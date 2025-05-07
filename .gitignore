@@ -115,7 +115,7 @@ Config/*
 
 # datasets
 xdecoder_data
-output
+output*
 
 #biomedparse_eval_results.json
 

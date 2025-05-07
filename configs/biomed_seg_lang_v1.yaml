@@ -231,34 +231,36 @@ ATTENTION_ARCH:
 
 DATASETS:
   TRAIN:
-  # Add your registered training datasets here
-    - 'biomed_Bladder_Tumor_train'
-    - 'biomed_Breast_Tumor_train' 
-    - 'biomed_Cervix_Tumor_train'
-    - 'biomed_Colon_Tumor_train'
-    - 'biomed_Kidney_Tumor_train'
-    - 'biomed_Liver_Tumor_train'
-    - 'biomed_Lung_Tumor_train'
-    - 'biomed_Ovary_Tumor_train'
-    - 'biomed_Pancreas_Tumor_train'
-    - 'biomed_Prostate_Tumor_train'
-    - 'biomed_Uterus_Tumor_train'
+    # Add your registered training datasets here
+    # - 'biomed_Bladder_Tumor_train'
+    # - 'biomed_Breast_Tumor_train' 
+    # - 'biomed_Cervix_Tumor_train'
+    # - 'biomed_Colon_Tumor_train'
+    # - 'biomed_Kidney_Tumor_train'
+    # - 'biomed_Liver_Tumor_train'
+    # - 'biomed_Lung_Tumor_train'
+    # - 'biomed_Ovary_Tumor_train'
+    # - 'biomed_Pancreas_Tumor_train'
+    # - 'biomed_Prostate_Tumor_train'
+    # - 'biomed_Uterus_Tumor_train'
+    - 'biomed_Multiphase_Breast_Tumor_train'
 
 
 
   TEST:
-  # Add your registered test datasets here
-    - 'biomed_Bladder_Tumor_test'
-    - 'biomed_Breast_Tumor_test' 
-    - 'biomed_Cervix_Tumor_test'
-    - 'biomed_Colon_Tumor_test'
-    - 'biomed_Kidney_Tumor_test'
-    - 'biomed_Liver_Tumor_test'
-    - 'biomed_Lung_Tumor_test'
-    - 'biomed_Ovary_Tumor_test'
-    - 'biomed_Pancreas_Tumor_test'
-    - 'biomed_Prostate_Tumor_test'
-    - 'biomed_Uterus_Tumor_test'
+    # Add your registered test datasets here
+    # - 'biomed_Bladder_Tumor_test'
+    # - 'biomed_Breast_Tumor_test' 
+    # - 'biomed_Cervix_Tumor_test'
+    # - 'biomed_Colon_Tumor_test'
+    # - 'biomed_Kidney_Tumor_test'
+    # - 'biomed_Liver_Tumor_test'
+    # - 'biomed_Lung_Tumor_test'
+    # - 'biomed_Ovary_Tumor_test'
+    # - 'biomed_Pancreas_Tumor_test'
+    # - 'biomed_Prostate_Tumor_test'
+    # - 'biomed_Uterus_Tumor_test'
+    - 'biomed_Multiphase_Breast_Tumor_test'
   
   CLASS_CONCAT: false
   SIZE_DIVISIBILITY: 32
