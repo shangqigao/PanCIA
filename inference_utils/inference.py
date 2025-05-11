@@ -35,7 +35,7 @@ from .output_processing import mask_stats, combine_masks, get_target_dist, check
     
 
 @torch.no_grad()
-def interactive_infer_image(model, image, prompts):
+def interactive_infer_image(model, image, prompts, resize_mask=True, return_feature=False):
 
     image_resize = transform(image)
     width = image.size[0]
@@ -54,7 +54,7 @@ def interactive_infer_image(model, image, prompts):
 
 
     batch_inputs = [data]
-    results,image_size,extra = model.model.evaluate_demo(batch_inputs)
+    results, image_size, extra = model.model.evaluate_demo(batch_inputs)
 
     pred_masks = results['pred_masks'][0]
     v_emb = results['pred_captions'][0]
@@ -70,12 +70,17 @@ def interactive_infer_image(model, image, prompts):
     pred_masks_pos = pred_masks[matched_id,:,:]
     pred_class = results['pred_logits'][0][matched_id].max(dim=-1)[1]
 
-    # interpolate mask to ori size
-    pred_mask_prob = F.interpolate(pred_masks_pos[None,], (data['height'], data['width']), 
-                                   mode='bilinear')[0,:,:data['height'],:data['width']].sigmoid().cpu().numpy()
+    if resize_mask:
+        # interpolate mask to ori size
+        pred_mask_prob = F.interpolate(pred_masks_pos[None,], (data['height'], data['width']), 
+                                    mode='bilinear')[0,:,:data['height'],:data['width']].sigmoid().cpu().numpy()
+    else:
+        pred_mask_prob = pred_masks_pos.sigmoid().cpu().numpy()
     pred_masks_pos = (1*(pred_mask_prob > 0.5)).astype(np.uint8)
-    
-    return pred_mask_prob
+    if return_feature:
+        return pred_mask_prob, extra['deep_feature']
+    else:
+        return pred_mask_prob
 
 
 @torch.no_grad()

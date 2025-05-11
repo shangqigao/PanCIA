@@ -19,7 +19,7 @@ import numpy as np
 import albumentations as A
 
 from albumentations.pytorch import ToTensorV2
-from common.m_utils import recur_find_ext, rmdir, select_checkpoints, mkdir
+from utilities.m_utils import recur_find_ext, rmdir, select_checkpoints, mkdir
 from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig, NucleusInstanceSegmentor
 from tiatoolbox.models.architecture.vanilla import CNNBackbone, CNNModel
 from tiatoolbox.tools.stainnorm import get_normalizer
@@ -66,8 +66,8 @@ def extract_pathomic_feature(
         resolution (int): the resolution of extacting features
         units (str): the units of resolution, e.g., mpp  
     """
-    if feature_mode == "cnn":
-        _ = extract_cnn_pathomic_features(
+    if feature_mode == "CNN":
+        _ = extract_cnn_pathomics(
             wsi_paths,
             wsi_msk_paths,
             save_dir,
@@ -75,8 +75,8 @@ def extract_pathomic_feature(
             resolution,
             units
         )
-    elif feature_mode == "vit":
-        _ = extract_vit_pathomic_features(
+    elif feature_mode == "HIPT":
+        _ = extract_vit_pathomics(
             wsi_paths,
             wsi_msk_paths,
             save_dir,
@@ -84,8 +84,8 @@ def extract_pathomic_feature(
             resolution,
             units
         )
-    elif feature_mode == "uni":
-        _ = extract_uni_pathomic_features(
+    elif feature_mode == "UNI":
+        _ = extract_uni_pathomics(
             wsi_paths,
             wsi_msk_paths,
             save_dir,
@@ -93,8 +93,8 @@ def extract_pathomic_feature(
             resolution,
             units
         )
-    elif feature_mode == "conch":
-        _ = extract_conch_pathomic_features(
+    elif feature_mode == "CONCH":
+        _ = extract_conch_pathomics(
             wsi_paths,
             wsi_msk_paths,
             save_dir,
@@ -102,8 +102,8 @@ def extract_pathomic_feature(
             resolution,
             units
         )
-    elif feature_mode == "chief":
-        _ = extract_chief_pathomic_features(
+    elif feature_mode == "CHIEF":
+        _ = extract_chief_pathomics(
             wsi_paths,
             wsi_msk_paths,
             save_dir,
@@ -150,7 +150,7 @@ def extract_radiomic_feature(
             n_jobs
         )
     elif feature_mode == "SegVol":
-        _ = extract_ViTradiomics(
+        _ = extract_SegVolViT_radiomics(
             img_paths,
             lab_paths,
             save_dir,
@@ -160,7 +160,17 @@ def extract_radiomic_feature(
             units
         )
     elif feature_mode == "M3D-CLIP":
-        _ = extract_M3DCLIPradiomics(
+        _ = extract_M3DCLIP_radiomics(
+            img_paths,
+            lab_paths,
+            save_dir,
+            class_name,
+            label,
+            resolution,
+            units
+        )
+    elif feature_mode == "BiomedParse":
+        _ = extract_BiomedParse_radiomics(
             img_paths,
             lab_paths,
             save_dir,
@@ -173,7 +183,7 @@ def extract_radiomic_feature(
         raise ValueError(f"Invalid feature mode: {feature_mode}")
     return
 
-def extract_cnn_pathomic_features(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+def extract_cnn_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -274,7 +284,7 @@ class ViT(torch.nn.Module):
             output = model(image)
         return [output.cpu().numpy()]
     
-def extract_vit_pathomic_features(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -359,7 +369,7 @@ class UNI(torch.nn.Module):
             output = model(image)
         return [output.cpu().numpy()]
     
-def extract_uni_pathomic_features(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -437,7 +447,7 @@ class CONCH(torch.nn.Module):
             output = model(images)
         return [output.cpu().numpy()]
     
-def extract_conch_pathomic_features(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -523,7 +533,7 @@ class CHIEF(torch.nn.Module):
             output = model(image)
         return [output.cpu().numpy()]
 
-def extract_chief_pathomic_features(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -829,7 +839,7 @@ def SegVol_image_transforms(keys, spacing, padding):
     return transform
 
 
-def extract_ViTradiomics(img_paths, lab_paths, save_dir, class_name, label=1, resolution=1.024, units="mm", device="cuda"):
+def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, resolution=1.024, units="mm", device="cuda"):
     from monai.networks.nets import ViT
     from monai.inferers import SlidingWindowInferer
     
@@ -956,7 +966,7 @@ def M3DCLIP_image_transforms(keys, padding):
         )
     return transform
 
-def extract_M3DCLIPradiomics(img_paths, lab_paths, save_dir, class_name, label=1, resolution=1.024, units="mm", device="cpu"):
+def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, resolution=1.024, units="mm", device="cpu"):
     from transformers import AutoTokenizer, AutoModel
     
     roi_size = (32, 256, 256)
@@ -998,6 +1008,106 @@ def extract_M3DCLIPradiomics(img_paths, lab_paths, save_dir, class_name, label=1
         np.save(feature_path, feature)
         coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
         np.save(coordinates_path, np.array(bbox))
+    return
+
+def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, class_name, 
+                                  label=1, format='nifti', is_CT=True, site=None,
+                                  dilation_mm=10, resolution=1.024, units="mm", device="gpu"):
+    """extracting radiomic features slice by slice in a size of (1024, 1024)
+        if no label provided, directly use model segmentation, else use give label
+    """
+    from PIL import Image
+    import nibabel as nib
+    from skimage.morphology import disk
+    from skimage.transform import resize
+    from scipy.ndimage import binary_dilation
+    import torch
+    from modeling.BaseModel import BaseModel
+    from modeling import build_model
+    from utilities.distributed import init_distributed
+    from utilities.arguments import load_opt_from_config_files
+    from utilities.constants import BIOMED_CLASSES
+
+    from inference_utils.inference import interactive_infer_image
+    from inference_utils.processing_utils import read_dicom
+    from inference_utils.processing_utils import read_nifti_inplane
+
+    # Build model config
+    opt = load_opt_from_config_files(["configs/biomedparse_inference.yaml"])
+    opt = init_distributed(opt)
+
+    # Load model from pretrained weights
+    pretrained_pth = '../checkpoints/BiomedParse/biomedparse_v1.pt'
+
+    model = BaseModel(opt, build_model(opt)).from_pretrained(pretrained_pth).eval().cuda()
+    with torch.no_grad():
+        model.model.sem_seg_head.predictor.lang_encoder.get_text_embeddings(BIOMED_CLASSES + ["background"], is_eval=True)
+    
+    for img_path, lab_path, text_prompt in zip(img_paths, lab_paths, text_prompts):
+        # read slices from dicom or nifti
+        if format == 'dicom':
+            dicom_dir = pathlib.Path(img_path)
+            assert pathlib.Path(img_path).is_dir()
+            dicom_paths = sorted(dicom_dir.glob('*.dcm'))
+            images = [read_dicom(p, is_CT, site, keep_size=True, return_spacing=True) for p in dicom_paths]
+        elif format == 'nifti':
+            images, slice_axis, _ = read_nifti_inplane(img_path, is_CT, site, keep_size=True, return_spacing=True)
+        else:
+            raise ValueError(f'Only support DICOM or NIFTI, but got {format}')
+
+        if lab_path is not None:
+            assert f'{lab_path}'.endswith(('.nii', '.nii.gz'))
+            nii = nib.load(lab_path)
+            labels = nii.get_fdata()
+            #suppose the last is slice axis for dicom annoations
+            if format == 'dicom':
+                labels = np.moveaxis(labels, -1, 0)
+            else:
+                labels = np.moveaxis(labels, slice_axis, 0) 
+        else:
+            labels = None
+        image_features, image_coordinates = [], []
+        for i, element in enumerate(images):
+            assert len(element) == 2
+            img, spacing = element
+
+            if labels is None:
+                # resize_mask=False would keep mask size to be (1024, 1024)
+                pred_prob, img_feature = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=False, return_feature=True)
+                pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
+            else:
+                pred_mask = labels[i, ...]
+                assert pred_mask.shape == img.shape
+                pred_mask = resize(pred_mask, (1024, 1024), order=0, preserve_range=True, anti_aliasing=False)
+                pred_mask = (1*(pred_mask > 0)).astype(np.uint8)
+
+            # mask dilation based on physical size
+            radius_pixels = int(1024 * dilation_mm / (np.mean(spacing) * np.mean(img.shape)))
+            kernel = disk(radius_pixels)
+            dilated_mask = binary_dilation(pred_mask, structure=kernel)
+
+            #extract feature of ROI
+            if np.sum(dilated_mask) > 1:
+                ROI_coords = np.argwhere(dilated_mask == 1)
+                ROI_feature = img_feature[ROI_coords[:, 0], ROI_coords[:, 1], ...]
+                image_features.append(ROI_feature)
+                ROI_coords_with_slice = np.zeros((ROI_coords.shape[0], 3))
+                ROI_coords_with_slice[:, 0:2] = ROI_coords
+                ROI_coords_with_slice[:, 2] = i
+                image_coordinates.append(ROI_coords_with_slice)
+
+         #save spatial features and corresponding cooridnates
+        image_features = np.concatenate(image_features, axis=0)
+        image_coordinates = np.concatenate(image_coordinates, axis=0)
+        logging.info(f"Extracted feature of shape {image_features.shape}")
+        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        feature_path = f"{save_dir}/{img_name}_{class_name}_radiomics.npy"
+        logging.info(f"Saving radiomic features to {feature_path}")
+        np.save(feature_path, image_features)
+        coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
+        logging.info(f"Saving feature coordinates to {coordinates_path}")
+        np.save(coordinates_path, image_coordinates)
+
     return
 
 
@@ -1042,7 +1152,7 @@ if __name__ == "__main__":
             args.mode,
         )
     elif args.feature_mode == "cnn":
-        output_list = extract_cnn_pathomic_features(
+        output_list = extract_cnn_pathomics(
             [wsi_path],
             [msk_path],
             wsi_feature_dir,

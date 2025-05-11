@@ -20,7 +20,7 @@ CT_WINDOWS = {'abdomen': [-150, 250],
               'colon': [-68, 187],
               'pancreas': [-100, 200]}
 
-def process_intensity_image(image_data, is_CT, site=None):
+def process_intensity_image(image_data, is_CT, site=None, keep_size=True):
     # process intensity-based image. If CT, apply site specific windowing
     
     # image_data: 2D numpy array of shape (H, W)
@@ -47,24 +47,27 @@ def process_intensity_image(image_data, is_CT, site=None):
         * 255.0
     )
     
-    # pad to square with equal padding on both sides
-    shape = image_data_pre.shape
-    if shape[0] > shape[1]:
-        pad = (shape[0]-shape[1])//2
-        pad_width = ((0,0), (pad, pad))
-    elif shape[0] < shape[1]:
-        pad = (shape[1]-shape[0])//2
-        pad_width = ((pad, pad), (0,0))
+    if keep_size:
+        resize_image = image_size
     else:
-        pad_width = None
-    
-    if pad_width is not None:
-        image_data_pre = np.pad(image_data_pre, pad_width, 'constant', constant_values=0)
+        # pad to square with equal padding on both sides
+        shape = image_data_pre.shape
+        if shape[0] > shape[1]:
+            pad = (shape[0]-shape[1])//2
+            pad_width = ((0,0), (pad, pad))
+        elif shape[0] < shape[1]:
+            pad = (shape[1]-shape[0])//2
+            pad_width = ((pad, pad), (0,0))
+        else:
+            pad_width = None
         
-    # resize image to 1024x1024
-    image_size = 1024
-    resize_image = transform.resize(image_data_pre, (image_size, image_size), order=3, 
-                                    mode='constant', preserve_range=True, anti_aliasing=True)
+        if pad_width is not None:
+            image_data_pre = np.pad(image_data_pre, pad_width, 'constant', constant_values=0)
+            
+        # resize image to 1024x1024
+        image_size = 1024
+        resize_image = transform.resize(image_data_pre, (image_size, image_size), order=3, 
+                                        mode='constant', preserve_range=True, anti_aliasing=True)
     
     # convert to 3-channel image
     resize_image = np.stack([resize_image]*3, axis=-1)
@@ -73,7 +76,7 @@ def process_intensity_image(image_data, is_CT, site=None):
 
 
 
-def read_dicom(image_path, is_CT, site=None):
+def read_dicom(image_path, is_CT, site=None, keep_size=False, return_spacing=False):
     # read dicom file and return pixel data
     
     # dicom_file: str, path to dicom file
@@ -82,11 +85,16 @@ def read_dicom(image_path, is_CT, site=None):
     # return: 2D numpy array of shape (H, W)
     
     ds = pydicom.dcmread(image_path)
+    spacing = ds.PixelSpacing
+
     image_array = ds.pixel_array * ds.RescaleSlope + ds.RescaleIntercept
     
-    image_array = process_intensity_image(image_array, is_CT, site)
+    image_array = process_intensity_image(image_array, is_CT, site, keep_size)
     
-    return image_array
+    if return_spacing:
+        return image_array, spacing
+    else:
+        return image_array
 
 
 def read_nifti(image_path, is_CT, slice_idx, site=None, HW_index=(0, 1), channel_idx=None):
@@ -114,6 +122,68 @@ def read_nifti(image_path, is_CT, slice_idx, site=None, HW_index=(0, 1), channel
         
     image_array = process_intensity_image(image_array, is_CT, site)
     return image_array
+
+def get_orientation(affine):
+    ornt = nib.orientations.io_orientation(affine)
+    axcodes = nib.orientations.ornt2axcodes(ornt)
+
+    # Compute voxel spacing from affine
+    voxel_sizes = np.sqrt((affine[:3, :3] ** 2).sum(axis=0))
+
+    # Find the two axes with the closest spacing (likely in-plane)
+    diffs = np.abs(voxel_sizes[:, None] - voxel_sizes[None, :])
+    diffs[np.eye(3, dtype=bool)] = np.inf  # ignore diagonal
+    i1, i2 = np.unravel_index(np.argmin(diffs), diffs.shape)
+    pixel_spacing = [voxel_sizes[i1], voxel_sizes[i2]]
+    in_plane_axes = {i1, i2}
+    slice_axis = (set([0, 1, 2]) - in_plane_axes).pop()
+    slice_dir = axcodes[slice_axis]
+
+    if slice_dir in ('I', 'S'):
+        return 'axial', slice_axis, pixel_spacing
+    elif slice_dir in ('A', 'P'):
+        return 'coronal', slice_axis, pixel_spacing
+    elif slice_dir in ('L', 'R'):
+        return 'sagittal', slice_axis, pixel_spacing
+    else:
+        return 'unknown', slice_axis, pixel_spacing
+
+def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spacing=False):
+    # read nifti file and return pixel data
+    
+    # image_path: str, path to nifti file
+    # is_CT: bool, whether image is CT or not
+    # slice_idx: int, slice index to read
+    # site: str, one of CT_WINDOWS.keys()
+    # HW_index: tuple, index of height and width in the image shape
+    # return: 2D numpy array of shape (H, W)
+    
+    
+    nii = nib.load(image_path)
+    affine = nii.affine
+    phase, slice_axis, pixel_spacing = get_orientation(affine)
+    image_array = nii.get_fdata()
+
+    image_list = []
+    if phase in ['axial', 'sagittal', 'coronal']:
+        for i in range(image_array.shape[slice_axis]):
+            if slice_axis == 0:
+                slice_img = image_array[i, :, :]
+            elif slice_axis == 1:
+                slice_img = image_array[:, i, :]
+            elif slice_axis == 2:
+                slice_img = image_array[:, :, i]
+            else:
+                raise ValueError(f"Slice axis is {slice_axis}, maximum shoud be 2")
+            slice_img = process_intensity_image(slice_img, is_CT, site, keep_size)
+            if return_spacing:
+                image_list.append((slice_img, pixel_spacing))
+            else:
+                image_list.append(slice_img)
+    else:
+        raise ValueError("Unsupported or unknown scanning phase")
+
+    return image_list, slice_axis, affine
     
 
 
