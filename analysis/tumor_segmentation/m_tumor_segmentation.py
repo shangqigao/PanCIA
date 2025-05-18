@@ -55,6 +55,10 @@ def extract_radiology_segmentation(
 def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir, class_name, 
                                   format='nifti', is_CT=True, site=None, device="gpu"):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
+        img_paths: a list of paths for single-phase images
+            or a list of lists, where each list has paths of multi-phase images.
+            For multi-phase images, only nifti format is allowed.
+        text_prompts: a list of strings with the same length as the img_paths
     """
 
     # Build model config

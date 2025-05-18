@@ -48,7 +48,7 @@ def process_intensity_image(image_data, is_CT, site=None, keep_size=True):
     )
     
     if keep_size:
-        resize_image = image_size
+        resize_image = image_data_pre
     else:
         # pad to square with equal padding on both sides
         shape = image_data_pre.shape
@@ -74,7 +74,62 @@ def process_intensity_image(image_data, is_CT, site=None, keep_size=True):
         
     return resize_image.astype(np.uint8)
 
-
+def process_intensity_3Dimage(image_data, is_CT, site=None, keep_size=True):
+    # process intensity-based 3D image. If CT, apply site specific windowing
+    
+    # image_data: 3D numpy array of shape (H, W, N)
+    
+    # return: N-channel numpy array of shape (H, W, N) as model input
+    
+    if is_CT:
+        # process image with windowing
+        if site and site in CT_WINDOWS:
+            window = CT_WINDOWS[site]
+        else:
+            raise ValueError(f'Please choose CT site from {CT_WINDOWS.keys()}')
+        lower_bound, upper_bound = window
+    else:
+        # process image with intensity range 0.5-99.5 percentile
+        lower_bound, upper_bound = np.percentile(
+            image_data[image_data > 0], 0.5
+        ), np.percentile(image_data[image_data > 0], 99.5)
+        
+    image_data_pre = np.clip(image_data, lower_bound, upper_bound)
+    image_data_pre = (
+        (image_data_pre - image_data_pre.min())
+        / (image_data_pre.max() - image_data_pre.min())
+        * 255.0
+    )
+    
+    if keep_size:
+        resize_image = image_data_pre
+    else:
+        # pad to square with equal padding on both sides
+        shape = image_data_pre.shape
+        if shape[0] > shape[1]:
+            pad = (shape[0]-shape[1])//2
+            pad_width = ((0,0), (pad, pad), (0,0))
+        elif shape[0] < shape[1]:
+            pad = (shape[1]-shape[0])//2
+            pad_width = ((pad, pad), (0,0), (0,0))
+        else:
+            pad_width = None
+        
+        if pad_width is not None:
+            image_data_pre = np.pad(image_data_pre, pad_width, 'constant', constant_values=0)
+            
+        # resize image to 1024x1024
+        image_size = 1024
+        N = image_data_pre.shape[2]
+        resize_image = np.zeros((image_size, image_size, N), dtype=np.uint8)
+        for i in range(N):
+            resize_image[:,:,i] = transform.resize(image_data_pre[:,:,i], (image_size, image_size), order=3, 
+                                        mode='constant', preserve_range=True, anti_aliasing=True)
+    
+    # convert to 3-channel image
+    # resize_image = np.stack([resize_image]*3, axis=-1)
+        
+    return resize_image.astype(np.uint8)
 
 def read_dicom(image_path, is_CT, site=None, keep_size=False, return_spacing=False):
     # read dicom file and return pixel data
@@ -149,20 +204,34 @@ def get_orientation(affine):
         return 'unknown', slice_axis, pixel_spacing
 
 def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spacing=False):
-    # read nifti file and return pixel data
-    
-    # image_path: str, path to nifti file
-    # is_CT: bool, whether image is CT or not
-    # slice_idx: int, slice index to read
-    # site: str, one of CT_WINDOWS.keys()
-    # HW_index: tuple, index of height and width in the image shape
-    # return: 2D numpy array of shape (H, W)
-    
-    
-    nii = nib.load(image_path)
-    affine = nii.affine
-    phase, slice_axis, pixel_spacing = get_orientation(affine)
-    image_array = nii.get_fdata()
+    """read single-phase or multi-phase nifti file and return pixel data
+        image_path: str, path to single-phase nifti file
+            or a list of paths to multi-phase nifti files
+        is_CT: bool, whether image is CT or not
+        site: str, one of CT_WINDOWS.keys()
+        return: 2D numpy array of shape (H, W)
+            or 3D numpy array of shape (H, W, N)
+    """
+    if isinstance(image_path, list):
+        assert len(image_path) > 1
+        multiphase = True
+        image_list, phases, slice_axises = [], [], []
+        for path in image_path:
+            nii = nib.load(path)
+            affine = nii.affine
+            phase, slice_axis, pixel_spacing = get_orientation(affine)
+            phases.append(phase)
+            slice_axises.append(slice_axis)
+            image_list.append(nii.get_fdata())
+        assert len(list(set(phases))) == 1, f"Inconsistent scanning phase: {phases}"
+        assert len(list), f"Inconsistent slice axis: {slice_axises}"
+        image_array = np.stack(image_list, axis=-1)
+    else:
+        multiphase = False
+        nii = nib.load(image_path)
+        affine = nii.affine
+        phase, slice_axis, pixel_spacing = get_orientation(affine)
+        image_array = nii.get_fdata()
 
     image_list = []
     if phase in ['axial', 'sagittal', 'coronal']:
@@ -175,7 +244,12 @@ def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spa
                 slice_img = image_array[:, :, i]
             else:
                 raise ValueError(f"Slice axis is {slice_axis}, maximum shoud be 2")
-            slice_img = process_intensity_image(slice_img, is_CT, site, keep_size)
+            
+            if multiphase:
+                slice_img = process_intensity_3Dimage(slice_img, is_CT, site, keep_size)
+            else:
+                slice_img = process_intensity_image(slice_img, is_CT, site, keep_size)
+
             if return_spacing:
                 image_list.append((slice_img, pixel_spacing))
             else:
