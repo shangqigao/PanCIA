@@ -1,3 +1,7 @@
+import sys
+sys.path.append('./')
+
+import os
 import torch
 import logging
 import pathlib
@@ -66,7 +70,8 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir, class_na
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
-    pretrained_pth = '../checkpoints/BiomedParse/biomedparse_v1.pt'
+    pretrained_pth = 'output_singlephase_breastcancer/biomed_seg_lang_v1.yaml_conf~/run_1/00039390/default/model_state_dict.pt'
+    # pretrained_pth = 'output_multiphase_breastcancer/biomed_seg_lang_v1.yaml_conf~/run_1/00039390/default/model_state_dict.pt'
 
     if device == 'gpu':
         model = BaseModel(opt, build_model(opt)).from_pretrained(pretrained_pth).eval().cuda()
@@ -91,17 +96,21 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir, class_na
         for i, element in enumerate(images):
             assert len(element) == 2
             img, spacing = element
+            # print(f"Segmenting slice [{i+1}/{len(images)}] ...")
 
             # resize_mask=False would keep mask size to be (1024, 1024)
             pred_prob = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=True, return_feature=False)
             pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
             masks.append(pred_mask)
-        final_mask = np.stack(masks, axis=0)
+        final_mask = np.concatenate(masks, axis=0)
         final_mask = np.moveaxis(final_mask, 0, slice_axis)
         
-        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        if isinstance(img_path, list):
+            img_name = pathlib.Path(img_path[0]).name.replace("_0000.nii.gz", "")
+        else:
+            img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         save_mask_path = f"{save_dir}/{img_name}_{class_name}_mask.nii.gz"
-        logging.info(f"Saving predicted segmentation to {save_mask_path}")
+        print(f"Saving predicted segmentation to {save_mask_path}")
         nifti_img = nib.Nifti1Image(final_mask, affine)
         nib.save(nifti_img, save_mask_path)
     return
@@ -110,10 +119,10 @@ if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
-    parser.add_argument('--dataset', default="TCGA-RCC", type=str)
-    parser.add_argument('--modality', default="CT", choices=["CT", "MRI"], type=str)
-    parser.add_argument('--format', default="dicom", choices=["dicom", "nifti"], type=str)
-    parser.add_argument('--site', default="kidney", type=str)
+    parser.add_argument('--modality', default="MRI", choices=["CT", "MRI"], type=str)
+    parser.add_argument('--phase', default="single", choices=["single", "multiple"], type=str)
+    parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
+    parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
     parser.add_argument('--model_mode', default="BiomedParse", choices=["SegVol", "BiomedParse"], type=str)
@@ -123,15 +132,25 @@ if __name__ == "__main__":
         img_paths = pathlib.Path(args.img_dir).glob('*')
         img_paths = [p for p in img_paths if p.is_dir()]
     else:
-        img_paths = pathlib.Path(args.img_dir).glob('*.nii.gz')
+        if args.phase == "single":
+            img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0001.nii.gz'))
+        else:
+            case_paths = sorted(pathlib.Path(args.img_dir).glob('*'))
+            case_paths = [p for p in case_paths if p.is_dir()]
+            img_paths = []
+            for path in case_paths:
+                nii_paths = path.glob("*.nii.gz")
+                multiphase_keys = ["_0000.nii.gz", "_0001.nii.gz", "_0002.nii.gz"]
+                nii_paths = [p for p in nii_paths if any(k in p.name for k in multiphase_keys)]
+                img_paths.append(sorted(nii_paths))
     text_prompts = [[f'{args.site} {args.target}']]*len(img_paths)
-    save_dir = pathlib.Path(args.save_dir) / args.modality / args.dataset
+    save_dir = pathlib.Path(args.save_dir)
 
     # extract radiology segmentation
     bs = 8
     nb = len(img_paths) // bs if len(img_paths) % bs == 0 else len(img_paths) // bs + 1
     for i in range(0, nb):
-        logging.info(f"Processing images of batch [{i+1}/{nb}] ...")
+        print(f"Processing images of batch [{i+1}/{nb}] ...")
         start = i * bs
         end = min(len(img_paths), (i + 1) * bs)
         batch_img_paths = img_paths[start:end]

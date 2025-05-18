@@ -224,7 +224,7 @@ def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spa
             slice_axises.append(slice_axis)
             image_list.append(nii.get_fdata())
         assert len(list(set(phases))) == 1, f"Inconsistent scanning phase: {phases}"
-        assert len(list), f"Inconsistent slice axis: {slice_axises}"
+        assert len(list(set(slice_axises))), f"Inconsistent slice axis: {slice_axises}"
         image_array = np.stack(image_list, axis=-1)
     else:
         multiphase = False
