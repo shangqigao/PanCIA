@@ -189,10 +189,10 @@ def get_orientation(affine):
     diffs = np.abs(voxel_sizes[:, None] - voxel_sizes[None, :])
     diffs[np.eye(3, dtype=bool)] = np.inf  # ignore diagonal
     i1, i2 = np.unravel_index(np.argmin(diffs), diffs.shape)
-    pixel_spacing = [voxel_sizes[i1], voxel_sizes[i2]]
     in_plane_axes = {i1, i2}
     slice_axis = (set([0, 1, 2]) - in_plane_axes).pop()
     slice_dir = axcodes[slice_axis]
+    pixel_spacing = voxel_sizes
 
     if slice_dir in ('I', 'S'):
         return 'axial', slice_axis, pixel_spacing
@@ -261,7 +261,7 @@ def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spa
     
 
 
-def read_rgb(image_path):
+def read_rgb(image_path, keep_size=False):
     # read RGB image and return resized pixel data
     
     # image_path: str, path to RGB image
@@ -290,11 +290,14 @@ def read_rgb(image_path):
         image = np.pad(image, pad_width, 'constant', constant_values=0)
         
     # resize image to 1024x1024 for each channel
-    image_size = 1024
-    resize_image = np.zeros((image_size, image_size, 3), dtype=np.uint8)
-    for i in range(3):
-        resize_image[:,:,i] = transform.resize(image[:,:,i], (image_size, image_size), order=3, 
-                                    mode='constant', preserve_range=True, anti_aliasing=True)
+    if keep_size:
+        resize_image = image
+    else:
+        image_size = 1024
+        resize_image = np.zeros((image_size, image_size, 3), dtype=np.uint8)
+        for i in range(3):
+            resize_image[:,:,i] = transform.resize(image[:,:,i], (image_size, image_size), order=3, 
+                                        mode='constant', preserve_range=True, anti_aliasing=True)
         
     return resize_image
 

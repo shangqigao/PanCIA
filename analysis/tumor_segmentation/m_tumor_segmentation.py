@@ -2,6 +2,7 @@ import sys
 sys.path.append('./')
 
 import os
+import json
 import torch
 import logging
 import pathlib
@@ -21,6 +22,8 @@ from inference_utils.inference import interactive_infer_image
 from inference_utils.processing_utils import read_dicom
 from inference_utils.processing_utils import read_nifti_inplane
 
+from m_post_processing import remove_inconsistent_objects
+
 def extract_radiology_segmentation(
         img_paths, 
         text_prompts,
@@ -29,7 +32,8 @@ def extract_radiology_segmentation(
         save_dir,
         is_CT=True,
         site='kidney',
-        img_format='nifti'
+        img_format='nifti',
+        beta_params=None
     ):
     """extract segmentation from radiology images
     Args:
@@ -50,19 +54,23 @@ def extract_radiology_segmentation(
             class_name,
             format=img_format,
             is_CT=is_CT,
-            site=site
+            site=site,
+            beta_params=beta_params
         )
     else:
         raise ValueError(f"Invalid model mode: {model_mode}")
     return
 
 def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir, class_name, 
-                                  format='nifti', is_CT=True, site=None, device="gpu"):
+                                  format='nifti', is_CT=True, site=None, beta_params=None, device="gpu"):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
         img_paths: a list of paths for single-phase images
             or a list of lists, where each list has paths of multi-phase images.
             For multi-phase images, only nifti format is allowed.
         text_prompts: a list of strings with the same length as the img_paths
+        beta_params: the parameters of Beta distribution, 
+            if provided, it would be used to compute p-values of segmented objects
+            if p-value is less than alpha, i.e., 0.05, the object would be removed
     """
 
     # Build model config
@@ -92,7 +100,9 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir, class_na
         else:
             raise ValueError(f'Only support DICOM or NIFTI, but got {format}')
 
-        masks = []
+        mask_3d = []
+        image_4d = []
+        prob_3d = []
         for i, element in enumerate(images):
             assert len(element) == 2
             img, spacing = element
@@ -100,10 +110,23 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir, class_na
 
             # resize_mask=False would keep mask size to be (1024, 1024)
             pred_prob = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=True, return_feature=False)
+            if beta_params is not None:
+                image_4d.append(img)
+                prob_3d.append(pred_prob)
             pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
-            masks.append(pred_mask)
-        final_mask = np.concatenate(masks, axis=0)
-        final_mask = np.moveaxis(final_mask, 0, slice_axis)
+            mask_3d.append(pred_mask)
+        
+        # post-processing predicted masks
+        mask_3d = np.concatenate(mask_3d, axis=0)
+        if beta_params is not None:
+            prob_3d = np.concatenate(prob_3d, axis=0)
+            image_4d = np.stack(image_4d, axis=0)
+            print("Post-processing by removing both unconfident predictions and spatially inconsistent objects")
+            mask_3d = remove_inconsistent_objects(mask_3d, prob_3d=prob_3d, image_4d=image_4d, beta_params=beta_params)
+        else:
+            print("Post-processing by removing spatially inconsistent objects")
+            mask_3d = remove_inconsistent_objects(mask_3d)
+        final_mask = np.moveaxis(mask_3d, 0, slice_axis)
         
         if isinstance(img_path, list):
             img_name = pathlib.Path(img_path[0]).name.replace("_0000.nii.gz", "")
@@ -119,6 +142,7 @@ if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
+    parser.add_argument('--beta_params', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--modality', default="MRI", choices=["CT", "MRI"], type=str)
     parser.add_argument('--phase', default="single", choices=["single", "multiple"], type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
@@ -146,6 +170,10 @@ if __name__ == "__main__":
     text_prompts = [[f'{args.site} {args.target}']]*len(img_paths)
     save_dir = pathlib.Path(args.save_dir)
 
+    with open(args.beta_params, 'r') as f:
+        data = json.load(f)
+        beta_params = data[f"{args.modality}-{args.site}"][args.target]
+
     # extract radiology segmentation
     bs = 8
     nb = len(img_paths) // bs if len(img_paths) % bs == 0 else len(img_paths) // bs + 1
@@ -163,5 +191,6 @@ if __name__ == "__main__":
             save_dir=save_dir,
             is_CT=args.modality == 'CT',
             site=args.site,
-            img_format=args.format
+            img_format=args.format,
+            beta_params=beta_params
         )
