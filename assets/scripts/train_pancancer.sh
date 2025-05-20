@@ -42,7 +42,7 @@ srun --mpi=pmi2 python entry.py train \
             SOLVER.BASE_LR 0.00001 \
             SOLVER.FIX_PARAM.backbone True \
             SOLVER.FIX_PARAM.lang_encoder True \
-            SOLVER.FIX_PARAM.pixel_decoder False \
+            SOLVER.FIX_PARAM.pixel_decoder True \
             MODEL.DECODER.COST_SPATIAL.CLASS_WEIGHT 0.0 \
             MODEL.DECODER.COST_SPATIAL.MASK_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.DICE_WEIGHT 1.0 \

@@ -82,12 +82,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.format == 'rgb':
-        img_paths = pathlib.Path(args.img_dir).glob('*.png')
+        img_paths = sorted(pathlib.Path(args.img_dir).glob('*.png'))
+        img_paths = list(img_paths)
     else:
         raise ValueError("Only support RGB images currently")
     
     text_prompts = [[f'{args.site} {args.target}']]*len(img_paths)
-    save_dir = pathlib.Path(args.save_dir)
 
     # fit beta distributions
     beta_params = estimate_BiomedParse_Beta_parameters(
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     location = f"{args.modality}-{args.site}"
     target = args.target
     beta_dict = {location: {target: beta_params}}
-    save_beta_path = f"{save_dir}/Beta_params.json"
+    save_beta_path = f"{args.save_dir}/Beta_params.json"
     print(f"Saving Beta parameters to {save_beta_path} ...")
     with open(save_beta_path, 'w') as f:
         json.dump(beta_dict, f, indent=4)
