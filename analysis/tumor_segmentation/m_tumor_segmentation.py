@@ -78,8 +78,8 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir, class_na
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
-    pretrained_pth = 'output_singlephase_breastcancer/biomed_seg_lang_v1.yaml_conf~/run_1/00039390/default/model_state_dict.pt'
-    # pretrained_pth = 'output_multiphase_breastcancer/biomed_seg_lang_v1.yaml_conf~/run_1/00039390/default/model_state_dict.pt'
+    # pretrained_pth = 'output_singlephase_breastcancer/biomed_seg_lang_v1.yaml_conf~/run_1/00039390/default/model_state_dict.pt'
+    pretrained_pth = 'output_multiphase_breastcancer/biomed_seg_lang_v1.yaml_conf~/run_1/00039390/default/model_state_dict.pt'
 
     if device == 'gpu':
         model = BaseModel(opt, build_model(opt)).from_pretrained(pretrained_pth).eval().cuda()
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--beta_params', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--modality', default="MRI", choices=["CT", "MRI"], type=str)
-    parser.add_argument('--phase', default="single", choices=["single", "multiple"], type=str)
+    parser.add_argument('--phase', default="multiple", choices=["single", "multiple"], type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
