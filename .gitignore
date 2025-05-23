@@ -123,3 +123,5 @@ output*
 
 log*
 checkpoints
+.DS_Store
+**/.DS_Store
