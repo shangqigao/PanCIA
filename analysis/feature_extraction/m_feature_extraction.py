@@ -1092,8 +1092,8 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
                 ROI_feature = img_feature[ROI_coords[:, 0], ROI_coords[:, 1], ...]
                 image_features.append(ROI_feature)
                 ROI_coords_with_slice = np.zeros((ROI_coords.shape[0], 3))
-                ROI_coords_with_slice[:, 0:2] = ROI_coords
-                ROI_coords_with_slice[:, 2] = i
+                ROI_coords_with_slice[:, 0] = i  # slice index, z
+                ROI_coords_with_slice[:, 1:3] = ROI_coords # spatial coordinates, (x,y)
                 image_coordinates.append(ROI_coords_with_slice)
 
          #save spatial features and corresponding cooridnates
