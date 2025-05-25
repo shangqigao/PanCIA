@@ -28,13 +28,17 @@ export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 #             --save_dir $save_dir
 
 # # tumor segmentation
-img_dir="/home/sg2162/rds/hpc-work/sanity-check/images"
-save_dir="/home/sg2162/rds/hpc-work/sanity-check/predictions"
-beta_params="/home/sg2162/rds/hpc-work/PanCIA/analysis/tumor_segmentation/Beta_params.json"
-srun --mpi=pmi2 python analysis/tumor_segmentation/m_tumor_segmentation.py \
+# img_dir="/home/sg2162/rds/hpc-work/sanity-check/images"
+# save_dir="/home/sg2162/rds/hpc-work/sanity-check/predictions"
+# beta_params="/home/sg2162/rds/hpc-work/PanCIA/analysis/tumor_segmentation/Beta_params.json"
+# srun --mpi=pmi2 python analysis/tumor_segmentation/m_tumor_segmentation.py \
+#             --img_dir $img_dir \
+#             --save_dir $save_dir \
+#             --beta_params $beta_params
+
+# extract radiomic features
+img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
+save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
             --img_dir $img_dir \
-            --save_dir $save_dir \
-            --beta_params $beta_params
-
-
-            
+            --save_dir $save_dir            

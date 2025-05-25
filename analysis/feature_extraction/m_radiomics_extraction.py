@@ -1,5 +1,5 @@
 import sys
-sys.path.append('../')
+sys.path.append('./')
 
 import pathlib
 import logging
@@ -20,13 +20,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--lab_dir', default=None)
-    parser.add_argument('--modality', default="CT", type=str)
-    parser.add_argument('--phase', default="multiple", choices=["single", "multiple"], type=str)
-    parser.add_argument('--format', default="nifti", choices=["dicom", "nifti", "rgb"], type=str)
+    parser.add_argument('--modality', default="MRI", type=str)
+    parser.add_argument('--format', default="rgb", choices=["dicom", "nifti", "rgb"], type=str)
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--feature_mode', default="SegVol", choices=["pyradiomics", "SegVol", "M3D-CLIP"], type=str)
+    parser.add_argument('--feature_mode', default="BiomedParse", choices=["pyradiomics", "SegVol", "M3D-CLIP", "BiomedParse"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 768], type=int)
     parser.add_argument('--resolution', default=1.024, type=float)
     parser.add_argument('--units', default="mm", type=str)
