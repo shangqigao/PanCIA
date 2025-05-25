@@ -122,6 +122,7 @@ def extract_radiomic_feature(
         save_dir, 
         class_name,
         prompts=None,
+        pixel_spacings=None,
         format='nifit',
         modality='CT',
         site='breast',
@@ -183,7 +184,8 @@ def extract_radiomic_feature(
             label,
             format=format,
             is_CT=modality == 'CT',
-            site=site
+            site=site,
+            pixel_spacings=pixel_spacings
         )
     else:
         raise ValueError(f"Invalid feature mode: {feature_mode}")
@@ -1017,7 +1019,7 @@ def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=
     return
 
 def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, class_name, 
-                                  label=1, format='nifti', is_CT=True, site=None,
+                                  label=1, format='nifti', is_CT=True, site=None, pixel_spacings=None,
                                   dilation_mm=10, resolution=1.024, units="mm", device="gpu"):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
         if no label provided, directly use model segmentation, else use give labels
@@ -1062,28 +1064,31 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
             assert isinstance(img_path, list), 'Must be a list of rgb image paths'
             images = [read_rgb(p, keep_size=True) for p in img_path]
             slice_nums = [re.search(r'slice_(\d+)', pathlib.Path(p).name).group(1) for p in img_path]
+            if pixel_spacings is not None:
+                assert len(pixel_spacings) == len(images)
+                images = [(i, p) for i, p in zip(images, pixel_spacings)]
+            else:
+                images = [(i, None) for i in images]
         else:
             raise ValueError(f'Only support DICOM, RGB, or NIFTI, but got {format}')
 
-        if lab_path is not None:
+        if format == 'nifti' and lab_path is not None:
             assert f'{lab_path}'.endswith(('.nii', '.nii.gz'))
             nii = nib.load(lab_path)
             labels = nii.get_fdata()
             #suppose the last is slice axis for dicom annoations
-            if format == 'dicom':
-                labels = np.moveaxis(labels, -1, 0)
-            else:
-                labels = np.moveaxis(labels, slice_axis, 0) 
+            labels = np.moveaxis(labels, slice_axis, 0) 
         else:
             labels = None
+
         image_features, image_coordinates = [], []
         for i, element in enumerate(images):
             assert len(element) == 2
             img, spacing = element
-
+            # resize_mask=False would keep mask size to be (1024, 1024)
+            pred_prob, img_feature = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=False, return_feature=True)
+            
             if labels is None:
-                # resize_mask=False would keep mask size to be (1024, 1024)
-                pred_prob, img_feature = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=False, return_feature=True)
                 pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
             else:
                 pred_mask = labels[i, ...]
@@ -1092,9 +1097,12 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
                 pred_mask = (1*(pred_mask > 0)).astype(np.uint8)
 
             # mask dilation based on physical size
-            radius_pixels = int(1024 * dilation_mm / (np.mean(spacing) * np.mean(img.shape)))
-            kernel = disk(radius_pixels)
-            dilated_mask = binary_dilation(pred_mask, structure=kernel)
+            if spacing is not None:
+                radius_pixels = int(1024 * dilation_mm / (np.mean(spacing) * np.mean(img.shape)))
+                kernel = disk(radius_pixels)
+                dilated_mask = binary_dilation(pred_mask, structure=kernel)
+            else:
+                dilated_mask = pred_mask
 
             #extract feature of ROI
             if np.sum(dilated_mask) > 1:

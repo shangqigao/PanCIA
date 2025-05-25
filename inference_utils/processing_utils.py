@@ -192,7 +192,7 @@ def get_orientation(affine):
     in_plane_axes = {i1, i2}
     slice_axis = (set([0, 1, 2]) - in_plane_axes).pop()
     slice_dir = axcodes[slice_axis]
-    pixel_spacing = voxel_sizes
+    pixel_spacing = (voxel_sizes[i1], voxel_sizes[i2])
 
     if slice_dir in ('I', 'S'):
         return 'axial', slice_axis, pixel_spacing
