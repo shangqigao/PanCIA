@@ -1087,7 +1087,6 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
             img, spacing = element
             # resize_mask=False would keep mask size to be (1024, 1024)
             pred_prob, img_feature = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=False, return_feature=True)
-            
             if labels is None:
                 pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
             else:
@@ -1121,7 +1120,12 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         image_features = np.concatenate(image_features, axis=0)
         image_coordinates = np.concatenate(image_coordinates, axis=0)
         logging.info(f"Extracted feature of shape {image_features.shape}")
-        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        if format == 'dicom':
+            img_name = f"{img_path[0]}".split('/')[-2]
+        elif format == 'rgb':
+            img_name = '_'.join(pathlib.Path(img_path[0]).name.split('_')[:-5])
+        elif format == 'nifti':
+            img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         feature_path = f"{save_dir}/{img_name}_{class_name}_radiomics.npy"
         logging.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, image_features)
