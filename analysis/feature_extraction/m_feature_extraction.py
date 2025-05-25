@@ -121,6 +121,10 @@ def extract_radiomic_feature(
         feature_mode, 
         save_dir, 
         class_name,
+        prompts=None,
+        format='nifit',
+        modality='CT',
+        site='breast',
         label=1,
         resolution=None, 
         units="mm",
@@ -173,11 +177,13 @@ def extract_radiomic_feature(
         _ = extract_BiomedParse_radiomics(
             img_paths,
             lab_paths,
+            prompts,
             save_dir,
             class_name,
             label,
-            resolution,
-            units
+            format=format,
+            is_CT=modality == 'CT',
+            site=site
         )
     else:
         raise ValueError(f"Invalid feature mode: {feature_mode}")
@@ -1014,7 +1020,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
                                   label=1, format='nifti', is_CT=True, site=None,
                                   dilation_mm=10, resolution=1.024, units="mm", device="gpu"):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
-        if no label provided, directly use model segmentation, else use give label
+        if no label provided, directly use model segmentation, else use give labels
     """
     from PIL import Image
     import nibabel as nib
@@ -1022,6 +1028,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     from skimage.transform import resize
     from scipy.ndimage import binary_dilation
     import torch
+    import re
     from modeling.BaseModel import BaseModel
     from modeling import build_model
     from utilities.distributed import init_distributed
@@ -1031,6 +1038,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     from inference_utils.inference import interactive_infer_image
     from inference_utils.processing_utils import read_dicom
     from inference_utils.processing_utils import read_nifti_inplane
+    from inference_utils.processing_utils import read_rgb
 
     # Build model config
     opt = load_opt_from_config_files(["configs/biomedparse_inference.yaml"])
@@ -1046,14 +1054,16 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     for img_path, lab_path, text_prompt in zip(img_paths, lab_paths, text_prompts):
         # read slices from dicom or nifti
         if format == 'dicom':
-            dicom_dir = pathlib.Path(img_path)
-            assert pathlib.Path(img_path).is_dir()
-            dicom_paths = sorted(dicom_dir.glob('*.dcm'))
-            images = [read_dicom(p, is_CT, site, keep_size=True, return_spacing=True) for p in dicom_paths]
+            assert isinstance(img_path, list), 'Must be a list of dicom image paths'
+            images = [read_dicom(p, is_CT, site, keep_size=True, return_spacing=True) for p in img_path]
         elif format == 'nifti':
             images, slice_axis, _ = read_nifti_inplane(img_path, is_CT, site, keep_size=True, return_spacing=True)
+        elif format == 'rgb':
+            assert isinstance(img_path, list), 'Must be a list of rgb image paths'
+            images = [read_rgb(p, keep_size=True) for p in img_path]
+            slice_nums = [re.search(r'slice_(\d+)', pathlib.Path(p).name).group(1) for p in img_path]
         else:
-            raise ValueError(f'Only support DICOM or NIFTI, but got {format}')
+            raise ValueError(f'Only support DICOM, RGB, or NIFTI, but got {format}')
 
         if lab_path is not None:
             assert f'{lab_path}'.endswith(('.nii', '.nii.gz'))
@@ -1092,7 +1102,10 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
                 ROI_feature = img_feature[ROI_coords[:, 0], ROI_coords[:, 1], ...]
                 image_features.append(ROI_feature)
                 ROI_coords_with_slice = np.zeros((ROI_coords.shape[0], 3))
-                ROI_coords_with_slice[:, 0] = i  # slice index, z
+                if format == 'rgb':
+                    ROI_coords_with_slice[:, 0] = slice_nums[i]
+                else:
+                    ROI_coords_with_slice[:, 0] = i  # slice index, z
                 ROI_coords_with_slice[:, 1:3] = ROI_coords # spatial coordinates, (x,y)
                 image_coordinates.append(ROI_coords_with_slice)
 

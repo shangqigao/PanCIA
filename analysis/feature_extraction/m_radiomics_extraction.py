@@ -4,6 +4,7 @@ sys.path.append('../')
 import pathlib
 import logging
 import argparse
+from collections import defaultdict
 
 from .m_feature_extraction import extract_radiomic_feature
 from feature_aggregation.m_graph_construction import construct_img_graph
@@ -18,9 +19,12 @@ if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
-    parser.add_argument('--lab_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/binary_label")
-    parser.add_argument('--dataset', default="TCGA-RCC", type=str)
+    parser.add_argument('--lab_dir', default=None)
     parser.add_argument('--modality', default="CT", type=str)
+    parser.add_argument('--phase', default="multiple", choices=["single", "multiple"], type=str)
+    parser.add_argument('--format', default="nifti", choices=["dicom", "nifti", "rgb"], type=str)
+    parser.add_argument('--site', default="breast", type=str)
+    parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
     parser.add_argument('--feature_mode', default="SegVol", choices=["pyradiomics", "SegVol", "M3D-CLIP"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 768], type=int)
@@ -29,36 +33,49 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ## get image and label paths
-    class_name = ["kidney_and_mass", "mass", "tumour"][2]
-    lab_dir = pathlib.Path(f"{args.lab_dir}/{args.dataset}/{args.modality}")
-    lab_paths = lab_dir.rglob(f"{class_name}.nii.gz")
-    lab_paths = [f"{p}" for p in lab_paths]
-    img_paths = [p.replace(args.lab_dir, args.img_dir) for p in lab_paths]
-    img_paths = [p.replace(f"_ensemble/{class_name}.nii.gz", ".nii.gz") for p in img_paths]
-    logging.info("The number of images on {}: {}".format(args.dataset, len(img_paths)))
+    if args.format == 'dicom':
+        dicom_cases = pathlib.Path(args.img_dir).glob('*')
+        dicom_cases = [p for p in dicom_cases if p.is_dir()]
+        img_paths = [sorted(p.glob('*.dcm')) for p in dicom_cases]
+    elif args.format == 'rgb':
+        rgb_images = sorted(pathlib.Path(args.img_dir).glob('*.png'))
+        grouped = defaultdict(list)
+        for p in rgb_images:
+            idx = '_'.join(p.name.split('_')[:2])
+            grouped[idx].append(p)
+        img_paths = list(grouped.values())
+    elif args.format == 'nifti':
+        img_paths = sorted(pathlib.Path(args.img_dir).glob('*.nii.gz'))
+        if args.lab_dir is not None:
+            lab_paths = sorted(pathlib.Path(args.lab_dir).glob('*.nii.gz'))
+        else:
+            lab_paths = [None]*len(img_paths)
+    logging.info("The number of images on {}: {}".format(args.site, len(img_paths)))
+    text_prompts = [[f'{args.site} {args.target}']]*len(img_paths)
     
     ## set save dir
-    save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.dataset}_{args.modality}_radiomic_features/{args.feature_mode}")
+    save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.site}_{args.modality}_radiomic_features/{args.feature_mode}")
     
     # extract radiomics
-    # bs = 8
-    # nb = len(img_paths) // bs if len(img_paths) % bs == 0 else len(img_paths) // bs + 1
-    # for i in range(0, nb):
-    #     logging.info(f"Processing images of batch [{i+1}/{nb}] ...")
-    #     start = i * bs
-    #     end = min(len(img_paths), (i + 1) * bs)
-    #     batch_img_paths = img_paths[start:end]
-    #     batch_lab_paths = lab_paths[start:end]
-    #     extract_radiomic_feature(
-    #         img_paths=batch_img_paths,
-    #         lab_paths=batch_lab_paths,
-    #         feature_mode=args.feature_mode,
-    #         save_dir=save_feature_dir,
-    #         class_name=class_name,
-    #         label=1,
-    #         n_jobs=8,
-    #         resolution=args.resolution
-    #     )
+    bs = 8
+    nb = len(img_paths) // bs if len(img_paths) % bs == 0 else len(img_paths) // bs + 1
+    for i in range(0, nb):
+        logging.info(f"Processing images of batch [{i+1}/{nb}] ...")
+        start = i * bs
+        end = min(len(img_paths), (i + 1) * bs)
+        batch_img_paths = img_paths[start:end]
+        batch_lab_paths = lab_paths[start:end]
+        extract_radiomic_feature(
+            img_paths=batch_img_paths,
+            lab_paths=batch_lab_paths,
+            feature_mode=args.feature_mode,
+            save_dir=save_feature_dir,
+            class_name=args.target,
+            prompts=text_prompts,
+            format=args.format,
+            modality=args.modality,
+            site=args.site
+        )
 
     # construct image graph
     # construct_img_graph(
@@ -70,14 +87,14 @@ if __name__ == "__main__":
     # )
 
     # measure graph properties
-    graph_paths = [save_feature_dir / pathlib.Path(p).name.replace(".nii.gz", f"_{class_name}.json") for p in img_paths]
-    measure_graph_properties(
-        graph_paths=graph_paths,
-        label_paths=lab_paths,
-        save_dir=save_feature_dir,
-        subgraph_dict=None,
-        n_jobs=32
-    )
+    # graph_paths = [save_feature_dir / pathlib.Path(p).name.replace(".nii.gz", f"_{class_name}.json") for p in img_paths]
+    # measure_graph_properties(
+    #     graph_paths=graph_paths,
+    #     label_paths=lab_paths,
+    #     save_dir=save_feature_dir,
+    #     subgraph_dict=None,
+    #     n_jobs=32
+    # )
 
     # visualize radiomics
     # radiomic_feature_visualization(
