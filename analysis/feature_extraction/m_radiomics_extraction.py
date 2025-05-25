@@ -5,6 +5,8 @@ import pathlib
 import logging
 import argparse
 from collections import defaultdict
+import pandas as pd
+import ast
 
 from .m_feature_extraction import extract_radiomic_feature
 from feature_aggregation.m_graph_construction import construct_img_graph
@@ -20,6 +22,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--lab_dir', default=None)
+    parser.add_argument('--meta_info', default=None)
+    parser.add_argument('--modality', default="CT", type=str)
+    parser.add_argument('--phase', default="multiple", choices=["single", "multiple"], type=str)
+    parser.add_argument('--format', default="nifti", choices=["dicom", "nifti", "rgb"], type=str)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="rgb", choices=["dicom", "nifti", "rgb"], type=str)
     parser.add_argument('--site', default="breast", type=str)
@@ -32,16 +38,23 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ## get image and label paths
+    pixel_spacings = None
     if args.format == 'dicom':
         dicom_cases = pathlib.Path(args.img_dir).glob('*')
         dicom_cases = [p for p in dicom_cases if p.is_dir()]
         img_paths = [sorted(p.glob('*.dcm')) for p in dicom_cases]
     elif args.format == 'rgb':
+        assert args.meta_info is not None, 'Expect meta data with pixel spacing info'
+        meta_info = pd.read_excel(args.meta_info)
+        meta_info['pixel_spacing'] = meta_info['pixel_spacing'].apply(ast.literal_eval)
         rgb_images = sorted(pathlib.Path(args.img_dir).glob('*.png'))
         grouped = defaultdict(list)
+        pixel_spacings = []
         for p in rgb_images:
             idx = '_'.join(p.name.split('_')[:2])
             grouped[idx].append(p)
+            pixel_spacing = meta_info[meta_info['patient_id'] == idx]['pixel_spacing']
+            pixel_spacings.append(pixel_spacing)
         img_paths = list(grouped.values())
     elif args.format == 'nifti':
         img_paths = sorted(pathlib.Path(args.img_dir).glob('*.nii.gz'))
@@ -73,7 +86,8 @@ if __name__ == "__main__":
             prompts=text_prompts,
             format=args.format,
             modality=args.modality,
-            site=args.site
+            site=args.site,
+            pixel_spacings=pixel_spacings
         )
 
     # construct image graph
