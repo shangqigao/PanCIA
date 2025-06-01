@@ -8,11 +8,11 @@ from collections import defaultdict
 import pandas as pd
 import ast
 
-from .m_feature_extraction import extract_radiomic_feature
-from feature_aggregation.m_graph_construction import construct_img_graph
-from feature_aggregation.m_graph_construction import radiomic_feature_visualization
-from feature_aggregation.m_graph_construction import visualize_radiomic_graph
-from feature_aggregation.m_graph_construction import measure_graph_properties
+from analysis.feature_extraction.m_feature_extraction import extract_radiomic_feature
+from analysis.feature_aggregation.m_graph_construction import construct_img_graph
+from analysis.feature_aggregation.m_graph_construction import radiomic_feature_visualization
+from analysis.feature_aggregation.m_graph_construction import visualize_radiomic_graph
+from analysis.feature_aggregation.m_graph_construction import measure_graph_properties
 
 import warnings
 warnings.filterwarnings('ignore')
