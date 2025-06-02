@@ -1,16 +1,23 @@
 #!/bin/bash
 
-#SBATCH -A CRISPIN-ORTUZAR-SL2-GPU
-#SBATCH -J radiopath
+#SBATCH -A PION-P3-DAWN-GPU
+##SBATCH -A PION-P3-CPU
+#SBATCH -J pancia
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
-##SBATCH --cpus-per-task=32
+##SBATCH --cpus-per-task=8
 #SBATCH --time=0-36:00:00
-##SBATCH -p cclake
-##SBATCH -p cclake-himem
-#SBATCH -p ampere
+##SBATCH --time=0-00:08:00
+#SBATCH --partition=pvc9
 #SBATCH --gres=gpu:1
 ##SBATCH --qos=intr
+
+## load dawn
+module purge
+module load default-dawn
+
+## load MPI
+module av intel-oneapi-mpi
 
 ## activate environment
 source ~/.bashrc
@@ -23,8 +30,16 @@ export DATASET2=$data_root
 export VLDATASET=$data_root
 export PATH=$PATH:$data_root/coco_caption/jre1.8.0_321/bin/
 export PYTHONPATH=$PYTHONPATH:$data_root/coco_caption/
+export I_MPI_OFFLOAD=1
+export I_MPI_OFFLOAD_SYMMETRIC=1
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+
+# Force output flushing
+export PYTHONUNBUFFERED=1   # if running Python
+export SLURM_EXPORT_ENV=ALL
+stdbuf -oL -eL echo "Starting job at $(date)"
+
 #export WANDB_KEY=YOUR_WANDB_KEY # Provide your wandb key here
 srun --mpi=pmi2 python entry.py train \
             --conf_files configs/biomed_seg_lang_v1.yaml \
@@ -59,4 +74,5 @@ srun --mpi=pmi2 python entry.py train \
             ATTENTION_ARCH.QUERY_NUMBER 3 \
             STROKE_SAMPLER.MAX_CANDIDATE 10 \
             WEIGHT True \
-            RESUME_FROM checkpoints/multiphase_pancancer.pt
+            RESUME_FROM checkpoints/biomedparse_v1.pt \
+            SAVE_DIR output_multiphase_breastcancer_aug
