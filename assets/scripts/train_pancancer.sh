@@ -51,6 +51,7 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.GROUNDING.ENABLED True \
             LOADER.SAMPLE_PROB prop \
             BioMed.INPUT.RANDOM_ROTATE True \
+            BioMed.INPUT.MRI_AUG_ICNB True \
             FIND_UNUSED_PARAMETERS True \
             ATTENTION_ARCH.SPATIAL_MEMORIES 32 \
             MODEL.DECODER.SPATIAL.MAX_ITER 0 \

@@ -11,7 +11,7 @@ from transformers import AutoTokenizer, LlamaForCausalLM
 
 from detectron2.data import detection_utils as utils
 from detectron2.data import transforms as T
-from detectron2.data.transforms import TransformGen
+from detectron2.data.transforms import TransformGen, Augmentation, Transform
 from detectron2.structures import BitMasks, Boxes, Instances, BoxMode
 from detectron2.structures.boxes import pairwise_iou
 from detectron2.data.datasets.builtin_meta import COCO_CATEGORIES
@@ -25,8 +25,105 @@ from modeling.utils import configurable
 
 from ..visual_sampler.sampler import build_shape_sampler
 
+from monai.transforms import RandBiasField
+
 __all__ = ["BioMedDatasetMapper"]
 
+class RandomPhaseIntensityShift(Augmentation):
+    def __init__(self, max_shift=0.1):
+        super().__init__()
+        self.max_shift = max_shift
+
+    def get_transform(self, image):
+        shifts = [random.uniform(-self.max_shift, self.max_shift) for _ in range(3)]
+        return _RandomPhaseIntensityShiftTransform(shifts)
+
+class _RandomPhaseIntensityShiftTransform(Transform):
+    def __init__(self, shifts):
+        super().__init__()
+        self._set_attributes()  # required by Detectron2
+        self.shifts = shifts
+
+    def apply_image(self, image):
+        image = image.astype(np.float32) / 255.0
+        for c in range(3):
+            image[..., c] = np.clip(image[..., c] + self.shifts[c], 0.0, 1.0)
+        return (image * 255).astype(np.uint8)
+
+    def apply_coords(self, coords):
+        return coords
+
+class RandomPhaseContrastScale(Augmentation):
+    def __init__(self, scale_range=(0.9, 1.1)):
+        super().__init__()
+        self.scale_range = scale_range
+
+    def get_transform(self, image):
+        scales = [random.uniform(*self.scale_range) for _ in range(3)]
+        return _RandomPhaseContrastScaleTransform(scales)
+
+class _RandomPhaseContrastScaleTransform(Transform):
+    def __init__(self, scales):
+        super().__init__()
+        self._set_attributes()
+        self.scales = scales
+
+    def apply_image(self, image):
+        image = image.astype(np.float32) / 255.0
+        for c in range(3):
+            mean = image[..., c].mean()
+            image[..., c] = np.clip((image[..., c] - mean) * self.scales[c] + mean, 0.0, 1.0)
+        return (image * 255).astype(np.uint8)
+
+    def apply_coords(self, coords):
+        return coords
+
+class RandomGaussianNoise(Augmentation):
+    def __init__(self, stddev=0.02):
+        super().__init__()
+        self.stddev = stddev
+
+    def get_transform(self, image):
+        return _RandomGaussianNoiseTransform(self.stddev)
+
+class _RandomGaussianNoiseTransform(Transform):
+    def __init__(self, stddev):
+        super().__init__()
+        self._set_attributes()
+        self.stddev = stddev
+
+    def apply_image(self, image):
+        image = image.astype(np.float32) / 255.0
+        noise = np.random.normal(0, self.stddev, image.shape).astype(np.float32)
+        image = np.clip(image + noise, 0.0, 1.0)
+        return (image * 255).astype(np.uint8)
+
+    def apply_coords(self, coords):
+        return coords  
+
+class RandomBiasField(Augmentation):
+    def __init__(self, prob=1.0):
+        super().__init__()
+        self.augmenter = RandBiasField(prob=prob)
+
+    def get_transform(self, image):
+        return _RandomBiasFieldTransform(self.augmenter)
+
+class _RandomBiasFieldTransform(Transform):
+    def __init__(self, augmenter):
+        super().__init__()
+        self._set_attributes()
+        self.augmenter = augmenter
+
+    def apply_image(self, image):
+        image = image.astype(np.float32) / 255.0
+        image_m = image.transpose(2, 0, 1)  # to C x H x W
+        image_m = self.augmenter(image_m)
+        image = np.clip(image_m.transpose(1, 2, 0), 0.0, 1.0)
+        return (image * 255).astype(np.uint8)
+
+    def apply_coords(self, coords):
+        return coords  
 
 def build_transform_gen(cfg, is_train):
     """
@@ -57,6 +154,16 @@ def build_transform_gen(cfg, is_train):
         ),
         T.FixedSizeCrop(crop_size=(image_size, image_size)),
     ])
+
+    # Augment MRI by shifting intensity, scaling contrast, 
+    # adding noise, and simulating bias field
+    if cfg_input['MRI_AUG_ICNB']:
+        augmentation.extend([
+            RandomPhaseIntensityShift(max_shift=0.1),
+            RandomPhaseContrastScale(scale_range=(0.9, 1.1)),
+            RandomGaussianNoise(stddev=0.02),
+            RandomBiasField(prob=1.0),
+        ])
     
     return augmentation
 
@@ -212,6 +319,12 @@ class BioMedDatasetMapper:
                 print('Image loading error:', dataset_dict["file_name"])
 
         utils.check_image_size(dataset_dict, image)
+
+        # ===== MRI-Safe Augmentations =====
+        if self.is_train:
+            image = random_phase_intensity_shift(image, max_shift=0.1)
+            image = random_phase_contrast_scale(image, scale_range=(0.9, 1.1))
+            image = add_gaussian_noise(image, stddev=0.01)
 
         image, transforms = T.apply_transform_gens(self.tfm_gens, image)
         image_shape = image.shape[:2]  # h, w
