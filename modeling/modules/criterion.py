@@ -688,6 +688,30 @@ class SetCriterion(nn.Module):
             box_ops.box_cxcywh_to_xyxy(target_boxes)))
         losses['loss_giou_0'] = loss_giou.sum() / num_boxes
         return losses
+    
+    def loss_decomposition(self, outputs, targets, indices, num_boxes, layer_id, extra):
+        """compute the Bayesian loss for image decomposition, consists of data fitting and KL divergence terms
+        """
+        decomp_outputs = extra['decomposition']
+        N = decomp_outputs["normalization"]
+        loss_y = torch.sum(decomp_outputs["kl_y"]) / N
+        loss_mu_m = torch.sum(decomp_outputs["kl_mu_m"]) / N
+        loss_sigma_m = torch.sum(decomp_outputs["kl_sigma_m"]) / N
+        loss_mu_x = torch.sum(decomp_outputs["kl_mu_x"]) / N
+        loss_sigma_x = torch.sum(decomp_outputs["kl_sigma_x"]) / N
+        loss_mu_z = torch.sum(decomp_outputs["kl_mu_z"]) / N
+        loss_sigma_z = torch.sum(decomp_outputs["kl_sigma_z"]) / N
+        loss_Bayes = (
+            loss_y
+            + loss_mu_m
+            + loss_sigma_m
+            + loss_mu_x
+            + loss_sigma_x
+            + loss_mu_z
+            + loss_sigma_z
+        )
+        losses = {'loss_decomposition_bayes_0': loss_Bayes}
+        return losses
 
     def _get_src_permutation_idx(self, indices):
         # permute predictions following indices
@@ -712,6 +736,7 @@ class SetCriterion(nn.Module):
             'groundings': self.loss_groundings,
             'labels_openimage': self.loss_labels_openimage,
             'spatials': self.loss_spatials,
+            'decomposition': self.loss_decomposition,
         }
         assert loss in loss_map, f"do you really want to compute {loss} loss?"
         return loss_map[loss](outputs, targets, indices, num_masks, layer_id, extra)
