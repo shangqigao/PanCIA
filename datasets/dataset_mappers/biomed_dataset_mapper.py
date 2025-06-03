@@ -119,7 +119,7 @@ class _RandomBiasFieldTransform(Transform):
         image = image.astype(np.float32) / 255.0
         image_m = image.transpose(2, 0, 1)  # to C x H x W
         image_m = self.augmenter(image_m)
-        image = np.clip(image_m.transpose(1, 2, 0), 0.0, 1.0)
+        image = np.clip(image_m.permute(1, 2, 0).numpy(), 0.0, 1.0)
         return (image * 255).astype(np.uint8)
 
     def apply_coords(self, coords):
@@ -319,12 +319,6 @@ class BioMedDatasetMapper:
                 print('Image loading error:', dataset_dict["file_name"])
 
         utils.check_image_size(dataset_dict, image)
-
-        # ===== MRI-Safe Augmentations =====
-        if self.is_train:
-            image = random_phase_intensity_shift(image, max_shift=0.1)
-            image = random_phase_contrast_scale(image, scale_range=(0.9, 1.1))
-            image = add_gaussian_noise(image, stddev=0.01)
 
         image, transforms = T.apply_transform_gens(self.tfm_gens, image)
         image_shape = image.shape[:2]  # h, w
