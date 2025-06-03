@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-##SBATCH --time=0-36:00:00
-#SBATCH --time=0-00:08:00
+#SBATCH --time=0-36:00:00
+##SBATCH --time=0-00:08:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-#SBATCH --qos=intr
+##SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -39,12 +39,12 @@ srun --mpi=pmi2 python entry.py train \
             TEST.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_PER_GPU 4 \
-            SOLVER.MAX_NUM_EPOCHS 5 \
+            SOLVER.MAX_NUM_EPOCHS 10 \
             SOLVER.BASE_LR 0.00001 \
             SOLVER.FIX_PARAM.backbone True \
             SOLVER.FIX_PARAM.lang_encoder True \
             SOLVER.FIX_PARAM.pixel_decoder False \
-            MODEL.DECODER.COST_SPATIAL.CLASS_WEIGHT 0.0 \
+            MODEL.DECODER.COST_SPATIAL.CLASS_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.MASK_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.DICE_WEIGHT 1.0 \
             MODEL.DECODER.TOP_SPATIAL_LAYERS 10 \

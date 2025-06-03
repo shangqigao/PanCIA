@@ -139,7 +139,6 @@ def build_transform_gen(cfg, is_train):
     max_scale = cfg_input['MAX_SCALE']
 
     spatial_augmentation = []
-    
     if cfg_input['RANDOM_FLIP'] != "none":
         spatial_augmentation.append(
             T.RandomFlip(
