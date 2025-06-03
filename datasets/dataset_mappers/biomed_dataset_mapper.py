@@ -138,17 +138,17 @@ def build_transform_gen(cfg, is_train):
     min_scale = cfg_input['MIN_SCALE']
     max_scale = cfg_input['MAX_SCALE']
 
-    augmentation = []
+    spatial_augmentation = []
     
     if cfg_input['RANDOM_FLIP'] != "none":
-        augmentation.append(
+        spatial_augmentation.append(
             T.RandomFlip(
                 horizontal=cfg_input['RANDOM_FLIP'] == "horizontal",
                 vertical=cfg_input['RANDOM_FLIP'] == "vertical",
             )
         )
 
-    augmentation.extend([
+    spatial_augmentation.extend([
         T.ResizeScale(
             min_scale=min_scale, max_scale=max_scale, target_height=image_size, target_width=image_size
         ),
@@ -157,27 +157,29 @@ def build_transform_gen(cfg, is_train):
 
     # Augment MRI by shifting intensity, scaling contrast, 
     # adding noise, and simulating bias field
+    intensity_augmentation = []
     if cfg_input['MRI_AUG_ICNB']:
-        augmentation.extend([
+        intensity_augmentation.extend([
             RandomPhaseIntensityShift(max_shift=0.1),
             RandomPhaseContrastScale(scale_range=(0.9, 1.1)),
             RandomGaussianNoise(stddev=0.02),
             RandomBiasField(prob=1.0),
         ])
     
-    return augmentation
+    return spatial_augmentation, intensity_augmentation
 
 def build_transform_gen_se(cfg, is_train):
     # min_scale = cfg['INPUT']['MIN_SIZE_TEST']
     # max_scale = cfg['INPUT']['MAX_SIZE_TEST']
 
-    augmentation = []
+    spatial_augmentation = []
+    intensity_augmentation = []
     # augmentation.extend([
     #     T.ResizeShortestEdge(
     #         min_scale, max_size=max_scale
     #     ),
     # ])    
-    return augmentation
+    return spatial_augmentation, intensity_augmentation
 
 def convert_coco_poly_to_mask(segmentations, height, width):
     masks = []
@@ -216,7 +218,8 @@ class BioMedDatasetMapper:
         self,
         is_train=True,
         *,
-        tfm_gens,
+        spatial_tfm_gens,
+        intensity_tfm_gens,
         image_format,
         caption_thres,
         grounding,
@@ -239,10 +242,11 @@ class BioMedDatasetMapper:
             tfm_gens: data augmentation
             image_format: an image format supported by :func:`detection_utils.read_image`.
         """
-        self.tfm_gens = tfm_gens
+        self.spatial_tfm_gens = spatial_tfm_gens
+        self.intensity_tfm_gens = intensity_tfm_gens
         logging.getLogger(__name__).info(
             "[COCOPanopticNewBaselineDatasetMapper] Full TransformGens used in training: {}".format(
-                str(self.tfm_gens)
+                str(self.intensity_tfm_gens) + str(spatial_tfm_gens)
             )
         )
 
@@ -267,9 +271,9 @@ class BioMedDatasetMapper:
     def from_config(cls, cfg, is_train=True):
         # Build augmentation
         if is_train:
-            tfm_gens = build_transform_gen(cfg, is_train)
+            spatial_tfm_gens, intensity_tfm_gens = build_transform_gen(cfg, is_train)
         else:
-            tfm_gens = build_transform_gen_se(cfg, is_train)
+            spatial_tfm_gens, intensity_tfm_gens = build_transform_gen_se(cfg, is_train)
             
         shape_sampler = build_shape_sampler(cfg)
 
@@ -286,7 +290,8 @@ class BioMedDatasetMapper:
 
         ret = {
             "is_train": is_train,
-            "tfm_gens": tfm_gens,
+            "spatial_tfm_gens": spatial_tfm_gens,
+            "intensity_tfm_gens": intensity_tfm_gens,
             "image_format": cfg['INPUT']['FORMAT'],
             "caption_thres": cfg['MODEL']['DECODER']['CAPTION']['SIM_THRES'],
             "grounding": cfg['MODEL']['DECODER']['GROUNDING']['ENABLED'],
@@ -320,7 +325,8 @@ class BioMedDatasetMapper:
 
         utils.check_image_size(dataset_dict, image)
 
-        image, transforms = T.apply_transform_gens(self.tfm_gens, image)
+        image, _ = T.apply_transform_gens(self.intensity_tfm_gens, image)
+        image, transforms = T.apply_transform_gens(self.spatial_tfm_gens, image)
         image_shape = image.shape[:2]  # h, w
 
         rotate_time = 0
