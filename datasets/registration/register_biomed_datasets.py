@@ -7,6 +7,7 @@
 import json
 import os
 import collections
+import random
 
 from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.data.datasets import load_sem_seg
@@ -101,6 +102,14 @@ def load_biomed_json(image_root, annot_json, metadata):
             )
     assert len(ret), f"No images found in {image_root}!"
     assert PathManager.isfile(ret[0]["file_name"]), ret[0]["file_name"]
+    positives = [r for r in ret if r["grounding_info"][0]["category_id"] > 0]
+    negatives = [r for r in ret if r["grounding_info"][0]["category_id"] == 0]
+    if len(negatives) > 0:
+        negatives_to_keep = min(int(len(positives) * 0.5), len(negatives))
+        sampled_negatives = random.sample(negatives, negatives_to_keep)
+        ret = positives + sampled_negatives
+    else:
+        ret = positives
     return ret
 
 
