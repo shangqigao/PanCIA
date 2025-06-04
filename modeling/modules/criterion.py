@@ -692,6 +692,10 @@ class SetCriterion(nn.Module):
     def loss_decomposition(self, outputs, targets, indices, num_boxes, layer_id, extra):
         """compute the Bayesian loss for image decomposition, consists of data fitting and KL divergence terms
         """
+        if layer_id >= 1:
+            return {'loss_decomposition_bayes_0': 0}
+        
+        assert 'decomposition' in extra
         decomp_outputs = extra['decomposition']
         N = decomp_outputs["normalization"]
         loss_y = torch.sum(decomp_outputs["kl_y"]) / N

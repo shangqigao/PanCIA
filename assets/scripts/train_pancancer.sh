@@ -17,7 +17,7 @@
 source ~/.bashrc
 conda activate biomedparse
 
-data_root="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/"
+data_root="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/"
 export DETECTRON2_DATASETS=$data_root
 export DATASET=$data_root
 export DATASET2=$data_root
@@ -36,10 +36,11 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.HIDDEN_DIM 512 \
             MODEL.ENCODER.CONVS_DIM 512 \
             MODEL.ENCODER.MASK_DIM 512 \
+            MODEL.ENCODER.BINARY_CLASSES True \
             TEST.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_PER_GPU 4 \
-            SOLVER.MAX_NUM_EPOCHS 10 \
+            SOLVER.MAX_NUM_EPOCHS 5 \
             SOLVER.BASE_LR 0.00001 \
             SOLVER.FIX_PARAM.backbone True \
             SOLVER.FIX_PARAM.lang_encoder True \
@@ -52,7 +53,7 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.GROUNDING.ENABLED True \
             LOADER.SAMPLE_PROB prop \
             BioMed.INPUT.RANDOM_ROTATE True \
-            BioMed.INPUT.MRI_AUG_ICNB True \
+            BioMed.INPUT.MRI_AUG_ICNB False \
             FIND_UNUSED_PARAMETERS True \
             ATTENTION_ARCH.SPATIAL_MEMORIES 32 \
             MODEL.DECODER.SPATIAL.MAX_ITER 0 \
