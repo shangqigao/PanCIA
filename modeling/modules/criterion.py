@@ -51,9 +51,46 @@ def dice_loss(
     loss = 1 - (numerator + 1) / (denominator + 1)
     return loss.sum() / num_masks
 
+def focal_tversky_loss(
+        inputs: torch.Tensor,
+        targets: torch.Tensor,
+        num_masks: float,
+        alpha=0.3, beta=0.7, gamma=0.75, smooth=1e-6
+    ):
+    """
+    Compute the Focal Tversky Loss.
+
+    Args:
+        inputs (Tensor): Raw logits from the model (N, H, W) or (N, 1, H, W).
+        targets (Tensor): Ground truth binary masks (same shape as inputs).
+        alpha (float): Weight for false positives.
+        beta (float): Weight for false negatives.
+        gamma (float): Focusing parameter.
+        smooth (float): Smoothing constant to avoid division by zero.
+
+    Returns:
+        torch.Tensor: Scalar loss value.
+    """
+    inputs = inputs.sigmoid()
+    inputs = inputs.flatten(1)
+
+    # Compute TP, FP, FN
+    TP = (inputs * targets).sum(-1)
+    FP = (inputs * (1 - targets)).sum(-1)
+    FN = ((1 - inputs) * targets).sum(-1)
+
+    # Tversky index
+    tversky = (TP + smooth) / (TP + alpha * FP + beta * FN + smooth)
+
+    # Focal Tversky loss
+    loss = (1 - tversky) ** gamma
+
+    return loss.sum() / num_masks
+
 
 dice_loss_jit = torch.jit.script(
     dice_loss
+    # focal_tversky_loss
 )  # type: torch.jit.ScriptModule
 
 
