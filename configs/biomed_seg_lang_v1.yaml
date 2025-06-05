@@ -243,8 +243,8 @@ DATASETS:
     # - "biomed_Pancreas_Tumor_train"
     # - "biomed_Prostate_Tumor_train"
     # - "biomed_Uterus_Tumor_train"
-    # - "biomed_Multiphase_Breast_Tumor_train"
-    - "biomed_Multiphase_NP_Breast_Tumor_train"
+    - "biomed_Multiphase_Breast_Tumor_train"
+    # - "biomed_Multiphase_NP_Breast_Tumor_train"
 
   TEST:
     # Add your registered test datasets here
@@ -259,8 +259,8 @@ DATASETS:
     # - "biomed_Pancreas_Tumor_test"
     # - "biomed_Prostate_Tumor_test"
     # - "biomed_Uterus_Tumor_test"
-    # - "biomed_Multiphase_Breast_Tumor_test"
-    - "biomed_Multiphase_NP_Breast_Tumor_test"
+    - "biomed_Multiphase_Breast_Tumor_test"
+    # - "biomed_Multiphase_NP_Breast_Tumor_test"
 
   CLASS_CONCAT: false
   SIZE_DIVISIBILITY: 32
