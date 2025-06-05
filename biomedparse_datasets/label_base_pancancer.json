@@ -1,0 +1,128 @@
+{
+  "0": {
+    "name": "background"
+  },
+  "1": {
+    "name": "kidney tumor",
+    "parent": "tumor",
+    "child": [
+      "kidney cancer",
+      "renal cell carcinoma",
+      "benign kidney tumor",
+      "malignant kidney tumor"
+    ]
+  },
+  "2": {
+    "name": "bladder tumor",
+    "parent": "tumor",
+    "child": [
+      "bladder cancer",
+      "bladder carcinoma",
+      "benign bladder tumor",
+      "malignant bladder tumor"
+    ]
+  },
+  "3": {
+    "name": "breast tumor",
+    "parent": "tumor",
+    "child": [
+      "breast cancer",
+      "breast carcinoma",
+      "benign breast tumor",
+      "malignant breast tumor"
+    ]
+  },
+  "4": {
+    "name": "cervix tumor",
+    "parent": "tumor",
+    "child": [
+      "cervical cancer",
+      "cervical carcinoma",
+      "benign cervical tumor",
+      "malignant cervical tumor"
+    ]
+  },
+  "5": {
+    "name": "colon tumor",
+    "parent": "tumor",
+    "child": [
+      "colorectal cancer",
+      "colorectal carcinoma",
+      "benign colorectal tumor",
+      "malignant colorectal tumor"
+    ]
+  },
+  "6": {
+    "name": "liver tumor",
+    "parent": "tumor",
+    "child": [
+      "liver cancer",
+      "hepatocellular carcinoma",
+      "benign liver tumor",
+      "malignant liver tumor"
+    ]
+  },
+  "7": {
+    "name": "lung tumor",
+    "parent": "tumor",
+    "child": [
+      "lung cancer",
+      "lung carcinoma",
+      "benign lung tumor",
+      "malignant lung tumor"
+    ]
+  },
+  "8": {
+    "name": "ovary tumor",
+    "parent": "tumor",
+    "child": [
+      "ovarian cancer",
+      "ovarian carcinoma",
+      "benign ovarian tumor",
+      "malignant ovarian tumor"
+    ]
+  },
+  "9": {
+    "name": "pancreas tumor",
+    "parent": "tumor",
+    "child": [
+      "pancreatic cancer",
+      "pancreatic ductal adenocarcinoma",
+      "benign pancreatic tumor",
+      "malignant pancreatic tumor"
+    ]
+  },
+  "10": {
+    "name": "prostate tumor",
+    "parent": "tumor",
+    "child": [
+      "prostate cancer",
+      "prostate adenocarcinoma",
+      "benign prostate tumor",
+      "malignant prostate tumor"
+    ]
+  },
+  "11": {
+    "name": "uterus tumor",
+    "parent": "tumor",
+    "child": [
+      "uterine cancer",
+      "womb cancer",
+      "endometrial cancer",
+      "uterine sarcoma",
+      "benign uterine tumor",
+      "malignant uterine tumor"
+    ]
+  },
+  "12": {
+    "name": "other",
+    "parent": "tumor",
+    "child": [
+      "brain cancer",
+      "brain tumor",
+      "gatric cancer",
+      "stomach tumor",
+      "thoracic cancer"
+    ]
+  }
+}
