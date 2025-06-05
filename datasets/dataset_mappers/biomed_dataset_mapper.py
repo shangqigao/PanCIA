@@ -159,10 +159,10 @@ def build_transform_gen(cfg, is_train):
     intensity_augmentation = []
     if cfg_input['MRI_AUG_ICNB']:
         intensity_augmentation.extend([
+            RandomBiasField(prob=1.0),
             RandomPhaseIntensityShift(max_shift=0.1),
             RandomPhaseContrastScale(scale_range=(0.9, 1.1)),
             RandomGaussianNoise(stddev=0.02),
-            RandomBiasField(prob=1.0),
         ])
     
     return spatial_augmentation, intensity_augmentation
@@ -324,8 +324,8 @@ class BioMedDatasetMapper:
 
         utils.check_image_size(dataset_dict, image)
 
-        image, _ = T.apply_transform_gens(self.intensity_tfm_gens, image)
         image, transforms = T.apply_transform_gens(self.spatial_tfm_gens, image)
+        image, _ = T.apply_transform_gens(self.intensity_tfm_gens, image)
         image_shape = image.shape[:2]  # h, w
 
         rotate_time = 0

@@ -55,7 +55,6 @@ def focal_tversky_loss(
         inputs: torch.Tensor,
         targets: torch.Tensor,
         num_masks: float,
-        alpha=0.3, beta=0.7, gamma=0.75, smooth=1e-6
     ):
     """
     Compute the Focal Tversky Loss.
@@ -80,17 +79,23 @@ def focal_tversky_loss(
     FN = ((1 - inputs) * targets).sum(-1)
 
     # Tversky index
-    tversky = (TP + smooth) / (TP + alpha * FP + beta * FN + smooth)
+    alpha=0.3
+    beta=0.7
+    gamma=0.75
+    smooth=1e-6
+    denominator = TP + alpha * FP + beta * FN + smooth
+    tversky = (TP + smooth) / torch.clamp(denominator, min=1e-4)
+    tversky = torch.clamp(tversky, min=1e-4, max=1.0)
 
     # Focal Tversky loss
-    loss = (1 - tversky) ** gamma
+    loss = torch.pow(1 - tversky, gamma)
 
     return loss.sum() / num_masks
 
 
 dice_loss_jit = torch.jit.script(
-    dice_loss
-    # focal_tversky_loss
+    # dice_loss
+    focal_tversky_loss
 )  # type: torch.jit.ScriptModule
 
 

@@ -23,15 +23,13 @@ module load intel-oneapi-compilers/2025.1.0/gcc/5berjkxu
 source ~/.bashrc
 conda activate biomedparse
 
-data_root="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/"
+data_root="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/"
 export DETECTRON2_DATASETS=$data_root
 export DATASET=$data_root
 export DATASET2=$data_root
 export VLDATASET=$data_root
 export PATH=$PATH:$data_root/coco_caption/jre1.8.0_321/bin/
 export PYTHONPATH=$PYTHONPATH:$data_root/coco_caption/
-export I_MPI_OFFLOAD=1
-export I_MPI_OFFLOAD_SYMMETRIC=1
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 
@@ -41,7 +39,7 @@ export SLURM_EXPORT_ENV=ALL
 stdbuf -oL -eL echo "Starting job at $(date)"
 
 #export WANDB_KEY=YOUR_WANDB_KEY # Provide your wandb key here
-mpirun -np 4 python entry.py train \
+srun --mpi=pmi2 python entry.py train \
             --conf_files configs/biomed_seg_lang_v1.yaml \
             --overrides \
             FP16 True \
@@ -50,6 +48,7 @@ mpirun -np 4 python entry.py train \
             MODEL.DECODER.HIDDEN_DIM 512 \
             MODEL.ENCODER.CONVS_DIM 512 \
             MODEL.ENCODER.MASK_DIM 512 \
+            MODEL.ENCODER.BINARY_CLASSES False \
             TEST.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_PER_GPU 4 \
@@ -58,7 +57,7 @@ mpirun -np 4 python entry.py train \
             SOLVER.FIX_PARAM.backbone True \
             SOLVER.FIX_PARAM.lang_encoder True \
             SOLVER.FIX_PARAM.pixel_decoder False \
-            MODEL.DECODER.COST_SPATIAL.CLASS_WEIGHT 0.0 \
+            MODEL.DECODER.COST_SPATIAL.CLASS_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.MASK_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.DICE_WEIGHT 1.0 \
             MODEL.DECODER.TOP_SPATIAL_LAYERS 10 \
@@ -66,13 +65,12 @@ mpirun -np 4 python entry.py train \
             MODEL.DECODER.GROUNDING.ENABLED True \
             LOADER.SAMPLE_PROB prop \
             BioMed.INPUT.RANDOM_ROTATE True \
-            BioMed.INPUT.MRI_AUG_ICNB True \
-            BioMed.INPUT.MRI_AUG_ICNB True \
+            BioMed.INPUT.MRI_AUG_ICNB False \
             FIND_UNUSED_PARAMETERS True \
             ATTENTION_ARCH.SPATIAL_MEMORIES 32 \
             MODEL.DECODER.SPATIAL.MAX_ITER 0 \
             ATTENTION_ARCH.QUERY_NUMBER 3 \
             STROKE_SAMPLER.MAX_CANDIDATE 10 \
             WEIGHT True \
-            RESUME_FROM checkpoints/biomedparse_v1.pt \
-            SAVE_DIR output_multiphase_breastcancer_aug
+            RESUME_FROM checkpoints/biomedparse_v1.pt
+            SAVE_DIR output_multiphase_NP_breastcancer
