@@ -8,7 +8,7 @@
 # Define Test/Trainer/Saving
 PIPELINE: XDecoderPipeline
 TRAINER: xdecoder
-SAVE_DIR: "./output"
+SAVE_DIR: "./output_bayes"
 base_path: "./"
 
 # Resume Logistic
