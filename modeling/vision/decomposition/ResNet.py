@@ -134,7 +134,8 @@ class ResNet_appearance(nn.Module):
         feat = self.lrelu(self.conv_first(x))
         out = self.body(feat)
         out = self.conv_last(self.lrelu(out))
-        out += x
+        mu, logvar = torch.chunk(out, 2, dim=1)
+        out = torch.cat((mu + x, logvar), dim=1)
         return out
 
 

@@ -15,16 +15,16 @@ class BayesDec(nn.Module):
         """
         super(BayesDec, self).__init__()
 
-        self.in_channel = cfg['MODLE']['DECOMPOSITION']['IN_CHANNEL']
-        self.mu_0 = cfg['MODLE']['DECOMPOSITION']['MU_0']
-        self.sigma_0 = cfg['MODLE']['DECOMPOSITION']['SIGMA_0']
-        self.gamma_rho = cfg['MODLE']['DECOMPOSITION']['GAMMA_RHO']
-        self.phi_rho = cfg['MODLE']['DECOMPOSITION']['PHI_RHO']
-        self.gamma_upsilon = cfg['MODLE']['DECOMPOSITION']['GAMMA_UPSILON']
-        self.phi_upsilon = cfg['MODLE']['DECOMPOSITION']['PHI_UPSILON']
+        self.in_channel = cfg['MODEL']['DECOMPOSITION']['IN_CHANNEL']
+        self.mu_0 = cfg['MODEL']['DECOMPOSITION']['MU_0']
+        self.sigma_0 = cfg['MODEL']['DECOMPOSITION']['SIGMA_0']
+        self.gamma_rho = cfg['MODEL']['DECOMPOSITION']['GAMMA_RHO']
+        self.phi_rho = float(cfg['MODEL']['DECOMPOSITION']['PHI_RHO'])
+        self.gamma_upsilon = cfg['MODEL']['DECOMPOSITION']['GAMMA_UPSILON']
+        self.phi_upsilon = float(cfg['MODEL']['DECOMPOSITION']['PHI_UPSILON'])
 
-        self.res_shape = ResNet_shape(num_out_ch=2*self.in_channel)
-        self.res_appear = ResNet_appearance(num_out_ch=2*self.in_channel, num_block=6, bn=True)
+        self.res_shape = ResNet_shape(num_in_ch=self.in_channel, num_out_ch=2*self.in_channel)
+        self.res_appear = ResNet_appearance(num_in_ch=self.in_channel, num_out_ch=2*self.in_channel, num_block=6, bn=True)
 
         Dx = torch.zeros([1, 1, 3, 3], dtype=torch.float)
         Dx[:, :, 1, 1] = 1
@@ -88,12 +88,9 @@ class BayesDec(nn.Module):
         kl_mu_x = torch.sum(
             difference_x * difference_x * mu_upsilon_hat.detach(), dim=1
         )
-        kl_sigma_x = (
-            torch.sum(
-                2 * torch.exp(log_var_x) * mu_upsilon_hat.detach(),
-                dim=1,
-            )
-            - log_var_x
+        kl_sigma_x = torch.sum(
+           2 * torch.exp(log_var_x) * mu_upsilon_hat.detach() - log_var_x,
+           dim=1
         )
 
         kl_mu_m = self.sigma_0 * (mu_m - self.mu_0) * (mu_m - self.mu_0)

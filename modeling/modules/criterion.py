@@ -745,16 +745,12 @@ class SetCriterion(nn.Module):
         loss_sigma_m = torch.sum(decomp_outputs["kl_sigma_m"]) / N
         loss_mu_x = torch.sum(decomp_outputs["kl_mu_x"]) / N
         loss_sigma_x = torch.sum(decomp_outputs["kl_sigma_x"]) / N
-        loss_mu_z = torch.sum(decomp_outputs["kl_mu_z"]) / N
-        loss_sigma_z = torch.sum(decomp_outputs["kl_sigma_z"]) / N
         loss_Bayes = (
             loss_y
             + loss_mu_m
             + loss_sigma_m
             + loss_mu_x
             + loss_sigma_x
-            + loss_mu_z
-            + loss_sigma_z
         )
         losses = {'loss_decomposition_bayes_0': loss_Bayes}
         return losses

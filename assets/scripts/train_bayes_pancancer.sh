@@ -42,6 +42,7 @@ srun --mpi=pmi2 python entry.py train \
             TRAIN.BATCH_SIZE_PER_GPU 4 \
             SOLVER.MAX_NUM_EPOCHS 5 \
             SOLVER.BASE_LR 0.00001 \
+            SOLVER.FIX_PARAM.decomposition False \
             SOLVER.FIX_PARAM.backbone True \
             SOLVER.FIX_PARAM.lang_encoder True \
             SOLVER.FIX_PARAM.pixel_decoder False \

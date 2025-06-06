@@ -219,8 +219,8 @@ class BayesianSEEM(nn.Module):
             aux_weight_dict = {}
             for i in range(dec_layers - 1):
                 for k, v in weight_dict.items():
-                    if (i+1) > (top_x_layers[k.split('_')[1]] - 1):
-                        continue
+                    if "decomposition" in k: continue
+                    if (i+1) > (top_x_layers[k.split('_')[1]] - 1): continue
                     aux_weight_dict.update({k.replace('_0', f"_{i+1}"): v})
             weight_dict.update(aux_weight_dict)
 

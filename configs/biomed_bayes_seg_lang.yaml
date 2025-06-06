@@ -344,10 +344,11 @@ SOLVER:
   OPTIMIZER: "ADAMW"
   LR_SCHEDULER_NAME: "WarmupMultiStepLR"
   LR_MULTIPLIER:
+    decomposition: 1.0
     backbone: 0.1
     lang_encoder: 0.1
   FIX_PARAM:
-    BayesDec: false
+    decomposition: false
     backbone: True
     lang_encoder: True
     pixel_decoder: True
