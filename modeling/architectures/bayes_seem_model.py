@@ -67,6 +67,7 @@ class BayesianSEEM(nn.Module):
         train_max_iter: int,
         binary_classes: bool,
         standard_text_for_eval: bool,
+        vis_every_n_steps: int
     ):
         """
         Args:
@@ -135,6 +136,9 @@ class BayesianSEEM(nn.Module):
         self.register_buffer("dilation_kernel", dilation_kernel)
 
         self.standard_text_for_eval = standard_text_for_eval
+
+        self.vis_every_n_steps = vis_every_n_steps
+        self.vis_counter = 0
 
     @classmethod
     def from_config(cls, cfg):
@@ -287,6 +291,7 @@ class BayesianSEEM(nn.Module):
             "train_max_iter": train_max_iter,
             "binary_classes": enc_cfg['BINARY_CLASSES'],
             "standard_text_for_eval": cfg['STANDARD_TEXT_FOR_EVAL'],
+            "vis_every_n_steps": decomp_cfg['VIS_EVERY_N_STEPS'],
         }
 
     @property
@@ -377,7 +382,9 @@ class BayesianSEEM(nn.Module):
 
         # Bayesian image decomposition
         decomp_outputs = self.decomposition(images.tensor)
-        self.visualizer(images.tensor, decomp_outputs['visualize'], self.writer)
+        self.vis_counter += 1
+        if self.vis_counter % self.vis_every_n_steps == 0:
+            self.visualizer(images.tensor, decomp_outputs['visualize'], self.vis_counter, self.writer)
 
         features = self.backbone(decomp_outputs['pred'])
         mask_features, _, multi_scale_features = self.sem_seg_head.pixel_decoder.forward_features(features)

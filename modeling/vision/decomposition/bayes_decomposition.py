@@ -121,10 +121,10 @@ class BayesDecVis(Visualization):
     def __init__(self):
         super(BayesDecVis, self).__init__()
 
-    def forward(self, inputs, outputs, writer):
-        self.save_image(inputs, "inputs", 0, writer)
+    def forward(self, inputs, outputs, step, writer):
+        self.save_image(inputs, "inputs", step, writer)
         for key, value in outputs.items():
-            self.save_image(value, key, 0, writer)
+            self.save_image(value, key, step, writer)
 
 
 def build_visualizer():
