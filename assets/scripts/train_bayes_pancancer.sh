@@ -28,7 +28,7 @@ export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 #export WANDB_KEY=YOUR_WANDB_KEY # Provide your wandb key here
 srun --mpi=pmi2 python entry.py train \
-            --conf_files configs/biomed_bayes_seg_lang.yaml \
+            --conf_files configs/pancia_bayes_seg_lang.yaml \
             --overrides \
             FP16 True \
             RANDOM_SEED 2024 \

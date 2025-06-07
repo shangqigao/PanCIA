@@ -13,7 +13,6 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from kornia.contrib import distance_transform
-from tensorboardX import SummaryWriter
 
 from detectron2.structures import Boxes, ImageList, Instances, BitMasks
 from detectron2.utils.memory import retry_if_cuda_oom
@@ -42,8 +41,6 @@ class BayesianSEEM(nn.Module):
         backbone: Backbone,
         sem_seg_head: nn.Module,
         criterion: nn.Module,
-        visualizer: nn.Module,
-        writer: SummaryWriter,
         losses: dict,
         num_queries: int,
         object_mask_threshold: float,
@@ -95,8 +92,6 @@ class BayesianSEEM(nn.Module):
         self.backbone = backbone
         self.sem_seg_head = sem_seg_head
         self.criterion = criterion
-        self.visualizer = visualizer
-        self.writer = writer
         self.losses = losses
         self.num_queries = num_queries
         self.overlap_threshold = overlap_threshold
@@ -150,10 +145,12 @@ class BayesianSEEM(nn.Module):
 
         task_switch = {'decomposition': decomp_cfg['BAYES'].get('ENABLED', True),
                        'bbox': dec_cfg.get('DETECTION', False),
-                       'mask': dec_cfg['MASK'].get('ENABLED', True),
+                       'mask': dec_cfg.get('MASK', True),
                        'spatial': dec_cfg['SPATIAL'].get('ENABLED', False),
                        'grounding': dec_cfg['GROUNDING'].get('ENABLED', False),
-                       'openimage': openimage_switch}
+                       'openimage': openimage_switch,
+                       'visual': dec_cfg['VISUAL'].get('ENABLED', False),
+                       'audio': dec_cfg['AUDIO'].get('ENABLED', False)}
 
         top_x_layers = {}
 
@@ -169,10 +166,6 @@ class BayesianSEEM(nn.Module):
         grd_weight = {}
         criterion = None
 
-        # visualizer and writer
-        visualizer = build_visualizer()
-        writer = SummaryWriter(log_dir=os.path.join(cfg['SAVE_DIR'], "summary"))
-
         # extra logistic
         train_dataset_name = None
         phrase_prob = None
@@ -187,13 +180,11 @@ class BayesianSEEM(nn.Module):
             "backbone": backbone,
             "sem_seg_head": sem_seg_head,
             "criterion": criterion,
-            "visualizer": visualizer,
-            "writer": writer,
             "losses": losses,
             "num_queries": dec_cfg['NUM_OBJECT_QUERIES'],
             "object_mask_threshold": dec_cfg['TEST']['OBJECT_MASK_THRESHOLD'],
             "overlap_threshold": dec_cfg['TEST']['OVERLAP_THRESHOLD'],
-            "metadata": MetadataCatalog.get(cfg['DATASETS']['TRAIN'][0]),
+            "metadata": None,
             "size_divisibility": dec_cfg['SIZE_DIVISIBILITY'],
             "sem_seg_postprocess_before_inference": (
                 dec_cfg['TEST']['SEM_SEG_POSTPROCESSING_BEFORE_INFERENCE']
@@ -208,7 +199,7 @@ class BayesianSEEM(nn.Module):
             "semantic_on": dec_cfg['TEST']['SEMANTIC_ON'],
             "instance_on": dec_cfg['TEST']['INSTANCE_ON'],
             "panoptic_on": dec_cfg['TEST']['PANOPTIC_ON'],
-            "test_topk_per_image": cfg['TEST']['DETECTIONS_PER_IMAGE'],
+            "test_topk_per_image": cfg['MODEL']['DECODER']['TEST']['DETECTIONS_PER_IMAGE'],
             "train_dataset_name": train_dataset_name,
             "interactive_mode": interactive_mode,
             "interactive_iter": interactive_iter,
@@ -304,10 +295,6 @@ class BayesianSEEM(nn.Module):
 
         # Bayesian image decomposition
         decomp_outputs = self.decomposition(images.tensor)
-        self.vis_counter += 1
-        if self.vis_counter % self.vis_every_n_steps == 0:
-            self.visualizer(images.tensor, decomp_outputs['visualize'], self.vis_counter, self.writer)
-
         features = self.backbone(decomp_outputs['pred'])
         mask_features, _, multi_scale_features = self.sem_seg_head.pixel_decoder.forward_features(features)
 
