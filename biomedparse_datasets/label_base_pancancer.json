@@ -113,16 +113,5 @@
       "benign uterine tumor",
       "malignant uterine tumor"
     ]
-  },
-  "12": {
-    "name": "other",
-    "parent": "tumor",
-    "child": [
-      "brain cancer",
-      "brain tumor",
-      "gatric cancer",
-      "stomach tumor",
-      "thoracic cancer"
-    ]
   }
 }

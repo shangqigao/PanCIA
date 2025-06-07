@@ -21,7 +21,7 @@ module load intel-oneapi-compilers/2025.1.0/gcc/5berjkxu
 
 ## activate environment
 source ~/.bashrc
-conda activate biomedparse
+conda activate /rds/user/sg2162/hpc-work/miniconda3/hpc-dawn
 
 data_root="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/"
 export DETECTRON2_DATASETS=$data_root
