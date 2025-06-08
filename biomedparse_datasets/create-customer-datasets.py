@@ -1,5 +1,4 @@
 import glob
-import ast
 from tqdm import tqdm
 import pandas as pd
 
@@ -35,45 +34,7 @@ for i in label_base:
 # Label ids of the dataset
 category_ids = {label_base[i]['name']: int(i) for i in label_base if 'name' in label_base[i]}
 
-# create descriptive prompts
-def create_prompts(filename, df_meta=None):
-    parts = filename.split("_")
-    assert len(parts) == 8, f"Does not support this filename: {filename}"
-    # slice information
-    patient_id = "_".join(parts[0:2])
-    view = parts[2]
-    slice_index = parts[4]
-    modality = parts[5]
-    site = parts[6]
-    target = parts[7].split("+")[-1]
 
-    basic_prompts = [
-        f"{target} in {site} {modality}",
-        f"{view} slice {slice_index} showing {target} in {site}",
-        f"{target} located in the {site} on {modality}",
-        f"{view} {site} {modality} with {target}",
-        f"{target} visible in slice {slice_index} of {modality}",
-    ]
-
-    # meta information
-    if df_meta is not None:
-        pixel_spacing = df_meta.loc[df_meta["patient_id"] == patient_id, 'pixel_spacing'].values[0]
-        x_spacing, y_spacing = pixel_spacing[0], pixel_spacing[1]
-        field_strength = df_meta.loc[df_meta["patient_id"] == patient_id, 'field_strength'].values[0]
-        bilateral_mri = df_meta.loc[df_meta["patient_id"] == patient_id, 'bilateral_mri'].values[0]
-        lateral = 'bilateral' if bilateral_mri == 1 else 'unilateral'
-        manufacturer = df_meta.loc[df_meta["patient_id"] == patient_id, 'manufacturer'].values[0]
-        meta_prompts = [
-            f"a {modality} scan of the {lateral} {site}, {view} view, slice {slice_index}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
-            f"{lateral} {site} {modality} in {view} view at slice {slice_index} with spacing {x_spacing:.2f}x{y_spacing:.2f} mm, includes {target}",
-            f"{view} slice {slice_index} from a {field_strength}T {manufacturer} {modality} of the {lateral} {site}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
-            f"{lateral} {site} {modality} in {view} view, slice {slice_index}, using {field_strength}T {manufacturer} scanner, spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
-            f"{modality} of the {lateral} {site} at slice {slice_index}, {view} view, spacing: {x_spacing:.2f}x{y_spacing:.2f} mm, scanned by {field_strength}T {manufacturer} scanner, shows {target}"
-        ]
-    else:
-        meta_prompts = []
-    
-    return basic_prompts + meta_prompts
 
 # Get "images" and "annotations" info 
 def images_annotations_info(maskpath):
@@ -110,7 +71,6 @@ def images_annotations_info(maskpath):
                 task['sequence'] = mod[4:]
             
         prompts = [f'{target} in {site} {mod}']
-        prompts += create_prompts(filename=file_name, df_meta=df_clinic)
         
         ann['sentences'] = []
         for p in prompts:
