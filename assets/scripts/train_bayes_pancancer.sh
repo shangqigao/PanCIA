@@ -54,11 +54,11 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.GROUNDING.ENABLED True \
             LOADER.SAMPLE_PROB prop \
             BioMed.INPUT.RANDOM_ROTATE True \
-            BioMed.INPUT.MRI_AUG_ICNB True \
+            BioMed.INPUT.MRI_AUG_ICNB False \
             FIND_UNUSED_PARAMETERS True \
             ATTENTION_ARCH.SPATIAL_MEMORIES 32 \
             MODEL.DECODER.SPATIAL.MAX_ITER 0 \
             ATTENTION_ARCH.QUERY_NUMBER 3 \
             STROKE_SAMPLER.MAX_CANDIDATE 10 \
             WEIGHT True \
-            RESUME_FROM checkpoints/biomedparse_v1.pt
+            RESUME_FROM checkpoints/bayes_multiphase_breastcancer.pt

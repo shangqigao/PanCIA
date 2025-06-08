@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-36:00:00
-##SBATCH --time=0-00:08:00
+##SBATCH --time=0-36:00:00
+#SBATCH --time=0-00:08:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-##SBATCH --qos=intr
+#SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -36,7 +36,7 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.HIDDEN_DIM 512 \
             MODEL.ENCODER.CONVS_DIM 512 \
             MODEL.ENCODER.MASK_DIM 512 \
-            MODEL.ENCODER.BINARY_CLASSES True \
+            MODEL.ENCODER.BINARY_CLASSES False \
             TEST.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_PER_GPU 4 \
@@ -53,7 +53,7 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.GROUNDING.ENABLED True \
             LOADER.SAMPLE_PROB prop \
             BioMed.INPUT.RANDOM_ROTATE True \
-            BioMed.INPUT.MRI_AUG_ICNB True \
+            BioMed.INPUT.MRI_AUG_ICNB False \
             FIND_UNUSED_PARAMETERS True \
             ATTENTION_ARCH.SPATIAL_MEMORIES 32 \
             MODEL.DECODER.SPATIAL.MAX_ITER 0 \
