@@ -345,7 +345,7 @@ SOLVER:
   OPTIMIZER: "ADAMW"
   LR_SCHEDULER_NAME: "WarmupMultiStepLR"
   LR_MULTIPLIER:
-    decomposition: 0.1
+    decomposition: 1.0
     backbone: 0.1
     lang_encoder: 0.1
   FIX_PARAM:

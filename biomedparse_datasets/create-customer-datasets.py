@@ -36,16 +36,14 @@ for i in label_base:
 category_ids = {label_base[i]['name']: int(i) for i in label_base if 'name' in label_base[i]}
 
 # create descriptive prompts
-def create_prompts(filename, df_meta=None):
+def create_prompts(filename, targetname, df_meta=None):
     parts = filename.split("_")
-    assert len(parts) == 8, f"Does not support this filename: {filename}"
     # slice information
-    patient_id = "_".join(parts[0:2])
-    view = parts[2]
-    slice_index = parts[4]
-    modality = parts[5]
-    site = parts[6]
-    target = parts[7].split("+")[-1]
+    view = parts[-5]
+    slice_index = parts[-3]
+    modality = parts[-2]
+    site = parts[-1].split(".")[0]
+    target = 'tumor' if 'tumor' in targetname else targetname
 
     basic_prompts = [
         f"{target} in {site} {modality}",
@@ -57,6 +55,8 @@ def create_prompts(filename, df_meta=None):
 
     # meta information
     if df_meta is not None:
+        excluded = '_' + "_".join(parts[-5:])
+        patient_id = filename.replace(excluded, "")
         pixel_spacing = df_meta.loc[df_meta["patient_id"] == patient_id, 'pixel_spacing'].values[0]
         x_spacing, y_spacing = pixel_spacing[0], pixel_spacing[1]
         field_strength = df_meta.loc[df_meta["patient_id"] == patient_id, 'field_strength'].values[0]
@@ -110,7 +110,7 @@ def images_annotations_info(maskpath):
                 task['sequence'] = mod[4:]
             
         prompts = [f'{target} in {site} {mod}']
-        prompts += create_prompts(filename=file_name, df_meta=df_clinic)
+        prompts += create_prompts(filename=file_name, targetname=target, df_meta=df_clinic)
         
         ann['sentences'] = []
         for p in prompts:

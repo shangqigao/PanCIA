@@ -36,7 +36,6 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.HIDDEN_DIM 512 \
             MODEL.ENCODER.CONVS_DIM 512 \
             MODEL.ENCODER.MASK_DIM 512 \
-            MODEL.ENCODER.BINARY_CLASSES False \
             TEST.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_PER_GPU 4 \
