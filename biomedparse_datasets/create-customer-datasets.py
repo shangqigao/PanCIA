@@ -7,7 +7,7 @@ from create_annotations import *
 
 
 # provide the path to the dataset. There should be train, train_mask, test, test_mask under this folder
-targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor'
+targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast'
 if 'Breast_Tumor' in targetpath:
     clinical_info_path = 'clinical_and_imaging_info.xlsx'
     df_clinic = pd.read_excel(clinical_info_path, sheet_name='dataset_info')
@@ -46,7 +46,7 @@ def create_prompts(filename, targetname, df_meta=None):
     target = 'tumor' if 'tumor' in targetname else targetname
 
     basic_prompts = [
-        f"{target} in {site} {modality}",
+        # f"{target} in {site} {modality}",
         f"{view} slice {slice_index} showing {target} in {site}",
         f"{target} located in the {site} on {modality}",
         f"{view} {site} {modality} with {target}",

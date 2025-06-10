@@ -94,8 +94,8 @@ def focal_tversky_loss(
 
 
 dice_loss_jit = torch.jit.script(
-    # dice_loss
-    focal_tversky_loss
+    dice_loss
+    # focal_tversky_loss
 )  # type: torch.jit.ScriptModule
 
 

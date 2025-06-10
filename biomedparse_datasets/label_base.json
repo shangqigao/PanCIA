@@ -95,7 +95,8 @@
         "aorta",
         "postcava",
         "hepatic vessel",
-        "retinal vessel"
+        "retinal vessel",
+        "blood vessel"
       ]
     },
     "9": {
@@ -116,7 +117,9 @@
         "bladder",
         "duodenum",
         "lymph node",
-        "colon"
+        "colon",
+        "breast tissue",
+        "fibroglandular tissue"
       ]
     },
     "10": {

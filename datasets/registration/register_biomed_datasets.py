@@ -44,7 +44,7 @@ datasets = [
     'Prostate_Tumor',
     'Uterus_Tumor',
     'Multiphase_Breast_Tumor',
-    'Multiphase_NP_Breast_Tumor'
+    'Duke_Multiphase_Breast',
     ]   # provide name of the dataset under biomedparse_datasets
 splits = ['train', 'test']    # provide split name, e.g., train, test, val
 

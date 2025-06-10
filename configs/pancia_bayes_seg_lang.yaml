@@ -245,6 +245,7 @@ ATTENTION_ARCH:
 DATASETS:
   TRAIN:
     # Add your registered training datasets here
+    # The second word, e.g., Bladder, cannot be the same
     # - "biomed_Bladder_Tumor_train"
     # - 'biomed_Breast_Tumor_train'
     # - "biomed_Cervix_Tumor_train"
