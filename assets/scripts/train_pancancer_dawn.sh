@@ -39,7 +39,7 @@ export SLURM_EXPORT_ENV=ALL
 stdbuf -oL -eL echo "Starting job at $(date)"
 
 #export WANDB_KEY=YOUR_WANDB_KEY # Provide your wandb key here
-srun --mpi=pmi2 python entry.py train \
+mpirun -np 4 python entry.py train \
             --conf_files configs/biomed_seg_lang_v1.yaml \
             --overrides \
             FP16 True \
