@@ -32,7 +32,6 @@ srun --mpi=pmi2 python entry.py train \
             --overrides \
             FP16 True \
             RANDOM_SEED 2024 \
-            STANDARD_TEXT_FOR_EVAL True \
             BioMed.INPUT.IMAGE_SIZE 1024 \
             MODEL.DECODER.HIDDEN_DIM 512 \
             MODEL.ENCODER.CONVS_DIM 512 \
@@ -54,7 +53,7 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.GROUNDING.ENABLED True \
             LOADER.SAMPLE_PROB prop \
             BioMed.INPUT.RANDOM_ROTATE True \
-            BioMed.INPUT.MRI_AUG_ICNB True \
+            BioMed.INPUT.MRI_AUG_ICNB False \
             FIND_UNUSED_PARAMETERS True \
             ATTENTION_ARCH.SPATIAL_MEMORIES 32 \
             MODEL.DECODER.SPATIAL.MAX_ITER 0 \
