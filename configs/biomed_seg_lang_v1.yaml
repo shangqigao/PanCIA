@@ -349,3 +349,15 @@ SOLVER:
     CLIP_VALUE: 5.0 # 0.01
     NORM_TYPE: 2.0
   MAX_NUM_EPOCHS: 50
+
+# Define LoRA config for finetuning model
+LoRA:
+  ENABLE: false
+  CONFIG:
+    r: 8
+    lora_alpha: 32
+    target_modules: ["pixel_decoder"]
+    exclude_modules: ["lang_encoder"]
+    lora_dropout: 0.01
+    bias: "none"
+    task_type: "FEATURE_EXTRACTION"

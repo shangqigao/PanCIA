@@ -199,14 +199,22 @@ class DefaultTrainer(UtilsTrainer, DistributedTrainer):
         if self.opt['CUDA']:
             torch.cuda.empty_cache()
 
-        self.create_optimizer_and_scheduler()
         self.models = {model_name: self.raw_models[model_name] for model_name in self.model_names}
-        self._initialize_ddp()
 
         if self.opt.get('WEIGHT', False):
             self.load_weight(self.opt['RESUME_FROM'], must_exist=True)
         if self.opt.get('RESUME', False):
             self.load_checkpoint(self.opt['RESUME_FROM'], must_exist=True)
+
+        # create LoRA model
+        if self.opt['LoRA'].get('ENABLE', False):
+            self.get_lora_model()
+
+        # initialize DDP
+        self._initialize_ddp()
+
+        # create optimizer
+        self.create_optimizer_and_scheduler()
 
         ######################
         # Start the main loop

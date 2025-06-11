@@ -27,6 +27,8 @@ from torch.utils.data.distributed import DistributedSampler
 from mpi4py import MPI
 from infinibatch import iterators
 
+from peft import LoraConfig, get_peft_model
+
 from .distributed_trainer import DistributedTrainer
 from .utils.misc import *
 from .utils.serialization import JSONEncoder, filter_jsonable
@@ -192,3 +194,8 @@ class UtilsTrainer(DistributedTrainer):
             logging.warning("Could not find random state for rank {}".format(self.opt['rank']))
 
         logger.warning(f'Finished loading checkpoint from {checkpoint_path}.')
+    
+    def get_lora_model(self):
+        config = LoraConfig(**config)
+        for model_name in self.model_names:
+            self.models[model_name] = get_peft_model(self.raw_models[model_name], config)

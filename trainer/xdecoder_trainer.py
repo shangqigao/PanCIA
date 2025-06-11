@@ -74,6 +74,7 @@ class XDecoder_Trainer(DefaultTrainer):
         
         fix_param = self.opt['SOLVER'].get('FIX_PARAM',{})
         ignore_fix = self.opt['SOLVER'].get('IGNORE_FIX',[])
+        lora_enabled = self.opt['LoRA'].get('ENABLE', False)
         for _module_name in self.model_names:
 
             flag_continue = False
@@ -89,8 +90,12 @@ class XDecoder_Trainer(DefaultTrainer):
                     continue
                 
                 for key, value in fix_param.items():
-                    if key in name and value == True:
-                        param.requires_grad = False
+                    if not lora_enabled:
+                        if key in name and value == True:
+                            param.requires_grad = False
+                    else:
+                        if key in name and value == False:
+                            param.requires_grad = True         
 
                     if key in name:
                         if key not in module_params:
