@@ -199,9 +199,12 @@ class UtilsTrainer(DistributedTrainer):
         exclude_modules = self.opt['LoRA']['EXCLUDE_MODULRS']
         supported_types = (torch.nn.Linear, torch.nn.Embedding, torch.nn.Conv2d)
         config = self.opt['LoRA']['CONFIG']
-        config = LoraConfig(**self.opt['LoRA']['CONFIG'])
         for model_name in self.model_names:
             target_modules = []
             for name, module in self.raw_models[model_name].named_modules():
-
-            self.models[model_name] = get_peft_model(self.raw_models[model_name], config)
+                if any(keyword in name for keyword in exclude_modules):
+                    continue
+                if isinstance(module, supported_types):
+                    target_modules.append(name)
+            config.update({'target_modules': target_modules})
+            self.models[model_name] = get_peft_model(self.raw_models[model_name], LoraConfig(**config))
