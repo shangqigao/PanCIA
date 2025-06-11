@@ -8,7 +8,7 @@
 # Define Test/Trainer/Saving
 PIPELINE: XDecoderPipeline
 TRAINER: xdecoder
-SAVE_DIR: "./output_bayes"
+SAVE_DIR: "./output_bayes_only_decomposition_attention"
 base_path: "./"
 
 # Resume Logistic
@@ -356,6 +356,7 @@ SOLVER:
     backbone: True
     lang_encoder: True
     pixel_decoder: True
+    # sem_seg_head: True
   WEIGHT_DECAY_NORM: 0.0
   WEIGHT_DECAY_EMBED: 0.0
   CLIP_GRADIENTS:
