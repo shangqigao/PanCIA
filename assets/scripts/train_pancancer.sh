@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-36:00:00
-##SBATCH --time=0-00:08:00
+##SBATCH --time=0-36:00:00
+#SBATCH --time=0-00:08:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-##SBATCH --qos=intr
+#SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -43,7 +43,7 @@ srun --mpi=pmi2 python entry.py train \
             SOLVER.BASE_LR 0.00001 \
             SOLVER.FIX_PARAM.backbone True \
             SOLVER.FIX_PARAM.lang_encoder True \
-            SOLVER.FIX_PARAM.pixel_decoder False \
+            SOLVER.FIX_PARAM.pixel_decoder True \
             MODEL.DECODER.COST_SPATIAL.CLASS_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.MASK_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.DICE_WEIGHT 1.0 \
@@ -58,5 +58,6 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.SPATIAL.MAX_ITER 0 \
             ATTENTION_ARCH.QUERY_NUMBER 3 \
             STROKE_SAMPLER.MAX_CANDIDATE 10 \
+            LoRA.ENABLE True \
             WEIGHT True \
             RESUME_FROM checkpoints/biomedparse_v1.pt

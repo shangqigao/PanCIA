@@ -196,6 +196,12 @@ class UtilsTrainer(DistributedTrainer):
         logger.warning(f'Finished loading checkpoint from {checkpoint_path}.')
     
     def get_lora_model(self):
-        config = LoraConfig(**config)
+        exclude_modules = self.opt['LoRA']['EXCLUDE_MODULRS']
+        supported_types = (torch.nn.Linear, torch.nn.Embedding, torch.nn.Conv2d)
+        config = self.opt['LoRA']['CONFIG']
+        config = LoraConfig(**self.opt['LoRA']['CONFIG'])
         for model_name in self.model_names:
+            target_modules = []
+            for name, module in self.raw_models[model_name].named_modules():
+
             self.models[model_name] = get_peft_model(self.raw_models[model_name], config)

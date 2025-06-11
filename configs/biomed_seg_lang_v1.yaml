@@ -353,11 +353,11 @@ SOLVER:
 # Define LoRA config for finetuning model
 LoRA:
   ENABLE: false
+  EXCLUDE_MODULRS: ['backbone', 'lang_encoder']
   CONFIG:
     r: 8
     lora_alpha: 32
-    target_modules: ["pixel_decoder"]
-    exclude_modules: ["lang_encoder"]
+    # exclude_modules: ["lang_encoder"]
     lora_dropout: 0.01
     bias: "none"
-    task_type: "FEATURE_EXTRACTION"
+    task_type: "VISION"

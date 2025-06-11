@@ -44,7 +44,7 @@ srun --mpi=pmi2 python entry.py train \
             SOLVER.FIX_PARAM.decomposition False \
             SOLVER.FIX_PARAM.backbone True \
             SOLVER.FIX_PARAM.lang_encoder True \
-            SOLVER.FIX_PARAM.pixel_decoder True \
+            SOLVER.FIX_PARAM.pixel_decoder False \
             MODEL.DECODER.COST_SPATIAL.CLASS_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.MASK_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.DICE_WEIGHT 1.0 \
@@ -59,5 +59,6 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.SPATIAL.MAX_ITER 0 \
             ATTENTION_ARCH.QUERY_NUMBER 3 \
             STROKE_SAMPLER.MAX_CANDIDATE 10 \
+            LoRA.ENABLE True \
             WEIGHT True \
             RESUME_FROM checkpoints/biomedparse_v1.pt
