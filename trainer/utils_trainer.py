@@ -201,10 +201,11 @@ class UtilsTrainer(DistributedTrainer):
         config = self.opt['LoRA']['CONFIG']
         for model_name in self.model_names:
             target_modules = []
-            for name, module in self.raw_models[model_name].named_modules():
+            for name, module in self.models[model_name].named_modules():
                 if any(keyword in name for keyword in exclude_modules):
                     continue
                 if isinstance(module, supported_types):
                     target_modules.append(name)
             config.update({'target_modules': target_modules})
-            self.models[model_name] = get_peft_model(self.raw_models[model_name], LoraConfig(**config))
+            self.models[model_name] = get_peft_model(self.models[model_name], LoraConfig(**config))
+            self.raw_models[model_name] = self.models[model_name]
