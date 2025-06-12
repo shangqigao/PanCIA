@@ -84,7 +84,7 @@ class XDecoderPipeline:
 
     @staticmethod
     def forward_func(trainer, batch):
-        loss = trainer.models['default'](batch)
+        loss = trainer.models['default'](batched_inputs=batch)
         return loss
 
     def forward_step(
@@ -157,7 +157,7 @@ class XDecoderPipeline:
                         # in FP16 mode, DeepSpeed casts the model to FP16, so the input needs to be manually casted to FP16
                         batch = cast_batch_to_half(batch)
 
-                    outputs = model(batch, mode=eval_type)
+                    outputs = model(batched_inputs=batch, mode=eval_type)
                     if torch.cuda.is_available():
                         torch.cuda.synchronize()
 

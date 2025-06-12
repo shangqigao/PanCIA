@@ -8,7 +8,7 @@
 # Define Test/Trainer/Saving
 PIPELINE: XDecoderPipeline
 TRAINER: xdecoder
-SAVE_DIR: "./output"
+SAVE_DIR: "./output_LoRA"
 base_path: "./"
 
 # Resume Logistic
@@ -353,7 +353,7 @@ SOLVER:
 # Define LoRA config for finetuning model
 LoRA:
   ENABLE: false
-  EXCLUDE_MODULRS: ["backbone", "lang_encoder"]
+  EXCLUDE_MODULRS: ["backbone", "lang_encoder", 'out_proj']
   CONFIG:
     r: 8
     lora_alpha: 32
