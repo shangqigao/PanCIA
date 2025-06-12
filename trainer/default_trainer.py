@@ -69,6 +69,11 @@ class DefaultTrainer(UtilsTrainer, DistributedTrainer):
         for module_name in self.model_names:
             self.raw_models[module_name].to(self.opt['device'])
 
+        # load LoRA model
+        if self.opt['LoRA'].get('ENABLE', False):
+            self.models = {model_name: self.raw_models[model_name] for model_name in self.model_names}
+            self.get_lora_model()
+
         # load model during evaluation
         if self.opt['WEIGHT'] and os.path.isfile(self.opt['RESUME_FROM']):
             model_path = self.opt['RESUME_FROM'] 

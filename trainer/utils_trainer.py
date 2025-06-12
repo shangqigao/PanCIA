@@ -208,4 +208,4 @@ class UtilsTrainer(DistributedTrainer):
                     target_modules.append(name)
             config.update({'target_modules': target_modules})
             self.models[model_name] = get_peft_model(self.models[model_name], LoraConfig(**config))
-            self.raw_models[model_name] = self.models[model_name].model
+            self.raw_models[model_name] = self.models[model_name]
