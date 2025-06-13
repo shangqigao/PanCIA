@@ -145,6 +145,8 @@ class UtilsTrainer(DistributedTrainer):
             for module_name in self.model_names:
                 module_save_dir = os.path.join(save_dir, module_name)
                 self.raw_models[module_name].save_pretrained(module_save_dir)
+                if self.opt['LoRA'].get('ENABLE', False):
+                    self.raw_models[module_name].model.save_pretrained(module_save_dir)
 
         if self.opt['rank'] == 0:
             # save the latest checkpoint location to json file

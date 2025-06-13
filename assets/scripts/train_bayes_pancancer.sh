@@ -44,14 +44,14 @@ srun --mpi=pmi2 python entry.py train \
             SOLVER.FIX_PARAM.decomposition False \
             SOLVER.FIX_PARAM.backbone True \
             SOLVER.FIX_PARAM.lang_encoder True \
-            SOLVER.FIX_PARAM.pixel_decoder False \
+            SOLVER.FIX_PARAM.pixel_decoder True \
             MODEL.DECODER.COST_SPATIAL.CLASS_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.MASK_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.DICE_WEIGHT 1.0 \
             MODEL.DECODER.TOP_SPATIAL_LAYERS 10 \
             MODEL.DECODER.SPATIAL.ENABLED True \
             MODEL.DECODER.GROUNDING.ENABLED True \
-            LOADER.SAMPLE_PROB sqrt \
+            LOADER.SAMPLE_PROB prop \
             BioMed.INPUT.RANDOM_ROTATE True \
             BioMed.INPUT.MRI_AUG_ICNB False \
             FIND_UNUSED_PARAMETERS True \

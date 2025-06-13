@@ -114,7 +114,7 @@ class XDecoderPipeline:
         save_folder,
     ) -> Tuple[Dict, Dict[str, float], bool]:
 
-        if self.opt['LoRA'].get('ENABLE', False):
+        if self._opt['LoRA'].get('ENABLE', False):
             model = trainer.raw_models['default'].model.eval()
         else:
             model = trainer.raw_models['default'].eval()
