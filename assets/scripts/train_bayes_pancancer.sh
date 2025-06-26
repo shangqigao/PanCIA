@@ -60,5 +60,5 @@ srun --mpi=pmi2 python entry.py train \
             ATTENTION_ARCH.QUERY_NUMBER 3 \
             STROKE_SAMPLER.MAX_CANDIDATE 10 \
             LoRA.ENABLE True \
-            WEIGHT True \
-            RESUME_FROM checkpoints/biomedparse_v1.pt
+            LoRA.RESUME True \
+            LoRA.RESUME_FROM output_bayes_LoRA/pancia_bayes_seg_lang.yaml_conf~/run_1/00063411/default/module_training_states.pt

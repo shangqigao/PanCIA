@@ -377,10 +377,12 @@ SOLVER:
 # Define LoRA config for finetuning model
 LoRA:
   ENABLE: false
-  EXCLUDE_MODULRS: ["decomposition", "lang_encoder", 'out_proj']
+  EXCLUDE_MODULRS: ["decomposition", "lang_encoder", "out_proj"]
   CONFIG:
     r: 8
     lora_alpha: 32
     lora_dropout: 0.01
     bias: "none"
     task_type: "FEATURE_EXTRACTION"
+  RESUME: false
+  RESUME_FROM: ""
