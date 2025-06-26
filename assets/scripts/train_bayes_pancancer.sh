@@ -36,9 +36,9 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.HIDDEN_DIM 512 \
             MODEL.ENCODER.CONVS_DIM 512 \
             MODEL.ENCODER.MASK_DIM 512 \
-            TEST.BATCH_SIZE_TOTAL 4 \
-            TRAIN.BATCH_SIZE_TOTAL 4 \
-            TRAIN.BATCH_SIZE_PER_GPU 4 \
+            TEST.BATCH_SIZE_TOTAL 2 \
+            TRAIN.BATCH_SIZE_TOTAL 2 \
+            TRAIN.BATCH_SIZE_PER_GPU 2 \
             SOLVER.MAX_NUM_EPOCHS 5 \
             SOLVER.BASE_LR 0.00001 \
             SOLVER.FIX_PARAM.decomposition False \
@@ -51,7 +51,7 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.TOP_SPATIAL_LAYERS 10 \
             MODEL.DECODER.SPATIAL.ENABLED True \
             MODEL.DECODER.GROUNDING.ENABLED True \
-            LOADER.SAMPLE_PROB prop \
+            LOADER.SAMPLE_PROB sqrt \
             BioMed.INPUT.RANDOM_ROTATE True \
             BioMed.INPUT.MRI_AUG_ICNB False \
             FIND_UNUSED_PARAMETERS True \

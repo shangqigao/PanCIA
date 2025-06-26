@@ -50,7 +50,7 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.TOP_SPATIAL_LAYERS 10 \
             MODEL.DECODER.SPATIAL.ENABLED True \
             MODEL.DECODER.GROUNDING.ENABLED True \
-            LOADER.SAMPLE_PROB prop \
+            LOADER.SAMPLE_PROB sqrt \
             BioMed.INPUT.RANDOM_ROTATE True \
             BioMed.INPUT.MRI_AUG_ICNB False \
             FIND_UNUSED_PARAMETERS True \

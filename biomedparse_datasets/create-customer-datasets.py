@@ -7,8 +7,8 @@ from create_annotations import *
 
 
 # provide the path to the dataset. There should be train, train_mask, test, test_mask under this folder
-targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast'
-if 'Breast_Tumor' in targetpath:
+targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/NACTTumor_Multiphase_Breast'
+if 'Tumor_Multiphase_Breast' in targetpath:
     clinical_info_path = 'clinical_and_imaging_info.xlsx'
     df_clinic = pd.read_excel(clinical_info_path, sheet_name='dataset_info')
     df_clinic['pixel_spacing'] = df_clinic['pixel_spacing'].apply(ast.literal_eval)
