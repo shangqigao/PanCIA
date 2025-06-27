@@ -214,14 +214,16 @@ class DefaultTrainer(UtilsTrainer, DistributedTrainer):
         # create LoRA model
         if self.opt['LoRA'].get('ENABLE', False):
             self.get_lora_model()
-        if self.opt['LoRA'].get('RESUME', False):
-            self.load_checkpoint(self.opt['LoRA']['RESUME_FROM'], must_exist=True)
 
         # initialize DDP
         self._initialize_ddp()
 
         # create optimizer
         self.create_optimizer_and_scheduler()
+
+        # resume LoRA model
+        if self.opt['LoRA'].get('RESUME', False):
+            self.load_checkpoint(self.opt['LoRA']['RESUME_FROM'], must_exist=True)
 
         ######################
         # Start the main loop
