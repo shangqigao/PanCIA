@@ -260,9 +260,9 @@ DATASETS:
     # - "biomed_Multiphase_Breast_Tumor_train"
     - "biomed_Duke_Multiphase_Breast_train"
     - "biomed_DukeTumor_Multiphase_Breast_train"
-    - "biomed_ISPY1Tumor_Multiphase_Breast_train"
+    # - "biomed_ISPY1Tumor_Multiphase_Breast_train"
     - "biomed_ISPY2Tumor_Multiphase_Breast_train"
-    - "biomed_NACTTumor_Multiphase_Breast_train"
+    # - "biomed_NACTTumor_Multiphase_Breast_train"
 
   TEST:
     # Add your registered test datasets here
@@ -377,7 +377,7 @@ SOLVER:
 # Define LoRA config for finetuning model
 LoRA:
   ENABLE: false
-  EXCLUDE_MODULRS: ["decomposition", "lang_encoder", "out_proj"]
+  EXCLUDE_MODULRS: ["decomposition", "backbone", "lang_encoder", "out_proj"]
   CONFIG:
     r: 8
     lora_alpha: 32

@@ -5,7 +5,7 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-36:00:00
+#SBATCH --time=0-02:00:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
@@ -16,7 +16,7 @@
 source ~/.bashrc
 conda activate biomedparse
 
-data_root="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/"
+data_root="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/"
 export DETECTRON2_DATASETS=$data_root
 export DATASET=$data_root
 export DATASET2=$data_root
@@ -35,6 +35,6 @@ srun --mpi=pmi2 python entry.py evaluate \
             TEST.BATCH_SIZE_TOTAL 1 \
             FP16 True \
             WEIGHT True \
-            STANDARD_TEXT_FOR_EVAL False \
+            STANDARD_TEXT_FOR_EVAL True \
             RESUME_FROM checkpoints/biomedparse_v1.pt \
             

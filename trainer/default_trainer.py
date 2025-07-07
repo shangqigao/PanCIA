@@ -208,8 +208,6 @@ class DefaultTrainer(UtilsTrainer, DistributedTrainer):
 
         if self.opt.get('WEIGHT', False):
             self.load_weight(self.opt['RESUME_FROM'], must_exist=True)
-        if self.opt.get('RESUME', False):
-            self.load_checkpoint(self.opt['RESUME_FROM'], must_exist=True)
 
         # create LoRA model
         if self.opt['LoRA'].get('ENABLE', False):
@@ -221,7 +219,9 @@ class DefaultTrainer(UtilsTrainer, DistributedTrainer):
         # create optimizer
         self.create_optimizer_and_scheduler()
 
-        # resume LoRA model
+        # resume model
+        if self.opt.get('RESUME', False):
+            self.load_checkpoint(self.opt['RESUME_FROM'], must_exist=True)
         if self.opt['LoRA'].get('RESUME', False):
             self.load_checkpoint(self.opt['LoRA']['RESUME_FROM'], must_exist=True)
 

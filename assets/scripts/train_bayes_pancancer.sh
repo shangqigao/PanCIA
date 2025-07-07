@@ -36,9 +36,9 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.HIDDEN_DIM 512 \
             MODEL.ENCODER.CONVS_DIM 512 \
             MODEL.ENCODER.MASK_DIM 512 \
-            TEST.BATCH_SIZE_TOTAL 2 \
-            TRAIN.BATCH_SIZE_TOTAL 2 \
-            TRAIN.BATCH_SIZE_PER_GPU 2 \
+            TEST.BATCH_SIZE_TOTAL 4 \
+            TRAIN.BATCH_SIZE_TOTAL 4 \
+            TRAIN.BATCH_SIZE_PER_GPU 4 \
             SOLVER.MAX_NUM_EPOCHS 5 \
             SOLVER.BASE_LR 0.00001 \
             SOLVER.FIX_PARAM.decomposition False \
@@ -60,5 +60,7 @@ srun --mpi=pmi2 python entry.py train \
             ATTENTION_ARCH.QUERY_NUMBER 3 \
             STROKE_SAMPLER.MAX_CANDIDATE 10 \
             LoRA.ENABLE True \
-            LoRA.RESUME True \
-            LoRA.RESUME_FROM output_bayes_LoRA/pancia_bayes_seg_lang.yaml_conf~/run_1/00063411/default/module_training_states.pt
+            WEIGHT True \
+            RESUME_FROM checkpoints/biomedparse_v1.pt
+            # LoRA.RESUME True \
+            # LoRA.RESUME_FROM output_bayes_LoRA/pancia_bayes_seg_lang.yaml_conf~/run_1/00063411
