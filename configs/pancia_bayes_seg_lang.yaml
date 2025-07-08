@@ -8,7 +8,7 @@
 # Define Test/Trainer/Saving
 PIPELINE: XDecoderPipeline
 TRAINER: xdecoder
-SAVE_DIR: "./output_bayes_LoRA"
+SAVE_DIR: "./output_bayes_LoRA_multiphase_breast_sqrt"
 base_path: "./"
 
 # Resume Logistic
@@ -260,9 +260,9 @@ DATASETS:
     # - "biomed_Multiphase_Breast_Tumor_train"
     - "biomed_Duke_Multiphase_Breast_train"
     - "biomed_DukeTumor_Multiphase_Breast_train"
-    # - "biomed_ISPY1Tumor_Multiphase_Breast_train"
+    - "biomed_ISPY1Tumor_Multiphase_Breast_train"
     - "biomed_ISPY2Tumor_Multiphase_Breast_train"
-    # - "biomed_NACTTumor_Multiphase_Breast_train"
+    - "biomed_NACTTumor_Multiphase_Breast_train"
 
   TEST:
     # Add your registered test datasets here

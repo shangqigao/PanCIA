@@ -36,5 +36,5 @@ srun --mpi=pmi2 python entry.py evaluate \
             FP16 True \
             WEIGHT True \
             STANDARD_TEXT_FOR_EVAL True \
-            RESUME_FROM checkpoints/biomedparse_v1.pt \
+            RESUME_FROM checkpoints/multiphase_breast.pt \
             
