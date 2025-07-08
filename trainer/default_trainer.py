@@ -77,7 +77,10 @@ class DefaultTrainer(UtilsTrainer, DistributedTrainer):
         # load model during evaluation
         if self.opt['WEIGHT'] and os.path.isfile(self.opt['RESUME_FROM']):
             model_path = self.opt['RESUME_FROM'] 
-            self.load_model(model_path)
+            if self.opt['LoRA'].get('ENABLE', False):
+                self.load_lora_model(model_path)
+            else:
+                self.load_model(model_path)
         else:
             raise ValueError(f"Model not found: {model_path}")
 
