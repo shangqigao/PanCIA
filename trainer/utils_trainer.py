@@ -79,8 +79,8 @@ class UtilsTrainer(DistributedTrainer):
         for module_name in self.model_names:
             self.raw_models[module_name].to(self.opt['device'])
             ckpt = torch.load(load_path, map_location=self.opt['device'])['module']
-            ckpt = {key.replace('module.',''): ckpt[key] for key in ckpt.keys() if 'criterion' not in key}
-            self.raw_models[module_name] = self.raw_models[module_name].load_state_dict(ckpt)
+            ckpt = {key.replace('module.',''): ckpt[key] for key in ckpt.keys()}
+            self.raw_models[module_name].load_state_dict(ckpt)
 
     def save_checkpoint(self, tag):
         tag = str(tag).zfill(8)

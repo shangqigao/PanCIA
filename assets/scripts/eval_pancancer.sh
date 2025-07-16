@@ -5,12 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-02:00:00
+##SBATCH --time=0-02:00:00
+#SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-##SBATCH --qos=intr
+#SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -36,5 +37,6 @@ srun --mpi=pmi2 python entry.py evaluate \
             FP16 True \
             WEIGHT True \
             STANDARD_TEXT_FOR_EVAL True \
-            RESUME_FROM checkpoints/multiphase_breast.pt \
+            LoRA.ENABLE True \
+            RESUME_FROM checkpoints/singlephase_breastcancer_lora.pt \
             

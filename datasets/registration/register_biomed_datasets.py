@@ -44,11 +44,13 @@ datasets = [
     'Prostate_Tumor',
     'Uterus_Tumor',
     'Multiphase_Breast_Tumor',
-    'Duke_Multiphase_Breast',
-    'DukeTumor_Multiphase_Breast',
-    'ISPY1Tumor_Multiphase_Breast',
-    'ISPY2Tumor_Multiphase_Breast',
-    'NACTTumor_Multiphase_Breast'
+    'DukeSP_Breast',
+    'DukeMP_Breast',
+    'DukeTumorMP_Breast',
+    'ISPY1TumorMP_Breast',
+    'ISPY2TumorMP_Breast',
+    'NACTTumorMP_Breast',
+    'MMs_Heart',
     ]   # provide name of the dataset under biomedparse_datasets
 splits = ['train', 'test']    # provide split name, e.g., train, test, val
 

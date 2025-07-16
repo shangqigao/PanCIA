@@ -7,8 +7,8 @@ from create_annotations import *
 
 
 # provide the path to the dataset. There should be train, train_mask, test, test_mask under this folder
-targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/NACTTumor_Multiphase_Breast'
-if 'Tumor_Multiphase_Breast' in targetpath:
+targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor'
+if 'Breast_Tumor' in targetpath:
     clinical_info_path = 'clinical_and_imaging_info.xlsx'
     df_clinic = pd.read_excel(clinical_info_path, sheet_name='dataset_info')
     df_clinic['pixel_spacing'] = df_clinic['pixel_spacing'].apply(ast.literal_eval)
@@ -35,6 +35,41 @@ for i in label_base:
 # Label ids of the dataset
 category_ids = {label_base[i]['name']: int(i) for i in label_base if 'name' in label_base[i]}
 
+# design breast cancer prompts
+def structured_breast_prompts(targetname):
+    if targetname == 'breast tumor':
+        prompts = [
+            "tumor located within fibroglandular tissue of the breast",
+            "abnormal mass inside the breast glandular tissue",
+            "breast tumor within dense breast tissue",
+            "abnormality embedded in fibroglandular tissue"
+        ] 
+    elif targetname == 'fibroglandular tissue':
+        prompts = [
+            "fibroglandular tissue of the breast",
+            "glandular tissue located inside the breast",
+            "dense breast tissue excluding blood vessels",
+            "breast parenchyma composed of glandular tissue"
+        ]
+    elif targetname == 'breast tissue':
+        prompts = [
+            "entire breast tissue including vessels and glandular structures",
+            "complete breast region with glandular and vascular components",
+            "breast organ including tumor, glands, and vessels",
+            "whole breast tissue with internal anatomical features"
+        ]
+    elif targetname == 'blood vessel':
+        prompts = [
+            "blood vessels located within the breast",
+            "vascular structures running through breast tissue",
+            "veins and arteries inside breast region",
+            "breast vasculature system"
+        ]
+    else:
+        prompts = None
+
+    return prompts
+
 # create descriptive prompts
 def create_prompts(filename, targetname, df_meta=None):
     parts = filename.split("_")
@@ -43,18 +78,24 @@ def create_prompts(filename, targetname, df_meta=None):
     slice_index = parts[-3]
     modality = parts[-2]
     site = parts[-1].split(".")[0]
-    target = 'tumor' if 'tumor' in targetname else targetname
+    prompts = structured_breast_prompts(targetname)
+    if prompts is None:
+        prompts = ['tumor'] if 'tumor' in targetname else [targetname]
 
-    basic_prompts = [
-        # f"{target} in {site} {modality}",
-        f"{view} slice {slice_index} showing {target} in {site}",
-        f"{target} located in the {site} on {modality}",
-        f"{view} {site} {modality} with {target}",
-        f"{target} visible in slice {slice_index} of {modality}",
-    ]
+    basic_prompts = []
+    for target in prompts:
+        basic_prompts += [
+            # f"{target} in {site} {modality}",
+            f"{view} slice {slice_index} showing {target}",
+            f"{target} on {modality}",
+            f"{view} {modality} with {target}",
+            f"{target} visible in slice {slice_index} of {modality}",
+        ]
 
     # meta information
+    meta_prompts = []
     if df_meta is not None:
+        # excluded = '_0001_' + "_".join(parts[-5:])
         excluded = '_' + "_".join(parts[-5:])
         patient_id = filename.replace(excluded, "")
         pixel_spacing = df_meta.loc[df_meta["patient_id"] == patient_id, 'pixel_spacing'].values[0]
@@ -63,15 +104,14 @@ def create_prompts(filename, targetname, df_meta=None):
         bilateral_mri = df_meta.loc[df_meta["patient_id"] == patient_id, 'bilateral_mri'].values[0]
         lateral = 'bilateral' if bilateral_mri == 1 else 'unilateral'
         manufacturer = df_meta.loc[df_meta["patient_id"] == patient_id, 'manufacturer'].values[0]
-        meta_prompts = [
-            f"a {modality} scan of the {lateral} {site}, {view} view, slice {slice_index}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
-            f"{lateral} {site} {modality} in {view} view at slice {slice_index} with spacing {x_spacing:.2f}x{y_spacing:.2f} mm, includes {target}",
-            f"{view} slice {slice_index} from a {field_strength}T {manufacturer} {modality} of the {lateral} {site}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
-            f"{lateral} {site} {modality} in {view} view, slice {slice_index}, using {field_strength}T {manufacturer} scanner, spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
-            f"{modality} of the {lateral} {site} at slice {slice_index}, {view} view, spacing: {x_spacing:.2f}x{y_spacing:.2f} mm, scanned by {field_strength}T {manufacturer} scanner, shows {target}"
-        ]
-    else:
-        meta_prompts = []
+        for target in prompts:
+            meta_prompts += [
+                f"a {modality} scan of the {lateral} {site}, {view} view, slice {slice_index}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
+                f"{lateral} {site} {modality} in {view} view at slice {slice_index} with spacing {x_spacing:.2f}x{y_spacing:.2f} mm, includes {target}",
+                f"{view} slice {slice_index} from a {field_strength}T {manufacturer} {modality} of the {lateral} {site}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
+                f"{lateral} {site} {modality} in {view} view, slice {slice_index}, using {field_strength}T {manufacturer} scanner, spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
+                f"{modality} of the {lateral} {site} at slice {slice_index}, {view} view, spacing: {x_spacing:.2f}x{y_spacing:.2f} mm, scanned by {field_strength}T {manufacturer} scanner, shows {target}"
+            ]
     
     return basic_prompts + meta_prompts
 
