@@ -35,24 +35,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ## get image and label paths
-    pixel_spacings = None
     if args.format == 'dicom':
         dicom_cases = pathlib.Path(args.img_dir).glob('*')
         dicom_cases = [p for p in dicom_cases if p.is_dir()]
         img_paths = [sorted(p.glob('*.dcm')) for p in dicom_cases]
-    elif args.format == 'rgb':
-        assert args.meta_info is not None, 'Expect meta data with pixel spacing info'
-        meta_info = pd.read_excel(args.meta_info)
-        meta_info['pixel_spacing'] = meta_info['pixel_spacing'].apply(ast.literal_eval)
-        rgb_images = sorted(pathlib.Path(args.img_dir).glob('*.png'))
-        grouped = defaultdict(list)
-        pixel_spacings = []
-        for p in rgb_images:
-            idx = '_'.join(p.name.split('_')[:2])
-            grouped[idx].append(p)
-            pixel_spacing = meta_info[meta_info['patient_id'] == idx]['pixel_spacing']
-            pixel_spacings.append(pixel_spacing)
-        img_paths = list(grouped.values())
     elif args.format == 'nifti':
         img_paths = sorted(pathlib.Path(args.img_dir).glob('*.nii.gz'))
         if args.lab_dir is not None:
@@ -83,8 +69,7 @@ if __name__ == "__main__":
             prompts=text_prompts,
             format=args.format,
             modality=args.modality,
-            site=args.site,
-            pixel_spacings=pixel_spacings
+            site=args.site
         )
 
     # construct image graph
