@@ -122,7 +122,6 @@ def extract_radiomic_feature(
         save_dir, 
         class_name,
         prompts=None,
-        pixel_spacings=None,
         format='nifit',
         modality='CT',
         site='breast',
@@ -184,8 +183,7 @@ def extract_radiomic_feature(
             label,
             format=format,
             is_CT=modality == 'CT',
-            site=site,
-            pixel_spacings=pixel_spacings
+            site=site
         )
     else:
         raise ValueError(f"Invalid feature mode: {feature_mode}")
@@ -1018,8 +1016,55 @@ def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=
         np.save(coordinates_path, np.array(bbox))
     return
 
+def create_prompts(meta_data):
+    keys = ['view', 'slice_index', 'modality', 'site', 'target']
+    assert all(meta_data.get(k) is not None for k in keys), f"all basic info {keys} should be provided"
+    view = meta_data['view']
+    slice_index = meta_data['slice_index']
+    modality = meta_data['modality']
+    site = meta_data['site']
+    target_name = meta_data['target']
+    # target = 'tumor' if 'tumor' in target_name else target_name
+    target = "tumor located within fibroglandular tissue of the breast"
+
+    # basic_prompts = [
+    #     f"{target_name} in {site} {modality}",
+    #     f"{view} slice {slice_index} showing {target} in {site}",
+    #     f"{target} located in the {site} on {modality}",
+    #     f"{view} {site} {modality} with {target}",
+    #     f"{target} visible in slice {slice_index} of {modality}",
+    # ]
+    basic_prompts = [
+        f"{target_name} in {site} {modality}",
+        f"{view} slice {slice_index} showing {target}",
+        f"{target} on {modality}",
+        f"{view} {modality} with {target}",
+        f"{target} visible in slice {slice_index} of {modality}",
+    ]
+
+    # meta information
+    keys = ['pixel_spacing', 'field_strength', 'bilateral', 'scanner_manufacturer']
+    meta_prompts = []
+    if all(meta_data.get(k) is not None for k in keys):
+        pixel_spacing = meta_data['pixel_spacing']
+        x_spacing, y_spacing = pixel_spacing[0], pixel_spacing[1]
+        field_strength = meta_data['field_strength']
+        bilateral_mri = meta_data['bilateral']
+        lateral = 'bilateral' if bilateral_mri == 1 else 'unilateral'
+        manufacturer = meta_data['scanner_manufacturer']
+        meta_prompts = [
+            f"a {modality} scan of the {lateral} {site}, {view} view, slice {slice_index}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
+            f"{lateral} {site} {modality} in {view} view at slice {slice_index} with spacing {x_spacing:.2f}x{y_spacing:.2f} mm, includes {target}",
+            f"{view} slice {slice_index} from a {field_strength}T {manufacturer} {modality} of the {lateral} {site}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
+            f"{lateral} {site} {modality} in {view} view, slice {slice_index}, using {field_strength}T {manufacturer} scanner, spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
+            f"{modality} of the {lateral} {site} at slice {slice_index}, {view} view, spacing: {x_spacing:.2f}x{y_spacing:.2f} mm, scanned by {field_strength}T {manufacturer} scanner, shows {target}"
+        ]
+    
+    return basic_prompts + meta_prompts
+
 def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, class_name, 
-                                  label=1, format='nifti', is_CT=True, site=None, pixel_spacings=None,
+                                  label=1, format='nifti', is_CT=True, site=None,
+                                  meta_list=None, prompt_ensemble=False,
                                   dilation_mm=10, resolution=1.024, units="mm", device="gpu"):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
         if no label provided, directly use model segmentation, else use give labels
@@ -1041,36 +1086,44 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     from inference_utils.processing_utils import read_dicom
     from inference_utils.processing_utils import read_nifti_inplane
     from inference_utils.processing_utils import read_rgb
+    from peft import LoraConfig, get_peft_model
 
     # Build model config
     opt = load_opt_from_config_files(["configs/biomedparse_inference.yaml"])
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
-    pretrained_pth = '../checkpoints/BiomedParse/biomedparse_v1.pt'
+    pretrained_pth = '../checkpoints/BiomedParse/MP_heart_LoRA_sqrt'
 
-    model = BaseModel(opt, build_model(opt)).from_pretrained(pretrained_pth).eval().cuda()
+    if device == 'gpu':
+        if not opt.get('LoRA', False):
+            model = BaseModel(opt, build_model(opt)).from_pretrained(pretrained_pth).eval().cuda()
+        else:
+            with open(f'{pretrained_pth}/adapter_config.json', 'r') as f:
+                config = json.load(f)
+            model = get_peft_model(BaseModel(opt, build_model(opt)), LoraConfig(**config)).cuda()
+            ckpt = torch.load(os.path.join(pretrained_pth, 'module_training_states.pt'))['module']
+            ckpt = {key.replace('module.',''): ckpt[key] for key in ckpt.keys() if 'criterion' not in key}
+            model.load_state_dict(ckpt)
+            model = model.model.eval()
+    else:
+        raise ValueError(f'Require gpu, but got {device}')
+    
     with torch.no_grad():
         model.model.sem_seg_head.predictor.lang_encoder.get_text_embeddings(BIOMED_CLASSES + ["background"], is_eval=True)
     
-    for img_path, lab_path, text_prompt in zip(img_paths, lab_paths, text_prompts):
+    for idx, (img_path, lab_path, target_name) in enumerate(zip(img_paths, lab_paths, text_prompts)):
         # read slices from dicom or nifti
         if format == 'dicom':
-            assert isinstance(img_path, list), 'Must be a list of dicom image paths'
-            images = [read_dicom(p, is_CT, site, keep_size=True, return_spacing=True) for p in img_path]
+            dicom_dir = pathlib.Path(img_path)
+            assert pathlib.Path(img_path).is_dir()
+            dicom_paths = sorted(dicom_dir.glob('*.dcm'))
+            images = [read_dicom(p, is_CT, site, keep_size=True, return_spacing=True) for p in dicom_paths]
+            slice_axis, affine = 0, np.eye(4)
         elif format == 'nifti':
-            images, slice_axis, _ = read_nifti_inplane(img_path, is_CT, site, keep_size=True, return_spacing=True)
-        elif format == 'rgb':
-            assert isinstance(img_path, list), 'Must be a list of rgb image paths'
-            images = [read_rgb(p, keep_size=True) for p in img_path]
-            slice_nums = [re.search(r'slice_(\d+)', pathlib.Path(p).name).group(1) for p in img_path]
-            if pixel_spacings is not None:
-                assert len(pixel_spacings) == len(images)
-                images = [(i, p) for i, p in zip(images, pixel_spacings)]
-            else:
-                images = [(i, None) for i in images]
+            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, site, keep_size=True, return_spacing=True)
         else:
-            raise ValueError(f'Only support DICOM, RGB, or NIFTI, but got {format}')
+            raise ValueError(f'Only support DICOM or NIFTI, but got {format}')
 
         if format == 'nifti' and lab_path is not None:
             assert f'{lab_path}'.endswith(('.nii', '.nii.gz'))
@@ -1081,57 +1134,79 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         else:
             labels = None
 
-        image_features, image_coordinates = [], []
+        image_features, masks = [], []
+        meta_data = {} if meta_list is None else meta_list[idx]
         for i, element in enumerate(images):
-            assert len(element) == 2
-            img, spacing = element
+            assert len(element) == 3
+            img, spacing, phase = element
+
+            if len(spacing) == 2:
+                    pixel_spacing = spacing
+            else:
+                assert len(spacing) == 3
+                pixel_index = list(set([0, 1, 2]) - {slice_axis})
+                pixel_spacing = [spacing[i] for i in pixel_index]
+
+            # use prompt ensemble
+            if prompt_ensemble:
+                assert isinstance(meta_data, dict)
+                meta_data['view'] = phase
+                meta_data['slice_index'] = f'{i:03}'
+                meta_data['modality'] = 'CT' if is_CT else 'MRI'
+                meta_data['site'] = site
+                meta_data['target'] = target_name
+                meta_data['pixel_spacing'] = pixel_spacing
+                text_prompts = create_prompts(meta_data)
+                text_prompts = [text_prompts[2], text_prompts[9]]
+            else:
+                text_prompts = [target_name]
+            # print(f"Segmenting slice [{i+1}/{len(images)}] ...")
+
             # resize_mask=False would keep mask size to be (1024, 1024)
-            pred_prob, img_feature = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=False, return_feature=True)
+            ensemble_prob = []
+            ensemble_feat = []
+            for text_prompt in text_prompts:
+                pred_prob, feature = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=True, return_feature=True)
+                ensemble_feat.append(np.transpose(feature, (1, 2, 0)))
+                ensemble_prob.append(pred_prob)
+            pred_prob = np.max(np.concatenate(ensemble_prob, axis=0), axis=0, keepdims=True)
+            slice_feat = np.mean(np.stack(ensemble_feat, axis=0), axis=0, keepdims=True)
+            image_features.append(slice_feat)
             if labels is None:
                 pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
             else:
                 pred_mask = labels[i, ...]
                 assert pred_mask.shape == img.shape
-                pred_mask = resize(pred_mask, (1024, 1024), order=0, preserve_range=True, anti_aliasing=False)
-                pred_mask = (1*(pred_mask > 0)).astype(np.uint8)
 
             # mask dilation based on physical size
-            if spacing is not None:
-                radius_pixels = int(1024 * dilation_mm / (np.mean(spacing) * np.mean(img.shape)))
+            if dilation_mm > 0:
+                radius_pixels = int(dilation_mm / np.mean(pixel_spacing))
                 kernel = disk(radius_pixels)
                 dilated_mask = binary_dilation(pred_mask, structure=kernel)
             else:
                 dilated_mask = pred_mask
+            masks.append(dilated_mask)
 
-            #extract feature of ROI
-            if np.sum(dilated_mask) > 1:
-                ROI_coords = np.argwhere(dilated_mask == 1)
-                ROI_feature = img_feature[ROI_coords[:, 0], ROI_coords[:, 1], ...]
-                image_features.append(ROI_feature)
-                ROI_coords_with_slice = np.zeros((ROI_coords.shape[0], 3))
-                if format == 'rgb':
-                    ROI_coords_with_slice[:, 0] = slice_nums[i]
-                else:
-                    ROI_coords_with_slice[:, 0] = i  # slice index, z
-                ROI_coords_with_slice[:, 1:3] = ROI_coords # spatial coordinates, (x,y)
-                image_coordinates.append(ROI_coords_with_slice)
-
-         #save spatial features and corresponding cooridnates
+        # Get feature array with shape [X, Y, Z, C]
+        masks = np.concatenate(masks, axis=0)
         image_features = np.concatenate(image_features, axis=0)
-        image_coordinates = np.concatenate(image_coordinates, axis=0)
-        logging.info(f"Extracted feature of shape {image_features.shape}")
+        final_mask = np.moveaxis(masks, 0, slice_axis)
+        radiomic_feat = np.moveaxis(image_features, 0, slice_axis)
+
+        # extract radiomic features of tumor regions
+        radiomic_feat = radiomic_feat[final_mask > 0]
+        radiomic_coord = np.argwhere(final_mask > 0)
+        logging.info(f"Extracted feature of shape {radiomic_feat.shape}")
         if format == 'dicom':
             img_name = f"{img_path[0]}".split('/')[-2]
-        elif format == 'rgb':
-            img_name = '_'.join(pathlib.Path(img_path[0]).name.split('_')[:-5])
         elif format == 'nifti':
             img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         feature_path = f"{save_dir}/{img_name}_{class_name}_radiomics.npy"
         logging.info(f"Saving radiomic features to {feature_path}")
-        np.save(feature_path, image_features)
+        np.save(feature_path, radiomic_feat)
         coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
         logging.info(f"Saving feature coordinates to {coordinates_path}")
-        np.save(coordinates_path, image_coordinates)
+        np.save(coordinates_path, radiomic_coord)
 
     return
 
