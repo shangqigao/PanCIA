@@ -15,7 +15,7 @@
 
 ## activate environment
 source ~/.bashrc
-conda activate pancia
+conda activate biomedparse
 
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
