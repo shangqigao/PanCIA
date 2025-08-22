@@ -35,16 +35,16 @@ from torch_geometric.data import Data
 from torch_geometric.utils import subgraph
 from torch_geometric import transforms
 from pprint import pprint
-from common.m_utils import mkdir, load_json, concat_dict_list
+from utilities.m_utils import mkdir, load_json, concat_dict_list
 
 from tiatoolbox.wsicore.wsireader import WSIReader, VirtualWSIReader
 from tiatoolbox.tools.graph import SlideGraphConstructor
 from tiatoolbox.utils.visualization import plot_graph, plot_map
 from tiatoolbox.utils.misc import imwrite
 
-from models.a_02tissue_masking.m_tissue_masking import generate_wsi_tissue_mask
-from models.a_03patch_extraction.m_patch_extraction import prepare_annotation_reader
-from models.a_04feature_extraction.m_feature_extraction import extract_cnn_pathomic_features, extract_composition_features
+from analysis.data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
+from analysis.data_preprocessiong.m_patch_extraction import prepare_annotation_reader
+from analysis.feature_extraction.m_feature_extraction import extract_cnn_pathomics, extract_composition_features
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 def construct_pathomic_graph(wsi_name, wsi_feature_dir, save_path):

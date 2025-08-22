@@ -50,11 +50,11 @@ from sklearn.linear_model import LogisticRegression as PlattScaling
 from sklearn.utils import resample
 from statsmodels.stats.multitest import multipletests
 
-from common.m_utils import mkdir, select_wsi, load_json, create_pbar, rm_n_mkdir, reset_logging, recur_find_ext, select_checkpoints
+from utilities.m_utils import mkdir, select_wsi, load_json, create_pbar, rm_n_mkdir, reset_logging, recur_find_ext, select_checkpoints
 
-from models.a_05feature_aggregation.m_gnn_survival_analysis import SurvivalGraphDataset, SurvivalGraphArch, SurvivalBayesGraphArch
-from models.a_05feature_aggregation.m_gnn_survival_analysis import ScalarMovingAverage, CoxSurvLoss
-from models.a_05feature_aggregation.m_graph_construction import visualize_radiomic_graph, visualize_pathomic_graph
+from analysis.feature_aggregation.m_gnn_survival_analysis import SurvivalGraphDataset, SurvivalGraphArch, SurvivalBayesGraphArch
+from analysis.feature_aggregation.m_gnn_survival_analysis import ScalarMovingAverage, CoxSurvLoss
+from analysis.feature_aggregation.m_graph_construction import visualize_radiomic_graph, visualize_pathomic_graph
 
 
 

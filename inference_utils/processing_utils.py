@@ -90,16 +90,22 @@ def process_intensity_3Dimage(image_data, is_CT, site=None, keep_size=True):
         lower_bound, upper_bound = window
     else:
         # process image with intensity range 0.5-99.5 percentile
-        lower_bound, upper_bound = np.percentile(
-            image_data[image_data > 0], 0.5
-        ), np.percentile(image_data[image_data > 0], 99.5)
-        
-    image_data_pre = np.clip(image_data, lower_bound, upper_bound)
-    image_data_pre = (
-        (image_data_pre - image_data_pre.min())
-        / (image_data_pre.max() - image_data_pre.min())
-        * 255.0
-    )
+        if image_data.max() > 0:
+            lower_bound, upper_bound = np.percentile(
+                image_data[image_data > 0], 0.5
+            ), np.percentile(image_data[image_data > 0], 99.5)
+        else:
+            lower_bound, upper_bound = 0, 0
+
+    if lower_bound == 0 and upper_bound == 0:
+        image_data_pre = np.zeros_like(image_data)  
+    else:
+        image_data_pre = np.clip(image_data, lower_bound, upper_bound)
+        image_data_pre = (
+            (image_data_pre - image_data_pre.min())
+            / (image_data_pre.max() - image_data_pre.min())
+            * 255.0
+        )
     
     if keep_size:
         resize_image = image_data_pre
@@ -131,6 +137,33 @@ def process_intensity_3Dimage(image_data, is_CT, site=None, keep_size=True):
         
     return resize_image.astype(np.uint8)
 
+def get_dicom_plane(ds):
+    """Infer scan plane from ImageOrientationPatient."""
+    orientation = ds.get("ImageOrientationPatient", None)
+    if orientation is None:
+        return "unknown"
+
+    # Convert to numpy for vector math
+    orientation = np.array(orientation)
+    x_dir = orientation[:3]
+    y_dir = orientation[3:]
+    
+    # Cross product gives normal vector of the image plane
+    normal = np.cross(x_dir, y_dir)
+    normal = np.abs(normal)  # direction doesn't matter
+
+    # Dominant axis determines the plane
+    axis = np.argmax(normal)
+
+    if axis == 0:
+        return "sagittal"
+    elif axis == 1:
+        return "coronal"
+    elif axis == 2:
+        return "axial"
+    else:
+        return "unknown"
+
 def read_dicom(image_path, is_CT, site=None, keep_size=False, return_spacing=False):
     # read dicom file and return pixel data
     
@@ -141,13 +174,14 @@ def read_dicom(image_path, is_CT, site=None, keep_size=False, return_spacing=Fal
     
     ds = pydicom.dcmread(image_path)
     spacing = ds.PixelSpacing
+    phase = get_dicom_plane(ds)
 
     image_array = ds.pixel_array * ds.RescaleSlope + ds.RescaleIntercept
     
     image_array = process_intensity_image(image_array, is_CT, site, keep_size)
     
     if return_spacing:
-        return image_array, spacing
+        return image_array, spacing, phase
     else:
         return image_array
 
@@ -192,7 +226,7 @@ def get_orientation(affine):
     in_plane_axes = {i1, i2}
     slice_axis = (set([0, 1, 2]) - in_plane_axes).pop()
     slice_dir = axcodes[slice_axis]
-    pixel_spacing = (voxel_sizes[i1], voxel_sizes[i2])
+    pixel_spacing = voxel_sizes
 
     if slice_dir in ('I', 'S'):
         return 'axial', slice_axis, pixel_spacing
@@ -244,14 +278,13 @@ def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spa
                 slice_img = image_array[:, :, i]
             else:
                 raise ValueError(f"Slice axis is {slice_axis}, maximum shoud be 2")
-            
             if multiphase:
                 slice_img = process_intensity_3Dimage(slice_img, is_CT, site, keep_size)
             else:
                 slice_img = process_intensity_image(slice_img, is_CT, site, keep_size)
 
             if return_spacing:
-                image_list.append((slice_img, pixel_spacing))
+                image_list.append((slice_img, pixel_spacing, phase))
             else:
                 image_list.append(slice_img)
     else:

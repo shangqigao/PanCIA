@@ -44,6 +44,12 @@ rng = np.random.default_rng(SEED)
 torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
 
+# Get the directory where the current script resides
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Add a relative subdirectory to sys.path
+root_dir = os.path.join(script_dir, '../../')
+
 def extract_pathomic_feature(
         wsi_paths, 
         wsi_msk_paths, 
@@ -300,7 +306,7 @@ def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         save_resolution={"units": "mpp", "resolution": 8.0}
     )
     
-    pretrained_path = "../checkpoints/HIPT/vit256_small_dino.pth"
+    pretrained_path = os.path.join(root_dir, 'checkpoints/HIPT/vit256_small_dino.pth')
     model = ViT(pretrained_path)
     ## define preprocessing function
     mean = (0.5, 0.5, 0.5)
@@ -385,7 +391,7 @@ def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         save_resolution={"units": "mpp", "resolution": 8.0}
     )
     
-    pretrained_path = "../checkpoints/UNI/pytorch_model.bin"
+    pretrained_path = os.path.join(root_dir, 'checkpoints/UNI/pytorch_model.bin')
     model = UNI(pretrained_path)
     ## define preprocessing function
     mean = (0.485, 0.456, 0.406)
@@ -464,7 +470,7 @@ def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
     )
     
     model_cfg = 'conch_ViT-B-16'
-    ckpt_path = '../checkpoints/CONCH/pytorch_model.bin'
+    ckpt_path = os.path.join(root_dir, 'checkpoints/CONCH/pytorch_model.bin')
     model = CONCH(model_cfg, ckpt_path, 'cuda')
     ## define preprocessing function
     TS = model.preprocess
@@ -549,7 +555,7 @@ def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
         save_resolution={"units": "mpp", "resolution": 8.0}
     )
     
-    pretrained_path = "../checkpoints/CHIEF/CHIEF_CTransPath.pth"
+    pretrained_path = os.path.join(root_dir, 'checkpoints/CHIEF/CHIEF_CTransPath.pth')
     model = CHIEF(pretrained_path)
     ## define preprocessing function
     mean = (0.485, 0.456, 0.406)
@@ -600,9 +606,9 @@ def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
 
 def extract_chief_wsi_level_features(patch_feature_paths, anatomic=13, on_gpu=True):
     from tiatoolbox.models.architecture.chief.CHIEF import CHIEF
-    text_embedding_path = '../checkpoints/CHIEF/Text_emdding.pth'
+    text_embedding_path = os.path.join(root_dir, 'checkpoints/CHIEF/Text_emdding.pth')
     model = CHIEF(size_arg="small", dropout=True, n_classes=2, text_embedding_path=text_embedding_path)
-    td = torch.load('../checkpoints/CHIEF/CHIEF_pretraining.pth')
+    td = torch.load(os.path.join(root_dir, 'checkpoints/CHIEF/CHIEF_pretraining.pth'))
     model.load_state_dict(td, strict=True)
     device = "cuda" if on_gpu else "cpu"
     model.to(device)
@@ -858,7 +864,7 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
         pos_embed="perceptron",
         )
     print(vit)
-    vit_checkpoint = '../checkpoints/SegVol/ViT_pretrain.ckpt'
+    vit_checkpoint = os.path.join(root_dir, 'checkpoints/SegVol/ViT_pretrain.ckpt')
     with open(vit_checkpoint, "rb") as f:
         state_dict = torch.load(f, map_location='cpu')['state_dict']
         encoder_dict = {k.replace('model.encoder.', ''): v for k, v in state_dict.items() if 'model.encoder.' in k}
@@ -1074,8 +1080,8 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     from skimage.morphology import disk
     from skimage.transform import resize
     from scipy.ndimage import binary_dilation
-    import torch
-    import re
+
+    logging.getLogger("modeling").setLevel(logging.ERROR)
     from modeling.BaseModel import BaseModel
     from modeling import build_model
     from utilities.distributed import init_distributed
@@ -1085,7 +1091,6 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     from inference_utils.inference import interactive_infer_image
     from inference_utils.processing_utils import read_dicom
     from inference_utils.processing_utils import read_nifti_inplane
-    from inference_utils.processing_utils import read_rgb
     from peft import LoraConfig, get_peft_model
 
     # Build model config
@@ -1093,7 +1098,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
-    pretrained_pth = '../checkpoints/BiomedParse/MP_heart_LoRA_sqrt'
+    pretrained_pth = os.path.join(root_dir, 'checkpoints/BiomedParse/MP_heart_LoRA_sqrt')
 
     if device == 'gpu':
         if not opt.get('LoRA', False):
@@ -1111,7 +1116,8 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     
     with torch.no_grad():
         model.model.sem_seg_head.predictor.lang_encoder.get_text_embeddings(BIOMED_CLASSES + ["background"], is_eval=True)
-    
+
+    mkdir(save_dir)
     for idx, (img_path, lab_path, target_name) in enumerate(zip(img_paths, lab_paths, text_prompts)):
         # read slices from dicom or nifti
         if format == 'dicom':
@@ -1157,7 +1163,8 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
                 meta_data['target'] = target_name
                 meta_data['pixel_spacing'] = pixel_spacing
                 text_prompts = create_prompts(meta_data)
-                text_prompts = [text_prompts[2], text_prompts[9]]
+                # text_prompts = [text_prompts[2], text_prompts[9]]
+                text_prompts = [text_prompts[2]]
             else:
                 text_prompts = [target_name]
             # print(f"Segmenting slice [{i+1}/{len(images)}] ...")
@@ -1176,37 +1183,48 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
                 pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
             else:
                 pred_mask = labels[i, ...]
-                assert pred_mask.shape == img.shape
 
             # mask dilation based on physical size
             if dilation_mm > 0:
                 radius_pixels = int(dilation_mm / np.mean(pixel_spacing))
                 kernel = disk(radius_pixels)
-                dilated_mask = binary_dilation(pred_mask, structure=kernel)
+                dilated_mask = binary_dilation(pred_mask.squeeze(), structure=kernel).astype(np.uint8)
             else:
-                dilated_mask = pred_mask
+                dilated_mask = pred_mask.squeeze()
             masks.append(dilated_mask)
 
         # Get feature array with shape [X, Y, Z, C]
-        masks = np.concatenate(masks, axis=0)
+        masks = np.stack(masks, axis=0)
         image_features = np.concatenate(image_features, axis=0)
         final_mask = np.moveaxis(masks, 0, slice_axis)
         radiomic_feat = np.moveaxis(image_features, 0, slice_axis)
+
+        # skip empty mask
+        if np.sum(final_mask) < 1: continue
 
         # extract radiomic features of tumor regions
         radiomic_feat = radiomic_feat[final_mask > 0]
         radiomic_coord = np.argwhere(final_mask > 0)
         logging.info(f"Extracted feature of shape {radiomic_feat.shape}")
         if format == 'dicom':
-            img_name = f"{img_path[0]}".split('/')[-2]
+            img_name = pathlib.path(img_path[0]).parent.name
         elif format == 'nifti':
-            img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+            if isinstance(img_path, list):
+                img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
+            else:
+                img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         feature_path = f"{save_dir}/{img_name}_{class_name}_radiomics.npy"
         logging.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, radiomic_feat)
         coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
         logging.info(f"Saving feature coordinates to {coordinates_path}")
         np.save(coordinates_path, radiomic_coord)
+
+        # save final mask
+        # save_mask_path = f"{save_dir}/{img_name}.nii.gz"
+        # print(f"Saving predicted segmentation to {save_mask_path}")
+        # nifti_img = nib.Nifti1Image(final_mask, affine)
+        # nib.save(nifti_img, save_mask_path)
 
     return
 

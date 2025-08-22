@@ -55,11 +55,11 @@ from sklearn.metrics import f1_score as f1_scorer
 from sklearn.utils import resample
 
 
-from common.m_utils import mkdir, select_wsi, load_json, create_pbar, rm_n_mkdir, reset_logging, recur_find_ext, select_checkpoints
+from utilities.m_utils import mkdir, select_wsi, load_json, create_pbar, rm_n_mkdir, reset_logging, recur_find_ext, select_checkpoints
 
-from models.a_05feature_aggregation.m_gnn_concept_learning import ConceptGraphDataset, ConceptGraphArch
-from models.a_05feature_aggregation.m_gnn_concept_learning import ScalarMovingAverage, CoxSurvConceptLoss
-from models.a_05feature_aggregation.m_graph_construction import visualize_pathomic_graph
+from analysis.feature_aggregation.m_gnn_concept_learning import ConceptGraphDataset, ConceptGraphArch
+from analysis.feature_aggregation.m_gnn_concept_learning import ScalarMovingAverage, CoxSurvConceptLoss
+from analysis.feature_aggregation.m_graph_construction import visualize_pathomic_graph
 
 
 def request_survival_data(project_ids, save_dir):

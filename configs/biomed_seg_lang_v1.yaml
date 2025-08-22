@@ -8,7 +8,7 @@
 # Define Test/Trainer/Saving
 PIPELINE: XDecoderPipeline
 TRAINER: xdecoder
-SAVE_DIR: "./output_LoRA+_multiphase_breast_heart_sqrt"
+SAVE_DIR: "./output"
 base_path: "./"
 
 # Resume Logistic
