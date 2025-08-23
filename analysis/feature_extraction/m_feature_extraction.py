@@ -38,6 +38,7 @@ import radiomics
 
 from monai.transforms.utils import generate_spatial_bounding_box
 from monai.transforms.utils import get_largest_connected_component_mask
+from inference_utils.processing_utils import get_orientation
 
 SEED = 5
 random.seed(SEED)
@@ -1136,14 +1137,18 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         if format == 'nifti' and lab_path is not None:
             assert f'{lab_path}'.endswith(('.nii', '.nii.gz'))
             nii = nib.load(lab_path)
+            affine = nii.affine
+            _, _, pixel_spacing = get_orientation(affine)
             labels = nii.get_fdata()
-            #suppose the last is slice axis for dicom annoations
-            labels = np.moveaxis(labels, slice_axis, 0) 
+
             # resample to given resolution
             if resolution is not None:
                 new_spacing = (resolution, resolution, resolution)
                 zoom_factors = tuple(os/ns for os, ns in zip(pixel_spacing, new_spacing))
                 labels = zoom(labels, zoom=zoom_factors, order=0)
+
+            # move the slice axis to the first
+            labels = np.moveaxis(labels, slice_axis, 0) 
         else:
             labels = None
 
@@ -1155,6 +1160,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
             zmax, _, _ = coords.max(axis=1)
             zmin = max(zmin - int(dilation_mm), 0)
             zmax = min(zmax + int(dilation_mm), labels.shape[0] - 1)
+            assert len(images) == len(labels)
             images = images[zmin:zmax+1]
             labels = labels[zmin:zmax+1, ...]
             print(f"Selected slices {zmin} to {zmax} for feature extraction")
