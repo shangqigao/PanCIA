@@ -14,6 +14,7 @@ import logging
 import json
 import PIL
 import skimage
+from scipy.ndimage import zoom
 
 import numpy as np
 import albumentations as A
@@ -189,7 +190,9 @@ def extract_radiomic_feature(
             label,
             format=format,
             is_CT=modality == 'CT',
-            site=site
+            site=site,
+            resolution=resolution,
+            units=units
         )
     else:
         raise ValueError(f"Invalid feature mode: {feature_mode}")
@@ -1071,7 +1074,7 @@ def create_prompts(meta_data):
 def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, class_name, 
                                   label=1, format='nifti', is_CT=True, site=None,
                                   meta_list=None, prompt_ensemble=False,
-                                  dilation_mm=10, resolution=1.024, units="mm", device="gpu"):
+                                  dilation_mm=10, resolution=None, units="mm", device="gpu"):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
         if no label provided, directly use model segmentation, else use give labels
     """
@@ -1140,7 +1143,15 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         else:
             labels = None
 
-        image_features, masks = [], []
+        # resample to give resolution
+        if resolution is not None:
+            new_spacing = 
+            zoom_factors = tuple(os/ns for os, ns in zip(spacing, new_spacing))
+            original_shape = mask_3d.shape
+            mask_3d = zoom(mask_3d, zoom=zoom_factors, order=0)
+            new_shape = mask_3d.shape
+
+        radiomic_feat, masks = [], []
         meta_data = {} if meta_list is None else meta_list[idx]
         for i, element in enumerate(images):
             assert len(element) == 3
@@ -1178,7 +1189,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
                 ensemble_prob.append(pred_prob)
             pred_prob = np.max(np.concatenate(ensemble_prob, axis=0), axis=0, keepdims=True)
             slice_feat = np.mean(np.stack(ensemble_feat, axis=0), axis=0, keepdims=True)
-            image_features.append(slice_feat)
+            radiomic_feat.append(slice_feat.astype(np.float16))
             if labels is None:
                 pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
             else:
@@ -1195,9 +1206,9 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
 
         # Get feature array with shape [X, Y, Z, C]
         masks = np.stack(masks, axis=0)
-        image_features = np.concatenate(image_features, axis=0)
+        radiomic_feat = np.concatenate(radiomic_feat, axis=0)
         final_mask = np.moveaxis(masks, 0, slice_axis)
-        radiomic_feat = np.moveaxis(image_features, 0, slice_axis)
+        radiomic_feat = np.moveaxis(radiomic_feat, 0, slice_axis)
 
         # skip empty mask
         if np.sum(final_mask) < 1: continue
