@@ -904,6 +904,7 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
     for case, data in zip(case_dicts, data_dicts):
         image = data["image"].squeeze().numpy()
         label = data["label"].squeeze().numpy()
+
         if np.sum(label > 0) < 1: continue
         img_shape = image.shape
         voi = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).to('cpu')
