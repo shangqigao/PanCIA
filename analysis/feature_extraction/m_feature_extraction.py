@@ -1138,13 +1138,13 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
             assert f'{lab_path}'.endswith(('.nii', '.nii.gz'))
             nii = nib.load(lab_path)
             affine = nii.affine
-            _, _, pixel_spacing = get_orientation(affine)
+            _, _, voxel_spacing = get_orientation(affine)
             labels = nii.get_fdata()
 
             # resample to given resolution
             if resolution is not None:
                 new_spacing = (resolution, resolution, resolution)
-                zoom_factors = tuple(os/ns for os, ns in zip(pixel_spacing, new_spacing))
+                zoom_factors = tuple(os/ns for os, ns in zip(voxel_spacing, new_spacing))
                 labels = zoom(labels, zoom=zoom_factors, order=0)
 
             # move the slice axis to the first
