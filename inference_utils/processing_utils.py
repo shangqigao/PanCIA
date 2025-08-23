@@ -6,6 +6,7 @@ from PIL import Image
 import nibabel as nib
 import SimpleITK as sitk
 from skimage import measure
+from scipy.ndimage import zoom
     
 
 """
@@ -237,7 +238,7 @@ def get_orientation(affine):
     else:
         return 'unknown', slice_axis, pixel_spacing
 
-def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spacing=False):
+def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spacing=False, resolution=None):
     """read single-phase or multi-phase nifti file and return pixel data
         image_path: str, path to single-phase nifti file
             or a list of paths to multi-phase nifti files
@@ -266,6 +267,17 @@ def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spa
         affine = nii.affine
         phase, slice_axis, pixel_spacing = get_orientation(affine)
         image_array = nii.get_fdata()
+
+    # resample to given resolution
+    if resolution is not None:
+        new_spacing = (resolution, resolution, resolution)
+        print(f"Resampling from {pixel_spacing} to {new_spacing}...")
+        zoom_factors = tuple(os/ns for os, ns in zip(pixel_spacing, new_spacing))
+        image_array = zoom(image_array, zoom=zoom_factors, order=3)
+        pixel_spacing = new_spacing
+        new_affine = affine.copy()
+        for i in range(3): new_affine[i, i] = np.sign(affine[i, i]) * new_spacing[i]
+        affine = new_affine
 
     image_list = []
     if phase in ['axial', 'sagittal', 'coronal']:

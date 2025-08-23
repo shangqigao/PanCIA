@@ -32,7 +32,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
     parser.add_argument('--feature_mode', default="BiomedParse", choices=["pyradiomics", "SegVol", "BiomedParse"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 768, 512], type=int)
-    parser.add_argument('--resolution', default=1.024, type=float)
+    parser.add_argument('--resolution', default=1, type=float)
     parser.add_argument('--units', default="mm", type=str)
     args = parser.parse_args()
 
@@ -81,7 +81,9 @@ if __name__ == "__main__":
             prompts=text_prompts,
             format=args.format,
             modality=args.modality,
-            site=args.site
+            site=args.site,
+            resolution=args.resolution,
+            units=args.units
         )
 
     # construct image graph

@@ -14,7 +14,6 @@ import logging
 import json
 import PIL
 import skimage
-from scipy.ndimage import zoom
 
 import numpy as np
 import albumentations as A
@@ -32,6 +31,7 @@ from tiatoolbox.utils.misc import imwrite
 from shapely.geometry import box as shapely_box
 from shapely.strtree import STRtree
 from pprint import pprint
+from scipy.ndimage import zoom
 
 from radiomics import featureextractor
 import radiomics
@@ -1081,7 +1081,6 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     from PIL import Image
     import nibabel as nib
     from skimage.morphology import disk
-    from skimage.transform import resize
     from scipy.ndimage import binary_dilation
 
     logging.getLogger("modeling").setLevel(logging.ERROR)
@@ -1130,7 +1129,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
             images = [read_dicom(p, is_CT, site, keep_size=True, return_spacing=True) for p in dicom_paths]
             slice_axis, affine = 0, np.eye(4)
         elif format == 'nifti':
-            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, site, keep_size=True, return_spacing=True)
+            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, site, keep_size=True, return_spacing=True, resolution=resolution)
         else:
             raise ValueError(f'Only support DICOM or NIFTI, but got {format}')
 
@@ -1140,16 +1139,25 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
             labels = nii.get_fdata()
             #suppose the last is slice axis for dicom annoations
             labels = np.moveaxis(labels, slice_axis, 0) 
+            # resample to given resolution
+            if resolution is not None:
+                new_spacing = (resolution, resolution, resolution)
+                zoom_factors = tuple(os/ns for os, ns in zip(pixel_spacing, new_spacing))
+                labels = zoom(labels, zoom=zoom_factors, order=0)
         else:
             labels = None
 
-        # resample to give resolution
-        if resolution is not None:
-            new_spacing = 
-            zoom_factors = tuple(os/ns for os, ns in zip(spacing, new_spacing))
-            original_shape = mask_3d.shape
-            mask_3d = zoom(mask_3d, zoom=zoom_factors, order=0)
-            new_shape = mask_3d.shape
+        # select slice range of interest
+        if labels is not None:
+            if np.sum(labels > 0) < 1: continue
+            coords = np.array(np.where(labels))
+            zmin, _, _ = coords.min(axis=1)
+            zmax, _, _ = coords.max(axis=1)
+            zmin = max(zmin - int(dilation_mm), 0)
+            zmax = min(zmax + int(dilation_mm), labels.shape[0] - 1)
+            images = images[zmin:zmax+1]
+            labels = labels[zmin:zmax+1, ...]
+            print(f"Selected slices {zmin} to {zmax} for feature extraction")
 
         radiomic_feat, masks = [], []
         meta_data = {} if meta_list is None else meta_list[idx]
@@ -1194,20 +1202,20 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
                 pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
             else:
                 pred_mask = labels[i, ...]
-
-            # mask dilation based on physical size
-            if dilation_mm > 0:
-                radius_pixels = int(dilation_mm / np.mean(pixel_spacing))
-                kernel = disk(radius_pixels)
-                dilated_mask = binary_dilation(pred_mask.squeeze(), structure=kernel).astype(np.uint8)
-            else:
-                dilated_mask = pred_mask.squeeze()
-            masks.append(dilated_mask)
+            masks.append(pred_mask)
 
         # Get feature array with shape [X, Y, Z, C]
         masks = np.stack(masks, axis=0)
         radiomic_feat = np.concatenate(radiomic_feat, axis=0)
+        radiomic_memory = radiomic_feat.nbytes / 1024**3
+        logging.info(f"The size of image features is {radiomic_memory}GiB")
         final_mask = np.moveaxis(masks, 0, slice_axis)
+        # mask dilation based on physical size
+        if dilation_mm > 0:
+            mean_spacing = np.mean(spacing)
+            radius_voxels = int(dilation_mm / mean_spacing)
+            kernel = skimage.morphology.ball(radius_voxels)
+            final_mask = binary_dilation(final_mask, structure=kernel).astype(np.uint8)
         radiomic_feat = np.moveaxis(radiomic_feat, 0, slice_axis)
 
         # skip empty mask
@@ -1216,7 +1224,8 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         # extract radiomic features of tumor regions
         radiomic_feat = radiomic_feat[final_mask > 0]
         radiomic_coord = np.argwhere(final_mask > 0)
-        logging.info(f"Extracted feature of shape {radiomic_feat.shape}")
+        radiomic_coord[:, slice_axis] += zmin
+        logging.info(f"Extracted ROI feature of shape {radiomic_feat.shape}")
         if format == 'dicom':
             img_name = pathlib.path(img_path[0]).parent.name
         elif format == 'nifti':
