@@ -134,6 +134,7 @@ def extract_radiomic_feature(
         modality='CT',
         site='breast',
         label=1,
+        dilation_mm=0,
         resolution=None, 
         units="mm",
         n_jobs=32
@@ -157,6 +158,7 @@ def extract_radiomic_feature(
             save_dir,
             class_name,
             label,
+            dilation_mm,
             resolution,
             units,
             n_jobs
@@ -168,6 +170,7 @@ def extract_radiomic_feature(
             save_dir,
             class_name,
             label,
+            dilation_mm,
             resolution,
             units
         )
@@ -191,6 +194,7 @@ def extract_radiomic_feature(
             label,
             format=format,
             is_CT=modality == 'CT',
+            dilation_mm=dilation_mm,
             site=site,
             resolution=resolution,
             units=units
@@ -741,7 +745,7 @@ def get_cell_compositions(
     np.save(f"{save_dir}/{base_name}.position.npy", patch_inputs)
     np.save(f"{save_dir}/{base_name}.features.npy", bounds_compositions)
 
-def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, resolution=None, units="mm", n_jobs=32):
+def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, dilation_mm=0, resolution=None, units="mm", n_jobs=32):
     # Get the PyRadiomics logger (default log-level = INFO)
     logger = radiomics.logger
     logger.setLevel(logging.DEBUG)  # set level to DEBUG to include debug log messages in log file
@@ -754,6 +758,7 @@ def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, 
     settings = {}
     settings['resampledPixelSpacing'] = [resolution, resolution, resolution]
     settings['correctMask'] = True
+    settings['maskDilation'] = int(dilation_mm)
 
     extractor = featureextractor.RadiomicsFeatureExtractor(**settings)
     extractor.enableImageTypeByName('Wavelet')
@@ -792,7 +797,7 @@ def extract_VOI(image, label, patch_size, padding, output_shape=None):
     bbox = [s, e]
     return image, bbox
 
-def SegVol_image_transforms(keys, spacing, padding):
+def SegVol_image_transforms(keys, spacing):
     from monai import transforms
 
     class MinMaxNormalization(transforms.Transform):
@@ -848,16 +853,16 @@ def SegVol_image_transforms(keys, spacing, padding):
                 transforms.Orientationd(keys=["image", "label"], axcodes="RAS"),
                 ForegroundNormalization(keys=["image"]),
                 MinMaxNormalization(keys=["image"]),
-                DimTranspose(keys=["image", "label"]),
-                transforms.BorderPadd(keys=["image", "label"], spatial_border=padding)
+                DimTranspose(keys=["image", "label"])
             ]
         )
     return transform
 
 
-def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, resolution=1.024, units="mm", device="cuda"):
+def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, dilation_mm=0, resolution=1, units="mm", device="cuda"):
     from monai.networks.nets import ViT
     from monai.inferers import SlidingWindowInferer
+    from scipy.ndimage import binary_dilation
     
     roi_size = (32, 256, 256)
     patch_size = (4, 16, 16)
@@ -888,8 +893,7 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
 
     spacing = (resolution, resolution, resolution)
     keys = ["image", "label"]
-    padding = (4, 8, 8)
-    transform = SegVol_image_transforms(keys, spacing, padding)
+    transform = SegVol_image_transforms(keys, spacing)
     case_dicts = [
         {"image": img_path, "label": lab_path} for img_path, lab_path in zip(img_paths, lab_paths)
     ]
@@ -900,18 +904,30 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
     for case, data in zip(case_dicts, data_dicts):
         image = data["image"].squeeze().numpy()
         label = data["label"].squeeze().numpy()
-        voi, bbox = extract_VOI(image, label, patch_size, padding)
-        img_shape, voi_shape = image.shape, voi.shape
-        voi = torch.from_numpy(voi).unsqueeze(0).unsqueeze(0).to('cpu')
+        if np.sum(label > 0) < 1: continue
+        img_shape = image.shape
+        voi = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).to('cpu')
         with torch.no_grad():
             feature = inferer(voi, lambda x: vit(x)[0].transpose(1, 2).reshape(-1, 768, fs[0], fs[1], fs[2]))
-        c, z, x, y = feature.squeeze().size()
-        feat_shape = (c, z, x, y)
-        logging.info(f"Got image of shape {img_shape}, VOI of shape {voi_shape}, feature of shape {feat_shape}")
-        feature = feature.squeeze().reshape([c, z*x*y]).transpose(0,1).cpu().numpy()
-        z, x, y = np.arange(z), np.arange(x), np.arange(y)
-        Z, X, Y = np.meshgrid(z, x, y, indexing="ij")
-        coordinates = np.array([bbox[0]]) + np.stack([Z, X, Y], axis=-1).reshape([-1, 3])
+        c, z, y, x = feature.squeeze().size()
+        feat_shape = (c, z, y, x)
+        logging.info(f"Got image of shape {img_shape}, feature of shape {feat_shape}")
+        feature = feature.squeeze().permute(1, 2, 3, 0).cpu().numpy()
+
+        # downsample label
+        new_shape = [z, y, x]
+        zoom_factors = tuple(ns/os for os, ns in zip(new_shape, img_shape))
+        label = zoom(label, zoom=zoom_factors, order=0)
+
+        # dilate label
+        if dilation_mm > 0:
+            radius_voxels = int(dilation_mm / resolution)
+            kernel = skimage.morphology.ball(radius_voxels)
+            label = binary_dilation(label, structure=kernel).astype(np.uint8)
+        
+        # extract ROI features
+        feature = feature[label > 0]
+        coordinates = np.argwhere(label > 0) * np.array(patch_size).reshape(1, 3)
         assert len(feature) == len(coordinates)
         logging.info(f"Saving radiomics in the resolution of {spacing}...")
         img_name = pathlib.Path(case["image"]).name.replace(".nii.gz", "")
@@ -1075,7 +1091,7 @@ def create_prompts(meta_data):
 def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, class_name, 
                                   label=1, format='nifti', is_CT=True, site=None,
                                   meta_list=None, prompt_ensemble=False,
-                                  dilation_mm=10, resolution=None, units="mm", device="gpu"):
+                                  dilation_mm=0, resolution=None, units="mm", device="gpu"):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
         if no label provided, directly use model segmentation, else use give labels
     """
