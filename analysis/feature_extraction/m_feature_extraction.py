@@ -746,6 +746,8 @@ def get_cell_compositions(
     np.save(f"{save_dir}/{base_name}.features.npy", bounds_compositions)
 
 def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, dilation_mm=0, resolution=None, units="mm", n_jobs=32):
+    import nibabel as nib
+
     # Get the PyRadiomics logger (default log-level = INFO)
     logger = radiomics.logger
     logger.setLevel(logging.DEBUG)  # set level to DEBUG to include debug log messages in log file
@@ -765,14 +767,26 @@ def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, 
     os.makedirs(save_dir, exist_ok=True)
     def _extract_radiomics(idx, img_path, lab_path):
         logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
-        features = extractor.execute(img_path, lab_path, label)
+
+        # skip if mask is empty
+        nii = nib.load(lab_path)
+        label_arr = nii.get_fdata()
+        if np.sum(label_arr > 0) < 1: 
+            lab_name = pathlib.Path(lab_path).name
+            logging.info(f"Skip case {lab_name}, because no foreground found!")
+            return
+        del label_arr
+
+        features = extractor.execute(str(img_path), str(lab_path), label)
         for k, v in features.items():
             if isinstance(v, np.ndarray):
                 features[k] = v.tolist()
-        img_name = f"{img_path}".split("/")[-1].replace(".nii.gz", "")
-        save_path = pathlib.Path(f"{save_dir}/{img_name}.{class_name}.pyradiomics.json")
+        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        save_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.json")
+        logging.info(f"Saving radiomic features to {save_path}")
         with save_path.open("w") as handle:
             json.dump(features, handle, indent=4)
+
         return
 
     # extract radiomics in parallel
@@ -872,7 +886,7 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
         patch_size=patch_size,
         pos_embed="perceptron",
         )
-    print(vit)
+    # print(vit)
     vit_checkpoint = os.path.join(root_dir, 'checkpoints/SegVol/ViT_pretrain.ckpt')
     with open(vit_checkpoint, "rb") as f:
         state_dict = torch.load(f, map_location='cpu')['state_dict']
@@ -887,54 +901,64 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
         sw_batch_size=8,
         sw_device=device,
         device='cpu',
-        progress=True
+        progress=False
     )
     print("Set sliding window for model inference.")
 
     spacing = (resolution, resolution, resolution)
     keys = ["image", "label"]
     transform = SegVol_image_transforms(keys, spacing)
-    case_dicts = [
-        {"image": img_path, "label": lab_path} for img_path, lab_path in zip(img_paths, lab_paths)
-    ]
-    data_dicts = transform(case_dicts)
     fs = (np.array(roi_size) / np.array(patch_size)).astype(np.int32)
     mkdir(save_dir)
     
-    for case, data in zip(case_dicts, data_dicts):
-        image = data["image"].squeeze().numpy()
-        label = data["label"].squeeze().numpy()
+    for img_path, lab_path in zip(img_paths, lab_paths):
+        case_dict = {"image": img_path, "label": lab_path}
+        data = transform(case_dict)
+        image = data["image"].squeeze()
+        label = data["label"].squeeze()
 
-        if np.sum(label > 0) < 1: continue
-        img_shape = image.shape
-        voi = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).to('cpu')
-        with torch.no_grad():
-            feature = inferer(voi, lambda x: vit(x)[0].transpose(1, 2).reshape(-1, 768, fs[0], fs[1], fs[2]))
-        c, z, y, x = feature.squeeze().size()
-        feat_shape = (c, z, y, x)
-        logging.info(f"Got image of shape {img_shape}, feature of shape {feat_shape}")
-        feature = feature.squeeze().permute(1, 2, 3, 0).cpu().numpy()
-
-        # downsample label
-        new_shape = [z, y, x]
-        zoom_factors = tuple(ns/os for os, ns in zip(new_shape, img_shape))
-        label = zoom(label, zoom=zoom_factors, order=0)
+        # skip empty mask
+        if np.sum(label > 0) < 1: 
+            lab_name = pathlib.Path(lab_path).name
+            logging.info(f"Skip case {lab_name}, because no foreground found!")
+            continue
 
         # dilate label
         if dilation_mm > 0:
+            logging.info(f"Dilating mask by {int(dilation_mm)}mm")
             radius_voxels = int(dilation_mm / resolution)
             kernel = skimage.morphology.ball(radius_voxels)
             label = binary_dilation(label, structure=kernel).astype(np.uint8)
+
+        img_shape = image.shape
+        image = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).to('cpu')
+        with torch.no_grad():
+            feature = inferer(image, lambda x: vit(x)[0].transpose(1, 2).reshape(-1, 768, fs[0], fs[1], fs[2]))
+        feature = feature.squeeze().permute(1, 2, 3, 0).cpu().numpy().astype(np.float16)
+        feat_shape = feature.shape
+        feat_memory = feature.nbytes / 1024**3
+        logging.info(f"Got image of shape {img_shape}, image feature of shape {feat_shape} ({feat_memory:.2f}GiB)")
+
+        # downsample label
+        new_shape = [feat_shape[0], feat_shape[1], feat_shape[2]]
+        cropped_shape = [i*j for i, j in zip(new_shape, patch_size)]
+        zoom_factors = tuple(ns/os for ns, os in zip(new_shape, cropped_shape))
+        ds_label = label[:cropped_shape[0], :cropped_shape[1], :cropped_shape[2]]
+        ds_label = zoom(ds_label, zoom=zoom_factors, order=0)
         
         # extract ROI features
-        feature = feature[label > 0]
-        coordinates = np.argwhere(label > 0) * np.array(patch_size).reshape(1, 3)
+        feature = feature[ds_label > 0]
+        feat_memory = feature.nbytes / 1024**2
+        coordinates = np.argwhere(ds_label > 0) * np.array(patch_size).reshape(1, 3)
+        logging.info(f"Extracted ROI feature of shape {feature.shape} ({feat_memory:.2f}MiB)")
         assert len(feature) == len(coordinates)
         logging.info(f"Saving radiomics in the resolution of {spacing}...")
-        img_name = pathlib.Path(case["image"]).name.replace(".nii.gz", "")
+        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         feature_path = f"{save_dir}/{img_name}_{class_name}_radiomics.npy"
+        logging.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, feature)
         coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
+        logging.info(f"Saving feature coordinates to {coordinates_path}")
         np.save(coordinates_path, coordinates)
     return
 
@@ -1171,7 +1195,10 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
 
         # select slice range of interest
         if labels is not None:
-            if np.sum(labels > 0) < 1: continue
+            if np.sum(labels > 0) < 1: 
+                lab_name = pathlib.Path(lab_path).name
+                logging.info(f"Skip case {lab_name}, because no foreground found!")
+                continue
             coords = np.array(np.where(labels))
             zmin, _, _ = coords.min(axis=1)
             zmax, _, _ = coords.max(axis=1)
@@ -1180,7 +1207,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
             assert len(images) == len(labels)
             images = images[zmin:zmax+1]
             labels = labels[zmin:zmax+1, ...]
-            print(f"Selected slices {zmin} to {zmax} for feature extraction")
+            logging.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
 
         radiomic_feat, masks = [], []
         meta_data = {} if meta_list is None else meta_list[idx]
@@ -1231,10 +1258,11 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         masks = np.stack(masks, axis=0)
         radiomic_feat = np.concatenate(radiomic_feat, axis=0)
         radiomic_memory = radiomic_feat.nbytes / 1024**3
-        logging.info(f"The size of image features is {radiomic_memory}GiB")
+        logging.info(f"Got image of shape {masks.shape}, image feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}GiB)")
         final_mask = np.moveaxis(masks, 0, slice_axis)
         # mask dilation based on physical size
         if dilation_mm > 0:
+            logging.info(f"Dilating mask by {int(dilation_mm)}mm")
             mean_spacing = np.mean(spacing)
             radius_voxels = int(dilation_mm / mean_spacing)
             kernel = skimage.morphology.ball(radius_voxels)
@@ -1246,11 +1274,12 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
 
         # extract radiomic features of tumor regions
         radiomic_feat = radiomic_feat[final_mask > 0]
+        radiomic_memory = radiomic_feat.nbytes / 1024**2
         radiomic_coord = np.argwhere(final_mask > 0)
         radiomic_coord[:, slice_axis] += zmin
-        logging.info(f"Extracted ROI feature of shape {radiomic_feat.shape}")
+        logging.info(f"Extracted ROI feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}MiB)")
         if format == 'dicom':
-            img_name = pathlib.path(img_path[0]).parent.name
+            img_name = pathlib.Path(img_path[0]).parent.name
         elif format == 'nifti':
             if isinstance(img_path, list):
                 img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")

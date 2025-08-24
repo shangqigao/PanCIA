@@ -1,6 +1,7 @@
 import numpy as np
 from skimage import transform
 import pydicom
+import logging
 from io import BytesIO
 from PIL import Image
 import nibabel as nib
@@ -271,7 +272,8 @@ def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spa
     # resample to given resolution
     if resolution is not None:
         new_spacing = (resolution, resolution, resolution)
-        print(f"Resampling from {pixel_spacing} to {new_spacing}...")
+        logging.info(f"Resampling from {pixel_spacing} to {new_spacing}...")
+        
         zoom_factors = tuple(os/ns for os, ns in zip(pixel_spacing, new_spacing))
         if multiphase: zoom_factors = zoom_factors + (1,)
         image_array = zoom(image_array, zoom=zoom_factors, order=3)

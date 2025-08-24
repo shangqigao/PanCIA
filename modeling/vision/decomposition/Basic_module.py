@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torchvision.utils import make_grid
 from monai.transforms import AsDiscrete
 from monai.losses import DiceCELoss, DiceLoss
-from monai.metrics import compute_dice, do_metric_reduction
+from monai.metrics import compute_meandice, do_metric_reduction
 
 
 class Balanced_DiceCELoss(DiceCELoss):
@@ -46,7 +46,7 @@ class Criterion(nn.Module):
     def compute_dice(self, pred, grnd):
         pred, grnd = self.post_pred(pred), self.post_label(grnd)
         dice, _ = do_metric_reduction(
-            compute_dice(pred, grnd, include_background=False)
+            compute_meandice(pred, grnd, include_background=False)
         )
         return dice
 

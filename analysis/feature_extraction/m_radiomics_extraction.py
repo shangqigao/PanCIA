@@ -22,15 +22,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--lab_dir', default=None)
-    parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
-    parser.add_argument('--phase', default="multiple", choices=["single", "multiple"], type=str)
+    parser.add_argument('--phase', default="single", choices=["single", "multiple"], type=str)
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--feature_mode', default="SegVol", choices=["pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--feature_mode', default="pyradiomics", choices=["pyradiomics", "SegVol", "BiomedParse"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 512], type=int)
     parser.add_argument('--dilation_mm', default=10, type=float)
     parser.add_argument('--resolution', default=1, type=float)
@@ -44,7 +44,7 @@ if __name__ == "__main__":
         img_paths = [sorted(p.glob('*.dcm')) for p in dicom_cases]
     elif args.format == 'nifti':
         if args.phase == "single":
-            img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0001.nii.gz'))
+            img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0000.nii.gz'))
         else:
             case_paths = sorted(pathlib.Path(args.img_dir).glob('*'))
             case_paths = [p for p in case_paths if p.is_dir()]
