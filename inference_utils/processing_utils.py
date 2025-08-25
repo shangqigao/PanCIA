@@ -38,16 +38,22 @@ def process_intensity_image(image_data, is_CT, site=None, keep_size=True):
         lower_bound, upper_bound = window
     else:
         # process image with intensity range 0.5-99.5 percentile
-        lower_bound, upper_bound = np.percentile(
-            image_data[image_data > 0], 0.5
-        ), np.percentile(image_data[image_data > 0], 99.5)
-        
-    image_data_pre = np.clip(image_data, lower_bound, upper_bound)
-    image_data_pre = (
-        (image_data_pre - image_data_pre.min())
-        / (image_data_pre.max() - image_data_pre.min())
-        * 255.0
-    )
+        if image_data.max() > 0:
+            lower_bound, upper_bound = np.percentile(
+                image_data[image_data > 0], 0.5
+            ), np.percentile(image_data[image_data > 0], 99.5)
+        else:
+            lower_bound, upper_bound = 0, 0
+
+    if lower_bound == 0 and upper_bound == 0:
+        image_data_pre = np.zeros_like(image_data)  
+    else:
+        image_data_pre = np.clip(image_data, lower_bound, upper_bound)
+        image_data_pre = (
+            (image_data_pre - image_data_pre.min())
+            / (image_data_pre.max() - image_data_pre.min())
+            * 255.0
+        )
     
     if keep_size:
         resize_image = image_data_pre
@@ -273,7 +279,7 @@ def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spa
     if resolution is not None:
         new_spacing = (resolution, resolution, resolution)
         logging.info(f"Resampling from {pixel_spacing} to {new_spacing}...")
-        
+
         zoom_factors = tuple(os/ns for os, ns in zip(pixel_spacing, new_spacing))
         if multiphase: zoom_factors = zoom_factors + (1,)
         image_array = zoom(image_array, zoom=zoom_factors, order=3)
