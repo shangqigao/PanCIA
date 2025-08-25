@@ -877,6 +877,7 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
     from monai.networks.nets import ViT
     from monai.inferers import SlidingWindowInferer
     from scipy.ndimage import binary_dilation
+    import nibabel as nib
     
     roi_size = (32, 256, 256)
     patch_size = (4, 16, 16)
@@ -916,6 +917,7 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
         data = transform(case_dict)
         image = data["image"].squeeze()
         label = data["label"].squeeze()
+        img_shape = image.shape
 
         # skip empty mask
         if np.sum(label > 0) < 1: 
@@ -923,22 +925,35 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
             logging.info(f"Skip case {lab_name}, because no foreground found!")
             continue
 
+        # get scanning phase and move slice axis to the first 
+        # SAR: (axial: RA-xy), (sagittal: AS-yz), (coronal: RS-xz)
+        nii = nib.load(lab_path)
+        affine = nii.affine
+        phase, _, _ = get_orientation(affine)
+        if phase == "axial":
+            slice_axis = 0
+        elif phase == "sagittal":
+            slice_axis = 2
+        elif phase == "coronal":
+            slice_axis == 1
+        image = np.moveaxis(image, slice_axis, 0)
+
+        image = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).to('cpu')
+        with torch.no_grad():
+            feature = inferer(image, lambda x: vit(x)[0].transpose(1, 2).reshape(-1, 768, fs[0], fs[1], fs[2]))
+        feature = feature.squeeze().permute(1, 2, 3, 0).cpu().numpy().astype(np.float16)
+        feature = np.moveaxis(feature, 0, slice_axis)
+        feat_shape = feature.shape
+        feat_memory = feature.nbytes / 1024**3
+        logging.info(f"Got image of shape {img_shape}, image feature of shape {feat_shape} ({feat_memory:.2f}GiB)")
+
         # dilate label
         if dilation_mm > 0:
             logging.info(f"Dilating mask by {int(dilation_mm)}mm")
             radius_voxels = int(dilation_mm / resolution)
             kernel = skimage.morphology.ball(radius_voxels)
             label = binary_dilation(label, structure=kernel).astype(np.uint8)
-
-        img_shape = image.shape
-        image = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).to('cpu')
-        with torch.no_grad():
-            feature = inferer(image, lambda x: vit(x)[0].transpose(1, 2).reshape(-1, 768, fs[0], fs[1], fs[2]))
-        feature = feature.squeeze().permute(1, 2, 3, 0).cpu().numpy().astype(np.float16)
-        feat_shape = feature.shape
-        feat_memory = feature.nbytes / 1024**3
-        logging.info(f"Got image of shape {img_shape}, image feature of shape {feat_shape} ({feat_memory:.2f}GiB)")
-
+            
         # downsample label
         new_shape = [feat_shape[0], feat_shape[1], feat_shape[2]]
         cropped_shape = [i*j for i, j in zip(new_shape, patch_size)]
