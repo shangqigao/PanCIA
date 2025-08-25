@@ -950,7 +950,7 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
 
         crop_pad = [s / p for s, p in zip(pad_after, patch_size)]
         crop_roi = [int(s - p) for s, p in zip(feature.shape[:3], crop_pad)]
-        feature = feature[:crop_roi[0], :crop_roi[1], crop_roi[2], :]
+        feature = feature[:crop_roi[0], :crop_roi[1], :crop_roi[2], :]
         feature = np.moveaxis(feature, 0, slice_axis)
         feat_shape = feature.shape
         feat_memory = feature.nbytes / 1024**3
@@ -965,7 +965,13 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
 
         # downsample label
         new_shape = [feat_shape[0], feat_shape[1], feat_shape[2]]
-        cropped_shape = [i*j for i, j in zip(new_shape, patch_size)]
+        if slice_axis == 0:
+            new_patch_size = patch_size
+        elif slice_axis == 1:
+            new_patch_size = (patch_size[1], patch_size[0], patch_size[2])
+        elif slice_axis == 2:
+            new_patch_size = (patch_size[1], patch_size[2], patch_size[0])
+        cropped_shape = [i*j for i, j in zip(new_shape, new_patch_size)]
         zoom_factors = tuple(ns/os for ns, os in zip(new_shape, cropped_shape))
         ds_label = label[:cropped_shape[0], :cropped_shape[1], :cropped_shape[2]]
         ds_label = zoom(ds_label, zoom=zoom_factors, order=0)
@@ -973,7 +979,8 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
         # extract ROI features
         feature = feature[ds_label > 0]
         feat_memory = feature.nbytes / 1024**2
-        coordinates = np.argwhere(ds_label > 0) * np.array(patch_size).reshape(1, 3)
+        coordinates = np.argwhere(ds_label > 0) * np.array(new_patch_size).reshape(1, 3)
+        coordinates += np.array(new_patch_size).reshape(1, 3) // 2
         logging.info(f"Extracted ROI feature of shape {feature.shape} ({feat_memory:.2f}MiB)")
         assert len(feature) == len(coordinates)
         logging.info(f"Saving radiomics in the resolution of {spacing}...")
