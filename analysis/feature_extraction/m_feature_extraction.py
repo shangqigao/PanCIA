@@ -938,10 +938,19 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
             slice_axis == 1
         image = np.moveaxis(image, slice_axis, 0)
 
+        # pad if smaller than roi size
+        pad_after = [max(0, s1 - s2) for s1, s2 in zip(roi_size, image.shape)]
+        padding = [(0, p) for p in pad_after]
+        image = np.pad(image, pad_width=padding, mode='constant', constant_values=0)
+
         image = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).to('cpu')
         with torch.no_grad():
             feature = inferer(image, lambda x: vit(x)[0].transpose(1, 2).reshape(-1, 768, fs[0], fs[1], fs[2]))
         feature = feature.squeeze().permute(1, 2, 3, 0).cpu().numpy().astype(np.float16)
+
+        crop_pad = [s / p for s, p in zip(pad_after, patch_size)]
+        crop_roi = [int(s - p) for s, p in zip(feature.shape[:3], crop_pad)]
+        feature = feature[:crop_roi[0], :crop_roi[1], crop_roi[2], :]
         feature = np.moveaxis(feature, 0, slice_axis)
         feat_shape = feature.shape
         feat_memory = feature.nbytes / 1024**3
@@ -953,7 +962,7 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
             radius_voxels = int(dilation_mm / resolution)
             kernel = skimage.morphology.ball(radius_voxels)
             label = binary_dilation(label, structure=kernel).astype(np.uint8)
-            
+
         # downsample label
         new_shape = [feat_shape[0], feat_shape[1], feat_shape[2]]
         cropped_shape = [i*j for i, j in zip(new_shape, patch_size)]
