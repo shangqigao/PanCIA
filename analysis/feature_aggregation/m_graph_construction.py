@@ -94,7 +94,7 @@ def construct_radiomic_graph(
         num_windows = 1
     else:
         num_windows = len(features) // window_size
-    logging.info(f"Splitting input feature into {num_windows} subgraphs...")
+    logging.info(f"Splitting input feature into {num_windows} window(s)...")
 
     def _construct_graph(i):
         start = i * window_size
@@ -114,7 +114,7 @@ def construct_radiomic_graph(
         return {i: graph_dict}
     
     # construct graphs in parallel
-    logging.info("Constructing graphs of patches in parallel...")
+    logging.info("Constructing graphs on windows in parallel...")
     list_graph_dicts = joblib.Parallel(n_jobs=n_jobs)(
         joblib.delayed(_construct_graph)(i) for i in range(num_windows)
     )
