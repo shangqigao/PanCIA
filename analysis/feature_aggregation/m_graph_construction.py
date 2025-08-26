@@ -149,8 +149,8 @@ def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30
     """
     for idx, img_path in enumerate(img_paths):
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        if not pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy").exists(): continue
         graph_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}.json")
-        if not graph_path.exists(): continue
         logging.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
         construct_radiomic_graph(img_name, save_dir, graph_path, class_name, window_size, n_jobs)
     return 
