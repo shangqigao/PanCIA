@@ -117,12 +117,12 @@ if __name__ == "__main__":
     # )
 
     # visualize radiomic graph
-    # for i in range(0, 200, 20):
-    #     visualize_radiomic_graph(
-    #         img_path=img_paths[i],
-    #         lab_path=lab_paths[i],
-    #         save_graph_dir=save_feature_dir,
-    #         class_name=class_name,
-    #         save_name=i
-    #     )
+    # visualize_radiomic_graph(
+    #     img_path=img_paths[0],
+    #     lab_path=lab_paths[0],
+    #     save_graph_dir=save_feature_dir,
+    #     class_name=args.target,
+    #     spacing=tuple([args.resolution]*3),
+    #     feature_extractor=args.feature_mode
+    # )
 

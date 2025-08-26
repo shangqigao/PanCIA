@@ -776,28 +776,42 @@ def visualize_radiomic_graph(
         attention=None,
         class_name="tumour",
         save_name="radiomics",
+        feature_extractor="SegVol",
         keys=["image", "label"],
-        spacing=(1.024, 1.024, 1.024),
-        padding=(4, 8, 8),
+        spacing=(1, 1, 1),
+        padding=(10, 10, 10),
         NODE_SIZE = 1,
         EDGE_SIZE = 0.25,
         remove_front_corner=True,
         n_jobs=32
     ):
-    from models.a_04feature_extraction.m_feature_extraction import SegVol_image_transforms
     from monai.transforms.utils import generate_spatial_bounding_box
-    from monai.transforms.utils import get_largest_connected_component_mask
 
-    transform = SegVol_image_transforms(keys, spacing, padding)
-    case_dict = [{"image": img_path, "label": lab_path}]
+    if feature_extractor == "SegVol":
+        from analysis.feature_extraction.m_feature_extraction import SegVol_image_transforms
+
+        transform = SegVol_image_transforms(keys, spacing, padding)
+    elif feature_extractor == "BiomedParse":
+        from monai import transforms
+
+        transform = transforms.Compose(
+            [
+                transforms.LoadImaged(keys, ensure_channel_first=True, allow_missing_keys=True),
+                transforms.Spacingd(keys, pixdim=spacing, mode=('bilinear', 'nearest')),
+            ]
+        )
+    else:
+        raise ValueError(f"Unsupported feature extractor {feature_extractor}")
+    
+    case_dict = {"image": img_path, "label": lab_path}
     data = transform(case_dict)
-    image, label = data[0]["image"].squeeze(), data[0]["label"].squeeze()
-    label = get_largest_connected_component_mask(label)
+    image, label = data["image"].squeeze(), data["label"].squeeze()
     s, e = generate_spatial_bounding_box(np.expand_dims(label, 0))
-    padding = (4, 8, 8)
     s = np.array(s) - np.array(padding)
     e = np.array(e) + np.array(padding)
-    print(s, e)
+    s = np.clip(s, 0, np.array(label.shape) - 1)
+    e = np.clip(e, 0, np.array(label.shape))
+    print(f"Coordinates start from {s}, end by {e}")
 
     img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
     logging.info(f"loading graph of {img_name}")
