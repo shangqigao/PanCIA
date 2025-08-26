@@ -81,59 +81,51 @@ def construct_radiomic_graph(
     img_feature_dir, 
     save_path, 
     class_name="tumour", 
-    patch_size=(30, 30, 30), 
+    window_size=30**3, 
     n_jobs=32
     ):
     """construct volumetric radiomic graph
     Args:
-        patch_size (int): patch size for sliding window, reduce it if out of memory
+        window_size (int): the size for sliding window, reduce it if out of memory
     """
     positions = np.load(f"{img_feature_dir}/{img_name}_{class_name}_coordinates.npy")
     features = np.load(f"{img_feature_dir}/{img_name}_{class_name}_radiomics.npy")
-    z, x, y = (np.max(positions, axis=0) - np.min(positions, axis=0) + 1).tolist()
-    positions = np.reshape(positions, newshape=(z, x, y, -1))
-    features = np.reshape(features, newshape=(z, x, y, -1))
-    pz, px, py = patch_size
-
-    start_Z, start_X, start_Y = np.mgrid[0:z:pz, 0:x:px, 0:y:py]
-    start_Z, start_X, start_Y = start_Z.flatten(), start_X.flatten(), start_Y.flatten()
-    end_Z, end_X, end_Y = start_Z + pz, start_X + px, start_Y + py
-    logging.info(f"Splitting input volumetric feature into {len(start_X)} patches...")
+    if (len(features) > 0) and (len(features) <= window_size):
+        num_windows = 1
+    else:
+        num_windows = len(features) // window_size
+    logging.info(f"Splitting input feature into {num_windows} subgraphs...")
 
     def _construct_graph(i):
-        sz, sx, sy = start_Z[i], start_X[i], start_Y[i]
-        ez, ex, ey = min(end_Z[i], z), min(end_X[i], x), min(end_Y[i], y)
-        lz, lx, ly = ez - sz, ex - sx, ey - sy
-        patch_positions = positions[sz:ez, sx:ex, sy:ey, :].reshape(lz*lx*ly, -1)
-        patch_features = features[sz:ez, sx:ex, sy:ey, :].reshape(lz*lx*ly, -1)
-        if lz*lx*ly < 4*pz*px:
-            graph_dict = None
-        else:
-            graph_dict = SlideGraphConstructor.build(
-                patch_positions, 
-                patch_features, 
-                lambda_d=0.2,
-                lambda_f=0.1,
-                lambda_h=0.8,
-                connectivity_distance=8,
-                neighbour_search_radius=4,
-                feature_range_thresh=None
-            )
+        start = i * window_size
+        end = len(features) if i == (num_windows - 1) else (i + 1) * window_size
+        patch_positions = positions[start : end]
+        patch_features = features[start : end]
+        graph_dict = SlideGraphConstructor.build(
+            patch_positions, 
+            patch_features, 
+            lambda_d=0.2,
+            lambda_f=0.1,
+            lambda_h=0.8,
+            connectivity_distance=8,
+            neighbour_search_radius=4,
+            feature_range_thresh=None
+        )
         return {i: graph_dict}
     
     # construct graphs in parallel
     logging.info("Constructing graphs of patches in parallel...")
     list_graph_dicts = joblib.Parallel(n_jobs=n_jobs)(
-        joblib.delayed(_construct_graph)(i) for i in range(len(start_X))
+        joblib.delayed(_construct_graph)(i) for i in range(num_windows)
     )
 
     # rearrange according to index
     all2one = {}
     for d in list_graph_dicts: all2one.update(d)
-    list_graph_dicts = [all2one[i] for i in range(len(start_X)) if all2one[i] is not None]
+    list_graph_dicts = [all2one[i] for i in range(len(num_windows))]
 
     # concatenate a list of graphs
-    logging.info("Concatenating all graphs constructed from the splitted patches...")
+    logging.info("Concatenating all subgraphs constructed from the sliding windows...")
     new_graph_dict = {k: [] for k in list_graph_dicts[0].keys()}
     for graph_dict in list_graph_dicts:
         coordinate_shift = len(new_graph_dict["x"])
@@ -145,11 +137,11 @@ def construct_radiomic_graph(
             else:
                 new_graph_dict[k] += v.tolist()
     num_nodes = len(new_graph_dict["x"])
-    logging.info(f"Constructed a graph of {num_nodes} nodes from {z*x*y} features!")
+    logging.info(f"Constructed a graph of {num_nodes} nodes from {len(features)} features!")
     with save_path.open("w") as handle:
         json.dump(new_graph_dict, handle)
 
-def construct_img_graph(img_paths, save_dir, class_name="tumour", patch_size=(30, 30, 30), n_jobs=32):
+def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30**3, n_jobs=32):
     """construct graph for radiological images
     Args:
         img_paths (list): a list of image paths
@@ -159,7 +151,7 @@ def construct_img_graph(img_paths, save_dir, class_name="tumour", patch_size=(30
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         graph_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}.json")
         logging.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
-        construct_radiomic_graph(img_name, save_dir, graph_path, class_name, patch_size, n_jobs)
+        construct_radiomic_graph(img_name, save_dir, graph_path, class_name, window_size, n_jobs)
     return 
 
 
