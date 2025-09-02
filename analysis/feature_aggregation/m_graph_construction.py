@@ -54,7 +54,7 @@ def construct_pathomic_graph(wsi_name, wsi_feature_dir, save_path):
     with save_path.open("w") as handle:
         new_graph_dict = {k: v.tolist() for k, v in graph_dict.items() if k != "cluster_points"}
         new_graph_dict.update({"cluster_points": graph_dict["cluster_points"]})
-        json.dump(new_graph_dict, handle)
+        json.dump(new_graph_dict, handle, indent=4)
 
 def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8):
     """construct graph for wsi
@@ -122,10 +122,10 @@ def construct_radiomic_graph(
     # rearrange according to index
     all2one = {}
     for d in list_graph_dicts: all2one.update(d)
-    list_graph_dicts = [all2one[i] for i in range(len(num_windows))]
+    list_graph_dicts = [all2one[i] for i in range(num_windows)]
 
     # concatenate a list of graphs
-    logging.info("Concatenating all subgraphs constructed from the sliding windows...")
+    logging.info("Concatenating all subgraphs constructed on the sliding windows...")
     new_graph_dict = {k: [] for k in list_graph_dicts[0].keys()}
     for graph_dict in list_graph_dicts:
         coordinate_shift = len(new_graph_dict["x"])
@@ -139,7 +139,7 @@ def construct_radiomic_graph(
     num_nodes = len(new_graph_dict["x"])
     logging.info(f"Constructed a graph of {num_nodes} nodes from {len(features)} features!")
     with save_path.open("w") as handle:
-        json.dump(new_graph_dict, handle)
+        json.dump(new_graph_dict, handle, indent=4)
 
 def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30**3, n_jobs=32):
     """construct graph for radiological images
@@ -712,7 +712,7 @@ def visualize_pathomic_graph(
         # sm = ScalarMappable(cmap=cmap, norm=norm)
         # cbar = fig.colorbar(sm, ax=ax, extend="both")
         # cbar.minorticks_on()
-        plt.savefig("a_05feature_aggregation/wsi_graph.jpg")
+        plt.savefig("analysis/feature_aggregation/wsi_graph.jpg")
     else:
         if not show_map:
             thumb_overlaid = plot_graph(
@@ -760,7 +760,7 @@ def visualize_pathomic_graph(
         cbar.minorticks_on()
         plt.subplot(2,2,3)
         plt.imshow(thumb_tile)
-        plt.savefig(f"a_05feature_aggregation/wsi_graph_{save_name}.jpg")
+        plt.savefig(f"analysis/feature_aggregation/wsi_graph_{save_name}.jpg")
 
 def visualize_radiomic_graph(
         img_path,
@@ -783,7 +783,7 @@ def visualize_radiomic_graph(
     if feature_extractor == "SegVol":
         from analysis.feature_extraction.m_feature_extraction import SegVol_image_transforms
 
-        transform = SegVol_image_transforms(keys, spacing, padding)
+        transform = SegVol_image_transforms(keys, spacing)
     elif feature_extractor == "BiomedParse":
         from monai import transforms
 
@@ -804,7 +804,7 @@ def visualize_radiomic_graph(
     e = np.array(e) + np.array(padding)
     s = np.clip(s, 0, np.array(label.shape) - 1)
     e = np.clip(e, 0, np.array(label.shape))
-    print(f"Coordinates start from {s}, end by {e}")
+    logging.info(f"Coordinates start from {s}, end by {e}")
 
     img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
     logging.info(f"loading graph of {img_name}")
@@ -813,7 +813,7 @@ def visualize_radiomic_graph(
     cluster_points = graph_dict["cluster_points"]
     graph_dict = {k: v for k, v in graph_dict.items() if k != "cluster_points"}
     node_coordinates = graph_dict["coordinates"]
-    print(f"The number of nodes: {len(node_coordinates)}")
+    logging.info(f"The number of nodes: {len(node_coordinates)}")
     node_label = [label[int(c[0]), int(c[1]), int(c[2])] for c in node_coordinates]
 
     edges = graph_dict["edge_index"]
@@ -826,6 +826,7 @@ def visualize_radiomic_graph(
     
     if attention is None:
         voi = image[s[0]:e[0], s[1]:e[1], s[2]:e[2]]
+        voi = (voi - voi.min()) / (voi.max() - voi.min() + 1e-12)
     else:
         def _assign_attention(points, value):
             voi = np.zeros((e[0]-s[0], e[1]-s[1], e[2]-s[2]))
@@ -854,7 +855,7 @@ def visualize_radiomic_graph(
         opacity=0.1, # needs to be small to see through all surfaces
         surface_count=17, # needs to be a large number for good volume rendering
         ))
-    fig.write_image(f"a_05feature_aggregation/image_voi_{save_name}.jpg")
+    fig.write_image(f"analysis/feature_aggregation/image_voi_{save_name}.jpg")
 
     node_coordinates = np.array(node_coordinates) 
     kept_nodes = np.array(kept_nodes)
@@ -913,7 +914,7 @@ def visualize_radiomic_graph(
         ),
         margin=dict(l=0, r=0, b=0, t=40)
     )
-    fig.write_image(f"a_05feature_aggregation/image_graph_{save_name}.jpg")
+    fig.write_image(f"analysis/feature_aggregation/image_graph_{save_name}.jpg")
     print("Visualization Done!")
     
 def pathomic_feature_visualization(wsi_paths, save_feature_dir, mode="tsne", save_label_dir=None, graph=True, n_class=None, features=None, colors=None):
@@ -977,7 +978,7 @@ def pathomic_feature_visualization(wsi_paths, save_feature_dir, mode="tsne", sav
     plt.ylim(-25, 25)
     ax.axis('off')
     ax.axis('tight') 
-    plt.savefig(f'a_05feature_aggregation/{mode}_visualization.jpg')
+    plt.savefig(f'analysis/feature_aggregation/{mode}_visualization.jpg')
     print("Visualization done!")
 
 def radiomic_feature_visualization(img_paths, save_feature_dir, class_name="tumour", mode="tsne", graph=True, n_class=None, features=None, colors=None):
@@ -1032,7 +1033,7 @@ def radiomic_feature_visualization(img_paths, save_feature_dir, class_name="tumo
     plt.ylim(-25, 25)
     ax.axis('off')
     ax.axis('tight') 
-    plt.savefig(f'a_05feature_aggregation/{mode}_visualization.jpg')
+    plt.savefig(f'analysis/feature_aggregation/{mode}_visualization.jpg')
     print("Visualization done!")
 
 

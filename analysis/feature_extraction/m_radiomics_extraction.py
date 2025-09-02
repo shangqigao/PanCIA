@@ -22,7 +22,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--lab_dir', default=None)
-    parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--feature_mode', default="BiomedParse", choices=["pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--feature_mode', default="SegVol", choices=["pyradiomics", "SegVol", "BiomedParse"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 512], type=int)
     parser.add_argument('--dilation_mm', default=10, type=float)
     parser.add_argument('--resolution', default=1, type=float)
@@ -65,37 +65,37 @@ if __name__ == "__main__":
     save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.site}_{args.modality}_radiomic_features/{args.feature_mode}/{args.lab_mode}")
     
     # extract radiomics
-    # bs = 200
-    # nb = len(img_paths) // bs if len(img_paths) % bs == 0 else len(img_paths) // bs + 1
-    # for i in range(0, nb):
-    #     logging.info(f"Processing images of batch [{i+1}/{nb}] ...")
-    #     start = i * bs
-    #     end = min(len(img_paths), (i + 1) * bs)
-    #     batch_img_paths = img_paths[start:end]
-    #     batch_lab_paths = lab_paths[start:end]
-    #     extract_radiomic_feature(
-    #         img_paths=batch_img_paths,
-    #         lab_paths=batch_lab_paths,
-    #         feature_mode=args.feature_mode,
-    #         save_dir=save_feature_dir,
-    #         class_name=args.target,
-    #         prompts=text_prompts,
-    #         format=args.format,
-    #         modality=args.modality,
-    #         site=args.site,
-    #         dilation_mm=args.dilation_mm,
-    #         resolution=args.resolution,
-    #         units=args.units
-    #     )
+    bs = 200
+    nb = len(img_paths) // bs if len(img_paths) % bs == 0 else len(img_paths) // bs + 1
+    for i in range(0, nb):
+        logging.info(f"Processing images of batch [{i+1}/{nb}] ...")
+        start = i * bs
+        end = min(len(img_paths), (i + 1) * bs)
+        batch_img_paths = img_paths[start:end]
+        batch_lab_paths = lab_paths[start:end]
+        extract_radiomic_feature(
+            img_paths=batch_img_paths,
+            lab_paths=batch_lab_paths,
+            feature_mode=args.feature_mode,
+            save_dir=save_feature_dir,
+            class_name=args.target,
+            prompts=text_prompts,
+            format=args.format,
+            modality=args.modality,
+            site=args.site,
+            dilation_mm=args.dilation_mm,
+            resolution=args.resolution,
+            units=args.units
+        )
 
     # construct image graph
-    construct_img_graph(
-        img_paths=img_paths,
-        save_dir=save_feature_dir,
-        class_name=args.target,
-        window_size=30**3,
-        n_jobs=16
-    )
+    # construct_img_graph(
+    #     img_paths=img_paths,
+    #     save_dir=save_feature_dir,
+    #     class_name=args.target,
+    #     window_size=30**3,
+    #     n_jobs=16
+    # )
 
     # measure graph properties
     # graph_paths = [save_feature_dir / pathlib.Path(p).name.replace(".nii.gz", f"_{class_name}.json") for p in img_paths]

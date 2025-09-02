@@ -8,6 +8,7 @@ git+https://github.com/MaureenZOU/detectron2-xyz.git
 defusedxml
 einops==0.8.0
 imageio
+kaleido==0.2.1
 kornia
 lifelines
 matplotlib
@@ -19,7 +20,7 @@ openpyxl
 openslide-python
 pandas
 peft
-plotly
+plotly==5.24.1
 pydicom
 pyradiomics
 scikit-image
