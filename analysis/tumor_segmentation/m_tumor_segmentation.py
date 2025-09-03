@@ -115,7 +115,7 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
     
     with torch.no_grad():
         model.model.sem_seg_head.predictor.lang_encoder.get_text_embeddings(BIOMED_CLASSES + ["background"], is_eval=True)
-    
+
     for idx, (img_path, target_name) in enumerate(zip(img_paths, text_prompts)):
         # read slices from dicom or nifti
         if format == 'dicom':
@@ -160,16 +160,53 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
             # print(f"Segmenting slice [{i+1}/{len(images)}] ...")
 
             # resize_mask=False would keep mask size to be (1024, 1024)
-            ensemble_mask = []
+            ensemble_prob = []
             ensemble_feat = []
             for text_prompt in text_prompts:
                 if save_radiomics:
-                    pred_mask, feature = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=True, return_feature=True)
+                    pred_prob, feature = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=True, return_feature=True)
                     ensemble_feat.append(np.transpose(feature, (1, 2, 0)))
                 else:
-                    pred_mask = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=True, return_feature=False)
-                ensemble_mask.append(pred_mask)
-            pred_mask = np.max(np.concatenate(ensemble_mask, axis=0), axis=0, keepdims=True)
+                    pred_prob = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=True, return_feature=False)
+                ensemble_prob.append(pred_prob)
+            pred_prob = np.max(np.concatenate(ensemble_prob, axis=0), axis=0, keepdims=True)
+            if beta_params is not None:
+                image_4d.append(img)
+                prob_3d.append(pred_prob)
+            pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
+
+            if zoom_in:
+                # Find coordinates where mask == 1
+                ys, xs = np.where(np.squeeze(pred_mask) == 1)
+                min_size = 256
+                if len(xs) > 0 and len(ys) > 0:
+                    x_min, x_max = np.min(xs), np.max(xs)
+                    y_min, y_max = np.min(ys), np.max(ys)
+                    H, W = img.shape[:2]
+
+                    # Current width and height
+                    box_w = x_max - x_min + 1
+                    box_h = y_max - y_min + 1
+
+                    # How much to expand
+                    pad_w = max(0, min_size - box_w)
+                    pad_h = max(0, min_size - box_h)
+
+                    # Pad equally on both sides
+                    x_min = max(0, x_min - pad_w // 2)
+                    x_max = min(W - 1, x_max + (pad_w - pad_w // 2))
+                    y_min = max(0, y_min - pad_h // 2)
+                    y_max = min(H - 1, y_max + (pad_h - pad_h // 2))
+                    zoom_img = img[y_min:y_max+1, x_min:x_max+1]
+
+                    ensemble_prob = []
+                    for text_prompt in text_prompts:
+                        zoom_pred_prob = interactive_infer_image(model, Image.fromarray(zoom_img), text_prompt, resize_mask=True, return_feature=False)
+                        ensemble_prob.append(zoom_pred_prob)
+                    zoom_pred_prob = np.max(np.concatenate(ensemble_prob, axis=0), axis=0, keepdims=True)
+                    zoom_pred_prob = np.maximum(pred_prob[:, y_min:y_max+1, x_min:x_max+1], zoom_pred_prob)
+                    zoom_pred_mask = (1*(zoom_pred_prob > 0.5)).astype(np.uint8)
+                    pred_mask[:, y_min:y_max+1, x_min:x_max+1] = zoom_pred_mask
             mask_3d.append(pred_mask)
 
             if save_radiomics: 
@@ -349,7 +386,7 @@ if __name__ == "__main__":
         beta_params = data[f"{args.modality}-{args.site}"][args.target]
 
     # extract radiology segmentation
-    bs = 8
+    bs = len(img_paths)
     nb = len(img_paths) // bs if len(img_paths) % bs == 0 else len(img_paths) // bs + 1
     for i in range(0, nb):
         print(f"Processing images of batch [{i+1}/{nb}] ...")

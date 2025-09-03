@@ -70,24 +70,20 @@ def interactive_infer_image(model, image, prompts, resize_mask=True, return_feat
     pred_masks_pos = pred_masks[matched_id,:,:]
     pred_class = results['pred_logits'][0][matched_id].max(dim=-1)[1]
 
-    pred_mask_prob = pred_masks_pos.sigmoid().cpu().numpy()
-    pred_masks_pos = (pred_mask_prob > 0.5).astype(np.uint8)
-    deep_feature = extra['deep_feature'].cpu().numpy()
-
     if resize_mask:
-        # resize binary mask with nearest
-        pred_masks_pos = torch.from_numpy(pred_masks_pos[None,]).float()  # (1,C,H,W)
-        pred_masks_pos = F.interpolate(pred_masks_pos, (data['height'], data['width']), mode='nearest')
-        pred_masks_pos = pred_masks_pos[0,:,:data['height'],:data['width']].cpu().numpy().astype(np.uint8)
-
-        # also resize deep_feature to match
-        deep_feature = F.interpolate(extra['deep_feature'], (data['height'], data['width']),
+        # interpolate mask to ori size
+        pred_mask_prob = F.interpolate(pred_masks_pos[None,], (data['height'], data['width']), 
+                                    mode='bilinear')[0,:,:data['height'],:data['width']].sigmoid().cpu().numpy()
+        deep_feature = F.interpolate(extra['deep_feature'], (data['height'], data['width']), 
                                     mode='bilinear')[0,:,:data['height'],:data['width']].cpu().numpy()
-    
-    if return_feature:
-        return pred_masks_pos, deep_feature
     else:
-        return pred_masks_pos
+        pred_mask_prob = pred_masks_pos.sigmoid().cpu().numpy()
+        deep_feature = extra['deep_feature'].cpu().numpy()
+    pred_masks_pos = (1*(pred_mask_prob > 0.5)).astype(np.uint8)
+    if return_feature:
+        return pred_mask_prob, deep_feature
+    else:
+        return pred_mask_prob
 
 
 @torch.no_grad()

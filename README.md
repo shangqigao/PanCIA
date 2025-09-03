@@ -12,5 +12,8 @@ If GCC is too old (need GCC 9 or later):
 - ln -sf $CONDA_PREFIX/bin/x86_64-conda-linux-gnu-gcc $CONDA_PREFIX/bin/gcc
 - ln -sf $CONDA_PREFIX/bin/x86_64-conda-linux-gnu-g++ $CONDA_PREFIX/bin/g++
 
+# Remark
+- Loads LoRA-based BiomedParse multiple times in a loop can get different results due to the nondeterminism in language encoder, so just loads it once.
+
 # Acknowlegement
 This is based on [BiomedParse](https://github.com/microsoft/BiomedParse) and [tiatoolbox](https://github.com/TissueImageAnalytics/tiatoolbox)

@@ -20,6 +20,11 @@ conda activate /home/sg2162/rds/hpc-work/miniconda3/PanCIA
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 
+# Force output flushing
+export PYTHONUNBUFFERED=1   # if running Python
+export SLURM_EXPORT_ENV=ALL
+stdbuf -oL -eL echo "Starting job at $(date)"
+
 # fit Beta distributions on training data
 # img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
 # save_dir="/home/sg2162/rds/hpc-work/PanCIA/analysis/tumor_segmentation"
@@ -28,7 +33,7 @@ export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 #             --save_dir $save_dir
 
 # tumor segmentation sanity test
-# img_dir="/home/sg2162/rds/hpc-work/sanity-check/images"
+# img_dir="/home/sg2162/rds/hpc-work/sanity-check/debugs"
 # save_dir="/home/sg2162/rds/hpc-work/sanity-check/predictions"
 # beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
 # meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
