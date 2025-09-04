@@ -107,8 +107,8 @@ def construct_radiomic_graph(
             lambda_d=0.2,
             lambda_f=0.1,
             lambda_h=0.8,
-            connectivity_distance=8,
-            neighbour_search_radius=4,
+            connectivity_distance=16,
+            neighbour_search_radius=8,
             feature_range_thresh=None
         )
         return {i: graph_dict}

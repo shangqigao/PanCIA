@@ -22,11 +22,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--lab_dir', default=None)
-    parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--lab_mode', default="nnUNet", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
-    parser.add_argument('--phase', default="single", choices=["single", "multiple"], type=str)
+    parser.add_argument('--phase', default="pre-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
@@ -43,8 +43,12 @@ if __name__ == "__main__":
         dicom_cases = [p for p in dicom_cases if p.is_dir()]
         img_paths = [sorted(p.glob('*.dcm')) for p in dicom_cases]
     elif args.format == 'nifti':
-        if args.phase == "single":
+        if args.phase == "pre-contrast":
             img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0000.nii.gz'))
+        elif args.phase == "1st-contrast":
+            img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0001.nii.gz'))
+        elif args.phase == "2nd-contrast":
+            img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0002.nii.gz'))
         else:
             case_paths = sorted(pathlib.Path(args.img_dir).glob('*'))
             case_paths = [p for p in case_paths if p.is_dir()]
@@ -62,31 +66,31 @@ if __name__ == "__main__":
     text_prompts = [[f'{args.site} {args.target}']]*len(img_paths)
     
     ## set save dir
-    save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.site}_{args.modality}_radiomic_features/{args.feature_mode}/{args.lab_mode}")
+    save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.site}_{args.modality}_radiomic_features/{args.feature_mode}/{args.phase}/{args.lab_mode}")
     
     # extract radiomics
-    bs = len(img_paths)
-    nb = len(img_paths) // bs if len(img_paths) % bs == 0 else len(img_paths) // bs + 1
-    for i in range(0, nb):
-        logging.info(f"Processing images of batch [{i+1}/{nb}] ...")
-        start = i * bs
-        end = min(len(img_paths), (i + 1) * bs)
-        batch_img_paths = img_paths[start:end]
-        batch_lab_paths = lab_paths[start:end]
-        extract_radiomic_feature(
-            img_paths=batch_img_paths,
-            lab_paths=batch_lab_paths,
-            feature_mode=args.feature_mode,
-            save_dir=save_feature_dir,
-            class_name=args.target,
-            prompts=text_prompts,
-            format=args.format,
-            modality=args.modality,
-            site=args.site,
-            dilation_mm=args.dilation_mm,
-            resolution=args.resolution,
-            units=args.units
-        )
+    # bs = len(img_paths)
+    # nb = len(img_paths) // bs if len(img_paths) % bs == 0 else len(img_paths) // bs + 1
+    # for i in range(0, nb):
+    #     logging.info(f"Processing images of batch [{i+1}/{nb}] ...")
+    #     start = i * bs
+    #     end = min(len(img_paths), (i + 1) * bs)
+    #     batch_img_paths = img_paths[start:end]
+    #     batch_lab_paths = lab_paths[start:end]
+    #     extract_radiomic_feature(
+    #         img_paths=batch_img_paths,
+    #         lab_paths=batch_lab_paths,
+    #         feature_mode=args.feature_mode,
+    #         save_dir=save_feature_dir,
+    #         class_name=args.target,
+    #         prompts=text_prompts,
+    #         format=args.format,
+    #         modality=args.modality,
+    #         site=args.site,
+    #         dilation_mm=args.dilation_mm,
+    #         resolution=args.resolution,
+    #         units=args.units
+    #     )
 
     # construct image graph
     # construct_img_graph(
@@ -117,12 +121,12 @@ if __name__ == "__main__":
     # )
 
     # visualize radiomic graph
-    # visualize_radiomic_graph(
-    #     img_path=img_paths[0],
-    #     lab_path=lab_paths[0],
-    #     save_graph_dir=save_feature_dir,
-    #     class_name=args.target,
-    #     spacing=tuple([args.resolution]*3),
-    #     feature_extractor=args.feature_mode
-    # )
+    visualize_radiomic_graph(
+        img_path=img_paths[0],
+        lab_path=lab_paths[0],
+        save_graph_dir=save_feature_dir,
+        class_name=args.target,
+        spacing=tuple([args.resolution]*3),
+        feature_extractor=args.feature_mode
+    )
 

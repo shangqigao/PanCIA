@@ -7,7 +7,7 @@
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=8
 ##SBATCH --time=0-12:00:00
-#SBATCH --time=0-00:08:00
+#SBATCH --time=0-00:10:00
 #SBATCH --partition=pvc9
 #SBATCH --gres=gpu:1
 #SBATCH --qos=intr
@@ -21,10 +21,8 @@ module av intel-oneapi-mpi
 
 ## activate environment
 source ~/.bashrc
-conda activate pancia
+conda activate /home/sg2162/rds/hpc-work/miniconda3/PanCIA
 
-export I_MPI_OFFLOAD=1
-export I_MPI_OFFLOAD_SYMMETRIC=1
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 
@@ -40,20 +38,36 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --img_dir $img_dir \
 #             --save_dir $save_dir
 
-# # tumor segmentation
-# img_dir="/home/sg2162/rds/hpc-work/sanity-check/images"
+# tumor segmentation sanity test
+# img_dir="/home/sg2162/rds/hpc-work/sanity-check/debugs"
 # save_dir="/home/sg2162/rds/hpc-work/sanity-check/predictions"
-# beta_params="/home/sg2162/rds/hpc-work/PanCIA/analysis/tumor_segmentation/Beta_params.json"
-# srun --mpi=pmi2 python analysis/tumor_segmentation/m_tumor_segmentation.py \
+# beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
+# meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
+# srun python analysis/tumor_segmentation/m_tumor_segmentation.py \
 #             --img_dir $img_dir \
 #             --save_dir $save_dir \
-#             --beta_params $beta_params
+#             --beta_params $beta_params \
+#             --meta_info $meta_info
+
+# tumor segmentation MAMA-MIA
+# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
+# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations/BiomedParse"
+# beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
+# meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
+# srun python analysis/tumor_segmentation/m_tumor_segmentation.py \
+#             --img_dir $img_dir \
+#             --save_dir $save_dir \
+#             --beta_params $beta_params \
+#             --meta_info $meta_info
 
 # extract radiomic features
-img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
+img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
+lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"
 save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
 meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
+
 srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
             --img_dir $img_dir \
+            --lab_dir $lab_dir \
             --save_dir $save_dir \
             --meta_info $meta_info           
