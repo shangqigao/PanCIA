@@ -390,8 +390,13 @@ class SlideGraphConstructor:  # noqa: PIE798
         point_centroids = np.array(point_centroids)
         feature_centroids = np.array(feature_centroids)
 
+        # remove redundant coordinates
+        variation = point_centroids.max(axis=0) - point_centroids.min(axis=0)
+        mask = variation > 1e-12
+        reduced_points = point_centroids[:, mask]
+
         adjacency_matrix = delaunay_adjacency(
-            points=point_centroids,
+            points=reduced_points,
             dthresh=connectivity_distance,
         )
         edge_index = affinity_to_edge_index(adjacency_matrix)
