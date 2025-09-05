@@ -48,15 +48,15 @@ from analysis.feature_extraction.m_feature_extraction import extract_cnn_pathomi
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 def construct_pathomic_graph(wsi_name, wsi_feature_dir, save_path):
-    positions = np.load(f"{wsi_feature_dir}/{wsi_name}.position.npy")
-    features = np.load(f"{wsi_feature_dir}/{wsi_name}.features.npy")
+    positions = np.load(f"{wsi_feature_dir}/{wsi_name}_coordinates.npy")
+    features = np.load(f"{wsi_feature_dir}/{wsi_name}_pathomics.npy")
     graph_dict = SlideGraphConstructor.build(positions[:, :2], features, feature_range_thresh=None)
     with save_path.open("w") as handle:
         new_graph_dict = {k: v.tolist() for k, v in graph_dict.items() if k != "cluster_points"}
         new_graph_dict.update({"cluster_points": graph_dict["cluster_points"]})
         json.dump(new_graph_dict, handle, indent=4)
 
-def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8):
+def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_exist=False):
     """construct graph for wsi
     Args:
         wsi_paths (list): a list of wsi paths
@@ -65,8 +65,17 @@ def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8):
     def _construct_graph(idx, wsi_path):
         wsi_name = pathlib.Path(wsi_path).stem
         graph_path = pathlib.Path(f"{save_dir}/{wsi_name}.json")
+        if graph_path.exists() and skip_exist:
+            logging.info(f"{graph_path.name} has existed, skip!")
         logging.info("constructing graph: {}/{}...".format(idx + 1, len(wsi_paths)))
         construct_pathomic_graph(wsi_name, save_dir, graph_path)
+        if delete_npy:
+            pathomics_npy = f"{wsi_name}_pathomics.npy"
+            os.remove(f"{save_dir}/{pathomics_npy}")
+            logging.info(f"{pathomics_npy} deleted")
+            coordinates_npy = f"{wsi_name}_coordinates.npy"
+            os.remove(f"{save_dir}/{coordinates_npy}")
+            logging.info(f"{coordinates_npy} deleted")
         return
     
     # construct graphs in parallel
@@ -132,7 +141,7 @@ def construct_radiomic_graph(
     with save_path.open("w") as handle:
         json.dump(new_graph_dict, handle, indent=4)
 
-def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30**3, n_jobs=32, delete_npy=False):
+def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30**3, n_jobs=32, delete_npy=False, skip_exist=False):
     """construct graph for radiological images
     Args:
         img_paths (list): a list of image paths
@@ -141,8 +150,11 @@ def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30
     """
     def _construct_graph(idx, img_path):
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        if not pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy").exists(): return
+        if not pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy").exists(): 
+            return
         graph_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}.json")
+        if graph_path.exists() and skip_exist:
+            logging.info(f"{graph_path.name} has existed, skip!")
         logging.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
         construct_radiomic_graph(img_name, save_dir, graph_path, class_name, window_size)
 

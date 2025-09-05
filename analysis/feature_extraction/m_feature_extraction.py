@@ -59,7 +59,8 @@ def extract_pathomic_feature(
         save_dir, 
         mode, 
         resolution=0.5, 
-        units="mpp"
+        units="mpp",
+        skip_exist=False
     ):
     """extract pathomic feature from wsi
     Args:
@@ -76,48 +77,53 @@ def extract_pathomic_feature(
     """
     if feature_mode == "CNN":
         _ = extract_cnn_pathomics(
-            wsi_paths,
-            wsi_msk_paths,
-            save_dir,
-            mode,
-            resolution,
-            units
+            wsi_paths=wsi_paths,
+            msk_paths=wsi_msk_paths,
+            save_dir=save_dir,
+            mode=mode,
+            resolution=resolution,
+            units=units,
+            skip_exist=skip_exist
         )
     elif feature_mode == "HIPT":
         _ = extract_vit_pathomics(
-            wsi_paths,
-            wsi_msk_paths,
-            save_dir,
-            mode,
-            resolution,
-            units
+            wsi_paths=wsi_paths,
+            msk_paths=wsi_msk_paths,
+            save_dir=save_dir,
+            mode=mode,
+            resolution=resolution,
+            units=units,
+            skip_exist=skip_exist
         )
     elif feature_mode == "UNI":
         _ = extract_uni_pathomics(
-            wsi_paths,
-            wsi_msk_paths,
-            save_dir,
-            mode,
-            resolution,
-            units
+            wsi_paths=wsi_paths,
+            msk_paths=wsi_msk_paths,
+            save_dir=save_dir,
+            mode=mode,
+            resolution=resolution,
+            units=units,
+            skip_exist=skip_exist
         )
     elif feature_mode == "CONCH":
         _ = extract_conch_pathomics(
-            wsi_paths,
-            wsi_msk_paths,
-            save_dir,
-            mode,
-            resolution,
-            units
+            wsi_paths=wsi_paths,
+            msk_paths=wsi_msk_paths,
+            save_dir=save_dir,
+            mode=mode,
+            resolution=resolution,
+            units=units,
+            skip_exist=skip_exist
         )
     elif feature_mode == "CHIEF":
         _ = extract_chief_pathomics(
-            wsi_paths,
-            wsi_msk_paths,
-            save_dir,
-            mode,
-            resolution,
-            units
+            wsi_paths=wsi_paths,
+            msk_paths=wsi_msk_paths,
+            save_dir=save_dir,
+            mode=mode,
+            resolution=resolution,
+            units=units,
+            skip_exist=skip_exist
         )
     else:
         raise NotImplementedError
@@ -137,7 +143,9 @@ def extract_radiomic_feature(
         dilation_mm=0,
         resolution=None, 
         units="mm",
-        n_jobs=32
+        n_jobs=32,
+        device="cuda",
+        skip_exist=False
     ):
     """extract pathomic feature from wsi
     Args:
@@ -153,57 +161,64 @@ def extract_radiomic_feature(
     """
     if feature_mode == "pyradiomics":
         _ = extract_pyradiomics(
-            img_paths,
-            lab_paths,
-            save_dir,
-            class_name,
-            label,
-            dilation_mm,
-            resolution,
-            units,
-            n_jobs
+            img_paths=img_paths,
+            lab_paths=lab_paths,
+            save_dir=save_dir,
+            class_name=class_name,
+            label=label,
+            dilation_mm=dilation_mm,
+            resolution=resolution,
+            units=units,
+            n_jobs=n_jobs,
+            skip_exist=skip_exist
         )
     elif feature_mode == "SegVol":
         _ = extract_SegVolViT_radiomics(
-            img_paths,
-            lab_paths,
-            save_dir,
-            class_name,
-            label,
-            dilation_mm,
-            resolution,
-            units
+            img_paths=img_paths,
+            lab_paths=lab_paths,
+            save_dir=save_dir,
+            class_name=class_name,
+            label=label,
+            dilation_mm=dilation_mm,
+            resolution=resolution,
+            units=units,
+            device=device,
+            skip_exist=skip_exist
         )
     elif feature_mode == "M3D-CLIP":
         _ = extract_M3DCLIP_radiomics(
-            img_paths,
-            lab_paths,
-            save_dir,
-            class_name,
-            label,
-            resolution,
-            units
+            img_paths=img_paths,
+            lab_paths=lab_paths,
+            save_dir=save_dir,
+            class_name=class_name,
+            label=label,
+            resolution=resolution,
+            units=units,
+            device=device,
+            skip_exist=skip_exist
         )
     elif feature_mode == "BiomedParse":
         _ = extract_BiomedParse_radiomics(
-            img_paths,
-            lab_paths,
-            prompts,
-            save_dir,
-            class_name,
-            label,
+            img_paths=img_paths,
+            lab_paths=lab_paths,
+            prompts=prompts,
+            save_dir=save_dir,
+            class_name=class_name,
+            label=label,
             format=format,
             is_CT=modality == 'CT',
             dilation_mm=dilation_mm,
             site=site,
             resolution=resolution,
-            units=units
+            units=units,
+            device=device,
+            skip_exist=skip_exist
         )
     else:
         raise ValueError(f"Invalid feature mode: {feature_mode}")
     return
 
-def extract_cnn_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+def extract_cnn_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -231,12 +246,26 @@ def extract_cnn_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         num_loader_workers=32, 
     )
 
+    if skip_exist:
+        new_wsi_paths, new_msk_paths = [], []
+        for wsi_path, msk_path in zip(wsi_paths, msk_paths):
+            wsi_name = pathlib.Path(wsi_path).name
+            feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
+            if feature_path.exists() and skip_exist:
+                logging.info(f"{feature_path.name} has existed, skip!")
+            else:
+                new_wsi_paths.append(wsi_path)
+                new_msk_paths.append(msk_path)
+    else:
+        new_wsi_paths = wsi_paths
+        new_msk_paths = msk_paths
+
     # create temporary dir
     tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
     rmdir(tmp_save_dir)
     output_map_list = extractor.predict(
-        wsi_paths,
-        msk_paths,
+        new_wsi_paths,
+        new_msk_paths,
         mode=mode,
         ioconfig=ioconfig,
         on_gpu=True,
@@ -248,12 +277,12 @@ def extract_cnn_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}.position.npy")
-        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}.position.npy")
+        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}.features.0.npy")
-        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}.features.npy")
+        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 
     # remove temporary dir
@@ -304,7 +333,7 @@ class ViT(torch.nn.Module):
             output = model(image)
         return [output.cpu().numpy()]
     
-def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -333,12 +362,26 @@ def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         num_loader_workers=32, 
     )
 
+    if skip_exist:
+        new_wsi_paths, new_msk_paths = [], []
+        for wsi_path, msk_path in zip(wsi_paths, msk_paths):
+            wsi_name = pathlib.Path(wsi_path).name
+            feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
+            if feature_path.exists() and skip_exist:
+                logging.info(f"{feature_path.name} has existed, skip!")
+            else:
+                new_wsi_paths.append(wsi_path)
+                new_msk_paths.append(msk_path)
+    else:
+        new_wsi_paths = wsi_paths
+        new_msk_paths = msk_paths
+
     # create temporary dir
     tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
     rmdir(tmp_save_dir)
     output_map_list = extractor.predict(
-        wsi_paths,
-        msk_paths,
+        new_wsi_paths,
+        new_msk_paths,
         mode=mode,
         ioconfig=ioconfig,
         on_gpu=True,
@@ -350,12 +393,12 @@ def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}.position.npy")
-        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}.position.npy")
+        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}.features.0.npy")
-        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}.features.npy")
+        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 
     # remove temporary dir
@@ -389,7 +432,7 @@ class UNI(torch.nn.Module):
             output = model(image)
         return [output.cpu().numpy()]
     
-def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -418,12 +461,26 @@ def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         num_loader_workers=32, 
     )
 
+    if skip_exist:
+        new_wsi_paths, new_msk_paths = [], []
+        for wsi_path, msk_path in zip(wsi_paths, msk_paths):
+            wsi_name = pathlib.Path(wsi_path).name
+            feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
+            if feature_path.exists() and skip_exist:
+                logging.info(f"{feature_path.name} has existed, skip!")
+            else:
+                new_wsi_paths.append(wsi_path)
+                new_msk_paths.append(msk_path)
+    else:
+        new_wsi_paths = wsi_paths
+        new_msk_paths = msk_paths
+
     # create temporary dir
     tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
     rmdir(tmp_save_dir)
     output_map_list = extractor.predict(
-        wsi_paths,
-        msk_paths,
+        new_wsi_paths,
+        new_msk_paths,
         mode=mode,
         ioconfig=ioconfig,
         on_gpu=True,
@@ -435,12 +492,12 @@ def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}.position.npy")
-        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}.position.npy")
+        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}.features.0.npy")
-        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}.features.npy")
+        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 
     # remove temporary dir
@@ -467,7 +524,7 @@ class CONCH(torch.nn.Module):
             output = model(images)
         return [output.cpu().numpy()]
     
-def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -496,12 +553,26 @@ def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
         num_loader_workers=32, 
     )
 
+    if skip_exist:
+        new_wsi_paths, new_msk_paths = [], []
+        for wsi_path, msk_path in zip(wsi_paths, msk_paths):
+            wsi_name = pathlib.Path(wsi_path).name
+            feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
+            if feature_path.exists() and skip_exist:
+                logging.info(f"{feature_path.name} has existed, skip!")
+            else:
+                new_wsi_paths.append(wsi_path)
+                new_msk_paths.append(msk_path)
+    else:
+        new_wsi_paths = wsi_paths
+        new_msk_paths = msk_paths
+
     # create temporary dir
     tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
     rmdir(tmp_save_dir)
     output_map_list = extractor.predict(
-        wsi_paths,
-        msk_paths,
+        new_wsi_paths,
+        new_msk_paths,
         mode=mode,
         ioconfig=ioconfig,
         on_gpu=True,
@@ -513,12 +584,12 @@ def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}.position.npy")
-        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}.position.npy")
+        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}.features.0.npy")
-        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}.features.npy")
+        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 
     # remove temporary dir
@@ -553,7 +624,7 @@ class CHIEF(torch.nn.Module):
             output = model(image)
         return [output.cpu().numpy()]
 
-def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -582,12 +653,26 @@ def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
         num_loader_workers=32, 
     )
 
+    if skip_exist:
+        new_wsi_paths, new_msk_paths = [], []
+        for wsi_path, msk_path in zip(wsi_paths, msk_paths):
+            wsi_name = pathlib.Path(wsi_path).name
+            feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
+            if feature_path.exists() and skip_exist:
+                logging.info(f"{feature_path.name} has existed, skip!")
+            else:
+                new_wsi_paths.append(wsi_path)
+                new_msk_paths.append(msk_path)
+    else:
+        new_wsi_paths = wsi_paths
+        new_msk_paths = msk_paths
+
     # create temporary dir
     tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
     rmdir(tmp_save_dir)
     output_map_list = extractor.predict(
-        wsi_paths,
-        msk_paths,
+        new_wsi_paths,
+        new_msk_paths,
         mode=mode,
         ioconfig=ioconfig,
         on_gpu=True,
@@ -599,12 +684,12 @@ def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}.position.npy")
-        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}.position.npy")
+        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}.features.0.npy")
-        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}.features.npy")
+        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 
     # remove temporary dir
@@ -629,7 +714,7 @@ def extract_chief_wsi_level_features(patch_feature_paths, anatomic=13, on_gpu=Tr
             anatomic = torch.tensor([anatomic]).to(device)
             result = model(x, anatomic)
             wsi_feature_emb = result['WSI_feature'].squeeze().cpu().numpy()
-        save_path = f"{path}".replace(".features.npy", ".WSI.features.npy")
+        save_path = f"{path}".replace("_pathomics.npy", "_WSI_pathomics.npy")
         save_name = save_path.split("/")[-1]
         logging.info(f"Saving [{i+1}/{len(patch_feature_paths)}] WSI-level features as {save_name} ...")
         np.save(save_path, wsi_feature_emb)
@@ -742,10 +827,10 @@ def get_cell_compositions(
     bounds_compositions = np.array(bounds_compositions)
 
     base_name = pathlib.Path(wsi_path).stem
-    np.save(f"{save_dir}/{base_name}.position.npy", patch_inputs)
-    np.save(f"{save_dir}/{base_name}.features.npy", bounds_compositions)
+    np.save(f"{save_dir}/{base_name}_coordinates.npy", patch_inputs)
+    np.save(f"{save_dir}/{base_name}_pathomics.npy", bounds_compositions)
 
-def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, dilation_mm=0, resolution=None, units="mm", n_jobs=32):
+def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, dilation_mm=0, resolution=None, units="mm", n_jobs=32, skip_exist=False):
     import nibabel as nib
 
     # Get the PyRadiomics logger (default log-level = INFO)
@@ -766,6 +851,12 @@ def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, 
     extractor.enableImageTypeByName('Wavelet')
     os.makedirs(save_dir, exist_ok=True)
     def _extract_radiomics(idx, img_path, lab_path):
+        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        save_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.json")
+        if save_path.exists() and skip_exist:
+            logging.info(f"{save_path.name} has existed, skip!")
+            return
+        
         logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
         # skip if mask is empty
@@ -781,8 +872,7 @@ def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, 
         for k, v in features.items():
             if isinstance(v, np.ndarray):
                 features[k] = v.tolist()
-        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        save_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.json")
+
         logging.info(f"Saving radiomic features to {save_path}")
         with save_path.open("w") as handle:
             json.dump(features, handle, indent=4)
@@ -873,7 +963,7 @@ def SegVol_image_transforms(keys, spacing):
     return transform
 
 
-def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, dilation_mm=0, resolution=1, units="mm", device="cuda"):
+def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, dilation_mm=0, resolution=1, units="mm", device="cuda", skip_exist=False):
     from monai.networks.nets import ViT
     from monai.inferers import SlidingWindowInferer
     from scipy.ndimage import binary_dilation
@@ -912,7 +1002,14 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
     fs = (np.array(roi_size) / np.array(patch_size)).astype(np.int32)
     mkdir(save_dir)
     
-    for img_path, lab_path in zip(img_paths, lab_paths):
+    for idx, (img_path, lab_path) in enumerate(zip(img_paths, lab_paths)):
+        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        feature_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy")
+        if feature_path.exists() and skip_exist:
+            logging.info(f"{feature_path.name} has existed, skip!")
+            continue
+        
+        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
         case_dict = {"image": img_path, "label": lab_path}
         data = transform(case_dict)
         image = data["image"].squeeze()
@@ -984,8 +1081,6 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
         logging.info(f"Extracted ROI feature of shape {feature.shape} ({feat_memory:.2f}MiB)")
         assert len(feature) == len(coordinates)
         logging.info(f"Saving radiomics in the resolution of {spacing}...")
-        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        feature_path = f"{save_dir}/{img_name}_{class_name}_radiomics.npy"
         logging.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, feature)
         coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
@@ -1054,7 +1149,7 @@ def M3DCLIP_image_transforms(keys, padding):
         )
     return transform
 
-def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, resolution=1.024, units="mm", device="cpu"):
+def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, resolution=1.024, units="mm", device="cpu", skip_exist=False):
     from transformers import AutoTokenizer, AutoModel
     
     roi_size = (32, 256, 256)
@@ -1079,7 +1174,14 @@ def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=
     data_dicts = transform(case_dicts)
     mkdir(save_dir)
     
-    for case, data in zip(case_dicts, data_dicts):
+    for idx, (case, data) in enumerate(zip(case_dicts, data_dicts)):
+        img_name = pathlib.Path(case["image"]).name.replace(".nii.gz", "")
+        feature_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy")
+        if feature_path.exists() and skip_exist:
+            logging.info(f"{feature_path.name} has existed, skip!")
+            continue
+        
+        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(case_dicts)))
         image = data["image"].squeeze().numpy()
         label = data["label"].squeeze().numpy()
         voi, bbox = extract_VOI(image, label, None, padding, roi_size)
@@ -1091,8 +1193,6 @@ def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=
         logging.info(f"Got image of shape {img_shape}, VOI of shape {voi_shape}, feature of shape {feat_shape}")
         feature = feature.squeeze().cpu().numpy()
         logging.info(f"Saving radiomics...")
-        img_name = pathlib.Path(case["image"]).name.replace(".nii.gz", "")
-        feature_path = f"{save_dir}/{img_name}_{class_name}_radiomics.npy"
         np.save(feature_path, feature)
         coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
         np.save(coordinates_path, np.array(bbox))
@@ -1147,7 +1247,7 @@ def create_prompts(meta_data):
 def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, class_name, 
                                   label=1, format='nifti', is_CT=True, site=None,
                                   meta_list=None, prompt_ensemble=False,
-                                  dilation_mm=0, resolution=None, units="mm", device="gpu"):
+                                  dilation_mm=0, resolution=None, units="mm", device="gpu", skip_exist=False):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
         if no label provided, directly use model segmentation, else use give labels
     """
@@ -1194,6 +1294,18 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
 
     mkdir(save_dir)
     for idx, (img_path, lab_path, target_name) in enumerate(zip(img_paths, lab_paths, text_prompts)):
+        if format == 'dicom':
+            img_name = pathlib.Path(img_path[0]).parent.name
+        elif format == 'nifti':
+            if isinstance(img_path, list):
+                img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
+            else:
+                img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        feature_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy")
+        if feature_path.exists() and skip_exist:
+            logging.info(f"{feature_path.name} has existed, skip!")
+            continue
+        
         # read slices from dicom or nifti
         if format == 'dicom':
             dicom_dir = pathlib.Path(img_path)
@@ -1309,14 +1421,6 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         radiomic_coord = np.argwhere(final_mask > 0)
         radiomic_coord[:, slice_axis] += zmin
         logging.info(f"Extracted ROI feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}MiB)")
-        if format == 'dicom':
-            img_name = pathlib.Path(img_path[0]).parent.name
-        elif format == 'nifti':
-            if isinstance(img_path, list):
-                img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
-            else:
-                img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        feature_path = f"{save_dir}/{img_name}_{class_name}_radiomics.npy"
         logging.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, radiomic_feat)
         coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
