@@ -386,26 +386,19 @@ if __name__ == "__main__":
         beta_params = data[f"{args.modality}-{args.site}"][args.target]
 
     # extract radiology segmentation
-    bs = len(img_paths)
-    nb = len(img_paths) // bs if len(img_paths) % bs == 0 else len(img_paths) // bs + 1
-    for i in range(0, nb):
-        print(f"Processing images of batch [{i+1}/{nb}] ...")
-        start = i * bs
-        end = min(len(img_paths), (i + 1) * bs)
-        batch_img_paths = img_paths[start:end]
-        batch_txt_prompts = text_prompts[start:end]
-        extract_radiology_segmentation(
-            img_paths=batch_img_paths,
-            text_prompts=batch_txt_prompts,
-            class_name=args.target,
-            model_mode=args.model_mode,
-            save_dir=save_dir,
-            is_CT=args.modality == 'CT',
-            site=args.site,
-            meta_list=meta_list,
-            img_format=args.format,
-            beta_params=None,
-            prompt_ensemble=True,
-            save_radiomics=False,
-            zoom_in=False
-        )
+    # warning: do not run function in a loop
+    extract_radiology_segmentation(
+        img_paths=img_paths,
+        text_prompts=text_prompts,
+        class_name=args.target,
+        model_mode=args.model_mode,
+        save_dir=save_dir,
+        is_CT=args.modality == 'CT',
+        site=args.site,
+        meta_list=meta_list,
+        img_format=args.format,
+        beta_params=None,
+        prompt_ensemble=True,
+        save_radiomics=False,
+        zoom_in=False
+    )

@@ -624,7 +624,7 @@ class CHIEF(torch.nn.Module):
             output = model(image)
         return [output.cpu().numpy()]
 
-def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist):
+def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],

@@ -22,7 +22,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--lab_dir', default=None)
-    parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--lab_mode', default="nnUNet", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--feature_mode', default="BiomedParse", choices=["pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--feature_mode', default="SegVol", choices=["pyradiomics", "SegVol", "BiomedParse"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 512], type=int)
     parser.add_argument('--dilation_mm', default=10, type=float)
     parser.add_argument('--resolution', default=1, type=float)
@@ -69,6 +69,7 @@ if __name__ == "__main__":
     save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.site}_{args.modality}_radiomic_features/{args.feature_mode}/{args.phase}/{args.lab_mode}")
     
     # extract radiomics
+    # warning: do not run function in a loop
     extract_radiomic_feature(
         img_paths=img_paths,
         lab_paths=lab_paths,
