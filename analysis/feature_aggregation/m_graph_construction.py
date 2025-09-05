@@ -81,8 +81,7 @@ def construct_radiomic_graph(
     img_feature_dir, 
     save_path, 
     class_name="tumour", 
-    window_size=30**3, 
-    n_jobs=32
+    window_size=30**3
     ):
     """construct volumetric radiomic graph
     Args:
@@ -96,7 +95,10 @@ def construct_radiomic_graph(
         num_windows = len(features) // window_size
     logging.info(f"Splitting input feature into {num_windows} window(s)...")
 
-    def _construct_graph(i):
+    # construct graphs in parallel
+    logging.info("Constructing graphs on windows one-by-one...")
+    list_graph_dicts = []
+    for i in range(num_windows):
         start = i * window_size
         end = len(features) if i == (num_windows - 1) else (i + 1) * window_size
         patch_positions = positions[start : end]
@@ -111,18 +113,7 @@ def construct_radiomic_graph(
             neighbour_search_radius=4,
             feature_range_thresh=None
         )
-        return {i: graph_dict}
-    
-    # construct graphs in parallel
-    logging.info("Constructing graphs on windows in parallel...")
-    list_graph_dicts = joblib.Parallel(n_jobs=n_jobs)(
-        joblib.delayed(_construct_graph)(i) for i in range(num_windows)
-    )
-
-    # rearrange according to index
-    all2one = {}
-    for d in list_graph_dicts: all2one.update(d)
-    list_graph_dicts = [all2one[i] for i in range(num_windows)]
+        list_graph_dicts.append(graph_dict)
 
     # concatenate a list of graphs
     logging.info("Concatenating all subgraphs constructed on the sliding windows...")
@@ -148,12 +139,12 @@ def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30
         save_dir (str): directory of reading feature and saving graph
         delete_npy: if true, numpy array features will be deleted
     """
-    for idx, img_path in enumerate(img_paths):
+    def _construct_graph(idx, img_path):
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        if not pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy").exists(): continue
+        if not pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy").exists(): return
         graph_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}.json")
         logging.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
-        construct_radiomic_graph(img_name, save_dir, graph_path, class_name, window_size, n_jobs)
+        construct_radiomic_graph(img_name, save_dir, graph_path, class_name, window_size)
 
         if delete_npy:
             radiomics_npy = f"{img_name}_{class_name}_radiomics.npy"
@@ -162,6 +153,13 @@ def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30
             coordinates_npy = f"{img_name}_{class_name}_coordinates.npy"
             os.remove(f"{save_dir}/{coordinates_npy}")
             logging.info(f"{coordinates_npy} deleted")
+        return
+    
+    # construct graphs in parallel
+    joblib.Parallel(n_jobs=n_jobs)(
+        joblib.delayed(_construct_graph)(idx, img_path)
+        for idx, img_path in enumerate(img_paths)
+    )
     return 
 
 
