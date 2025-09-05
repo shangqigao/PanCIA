@@ -13,6 +13,7 @@ import json
 import torch
 import pathlib
 import argparse
+import logging
 import numpy as np
 import nibabel as nib
 import pandas as pd
@@ -43,7 +44,8 @@ def extract_radiology_segmentation(
         beta_params=None,
         prompt_ensemble=False,
         save_radiomics=False,
-        zoom_in=False
+        zoom_in=False,
+        skip_exist=False
     ):
     """extract segmentation from radiology images
     Args:
@@ -68,7 +70,8 @@ def extract_radiology_segmentation(
             beta_params=beta_params,
             prompt_ensemble=prompt_ensemble,
             save_radiomics=save_radiomics,
-            zoom_in=zoom_in
+            zoom_in=zoom_in,
+            skip_exist=skip_exist
         )
     else:
         raise ValueError(f"Invalid model mode: {model_mode}")
@@ -78,7 +81,7 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
                                   format='nifti', is_CT=True, site=None, 
                                   meta_list=None, beta_params=None, 
                                   prompt_ensemble=False, save_radiomics=False,
-                                  zoom_in=False, device="gpu"):
+                                  zoom_in=False, device="gpu", skip_exist=False):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
         img_paths: a list of paths for single-phase images
             or a list of lists, where each list has paths of multi-phase images.
@@ -117,6 +120,15 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
         model.model.sem_seg_head.predictor.lang_encoder.get_text_embeddings(BIOMED_CLASSES + ["background"], is_eval=True)
 
     for idx, (img_path, target_name) in enumerate(zip(img_paths, text_prompts)):
+        if isinstance(img_path, list):
+            img_name = pathlib.Path(img_path[0]).name.replace("_0000.nii.gz", "")
+        else:
+            img_name = pathlib.Path(img_path).name.replace("_0001.nii.gz", "")
+        save_mask_path = pathlib.Path(f"{save_dir}/{img_name}.nii.gz")
+        if save_mask_path.exists() and skip_exist:
+            logging.info(f"{save_mask_path.name} has existed, skip!")
+            continue
+
         # read slices from dicom or nifti
         if format == 'dicom':
             dicom_dir = pathlib.Path(img_path)
@@ -234,10 +246,10 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
         if beta_params is not None:
             prob_3d = np.concatenate(prob_3d, axis=0)
             image_4d = np.stack(image_4d, axis=0)
-            print("Post-processing by removing both unconfident predictions and spatially inconsistent objects")
+            logging.info("Post-processing by removing both unconfident predictions and spatially inconsistent objects")
             mask_3d = remove_inconsistent_objects(mask_3d, prob_3d=prob_3d, image_4d=image_4d, beta_params=beta_params)
         else:
-            print("Post-processing by removing spatially inconsistent objects")
+            logging.info("Post-processing by removing spatially inconsistent objects")
             if format == 'dicom':
                 voxel_spacing = None
             else:
@@ -250,17 +262,12 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
             radiomic_feat = np.moveaxis(feat_4d, 0, slice_axis)
             radiomic_feat = radiomic_feat[final_mask > 0]
         
-        if isinstance(img_path, list):
-            img_name = pathlib.Path(img_path[0]).name.replace("_0000.nii.gz", "")
-        else:
-            img_name = pathlib.Path(img_path).name.replace("_0001.nii.gz", "")
-        save_mask_path = f"{save_dir}/{img_name}.nii.gz"
-        print(f"Saving predicted segmentation to {save_mask_path}")
+        logging.info(f"Saving predicted segmentation to {save_mask_path}")
         nifti_img = nib.Nifti1Image(final_mask, affine)
         nib.save(nifti_img, save_mask_path)
         if save_radiomics:
             save_feat_path = f"{save_dir}/{img_name}.npy"
-            print(f"Saving radiomic features to {save_feat_path}")
+            logging.info(f"Saving radiomic features to {save_feat_path}")
             np.save(save_feat_path, radiomic_feat)
     return
 
