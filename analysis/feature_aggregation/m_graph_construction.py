@@ -141,11 +141,12 @@ def construct_radiomic_graph(
     with save_path.open("w") as handle:
         json.dump(new_graph_dict, handle, indent=4)
 
-def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30**3, n_jobs=32):
+def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30**3, n_jobs=32, delete_npy=False):
     """construct graph for radiological images
     Args:
         img_paths (list): a list of image paths
         save_dir (str): directory of reading feature and saving graph
+        delete_npy: if true, numpy array features will be deleted
     """
     for idx, img_path in enumerate(img_paths):
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
@@ -153,6 +154,14 @@ def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30
         graph_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}.json")
         logging.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
         construct_radiomic_graph(img_name, save_dir, graph_path, class_name, window_size, n_jobs)
+
+        if delete_npy:
+            radiomics_npy = f"{img_name}_{class_name}_radiomics.npy"
+            os.remove(f"{save_dir}/{radiomics_npy}")
+            logging.info(f"{radiomics_npy} deleted")
+            coordinates_npy = f"{img_name}_{class_name}_coordinates.npy"
+            os.remove(f"{save_dir}/{coordinates_npy}")
+            logging.info(f"{coordinates_npy} deleted")
     return 
 
 

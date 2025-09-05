@@ -98,7 +98,8 @@ if __name__ == "__main__":
     #     save_dir=save_feature_dir,
     #     class_name=args.target,
     #     window_size=30**3,
-    #     n_jobs=16
+    #     n_jobs=16,
+    #     delete_npy=True
     # )
 
     # measure graph properties
