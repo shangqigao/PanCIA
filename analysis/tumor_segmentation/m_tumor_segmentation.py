@@ -393,7 +393,7 @@ if __name__ == "__main__":
         beta_params = data[f"{args.modality}-{args.site}"][args.target]
 
     # extract radiology segmentation
-    # warning: do not run function in a loop
+    # warning: do not run this function in a loop
     extract_radiology_segmentation(
         img_paths=img_paths,
         text_prompts=text_prompts,
