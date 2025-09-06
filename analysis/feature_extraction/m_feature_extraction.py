@@ -201,7 +201,7 @@ def extract_radiomic_feature(
         _ = extract_BiomedParse_radiomics(
             img_paths=img_paths,
             lab_paths=lab_paths,
-            prompts=prompts,
+            text_prompts=prompts,
             save_dir=save_dir,
             class_name=class_name,
             label=label,
@@ -1149,7 +1149,7 @@ def M3DCLIP_image_transforms(keys, padding):
         )
     return transform
 
-def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, resolution=1.024, units="mm", device="cpu", skip_exist=False):
+def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, resolution=1.024, units="mm", device="cuda", skip_exist=False):
     from transformers import AutoTokenizer, AutoModel
     
     roi_size = (32, 256, 256)
@@ -1247,7 +1247,7 @@ def create_prompts(meta_data):
 def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, class_name, 
                                   label=1, format='nifti', is_CT=True, site=None,
                                   meta_list=None, prompt_ensemble=False,
-                                  dilation_mm=0, resolution=None, units="mm", device="gpu", skip_exist=False):
+                                  dilation_mm=0, resolution=None, units="mm", device="cuda", skip_exist=False):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
         if no label provided, directly use model segmentation, else use give labels
     """
@@ -1275,7 +1275,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     # Load model from pretrained weights
     pretrained_pth = os.path.join(root_dir, 'checkpoints/BiomedParse/MP_heart_LoRA_sqrt')
 
-    if device == 'gpu':
+    if device == 'cuda':
         if not opt.get('LoRA', False):
             model = BaseModel(opt, build_model(opt)).from_pretrained(pretrained_pth).eval().cuda()
         else:
@@ -1287,7 +1287,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
             model.load_state_dict(ckpt)
             model = model.model.eval()
     else:
-        raise ValueError(f'Require gpu, but got {device}')
+        raise ValueError(f'Requires cuda, but got {device}')
     
     with torch.no_grad():
         model.model.sem_seg_head.predictor.lang_encoder.get_text_embeddings(BIOMED_CLASSES + ["background"], is_eval=True)
@@ -1305,7 +1305,9 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         if feature_path.exists() and skip_exist:
             logging.info(f"{feature_path.name} has existed, skip!")
             continue
-        
+
+        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+
         # read slices from dicom or nifti
         if format == 'dicom':
             dicom_dir = pathlib.Path(img_path)
