@@ -1,15 +1,11 @@
 import sys
-sys.path.append('../')
+sys.path.append('./')
 
-import requests
 import argparse
 import pathlib
 import logging
-import warnings
 import joblib
 import copy
-import json
-import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -17,37 +13,31 @@ import numpy as np
 import torch
 import torchbnn as bnn
 
-from scipy.stats import zscore
 from scipy.special import softmax
 from torch_geometric.loader import DataLoader
 from tiatoolbox import logger
 from tiatoolbox.utils.misc import save_as_json
 
-from sklearn import set_config
-from sklearn.exceptions import FitFailedWarning
 from sklearn.model_selection import GridSearchCV, KFold
 from sklearn.feature_selection import SelectKBest, f_classif, VarianceThreshold
-from sklearn.pipeline import make_pipeline, Pipeline
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans, FeatureAgglomeration
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.cluster import KMeans
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC, LinearSVC
-from sklearn.neural_network import MLPClassifier
-from sklearn.utils import resample
+from sklearn.svm import SVC
 from sklearn.metrics import average_precision_score as auprc_scorer
 from sklearn.metrics import roc_auc_score as auroc_scorer
 from sklearn.metrics import balanced_accuracy_score as acc_scorer
 from sklearn.metrics import f1_score as f1_scorer
-from statsmodels.stats.multitest import multipletests
 from xgboost import XGBClassifier
 
-from utilities.m_utils import mkdir, select_wsi, load_json, create_pbar, rm_n_mkdir, reset_logging, recur_find_ext, select_checkpoints
+from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
 from analysis.feature_aggregation.m_gnn_therapy_response import TherapyGraphDataset, TherapyGraphArch, TherapyBayesGraphArch
 from analysis.feature_aggregation.m_gnn_therapy_response import ScalarMovingAverage, R2TLoss
-from analysis.feature_aggregation.m_graph_construction import visualize_radiomic_graph, visualize_pathomic_graph
+# from analysis.feature_aggregation.m_graph_construction import visualize_radiomic_graph, visualize_pathomic_graph
 
 def prepare_graph_properties(data_dict, prop_keys=None, subgraphs=False, omics="radiomics"):
     if prop_keys == None: 
