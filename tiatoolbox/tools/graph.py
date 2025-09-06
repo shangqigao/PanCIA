@@ -14,6 +14,7 @@ from matplotlib.axes import Axes
 from numpy.typing import ArrayLike
 from scipy.cluster import hierarchy
 from scipy.spatial import Delaunay, cKDTree
+from sklearn.neighbors import kneighbors_graph
 
 
 def delaunay_adjacency(points: ArrayLike, dthresh: Number) -> list:
@@ -395,10 +396,18 @@ class SlideGraphConstructor:  # noqa: PIE798
         mask = variation > 1e-12
         reduced_points = point_centroids[:, mask]
 
-        adjacency_matrix = delaunay_adjacency(
-            points=reduced_points,
-            dthresh=connectivity_distance,
-        )
+        if reduced_points.shape[1] < 2:
+            # Fall back to kNN graph (choose k as you need, e.g., 5)
+            adjacency_matrix = kneighbors_graph(
+                reduced_points, 
+                n_neighbors=2,           # adjust depending on your use case
+                mode="connectivity"     # adjacency matrix with 0/1 values
+            ).toarray()
+        else:
+            adjacency_matrix = delaunay_adjacency(
+                points=reduced_points,
+                dthresh=connectivity_distance,
+            )
         edge_index = affinity_to_edge_index(adjacency_matrix)
 
         return {
