@@ -406,7 +406,7 @@ class TherapyGraphArch(nn.Module):
     """define Graph architecture for response to therapy
     Args:
         aggregation: attention-based multiple instance learning (ABMIL) 
-        or stochastic importance score informed regression (SISIR)
+        or sparsity-informed spatial regression and aggreation (SPARRA)
     """
     def __init__(
             self, 
@@ -417,7 +417,7 @@ class TherapyGraphArch(nn.Module):
             pool_ratio={"radiomics": 0.7, "pathomics": 0.2},
             conv="GINConv",
             keys=["radiomics", "pathomics"],
-            aggregation="SISIR",
+            aggregation="SPARRA",
             mu0=0, 
             lambda0=1, 
             alpha0=2, 
@@ -474,7 +474,7 @@ class TherapyGraphArch(nn.Module):
                 }
             )
             self.Aggregation = SumAggregation()
-        elif aggregation == "SISIR":
+        elif aggregation == "SPARRA":
             # dim_teachers = [dim_features[k] for k in keys]
             # dim_student = input_emb_dim
 
@@ -593,7 +593,7 @@ class TherapyGraphArch(nn.Module):
             VIparas = None
             KAparas = None
             atte_dict = gate_dict
-        elif self.aggregation == "SISIR":
+        elif self.aggregation == "SPARRA":
             # encoder
             feature_list, edge_index_list, batch_list = [], [], []
             perm_dict, score_list = {}, []
