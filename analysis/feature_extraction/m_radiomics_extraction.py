@@ -22,7 +22,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--lab_dir', default=None)
-    parser.add_argument('--lab_mode', default="nnUNet", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
@@ -87,15 +87,15 @@ if __name__ == "__main__":
     # )
 
     # construct image graph
-    construct_img_graph(
-        img_paths=img_paths,
-        save_dir=save_feature_dir,
-        class_name=args.target,
-        window_size=30**3,
-        n_jobs=32,
-        delete_npy=True,
-        skip_exist=True
-    )
+    # construct_img_graph(
+    #     img_paths=img_paths,
+    #     save_dir=save_feature_dir,
+    #     class_name=args.target,
+    #     window_size=30**3,
+    #     n_jobs=32,
+    #     delete_npy=True,
+    #     skip_exist=True
+    # )
 
     # measure graph properties
     # graph_paths = [save_feature_dir / pathlib.Path(p).name.replace(".nii.gz", f"_{class_name}.json") for p in img_paths]
@@ -123,6 +123,7 @@ if __name__ == "__main__":
     #     save_graph_dir=save_feature_dir,
     #     class_name=args.target,
     #     spacing=tuple([args.resolution]*3),
-    #     feature_extractor=args.feature_mode
+    #     feature_extractor=args.feature_mode,
+    #     remove_front_corner=False
     # )
 

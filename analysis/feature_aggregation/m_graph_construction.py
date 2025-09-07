@@ -67,6 +67,12 @@ def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_ex
         graph_path = pathlib.Path(f"{save_dir}/{wsi_name}.json")
         if graph_path.exists() and skip_exist:
             logging.info(f"{graph_path.name} has existed, skip!")
+            return
+        
+        if not pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy").exists(): 
+            logging.info(f"{wsi_name}_pathomics.npy doesn't exist, skip!")
+            return
+
         logging.info("constructing graph: {}/{}...".format(idx + 1, len(wsi_paths)))
         construct_pathomic_graph(wsi_name, save_dir, graph_path)
         if delete_npy:
@@ -150,11 +156,15 @@ def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30
     """
     def _construct_graph(idx, img_path):
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        if not pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy").exists(): 
-            return
         graph_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}.json")
         if graph_path.exists() and skip_exist:
             logging.info(f"{graph_path.name} has existed, skip!")
+            return
+
+        if not pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy").exists(): 
+            logging.info(f"{img_name}_{class_name}_radiomics.npy doesn't exist, skip!")
+            return
+            
         logging.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
         construct_radiomic_graph(img_name, save_dir, graph_path, class_name, window_size)
 
