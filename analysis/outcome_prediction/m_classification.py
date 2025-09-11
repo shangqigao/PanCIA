@@ -217,12 +217,19 @@ def plot_coefficients(coefs, n_highlight):
     plt.subplots_adjust(left=0.2)
     plt.savefig("a_07explainable_AI/coefficients.jpg")
 
-def matched_therapy_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA"):
+def matched_outcome_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA", outcome=None):
     clinical_info_path = f"{save_clinical_dir}/{dataset}_clinical_and_imaging_info.xlsx"
     df = pd.read_excel(clinical_info_path, sheet_name='dataset_info')
     
     # Prepare the response to therapy data
-    df = df[df['pcr'].notna()]
+    if outcome == 'pcr':
+        df = df[df['pcr'].notna()]
+    elif outcome == 'grade':
+        df = df[df['nottingham_grade'].notna()]
+    elif outcome == 'subtype':
+        df = df[df['tumor_subtype'].notna()]
+    else:
+        raise ValueError(f'Unsuppored outcome type: {outcome}')
     logging.info(f"Clinical data strcuture: {df.shape}")
 
     # filter graph properties 
@@ -1256,6 +1263,7 @@ if __name__ == "__main__":
     parser.add_argument('--img_dir', default=None)
     parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--dataset', default="TCGA", type=str)
+    parser.add_argument('--outcome', default="pcr", choices=["pcr", "grade", "subtype"], type=str)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--phase', default="pre-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
@@ -1387,25 +1395,36 @@ if __name__ == "__main__":
     data_types = ["radiomics", "pathomics"]
 
     if None not in (matched_pathomics_paths, matched_radiomics_paths):
-        df, matched_i = matched_therapy_graph(save_clinical_dir, matched_pathomics_paths)
+        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths)
         matched_pathomics_paths = [matched_pathomics_paths[i] for i in matched_i]
         matched_radiomics_paths = [matched_radiomics_paths[i] for i in matched_i]
         kr, kp = data_types[0], data_types[1]
         matched_graph_paths = [{kr : r, kp : p} for r, p in zip(matched_radiomics_paths, matched_pathomics_paths)]
     elif matched_pathomics_paths is not None and matched_radiomics_paths is None:
-        df, matched_i = matched_therapy_graph(save_clinical_dir, matched_pathomics_paths)
+        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths)
         matched_pathomics_paths = [matched_pathomics_paths[i] for i in matched_i]
         kr, kp = data_types[0], data_types[1]
         matched_graph_paths = [{kr : None, kp : p} for p in matched_pathomics_paths]
     elif matched_radiomics_paths is not None and matched_pathomics_paths is None:
-        df, matched_i = matched_therapy_graph(save_clinical_dir, matched_radiomics_paths)
+        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_radiomics_paths)
         matched_radiomics_paths = [matched_radiomics_paths[i] for i in matched_i]
         kr, kp = data_types[0], data_types[1]
         matched_graph_paths = [{kr : r, kp : None} for r in matched_radiomics_paths]
     else:
         raise ValueError("Cannot find matched radiomics or pathomics!")
 
-    y = df[['pcr']].to_numpy(dtype=np.float32).squeeze().tolist()
+    if args.outcome == 'pcr':
+        y = df[['pcr']].to_numpy(dtype=np.float32).squeeze().tolist()
+    elif args.outcome == 'grade':
+        df['nottingham_grade_int'], uniques = pd.factorize(df['nottingham_grade'])
+        print("Grade mapping:", dict(enumerate(uniques)))
+        y = df[['nottingham_grade_int']].to_numpy(dtype=np.float32).squeeze().tolist()
+    elif args.outcome == 'subtype':
+        df['tumor_subtype_int'], uniques = pd.factorize(df['tumor_subtype'])
+        print("Subtype mapping:", dict(enumerate(uniques)))
+        y = df[['tumor_subtype_int']].to_numpy(dtype=np.float32).squeeze().tolist()
+    else:
+        raise ValueError(f'Unsupported outcome type: {args.outcome}')
     splits = generate_data_split(
         x=matched_graph_paths,
         y=y,
