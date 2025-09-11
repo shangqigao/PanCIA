@@ -161,7 +161,7 @@ def prepare_graph_pathomics(
 def prepare_graph_radiomics(
     idx, 
     graph_path, 
-    mode="mean"
+    mode="mean+max"
     ):
     graph_dict = load_json(graph_path)
     feature = np.array(graph_dict["x"])
@@ -179,6 +179,8 @@ def prepare_graph_radiomics(
         kmeans = KMeans(n_clusters=4)
         feat_list = kmeans.fit(feature).cluster_centers_
         feat_list = feat_list.flatten().tolist()
+    elif "mean+max":
+        feat_list = np.mean(feature, axis=0).tolist() + np.max(feature, axis=0).tolist()
         
     feat_dict = {}
     for i, feat in enumerate(feat_list):
@@ -221,12 +223,12 @@ def matched_therapy_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA
     
     # Prepare the response to therapy data
     df = df[df['pcr'].notna()]
-    print("Clinical data strcuture:", df.shape)
+    logging.info(f"Clinical data strcuture: {df.shape}")
 
     # filter graph properties 
     graph_names = [pathlib.Path(p).stem for p in save_graph_paths]
-    graph_ids = [f"{n}".split("-")[0:2] for n in graph_names]
-    graph_ids = ["-".join(d) for d in graph_ids]
+    graph_ids = [f"{n}".split("_")[0:2] for n in graph_names]
+    graph_ids = ["_".join(d) for d in graph_ids]
     df = df[df["patient_id"].isin(graph_ids)]
     matched_indices = [graph_ids.index(d) for d in df["patient_id"]]
     logging.info(f"The number of matched clinical samples are {len(matched_indices)}")
@@ -257,8 +259,8 @@ def matched_pathomics_radiomics(save_pathomics_paths, save_radiomics_paths, save
 def randomforest(split_idx, tr_X, tr_y, refit, n_jobs):
     # choosing parameters by cross validation
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    model = RandomForestClassifier(max_depth=2, random_state=42)
-    param_grid={"model_max_depth": [None] + list(range(1, 21))}
+    model = RandomForestClassifier(max_depth=2, class_weight="balanced", random_state=42)
+    param_grid={"model__max_depth": list(range(1, 6))}
     scoring = {
         "accuracy": "accuracy",
         "f1": "f1",
@@ -282,9 +284,9 @@ def randomforest(split_idx, tr_X, tr_y, refit, n_jobs):
 
     # plot cross validation results
     cv_results = pd.DataFrame(gcv.cv_results_)
-    depths = cv_results.param_model__max_depth
-    mean = cv_results.mean_test_score
-    std = cv_results.std_test_score
+    depths = cv_results['param_model__max_depth']
+    mean = cv_results[f'mean_test_{refit}']
+    std = cv_results[f'std_test_{refit}']
     fig, ax = plt.subplots(figsize=(9, 6))
     ax.plot(depths, mean)
     ax.fill_between(depths, mean - std, mean + std, alpha=0.15)
@@ -305,8 +307,9 @@ def randomforest(split_idx, tr_X, tr_y, refit, n_jobs):
 def xgboost(split_idx, tr_X, tr_y, refit, n_jobs):
     # choosing parameters by cross validation
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    model = XGBClassifier(max_depth=2, random_state=42)
-    param_grid={"model_max_depth": [None] + list(range(1, 21))}
+    neg, pos = np.bincount(tr_y.to_numpy(dtype=int))
+    model = XGBClassifier(max_depth=2, scale_pos_weight=neg / pos, random_state=42)
+    param_grid={"model__max_depth": list(range(1, 6))}
     scoring = {
         "accuracy": "accuracy",
         "f1": "f1",
@@ -330,9 +333,9 @@ def xgboost(split_idx, tr_X, tr_y, refit, n_jobs):
 
     # plot cross validation results
     cv_results = pd.DataFrame(gcv.cv_results_)
-    depths = cv_results.param_model__max_depth
-    mean = cv_results.mean_test_score
-    std = cv_results.std_test_score
+    depths = cv_results['param_model__max_depth']
+    mean = cv_results[f'mean_test_{refit}']
+    std = cv_results[f'std_test_{refit}']
     fig, ax = plt.subplots(figsize=(9, 6))
     ax.plot(depths, mean)
     ax.fill_between(depths, mean - std, mean + std, alpha=0.15)
@@ -355,7 +358,7 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
     model = LogisticRegression(
         penalty='elasticnet', solver='saga', l1_ratio=0.5, 
-        C=1.0, max_iter=1000, random_state=42
+        C=1.0, max_iter=1000, class_weight="balanced", random_state=42
     )
     param_grid={"model__C": np.logspace(-3, 3, 7)}
     pipe = Pipeline(
@@ -382,15 +385,15 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
 
     # plot cross validation results
     cv_results = pd.DataFrame(gcv.cv_results_)
-    alphas = cv_results.param_model__C
-    mean = cv_results.mean_test_score
-    std = cv_results.std_test_score
+    Cs = cv_results['param_model__C']
+    mean = cv_results[f'mean_test_{refit}']
+    std = cv_results[f'std_test_{refit}']
     fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(alphas, mean)
-    ax.fill_between(alphas, mean - std, mean + std, alpha=0.15)
+    ax.plot(Cs, mean)
+    ax.fill_between(Cs, mean - std, mean + std, alpha=0.15)
     ax.set_xscale("log")
     ax.set_ylabel(refit)
-    ax.set_xlabel("alpha")
+    ax.set_xlabel("C")
     ax.axvline(gcv.best_params_["model__C"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
@@ -398,7 +401,7 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
 
     # Visualize coefficients of the best estimator
     best_model = gcv.best_estimator_.named_steps["model"]
-    best_coefs = pd.DataFrame(best_model.coef_, index=tr_X.columns, columns=["coefficient"])
+    best_coefs = pd.DataFrame(best_model.coef_.ravel(), index=tr_X.columns, columns=["coefficient"])
     non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
     print(f"Number of non-zero coefficients: {non_zero}")
 
@@ -421,7 +424,7 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
 def svc(split_idx, tr_X, tr_y, refit, n_jobs):
     # choosing parameters by cross validation
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    model = SVC(C=1, kernel='rbf', random_state=42)
+    model = SVC(C=1, kernel='rbf', class_weight="balanced", probability=True, random_state=42)
     param_grid={"model__C": np.logspace(-3, 3, 7)}
     pipe = Pipeline(
         [
@@ -447,36 +450,36 @@ def svc(split_idx, tr_X, tr_y, refit, n_jobs):
 
     # plot cross validation results
     cv_results = pd.DataFrame(gcv.cv_results_)
-    alphas = cv_results.param_model__C
-    mean = cv_results.mean_test_score
-    std = cv_results.std_test_score
+    Cs = cv_results['param_model__C']
+    mean = cv_results[f'mean_test_{refit}']
+    std = cv_results[f'std_test_{refit}']
     fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(alphas, mean)
-    ax.fill_between(alphas, mean - std, mean + std, alpha=0.15)
+    ax.plot(Cs, mean)
+    ax.fill_between(Cs, mean - std, mean + std, alpha=0.15)
     ax.set_xscale("log")
     ax.set_ylabel(refit)
-    ax.set_xlabel("alpha")
+    ax.set_xlabel("C")
     ax.axvline(gcv.best_params_["model__C"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
     plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
-    best_model = gcv.best_estimator_.named_steps["model"]
-    best_coefs = pd.DataFrame(best_model.coef_, index=tr_X.columns, columns=["coefficient"])
-    non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
-    print(f"Number of non-zero coefficients: {non_zero}")
+    # best_model = gcv.best_estimator_.named_steps["model"]
+    # best_coefs = pd.DataFrame(best_model.coef_.ravel(), index=tr_X.columns, columns=["coefficient"])
+    # non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
+    # print(f"Number of non-zero coefficients: {non_zero}")
 
-    non_zero_coefs = best_coefs.query("coefficient != 0")
-    coef_order = non_zero_coefs.abs().sort_values("coefficient").index
-    top10 = coef_order[:10]
+    # non_zero_coefs = best_coefs.query("coefficient != 0")
+    # coef_order = non_zero_coefs.abs().sort_values("coefficient").index
+    # top10 = coef_order[:10]
 
-    _, ax = plt.subplots(figsize=(8, 6))
-    non_zero_coefs.loc[top10].plot.barh(ax=ax, legend=False)
-    ax.set_xlabel("coefficient")
-    ax.grid(True)
-    plt.subplots_adjust(left=0.3)
-    plt.savefig(f"analysis/outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
+    # _, ax = plt.subplots(figsize=(8, 6))
+    # non_zero_coefs.loc[top10].plot.barh(ax=ax, legend=False)
+    # ax.set_xlabel("coefficient")
+    # ax.grid(True)
+    # plt.subplots_adjust(left=0.3)
+    # plt.savefig(f"analysis/outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -492,7 +495,7 @@ def load_radiomics(
         n_jobs
     ):
 
-    if radiomics_aggregated_mode in ["ABMIL", "SPARRA"]:
+    if radiomics_aggregated_mode in ["MeanPooling", "ABMIL", "SPARRA"]:
         radiomics_paths = []
         for p in data:
             path = pathlib.Path(p[0]["radiomics"])
@@ -519,10 +522,7 @@ def load_radiomics(
 
     if use_graph_properties:
         prop_paths = [p[0]["radiomics"] for p in data]
-        if radiomics_aggregated_mode == "Mean":
-            prop_paths = [f"{p}".replace("_aggr_mean.npy", "_graph_properties.json") for p in prop_paths]
-        else:
-            prop_paths = [f"{p}".replace(".json", "_graph_properties.json") for p in prop_paths]
+        prop_paths = [f"{p}".replace(".json", "_graph_properties.json") for p in prop_paths]
         prop_dict_list = [load_json(p) for p in prop_paths]
         prop_X = [prepare_graph_properties(d, omics="radiomics") for d in prop_dict_list]
         prop_X = pd.DataFrame(prop_X)
@@ -538,7 +538,7 @@ def load_pathomics(
         n_jobs
     ):
 
-    if pathomics_aggregated_mode in ["ABMIL", "SPARRA"]:
+    if pathomics_aggregated_mode in ["MeanPooling", "ABMIL", "SPARRA"]:
         pathomics_paths = []
         for p in data:
             path = pathlib.Path(p[0]["pathomics"])
@@ -710,38 +710,38 @@ def response2therapy(
         if feature_selection:
             print("Selecting features...")
             selector = VarianceThreshold(threshold=1e-4)
-            selector.fit(tr_X[tr_y["label"]])
+            selector.fit(tr_X)
             selected_names = selector.get_feature_names_out().tolist()
             num_removed = len(tr_X.columns) - len(selected_names)
             print(f"Removing {num_removed} low-variance features...")
             tr_X = tr_X[selected_names]
             te_X = te_X[selected_names]
-            print("Selecting univariate feature...")
-            selector = SelectKBest(score_func=f_classif, k=n_selected_features)
-            _ = selector.fit_transform(tr_X, tr_y["label"])
-            selected_mask = selector.get_support()
-            selected_names = tr_X.columns[selected_mask]
-            print(f"Selected features: {len(selected_names)}")
-            tr_X = tr_X[selected_names]
-            te_X = te_X[selected_names]
+            if n_selected_features is not None:
+                print("Selecting univariate feature...")
+                selector = SelectKBest(score_func=f_classif, k=n_selected_features)
+                _ = selector.fit_transform(tr_X, tr_y["label"])
+                selected_mask = selector.get_support()
+                selected_names = tr_X.columns[selected_mask]
+                tr_X = tr_X[selected_names]
+                te_X = te_X[selected_names]
+            print(f"Selected features: {len(tr_X.columns)}")
 
         # model selection
         print("Selecting classifier...")
         if model == "RF":
-            predictor = randomforest(split_idx, tr_X, tr_y, refit, n_jobs)
+            predictor = randomforest(split_idx, tr_X, tr_y['label'], refit, n_jobs)
         elif model == "XG":
-            predictor = xgboost(split_idx, tr_X, tr_y, refit, n_jobs)
+            predictor = xgboost(split_idx, tr_X, tr_y['label'], refit, n_jobs)
         elif model == "LR":
-            predictor = logisticregression(split_idx, tr_X, tr_y, refit, n_jobs)
+            predictor = logisticregression(split_idx, tr_X, tr_y['label'], refit, n_jobs)
         elif model == "SVC":
-            predictor = svc(split_idx, tr_X, tr_y, refit, n_jobs)
+            predictor = svc(split_idx, tr_X, tr_y['label'], refit, n_jobs)
 
         pred = predictor.predict(te_X)
         prob = predictor.predict_proba(te_X)
         num_class = prob.shape[1]
 
         label = te_y["label"].to_numpy()
-        label = np.argmax(prob, axis=1)
         acc = acc_scorer(label, pred)
         f1 = f1_scorer(label, pred)
 
@@ -761,7 +761,7 @@ def response2therapy(
             "auprc": auprc
         }
 
-        print(f"Updating regression results on fold {split_idx}")
+        print(f"Updating predicted results on fold {split_idx}")
         predict_results.update({f"Fold {split_idx}": scores_dict})
     print(predict_results)
     for k in scores_dict.keys():
@@ -777,46 +777,35 @@ def generate_data_split(
         test: float,
         num_folds: int,
         seed: int = 5,
-        balanced=False
 ):
     """Helper to generate splits
     Args:
         x (list): a list of image paths
         y (list): a list of annotation paths
-        train (float or int): if int, number of training samples per class
-        if float, ratio of training samples
+        train (float): ratio of training samples
+        valid (float): ratio of validating samples
         test (float): ratio of testing samples
         num_folds (int): number of folds for cross-validation
         seed (int): random seed
-        balanced (bool): if true, sampling equal number of samples for each class
     Returns:
         splits (list): a list of folds, each fold consists of train, valid, and test splits
     """
-    if balanced:
-        assert train >= 1, "The number training samples should be no less than 1"
-        assert test < 1, "The ratio of testing samples should be less than 1"
-        outer_splitter = StratifiedShuffleSplit(
-            n_splits=num_folds,
-            test_size=test,
-            random_state=seed,
-        )
-    else:
-        assert train + valid + test - 1.0 < 1.0e-10, "Ratios must sum to 1.0"
-        outer_splitter = StratifiedShuffleSplit(
-            n_splits=num_folds,
-            train_size=train + valid,
-            random_state=seed,
-        )
-        inner_splitter = StratifiedShuffleSplit(
-            n_splits=1,
-            train_size=train / (train + valid),
-            random_state=seed,
-        )
+    assert train + valid + test - 1.0 < 1.0e-10, "Ratios must sum to 1.0"
+
+    outer_splitter = StratifiedShuffleSplit(
+        n_splits=num_folds,
+        train_size=train + valid,
+        random_state=seed,
+    )
+    inner_splitter = StratifiedShuffleSplit(
+        n_splits=1,
+        train_size=train / (train + valid),
+        random_state=seed,
+    )
 
     l = np.array(y)
 
     splits = []
-    random_seed = seed
     for train_valid_idx, test_idx in outer_splitter.split(x, l):
         test_x = [x[idx] for idx in test_idx]
         test_y = [y[idx] for idx in test_idx]
@@ -824,29 +813,42 @@ def generate_data_split(
         y_ = [y[idx] for idx in train_valid_idx]
         l_ = [l[idx] for idx in train_valid_idx]
 
-        l_ = np.array(l_)
-        if balanced:
-            train_idx, valid_idx = BalancedShuffleSplitter(l_, train, random_seed)
-            random_seed += 1
-        else:
+        if valid > 0:
             train_idx, valid_idx = next(iter(inner_splitter.split(x_, l_)))
+            valid_x = [x_[idx] for idx in valid_idx]
+            valid_y = [y_[idx] for idx in valid_idx]
+            train_x = [x_[idx] for idx in train_idx]
+            train_y = [y_[idx] for idx in train_idx]
+        else:
+            train_x, train_y = x_, y_
 
-        valid_x = [x_[idx] for idx in valid_idx]
-        valid_y = [y_[idx] for idx in valid_idx]
-        train_x = [x_[idx] for idx in train_idx]
-        train_y = [y_[idx] for idx in train_idx]
+        train_x_list = []
+        for i in train_x: train_x_list + list(i.values())
+        test_x_list = []
+        for i in test_x: test_x_list + list(i.values())
+        if valid > 0:
+            valid_x_list = []
+            for i in valid_x: valid_x_list + list(i.values())
+            assert len(set(train_x_list).intersection(set(valid_x_list))) == 0
+            assert len(set(valid_x_list).intersection(set(test_x_list))) == 0
+        else:
+            assert len(set(train_x_list).intersection(set(test_x_list))) == 0
 
-        assert len(set(train_x).intersection(set(valid_x))) == 0
-        assert len(set(valid_x).intersection(set(test_x))) == 0
-        assert len(set(train_x).intersection(set(test_x))) == 0
-
-        splits.append(
-            {
-                "train": list(zip(train_x, train_y)),
-                "valid": list(zip(valid_x, valid_y)),
-                "test": list(zip(test_x, test_y)),
-            }
-        )
+        if valid > 0:
+            splits.append(
+                {
+                    "train": list(zip(train_x, train_y)),
+                    "valid": list(zip(valid_x, valid_y)),
+                    "test": list(zip(test_x, test_y)),
+                }
+            )
+        else:
+            splits.append(
+                {
+                    "train": list(zip(train_x, train_y)),
+                    "test": list(zip(test_x, test_y)),
+                }
+            )
     return splits
 
 def run_once(
@@ -1252,9 +1254,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--wsi_dir', default=None)
     parser.add_argument('--img_dir', default=None)
-    parser.add_argument('--lab_mode', default="nnUNet", choices=["expert", "nnUNet", "BiomedParse"], type=str)
-    parser.add_argument('--dataset', default="TCGA-RCC", type=str)
-    parser.add_argument('--modality', default="CT", type=str)
+    parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--dataset', default="TCGA", type=str)
+    parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--phase', default="pre-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
     parser.add_argument('--site', default="breast", type=str)
@@ -1265,15 +1267,21 @@ if __name__ == "__main__":
     parser.add_argument('--save_model_dir', default=None)
     parser.add_argument('--slide_mode', default="wsi", choices=["tile", "wsi"], type=str)
     parser.add_argument('--epochs', default=20, type=int)
+    parser.add_argument('--radiomics_mode', default="BiomedParse", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--radiomics_dim', default=768, choices=[107, 768, 768], type=int)
+    parser.add_argument('--radiomics_aggregation', default=True, type=bool,
+                        help="if radiomic features have not been aggregated yet and true, do spatial aggregation"
+                        )
+    parser.add_argument('--radiomics_aggregated_mode', default="None", choices=["None", "MeanPooling", "ABMIL", "SPARRA"], type=str, 
+                        help="if radiomic features have been aggregated, specify which mode, defaut is none"
+                        )
     parser.add_argument('--pathomics_mode', default="None", choices=["None", "cnn", "vit", "uni", "conch", "chief"], type=str)
     parser.add_argument('--pathomics_dim', default=1024, choices=[2048, 384, 1024, 35, 768], type=int)
-    parser.add_argument('--radiomics_mode', default="pyradiomics", choices=["None", "pyradiomics", "SegVol", "M3D-CLIP"], type=str)
-    parser.add_argument('--radiomics_dim', default=768, choices=[107, 768, 768], type=int)
-    parser.add_argument('--radiomics_aggr_mode', default="SPARRA", choices=["None", "Mean", "ABMIL", "SPARRA"], type=str, 
-                        help="if graph has been aggregated, specify which mode, defaut is none"
+    parser.add_argument('--pathomics_aggregated_mode', default="None", choices=["None", "MeanPooling", "ABMIL", "SPARRA", "radiopathomics_SPARRA"], type=str, 
+                        help="if pathomic features have been aggregated, specify which mode, defaut is none"
                         )
-    parser.add_argument('--pathomics_aggr_mode', default="SPARRA", choices=["None", "Mean", "ABMIL", "SPARRA", "radiopathomics_SPARRA"], type=str, 
-                        help="if graph has been aggregated, specify which mode, defaut is none"
+    parser.add_argument('--pathomics_aggregation', default=False, type=bool,
+                        help="if pathomic features have not been aggregated yet and true, do spatial aggregation"
                         )
     parser.add_argument('--resolution', default=20, type=float)
     parser.add_argument('--units', default="power", type=str)
@@ -1284,7 +1292,7 @@ if __name__ == "__main__":
     
     ## get wsi path
     if args.wsi_dir is not None:
-        wsi_dir = pathlib.Path(args.wsi_dir) / args.dataset
+        wsi_dir = pathlib.Path(args.wsi_dir) / args.dataset / 'Pathology'
         all_paths = sorted(pathlib.Path(wsi_dir).rglob("*.svs"))
         excluded_wsi = ["TCGA-5P-A9KC-01Z-00-DX1", "TCGA-5P-A9KA-01Z-00-DX1", "TCGA-UZ-A9PQ-01Z-00-DX1"]
         wsi_paths = []
@@ -1323,7 +1331,7 @@ if __name__ == "__main__":
     
     ## set save dir
     if args.save_pathomics_dir is not None:
-        save_pathomics_dir = pathlib.Path(f"{args.save_pathomics_dir}/{args.dataset}_{args.slide_mode}_pathomic_features/{args.pathomics_mode}")
+        save_pathomics_dir = pathlib.Path(f"{args.save_pathomics_dir}/{args.site}_{args.slide_mode}_pathomic_features/{args.pathomics_mode}")
     else:
         save_pathomics_dir = None
     if args.save_radiomics_dir is not None:
@@ -1335,31 +1343,24 @@ if __name__ == "__main__":
     else:
         save_clinical_dir = None
     if args.save_model_dir is not None:
-        save_model_dir = pathlib.Path(f"{args.save_model_dir}/{args.dataset}_response2therapy/{args.radiomics_mode}+{args.pathomics_mode}")
+        save_model_dir = pathlib.Path(f"{args.save_model_dir}/{args.site}_response2therapy/{args.radiomics_mode}+{args.pathomics_mode}")
     else:
         save_model_dir = None
 
     # predict response to therapy
+    pathomics_aggregation = args.pathomics_aggregation # false if load aggregated features else true
     if None not in (wsi_paths, save_pathomics_dir):
-        pathomics_aggregation = args.pathomics_aggr_mode == "None" # false if load aggregated features else true
         pathomics_paths = sorted([save_pathomics_dir / f"{p.stem}.json" for p in wsi_paths])
     else:
         pathomics_paths = None
 
+    radiomics_aggregation = args.radiomics_aggregation # false if load patient-level features else true
     if None not in (img_paths, save_radiomics_dir):
-        radiomics_aggregation = args.radiomics_aggr_mode == "None" # false if load image-level features else true
-        if radiomics_aggregation:
-            radiomics_paths = sorted([save_radiomics_dir / f"{p.stem}_{args.target}.json" for p in img_paths])
+        img_names = [p.name.replace('.nii.gz', '') for p in img_paths]
+        if args.radiomics_mode == "pyradiomics":
+            radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}_radiomics.json" for p in img_names])
         else:
-            if args.radiomics_mode == "pyradiomics":
-                radiomics_paths = sorted([save_radiomics_dir / f"{p.stem}_{args.target}_radiomics.json" for p in img_paths])
-            elif args.radiomics_mode == "SegVol":
-                if args.radiomics_aggregated_mode == "Mean":
-                    radiomics_paths = sorted([save_radiomics_dir / f"{p.stem}_{args.target}_aggr_mean.json" for p in img_paths])
-                else:
-                    radiomics_paths = sorted([save_radiomics_dir / f"{p.stem}_{args.target}.json" for p in img_paths])
-            elif args.radiomics_mode == "M3D-CLIP":
-                radiomics_paths = sorted([save_radiomics_dir / f"{p.stem}_{args.target}.json" for p in img_paths])
+            radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}.json" for p in img_names])
     else:
         radiomics_paths = None
 
@@ -1404,7 +1405,7 @@ if __name__ == "__main__":
     else:
         raise ValueError("Cannot find matched radiomics or pathomics!")
 
-    y = df[['pcr']].to_numpy(dtype=np.float32).tolist()
+    y = df[['pcr']].to_numpy(dtype=np.float32).squeeze().tolist()
     splits = generate_data_split(
         x=matched_graph_paths,
         y=y,
@@ -1436,9 +1437,9 @@ if __name__ == "__main__":
         radiomics_keys=None, #radiomic_propereties,
         pathomics_keys=None, #["TUM", "NORM", "DEB"],
         model=["RF", "XG", "LR", "SVC"][0],
-        refit=["accuracy", "f1", "roc_auc"][0],
+        refit=["accuracy", "f1", "roc_auc"][1],
         feature_selection=True,
-        n_selected_features=64,
+        n_selected_features=128,
         use_graph_properties=False
     )
 

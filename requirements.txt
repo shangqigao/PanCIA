@@ -37,4 +37,5 @@ timm
 torch_geometric
 torchbnn
 umap-learn
+xgboost
 zarr
