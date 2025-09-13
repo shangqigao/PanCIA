@@ -492,6 +492,7 @@ def svc(split_idx, tr_X, tr_y, refit, n_jobs):
 def load_radiomics(
         split_idx,
         data,
+        radiomics_aggregation,
         radiomics_aggregated_mode,
         radiomics_keys,
         use_graph_properties,
@@ -535,6 +536,7 @@ def load_radiomics(
 def load_pathomics(
         split_idx,
         data,
+        pathomics_aggregation,
         pathomics_aggregated_mode,
         pathomics_keys,
         use_graph_properties,
@@ -608,6 +610,7 @@ def outcome_classification(
             radiomics_tr_X = load_radiomics(
                 split_idx=split_idx,
                 data=data_tr,
+                radiomics_aggregation=radiomics_aggregation,
                 radiomics_aggregated_mode=radiomics_aggregated_mode,
                 radiomics_keys=radiomics_keys,
                 use_graph_properties=use_graph_properties,
@@ -619,6 +622,7 @@ def outcome_classification(
             pathomics_tr_X = load_pathomics(
                 split_idx=split_idx,
                 data=data_tr,
+                pathomics_aggregation=pathomics_aggregation,
                 pathomics_aggregated_mode=pathomics_aggregated_mode,
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
@@ -632,6 +636,7 @@ def outcome_classification(
             radiomics_te_X = load_radiomics(
                 split_idx=split_idx,
                 data=data_te,
+                radiomics_aggregation=radiomics_aggregation,
                 radiomics_aggregated_mode=radiomics_aggregated_mode,
                 radiomics_keys=radiomics_keys,
                 use_graph_properties=use_graph_properties,
@@ -643,6 +648,7 @@ def outcome_classification(
             pathomics_te_X = load_pathomics(
                 split_idx=split_idx,
                 data=data_te,
+                pathomics_aggregation=pathomics_aggregation,
                 pathomics_aggregated_mode=pathomics_aggregated_mode,
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
@@ -656,6 +662,7 @@ def outcome_classification(
             pathomics_tr_X = load_pathomics(
                 split_idx=split_idx,
                 data=data_tr,
+                pathomics_aggregation=pathomics_aggregation,
                 pathomics_aggregated_mode=pathomics_aggregated_mode,
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
@@ -667,6 +674,7 @@ def outcome_classification(
             pathomics_te_X = load_pathomics(
                 split_idx=split_idx,
                 data=data_te,
+                pathomics_aggregation=pathomics_aggregation,
                 pathomics_aggregated_mode=pathomics_aggregated_mode,
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
@@ -680,6 +688,7 @@ def outcome_classification(
             radiomics_tr_X = load_radiomics(
                 split_idx=split_idx,
                 data=data_tr,
+                radiomics_aggregation=radiomics_aggregation,
                 radiomics_aggregated_mode=radiomics_aggregated_mode,
                 radiomics_keys=radiomics_keys,
                 use_graph_properties=use_graph_properties,
@@ -691,6 +700,7 @@ def outcome_classification(
             radiomics_te_X = load_radiomics(
                 split_idx=split_idx,
                 data=data_te,
+                radiomics_aggregation=radiomics_aggregation,
                 radiomics_aggregated_mode=radiomics_aggregated_mode,
                 radiomics_keys=radiomics_keys,
                 use_graph_properties=use_graph_properties,
