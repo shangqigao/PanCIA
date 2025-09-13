@@ -55,25 +55,26 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --meta_info $meta_info
 
 # extract radiomic features
-# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
-# lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"
-# save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
-# meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
-
-# srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
-#             --img_dir $img_dir \
-#             --lab_dir $lab_dir \
-#             --save_dir $save_dir \
-#             --meta_info $meta_info 
-
-# response to therapy
 img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
-save_radiomics_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
-save_clinical_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
-save_model_dir="/home/sg2162/rds/hpc-work/Experiments/outcomes"
+lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"
+save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
 
-python analysis/outcome_prediction/m_therapy_response.py \
+srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
             --img_dir $img_dir \
-            --save_radiomics_dir $save_radiomics_dir \
-            --save_clinical_dir $save_clinical_dir \
-            --save_model_dir $save_model_dir       
+            --lab_dir $lab_dir \
+            --save_dir $save_dir \
+            --meta_info $meta_info 
+
+# classification
+# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
+# save_radiomics_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+# save_clinical_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
+# save_model_dir="/home/sg2162/rds/hpc-work/Experiments/outcomes"
+
+# python analysis/outcome_prediction/m_therapy_response.py \
+#             --img_dir $img_dir \
+#             --outcome her2 \
+#             --save_radiomics_dir $save_radiomics_dir \
+#             --save_clinical_dir $save_clinical_dir \
+#             --save_model_dir $save_model_dir       

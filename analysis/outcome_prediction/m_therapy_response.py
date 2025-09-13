@@ -224,10 +224,10 @@ def matched_outcome_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA
     # Prepare the response to therapy data
     if outcome == 'pcr':
         df = df[df['pcr'].notna()]
-    elif outcome == 'grade':
-        df = df[df['nottingham_grade'].notna()]
-    elif outcome == 'subtype':
-        df = df[df['tumor_subtype'].notna()]
+    elif outcome == 'hr':
+        df = df[df['hr'].notna()]
+    elif outcome == 'her2':
+        df = df[df['her2'].notna()]
     else:
         raise ValueError(f'Unsuppored outcome type: {outcome}')
     logging.info(f"Clinical data strcuture: {df.shape}")
@@ -270,8 +270,7 @@ def randomforest(split_idx, tr_X, tr_y, refit, n_jobs):
     param_grid={"model__max_depth": list(range(1, 6))}
     scoring = {
         "accuracy": "accuracy",
-        "f1": "f1",
-        "roc_auc": "roc_auc"
+        "f1": "f1_macro"
     }
     assert scoring.get(refit, False), f"{refit} is unsupported"
     pipe = Pipeline(
@@ -319,8 +318,7 @@ def xgboost(split_idx, tr_X, tr_y, refit, n_jobs):
     param_grid={"model__max_depth": list(range(1, 6))}
     scoring = {
         "accuracy": "accuracy",
-        "f1": "f1",
-        "roc_auc": "roc_auc"
+        "f1": "f1_macro"
     }
     assert scoring.get(refit, False), f"{refit} is unsupported"
     pipe = Pipeline(
@@ -376,8 +374,7 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
     )
     scoring = {
         "accuracy": "accuracy",
-        "f1": "f1",
-        "roc_auc": "roc_auc"
+        "f1": "f1_macro"
     }
     assert scoring.get(refit, False), f"{refit} is unsupported"
 
@@ -407,21 +404,21 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
     plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
-    best_model = gcv.best_estimator_.named_steps["model"]
-    best_coefs = pd.DataFrame(best_model.coef_.ravel(), index=tr_X.columns, columns=["coefficient"])
-    non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
-    print(f"Number of non-zero coefficients: {non_zero}")
+    # best_model = gcv.best_estimator_.named_steps["model"]
+    # best_coefs = pd.DataFrame(best_model.coef_.ravel(), index=tr_X.columns, columns=["coefficient"])
+    # non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
+    # print(f"Number of non-zero coefficients: {non_zero}")
 
-    non_zero_coefs = best_coefs.query("coefficient != 0")
-    coef_order = non_zero_coefs.abs().sort_values("coefficient").index
-    top10 = coef_order[:10]
+    # non_zero_coefs = best_coefs.query("coefficient != 0")
+    # coef_order = non_zero_coefs.abs().sort_values("coefficient").index
+    # top10 = coef_order[:10]
 
-    _, ax = plt.subplots(figsize=(8, 6))
-    non_zero_coefs.loc[top10].plot.barh(ax=ax, legend=False)
-    ax.set_xlabel("coefficient")
-    ax.grid(True)
-    plt.subplots_adjust(left=0.3)
-    plt.savefig(f"analysis/outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
+    # _, ax = plt.subplots(figsize=(8, 6))
+    # non_zero_coefs.loc[top10].plot.barh(ax=ax, legend=False)
+    # ax.set_xlabel("coefficient")
+    # ax.grid(True)
+    # plt.subplots_adjust(left=0.3)
+    # plt.savefig(f"analysis/outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -441,8 +438,7 @@ def svc(split_idx, tr_X, tr_y, refit, n_jobs):
     )
     scoring = {
         "accuracy": "accuracy",
-        "f1": "f1",
-        "roc_auc": "roc_auc"
+        "f1": "f1_macro"
     }
     assert scoring.get(refit, False), f"{refit} is unsupported"
 
@@ -579,7 +575,7 @@ def load_pathomics(
         pathomics_X = pd.concat([pathomics_X, prop_X], axis=1)
     return pathomics_X
 
-def response2therapy(
+def outcome_classification(
     split_path,
     radiomics_keys=None,
     pathomics_keys=None,
@@ -748,9 +744,9 @@ def response2therapy(
         prob = predictor.predict_proba(te_X)
         num_class = prob.shape[1]
 
-        label = te_y["label"].to_numpy()
+        label = te_y["label"].to_numpy(dtype=int)
         acc = acc_scorer(label, pred)
-        f1 = f1_scorer(label, pred)
+        f1 = f1_scorer(label, pred, average="macro")
 
         prob = prob[:, 1] if prob.shape[1] == 2 else prob
         auroc = auroc_scorer(label, prob, multi_class="ovr")
@@ -1263,10 +1259,10 @@ if __name__ == "__main__":
     parser.add_argument('--img_dir', default=None)
     parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--dataset', default="TCGA", type=str)
-    parser.add_argument('--outcome', default="pcr", choices=["pcr", "grade", "subtype"], type=str)
+    parser.add_argument('--outcome', default="pcr", choices=["pcr", "hr", "her2"], type=str)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
-    parser.add_argument('--phase', default="pre-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
+    parser.add_argument('--phase', default="1st-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_pathomics_dir', default=None)
@@ -1275,9 +1271,9 @@ if __name__ == "__main__":
     parser.add_argument('--save_model_dir', default=None)
     parser.add_argument('--slide_mode', default="wsi", choices=["tile", "wsi"], type=str)
     parser.add_argument('--epochs', default=20, type=int)
-    parser.add_argument('--radiomics_mode', default="BiomedParse", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--radiomics_mode', default="pyradiomics", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
     parser.add_argument('--radiomics_dim', default=768, choices=[107, 768, 768], type=int)
-    parser.add_argument('--radiomics_aggregation', default=True, type=bool,
+    parser.add_argument('--radiomics_aggregation', default=False, type=bool,
                         help="if radiomic features have not been aggregated yet and true, do spatial aggregation"
                         )
     parser.add_argument('--radiomics_aggregated_mode', default="None", choices=["None", "MeanPooling", "ABMIL", "SPARRA"], type=str, 
@@ -1395,18 +1391,18 @@ if __name__ == "__main__":
     data_types = ["radiomics", "pathomics"]
 
     if None not in (matched_pathomics_paths, matched_radiomics_paths):
-        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths)
+        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths, outcome=args.outcome)
         matched_pathomics_paths = [matched_pathomics_paths[i] for i in matched_i]
         matched_radiomics_paths = [matched_radiomics_paths[i] for i in matched_i]
         kr, kp = data_types[0], data_types[1]
         matched_graph_paths = [{kr : r, kp : p} for r, p in zip(matched_radiomics_paths, matched_pathomics_paths)]
     elif matched_pathomics_paths is not None and matched_radiomics_paths is None:
-        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths)
+        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths, outcome=args.outcome)
         matched_pathomics_paths = [matched_pathomics_paths[i] for i in matched_i]
         kr, kp = data_types[0], data_types[1]
         matched_graph_paths = [{kr : None, kp : p} for p in matched_pathomics_paths]
     elif matched_radiomics_paths is not None and matched_pathomics_paths is None:
-        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_radiomics_paths)
+        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_radiomics_paths, outcome=args.outcome)
         matched_radiomics_paths = [matched_radiomics_paths[i] for i in matched_i]
         kr, kp = data_types[0], data_types[1]
         matched_graph_paths = [{kr : r, kp : None} for r in matched_radiomics_paths]
@@ -1415,14 +1411,14 @@ if __name__ == "__main__":
 
     if args.outcome == 'pcr':
         y = df[['pcr']].to_numpy(dtype=np.float32).squeeze().tolist()
-    elif args.outcome == 'grade':
-        df['nottingham_grade_int'], uniques = pd.factorize(df['nottingham_grade'])
-        print("Grade mapping:", dict(enumerate(uniques)))
-        y = df[['nottingham_grade_int']].to_numpy(dtype=np.float32).squeeze().tolist()
-    elif args.outcome == 'subtype':
-        df['tumor_subtype_int'], uniques = pd.factorize(df['tumor_subtype'])
-        print("Subtype mapping:", dict(enumerate(uniques)))
-        y = df[['tumor_subtype_int']].to_numpy(dtype=np.float32).squeeze().tolist()
+    elif args.outcome == 'hr':
+        # df['nottingham_grade_int'], uniques = pd.factorize(df['nottingham_grade'])
+        # print("Grade mapping:", dict(enumerate(uniques)))
+        y = df[['hr']].to_numpy(dtype=np.float32).squeeze().tolist()
+    elif args.outcome == 'her2':
+        # df['tumor_subtype_int'], uniques = pd.factorize(df['tumor_subtype'])
+        # print("Subtype mapping:", dict(enumerate(uniques)))
+        y = df[['her2']].to_numpy(dtype=np.float32).squeeze().tolist()
     else:
         raise ValueError(f'Unsupported outcome type: {args.outcome}')
     splits = generate_data_split(
@@ -1443,24 +1439,6 @@ if __name__ == "__main__":
     logging.info(f"Number of validating samples: {num_valid}.")
     num_test = len(splits[0]["test"])
     logging.info(f"Number of testing samples: {num_test}.")
-
-    # response prediction from the splits
-    response2therapy(
-        split_path=split_path,
-        used=["radiomics", "pathomics", "radiopathomics"][0],
-        n_jobs=8,
-        radiomics_aggregation=radiomics_aggregation,
-        radiomics_aggregated_mode=args.radiomics_aggregated_mode,
-        pathomics_aggregation=pathomics_aggregation,
-        pathomics_aggregated_mode=args.pathomics_aggregated_mode,
-        radiomics_keys=None, #radiomic_propereties,
-        pathomics_keys=None, #["TUM", "NORM", "DEB"],
-        model=["RF", "XG", "LR", "SVC"][0],
-        refit=["accuracy", "f1", "roc_auc"][1],
-        feature_selection=True,
-        n_selected_features=128,
-        use_graph_properties=False
-    )
 
     # compute mean and std on training data for normalization 
     # splits = joblib.load(split_path)
@@ -1525,6 +1503,24 @@ if __name__ == "__main__":
     #     aggregation=["ABMIL", "SPARRA"][1],
     #     save_features=True
     # )
+
+    # response prediction from the splits
+    outcome_classification(
+        split_path=split_path,
+        used=["radiomics", "pathomics", "radiopathomics"][0],
+        n_jobs=8,
+        radiomics_aggregation=radiomics_aggregation,
+        radiomics_aggregated_mode=args.radiomics_aggregated_mode,
+        pathomics_aggregation=pathomics_aggregation,
+        pathomics_aggregated_mode=args.pathomics_aggregated_mode,
+        radiomics_keys=None, #radiomic_propereties,
+        pathomics_keys=None, #["TUM", "NORM", "DEB"],
+        model=["RF", "XG", "LR", "SVC"][0],
+        refit=["accuracy", "f1", "roc_auc"][1],
+        feature_selection=True,
+        n_selected_features=128,
+        use_graph_properties=False
+    )
 
     # visualize radiomics
     # splits = joblib.load(split_path)
