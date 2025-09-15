@@ -74,7 +74,21 @@ srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
 
 # python analysis/outcome_prediction/m_therapy_response.py \
 #             --img_dir $img_dir \
-#             --outcome her2 \
+#             --outcome hr \
 #             --save_radiomics_dir $save_radiomics_dir \
 #             --save_clinical_dir $save_clinical_dir \
-#             --save_model_dir $save_model_dir       
+#             --save_model_dir $save_model_dir  
+
+
+# survival
+# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
+# save_radiomics_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+# save_clinical_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
+# save_model_dir="/home/sg2162/rds/hpc-work/Experiments/outcomes"
+
+# python analysis/outcome_prediction/m_survival_analysis.py \
+#             --img_dir $img_dir \
+#             --outcome recurrence \
+#             --save_radiomics_dir $save_radiomics_dir \
+#             --save_clinical_dir $save_clinical_dir \
+#             --save_model_dir $save_model_dir     

@@ -1,5 +1,5 @@
 import sys
-sys.path.append('../')
+sys.path.append('./')
 
 import requests
 import argparse
@@ -56,7 +56,7 @@ from analysis.feature_aggregation.m_gnn_survival_analysis import SurvivalGraphDa
 from analysis.feature_aggregation.m_gnn_survival_analysis import ScalarMovingAverage, CoxSurvLoss
 from analysis.feature_aggregation.m_graph_construction import visualize_radiomic_graph, visualize_pathomic_graph
 
-
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
 def request_survival_data(project_ids, save_dir):
     fields = [
@@ -153,7 +153,7 @@ def plot_survival_curve(save_dir):
     plt.ylim(0, 1)
     plt.ylabel(r"est. probability of survival $\hat{S}(t)$")
     plt.xlabel("time $t$")
-    plt.savefig("a_07explainable_AI/survival_curve.jpg")
+    plt.savefig(f"{script_dir}/survival_curve.jpg")
     return
 
 def prepare_graph_properties(data_dict, prop_keys=None, subgraphs=False, omics="radiomics"):
@@ -332,19 +332,19 @@ def plot_coefficients(coefs, n_highlight):
     ax.set_xlabel("alpha")
     ax.set_ylabel("coefficient")
     plt.subplots_adjust(left=0.2)
-    plt.savefig("a_07explainable_AI/coefficients.jpg")
+    plt.savefig(f"{script_dir}/coefficients.jpg")
 
 def matched_outcome_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA", outcome=None):
     clinical_info_path = f"{save_clinical_dir}/{dataset}_clinical_and_imaging_info.xlsx"
     df = pd.read_excel(clinical_info_path, sheet_name='dataset_info')
     
     # Prepare the response to therapy data
-    if outcome == 'OS':
+    if outcome == 'os':
         df = df[df['days_to_death'].notna()]
         df['event'] = df['days_to_death'].apply(lambda x: True if x > 0 else False)
         df['duration'] = df['days_to_death']
         df.loc[df['days_to_death'] == 0, 'duration'] = df['days_to_follow_up']
-    elif outcome == 'DFS':
+    elif outcome == 'recurrence':
         df = df[df['days_to_recurrence'].notna()]
         df['event'] = df['days_to_recurrence'].apply(lambda x: True if x > 0 else False)
         df['duration'] = df['days_to_recurrence']
@@ -453,7 +453,7 @@ def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
         ax.axvline(gcv.best_params_["model__estimator__alphas"][0], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     best_model = gcv.best_estimator_.named_steps["model"]
@@ -473,7 +473,7 @@ def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
     ax.set_xlabel("coefficient")
     ax.grid(True)
     plt.subplots_adjust(left=0.3)
-    plt.savefig(f"analysis/outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
+    plt.savefig(f"{script_dir}/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -539,7 +539,7 @@ def rsf(split_idx, tr_X, tr_y, scorer, n_jobs):
         ax.axvline(gcv.best_params_["model__estimator__max_depth"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -605,7 +605,7 @@ def gradientboosting(split_idx, tr_X, tr_y, scorer, n_jobs, loss="coxph"):
         ax.axvline(gcv.best_params_["model__estimator__max_depth"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -672,7 +672,7 @@ def coxph(split_idx, tr_X, tr_y, scorer, n_jobs):
         ax.axvline(gcv.best_params_["model__estimator__alpha"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     best_model = gcv.best_estimator_.named_steps["model"]
@@ -693,7 +693,7 @@ def coxph(split_idx, tr_X, tr_y, scorer, n_jobs):
     ax.set_xlabel("coefficient")
     ax.grid(True)
     plt.subplots_adjust(left=0.3)
-    plt.savefig(f"analysis/outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
+    plt.savefig(f"{script_dir}/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -756,7 +756,7 @@ def ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs):
         ax.axvline(gcv.best_params_["model__estimator__alpha"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     best_model = gcv.best_estimator_.named_steps["model"]
@@ -777,7 +777,7 @@ def ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs):
     ax.set_xlabel("coefficient")
     ax.grid(True)
     plt.subplots_adjust(left=0.3)
-    plt.savefig(f"analysis/outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
+    plt.savefig(f"{script_dir}/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -840,7 +840,7 @@ def fastsvm(split_idx, tr_X, tr_y, scorer, n_jobs, rank_ratio=1):
         ax.axvline(gcv.best_params_["model__estimator__alpha"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     best_model = gcv.best_estimator_.named_steps["model"]
@@ -861,7 +861,7 @@ def fastsvm(split_idx, tr_X, tr_y, scorer, n_jobs, rank_ratio=1):
     ax.set_xlabel("coefficient")
     ax.grid(True)
     plt.subplots_adjust(left=0.3)
-    plt.savefig(f"analysis/outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
+    plt.savefig(f"{script_dir}/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -1123,7 +1123,11 @@ def survival(
                         name: tr_X[name] 
                     }
                 )
-                cph.fit(df, "duration", "event")
+                try:
+                    cph.fit(df, "duration", "event")
+                except Exception as e:
+                    print(f"Skipping {name} | Error: {e}")
+                    continue
                 summary = cph.summary
                 univariate_results.append({
                     'name': name,
@@ -1139,8 +1143,8 @@ def survival(
             tr_X = tr_X[selected_names]
             te_X = te_X[selected_names]
 
-        # model selection
-        print("Selecting survival model...")
+        # model fitting
+        print("Fitting survival model...")
         if model == "Coxnet":
             predictor = coxnet(split_idx, tr_X, tr_y, scorer, n_jobs)
         elif model == "RSF":
@@ -1202,7 +1206,7 @@ def survival(
         ax.set_xlabel("days from enrollment")
         ax.axhline(mean_auc, linestyle="--")
         ax.grid(True)
-        plt.savefig(f"analysis/outcome_prediction/AUC_fold{split_idx}.jpg") 
+        plt.savefig(f"{script_dir}/AUC_fold{split_idx}.jpg") 
 
         print(f"Updating regression results on fold {split_idx}")
         predict_results.update({f"Fold {split_idx}": scores_dict})
@@ -1234,7 +1238,7 @@ def survival(
     print(f"p-value: {pvalue}")
     ax.set_ylabel("Survival Probability")
     plt.subplots_adjust(left=0.2, bottom=0.2)
-    plt.savefig(f"analysis/outcome_prediction/{used}_survival_curve.png")
+    plt.savefig(f"{script_dir}/{used}_survival_curve.png")
     return
 
 def generate_data_split(
@@ -1692,9 +1696,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--wsi_dir', default=None)
     parser.add_argument('--img_dir', default=None)
-    parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--dataset', default="TCGA", type=str)
-    parser.add_argument('--outcome', default="DFS", choices=["OS", "DFS"], type=str)
+    parser.add_argument('--outcome', default="recurrence", choices=["os", "recurrence"], type=str)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--phase', default="1st-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
@@ -1874,7 +1878,7 @@ if __name__ == "__main__":
     # survival analysis from the splits
     survival(
         split_path=split_path,
-        used=["radiomics", "pathomics", "radiopathomics"][2],
+        used=["radiomics", "pathomics", "radiopathomics"][0],
         n_jobs=8,
         radiomics_aggregation=radiomics_aggregation,
         radiomics_aggregated_mode=args.radiomics_aggregated_mode,
@@ -1882,7 +1886,7 @@ if __name__ == "__main__":
         pathomics_aggregated_mode=args.pathomics_aggregated_mode,
         radiomics_keys=None, #radiomic_propereties,
         pathomics_keys=None, #["TUM", "NORM", "DEB"],
-        model=["RSF", "CoxPH", "Coxnet", "FastSVM"][1],
+        model=["RSF", "CoxPH", "Coxnet", "FastSVM"][3],
         scorer=["cindex", "cindex-ipcw", "auc", "ibs"][2],
         feature_selection=True,
         n_bootstraps=0,

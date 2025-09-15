@@ -1267,7 +1267,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--wsi_dir', default=None)
     parser.add_argument('--img_dir', default=None)
-    parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--dataset', default="TCGA", type=str)
     parser.add_argument('--outcome', default="pcr", choices=["pcr", "hr", "her2"], type=str)
     parser.add_argument('--modality', default="MRI", type=str)
@@ -1281,9 +1281,9 @@ if __name__ == "__main__":
     parser.add_argument('--save_model_dir', default=None)
     parser.add_argument('--slide_mode', default="wsi", choices=["tile", "wsi"], type=str)
     parser.add_argument('--epochs', default=20, type=int)
-    parser.add_argument('--radiomics_mode', default="pyradiomics", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--radiomics_mode', default="SegVol", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
     parser.add_argument('--radiomics_dim', default=768, choices=[107, 768, 768], type=int)
-    parser.add_argument('--radiomics_aggregation', default=False, type=bool,
+    parser.add_argument('--radiomics_aggregation', default=True, type=bool,
                         help="if radiomic features have not been aggregated yet and true, do spatial aggregation"
                         )
     parser.add_argument('--radiomics_aggregated_mode', default="None", choices=["None", "MeanPooling", "ABMIL", "SPARRA"], type=str, 
@@ -1525,7 +1525,7 @@ if __name__ == "__main__":
         pathomics_aggregated_mode=args.pathomics_aggregated_mode,
         radiomics_keys=None, #radiomic_propereties,
         pathomics_keys=None, #["TUM", "NORM", "DEB"],
-        model=["RF", "XG", "LR", "SVC"][0],
+        model=["RF", "XG", "LR", "SVC"][3],
         refit=["accuracy", "f1", "roc_auc"][1],
         feature_selection=True,
         n_selected_features=128,

@@ -30,6 +30,7 @@ scipy
 seaborn
 shapely
 SimpleITK
+statsmodels
 tcia_utils
 tensorboard
 tensorboardX
