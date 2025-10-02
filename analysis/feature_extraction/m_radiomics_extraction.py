@@ -22,7 +22,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--lab_dir', default=None)
-    parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
@@ -30,7 +30,7 @@ if __name__ == "__main__":
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--feature_mode', default="BiomedParse", choices=["pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--feature_mode', default="SegVol", choices=["pyradiomics", "SegVol", "BiomedParse"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 512], type=int)
     parser.add_argument('--dilation_mm', default=10, type=float)
     parser.add_argument('--resolution', default=1, type=float)
@@ -70,21 +70,21 @@ if __name__ == "__main__":
     
     # extract radiomics
     # warning: do not run this function in a loop
-    extract_radiomic_feature(
-        img_paths=img_paths,
-        lab_paths=lab_paths,
-        feature_mode=args.feature_mode,
-        save_dir=save_feature_dir,
-        class_name=args.target,
-        prompts=text_prompts,
-        format=args.format,
-        modality=args.modality,
-        site=args.site,
-        dilation_mm=args.dilation_mm,
-        resolution=args.resolution,
-        units=args.units,
-        skip_exist=True
-    )
+    # extract_radiomic_feature(
+    #     img_paths=img_paths,
+    #     lab_paths=lab_paths,
+    #     feature_mode=args.feature_mode,
+    #     save_dir=save_feature_dir,
+    #     class_name=args.target,
+    #     prompts=text_prompts,
+    #     format=args.format,
+    #     modality=args.modality,
+    #     site=args.site,
+    #     dilation_mm=args.dilation_mm,
+    #     resolution=args.resolution,
+    #     units=args.units,
+    #     skip_exist=True
+    # )
 
     # construct image graph
     # construct_img_graph(
@@ -108,13 +108,13 @@ if __name__ == "__main__":
     # )
 
     # visualize radiomics
-    # radiomic_feature_visualization(
-    #     img_paths=img_paths[0:1],
-    #     save_feature_dir=save_feature_dir,
-    #     class_name=class_name,
-    #     mode="tsne",
-    #     graph=False
-    # )
+    radiomic_feature_visualization(
+        img_paths=img_paths[0:10],
+        save_feature_dir=save_feature_dir,
+        class_name=class_name,
+        mode="umap",
+        graph=True
+    )
 
     # visualize radiomic graph
     # visualize_radiomic_graph(
