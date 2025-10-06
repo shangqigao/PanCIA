@@ -70,4 +70,4 @@ srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
             --img_dir $img_dir \
             --lab_dir $lab_dir \
             --save_dir $save_dir \
-            --meta_info $meta_info           
+            --meta_info $meta_info          

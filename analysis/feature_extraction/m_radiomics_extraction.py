@@ -26,7 +26,7 @@ if __name__ == "__main__":
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
-    parser.add_argument('--phase', default="1st-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
+    parser.add_argument('--phase', default="pre-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     radiomic_feature_visualization(
         img_paths=img_paths[0:10],
         save_feature_dir=save_feature_dir,
-        class_name=class_name,
+        class_name=args.target,
         mode="umap",
         graph=True
     )
