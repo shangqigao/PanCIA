@@ -228,6 +228,8 @@ def matched_outcome_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA
         df = df[df['hr'].notna()]
     elif outcome == 'her2':
         df = df[df['her2'].notna()]
+    elif outcome == 'pcr+subtype':
+        df = df[df['pcr'].notna() & df['tumor_subtype'].notna()]
     else:
         raise ValueError(f'Unsuppored outcome type: {outcome}')
     
@@ -1292,7 +1294,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_model_dir', default=None)
     parser.add_argument('--slide_mode', default="wsi", choices=["tile", "wsi"], type=str)
     parser.add_argument('--epochs', default=20, type=int)
-    parser.add_argument('--radiomics_mode', default="pyradiomics", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--radiomics_mode', default="SegVol", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
     parser.add_argument('--radiomics_dim', default=768, choices=[851, 768, 768], type=int)
     parser.add_argument('--radiomics_aggregation', default=False, type=bool,
                         help="if radiomic features have not been aggregated yet and true, do spatial aggregation"
@@ -1441,12 +1443,9 @@ if __name__ == "__main__":
         # print("Subtype mapping:", dict(enumerate(uniques)))
         y = df[['her2']].to_numpy(dtype=np.float32).squeeze().tolist()
     elif args.outcome == "pcr+subtype":
-        df = df[df['tumor_subtype'].notna()]
-        df_subtype = pd.get_dummies(df, columns='tumor_subtype')
+        df_subtype = pd.get_dummies(df['tumor_subtype'], prefix='tumor_subtype')
         df = pd.concat([df[['pcr']], df_subtype], axis=1)
         y = df.to_numpy(dtype=np.float32).squeeze().tolist()
-        print(df)
-        print(y)
     else:
         raise ValueError(f'Unsupported outcome type: {args.outcome}')
     splits = generate_data_split(
@@ -1469,53 +1468,53 @@ if __name__ == "__main__":
     logging.info(f"Number of testing samples: {num_test}.")
 
     # compute mean and std on training data for normalization 
-    # splits = joblib.load(split_path)
-    # train_graph_paths = [path for path, _ in splits[0]["train"]]
-    # loader = SurvivalGraphDataset(train_graph_paths, mode="infer", data_types=data_types)
-    # loader = DataLoader(
-    #     loader,
-    #     num_workers=8,
-    #     batch_size=1,
-    #     shuffle=False,
-    #     drop_last=False,
-    # )
-    # omic_features = [{k: v.x_dict[k].numpy() for k in data_types} for v in loader]
-    # omics_modes = {"radiomics": args.radiomics_mode, "pathomics": args.pathomics_mode}
-    # for k, v in omics_modes.items():
-    #     node_features = [d[k] for d in omic_features]
-    #     node_features = np.concatenate(node_features, axis=0)
-    #     node_scaler = StandardScaler(copy=False)
-    #     node_scaler.fit(node_features)
-    #     scaler_path = f"{save_model_dir}/survival_{k}_{v}_scaler.dat"
-    #     joblib.dump(node_scaler, scaler_path)
+    splits = joblib.load(split_path)
+    train_graph_paths = [path for path, _ in splits[0]["train"]]
+    loader = SurvivalGraphDataset(train_graph_paths, mode="infer", data_types=data_types)
+    loader = DataLoader(
+        loader,
+        num_workers=8,
+        batch_size=1,
+        shuffle=False,
+        drop_last=False,
+    )
+    omic_features = [{k: v.x_dict[k].numpy() for k in data_types} for v in loader]
+    omics_modes = {"radiomics": args.radiomics_mode, "pathomics": args.pathomics_mode}
+    for k, v in omics_modes.items():
+        node_features = [d[k] for d in omic_features]
+        node_features = np.concatenate(node_features, axis=0)
+        node_scaler = StandardScaler(copy=False)
+        node_scaler.fit(node_features)
+        scaler_path = f"{save_model_dir}/response2therapy_{k}_{v}_scaler.dat"
+        joblib.dump(node_scaler, scaler_path)
 
     # training
     # omics_modes = {"radiomics": args.radiomics_mode, "pathomics": args.pathomics_mode}
     # omics_dims = {"radiomics": args.radiomics_dim, "pathomics": args.pathomics_dim}
     # omics_pool_ratio = {"radiomics": 0.7, "pathomics": 0.2}
-    # omics_modes = {"radiomics": args.radiomics_mode}
-    # omics_dims = {"radiomics": args.radiomics_dim}
-    # omics_pool_ratio = {"radiomics": 0.7}
+    omics_modes = {"radiomics": args.radiomics_mode}
+    omics_dims = {"radiomics": args.radiomics_dim}
+    omics_pool_ratio = {"radiomics": 0.7}
     # omics_modes = {"pathomics": args.pathomics_mode}
     # omics_dims = {"pathomics": args.pathomics_dim}
     # omics_pool_ratio = {"pathomics": 0.2}
-    # split_path = f"{save_model_dir}/survival_radiopathomics_{args.radiomics_mode}_{args.pathomics_mode}_splits.dat"
-    # scaler_paths = {k: f"{save_model_dir}/survival_{k}_{v}_scaler.dat" for k, v in omics_modes.items()}
-    # training(
-    #     num_epochs=args.epochs,
-    #     split_path=split_path,
-    #     scaler_path=scaler_paths,
-    #     num_node_features=omics_dims,
-    #     model_dir=save_model_dir,
-    #     conv="GCNConv",
-    #     n_works=32,
-    #     batch_size=32,
-    #     BayesGNN=False,
-    #     pool_ratio=omics_pool_ratio,
-    #     omic_keys=list(omics_modes.keys()),
-    #     aggregation=["ABMIL", "SPARRA"][1],
-    #     sampling_rate=1
-    # )
+    split_path = f"{save_model_dir}/response2therapy_{args.radiomics_mode}_{args.pathomics_mode}_splits.dat"
+    scaler_paths = {k: f"{save_model_dir}/response2therapy_{k}_{v}_scaler.dat" for k, v in omics_modes.items()}
+    training(
+        num_epochs=args.epochs,
+        split_path=split_path,
+        scaler_path=scaler_paths,
+        num_node_features=omics_dims,
+        model_dir=save_model_dir,
+        conv="GCNConv",
+        n_works=32,
+        batch_size=32,
+        BayesGNN=False,
+        pool_ratio=omics_pool_ratio,
+        omic_keys=list(omics_modes.keys()),
+        aggregation=["ABMIL", "SPARRA"][0],
+        sampling_rate=1
+    )
 
     # inference
     # inference(
