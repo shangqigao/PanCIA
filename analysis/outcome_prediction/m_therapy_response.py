@@ -1279,7 +1279,7 @@ if __name__ == "__main__":
     parser.add_argument('--img_dir', default=None)
     parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--dataset', default="TCGA", type=str)
-    parser.add_argument('--outcome', default="pcr", choices=["pcr", "hr", "her2", "pcr+subtype"], type=str)
+    parser.add_argument('--outcome', default="pcr+subtype", choices=["pcr", "hr", "her2", "pcr+subtype"], type=str)
     parser.add_argument('--subgroup', default=None, choices=["HR+/HER2-", "HER2+", "TNBC", None])
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
@@ -1440,8 +1440,13 @@ if __name__ == "__main__":
         # df['tumor_subtype_int'], uniques = pd.factorize(df['tumor_subtype'])
         # print("Subtype mapping:", dict(enumerate(uniques)))
         y = df[['her2']].to_numpy(dtype=np.float32).squeeze().tolist()
-    elif args.outcome == "pcr+outcome":
-        
+    elif args.outcome == "pcr+subtype":
+        df = df[df['tumor_subtype'].notna()]
+        df_subtype = pd.get_dummies(df, columns='tumor_subtype')
+        df = pd.concat([df[['pcr']], df_subtype], axis=1)
+        y = df.to_numpy(dtype=np.float32).squeeze().tolist()
+        print(df)
+        print(y)
     else:
         raise ValueError(f'Unsupported outcome type: {args.outcome}')
     splits = generate_data_split(
@@ -1528,22 +1533,22 @@ if __name__ == "__main__":
     # )
 
     # response prediction from the splits
-    outcome_classification(
-        split_path=split_path,
-        used=["radiomics", "pathomics", "radiopathomics"][0],
-        n_jobs=8,
-        radiomics_aggregation=radiomics_aggregation,
-        radiomics_aggregated_mode=args.radiomics_aggregated_mode,
-        pathomics_aggregation=pathomics_aggregation,
-        pathomics_aggregated_mode=args.pathomics_aggregated_mode,
-        radiomics_keys=None, #radiomic_propereties,
-        pathomics_keys=None, #["TUM", "NORM", "DEB"],
-        model=["RF", "XG", "LR", "SVC"][0],
-        refit=["accuracy", "f1", "roc_auc"][1],
-        feature_selection=True,
-        n_selected_features=128,
-        use_graph_properties=False
-    )
+    # outcome_classification(
+    #     split_path=split_path,
+    #     used=["radiomics", "pathomics", "radiopathomics"][0],
+    #     n_jobs=8,
+    #     radiomics_aggregation=radiomics_aggregation,
+    #     radiomics_aggregated_mode=args.radiomics_aggregated_mode,
+    #     pathomics_aggregation=pathomics_aggregation,
+    #     pathomics_aggregated_mode=args.pathomics_aggregated_mode,
+    #     radiomics_keys=None, #radiomic_propereties,
+    #     pathomics_keys=None, #["TUM", "NORM", "DEB"],
+    #     model=["RF", "XG", "LR", "SVC"][0],
+    #     refit=["accuracy", "f1", "roc_auc"][1],
+    #     feature_selection=True,
+    #     n_selected_features=128,
+    #     use_graph_properties=False
+    # )
 
     # visualize radiomics
     # splits = joblib.load(split_path)
