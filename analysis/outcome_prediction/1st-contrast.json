@@ -1987,5 +1987,14 @@
                 }
             }
         }
+    },
+    "pcr for HR+/HER2-": {
+        "Expert": {
+            "Pyradiomics": {
+                "None": {
+                    "RF":
+                }
+            }
+        }
     }
 }

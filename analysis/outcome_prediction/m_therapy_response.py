@@ -233,15 +233,16 @@ def matched_outcome_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA
     else:
         raise ValueError(f'Unsuppored outcome type: {outcome}')
     
-    if subgroup is not None:
-        if subgroup == "HR+/HER2-":
-            df = df[(df['hr'] == 1) & (df['her2'] == 0)]
-        elif subgroup == "HER2+":
-            df = df[df['her2'] == 1]
-        elif subgroup == "TNBC":
-            df = df[df['tumor_subtype'] == 'triple_negative']
-        else:
-            raise ValueError(f'Unsupported subgroup type: {subgroup}')
+    if subgroup == "HR+/HER2-":
+        df = df[(df['hr'] == 1) & (df['her2'] == 0)]
+    elif subgroup == "HER2+":
+        df = df[df['her2'] == 1]
+    elif subgroup == "TNBC":
+        df = df[df['tumor_subtype'] == 'triple_negative']
+    elif subgroup == 'Overall':
+        df = df
+    else:
+        raise ValueError(f'Unsupported subgroup type: {subgroup}')
     logging.info(f"Clinical data strcuture: {df.shape}")
 
     # filter graph properties 
@@ -912,7 +913,7 @@ def run_once(
         model = model.to("cuda")
     else:
         model = model.to("cpu")
-    loss = R2TLoss()
+    loss = R2TLoss(binary_cls=arch_kwargs['binary_cls'])
     optimizer = torch.optim.Adam(model.parameters(), **optim_kwargs)
     # optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, nesterov=True, **optim_kwargs)
     # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 80], gamma=0.1)
@@ -972,25 +973,51 @@ def run_once(
                 label = np.array(label).squeeze()
                 assert logit.ndim == 2
 
-                prob = softmax(logit, axis=1)
-                num_class = prob.shape[1]
-                pred = np.argmax(prob, axis=1)
-                val = acc_scorer(label, pred)
-                logging_dict[f"{loader_name}-acc"] = val
+                if not arch_kwargs['binary_cls']:
+                    prob = softmax(logit, axis=1)
+                    num_class = prob.shape[1]
+                    pred = np.argmax(prob, axis=1)
 
-                val = f1_scorer(label, pred)
-                logging_dict[f"{loader_name}-f1"] = val
+                    val = acc_scorer(label, pred)
+                    logging_dict[f"{loader_name}-acc"] = val
 
-                prob = prob[:, 1] if num_class == 2 else prob
-                val = auroc_scorer(label, prob, multi_class="ovr")
-                logging_dict[f"{loader_name}-auroc"] = val
+                    val = f1_scorer(label, pred)
+                    logging_dict[f"{loader_name}-f1"] = val
 
-                if num_class == 2:
-                    val = auprc_scorer(label, prob)
+                    prob = prob[:, 1] if num_class == 2 else prob
+                    val = auroc_scorer(label, prob, multi_class="ovr")
+                    logging_dict[f"{loader_name}-auroc"] = val
+
+                    if num_class == 2:
+                        val = auprc_scorer(label, prob)
+                    else:
+                        onehot = np.eye(num_class)[label]
+                        val = auprc_scorer(onehot, prob)
+                    logging_dict[f"{loader_name}-auprc"] = val
                 else:
-                    onehot = np.eye(num_class)[label]
-                    val = auprc_scorer(onehot, prob)
-                logging_dict[f"{loader_name}-auprc"] = val
+                    prob = 1 / (1 + np.exp(-logit))
+                    num_class = prob.shape[1]
+                    pred = (prob > 0.5).astype(np.int8)
+
+                    acc_list = []
+                    for i in range(num_class):
+                        acc_list.append(acc_scorer(label[:, i], pred[:, i]))
+                    logging_dict[f"{loader_name}-acc"] = sum(acc_list) / num_class
+
+                    f1_list = []
+                    for i in range(num_class):
+                        f1_list.append(f1_scorer(label[:, i], pred[:, i]))
+                    logging_dict[f"{loader_name}-f1"] = sum(f1_list) / num_class
+
+                    auroc_list = []
+                    for i in range(num_class):
+                        auroc_list.append(auroc_scorer(label[:, i], pred[:, i]))
+                    logging_dict[f"{loader_name}-auroc"] = sum(auroc_list) / num_class
+
+                    auprc_list = []
+                    for i in range(num_class):
+                        auprc_list.append(auprc_scorer(label[:, i], pred[:, i]))
+                    logging_dict[f"{loader_name}-auprc"] = sum(auroc_list) / num_class
 
                 logging_dict[f"{loader_name}-raw-logit"] = logit
                 logging_dict[f"{loader_name}-raw-label"] = label
@@ -1017,7 +1044,6 @@ def run_once(
                 save_as_json(new_stats, f"{save_dir}/stats.json", exist_ok=True)
                 model.save(
                     f"{save_dir}/epoch={epoch:03d}.weights.pth",
-                    f"{save_dir}/epoch={epoch:03d}.aux.dat",
                 )
         lr_scheduler.step()
     
@@ -1063,7 +1089,8 @@ def training(
         "pool_ratio": pool_ratio,
         "conv": conv,
         "keys": omic_keys,
-        "aggregation": aggregation
+        "aggregation": aggregation,
+        "binary_cls": True
     }
     omics_name = "_".join(omic_keys)
     if BayesGNN:
@@ -1282,7 +1309,7 @@ if __name__ == "__main__":
     parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--dataset', default="TCGA", type=str)
     parser.add_argument('--outcome', default="pcr+subtype", choices=["pcr", "hr", "her2", "pcr+subtype"], type=str)
-    parser.add_argument('--subgroup', default=None, choices=["HR+/HER2-", "HER2+", "TNBC", None])
+    parser.add_argument('--subgroup', default='Overall', choices=["HR+/HER2-", "HER2+", "TNBC", 'Overall'])
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--phase', default="1st-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
@@ -1293,9 +1320,9 @@ if __name__ == "__main__":
     parser.add_argument('--save_clinical_dir', default=None)
     parser.add_argument('--save_model_dir', default=None)
     parser.add_argument('--slide_mode', default="wsi", choices=["tile", "wsi"], type=str)
-    parser.add_argument('--epochs', default=20, type=int)
-    parser.add_argument('--radiomics_mode', default="SegVol", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
-    parser.add_argument('--radiomics_dim', default=768, choices=[851, 768, 768], type=int)
+    parser.add_argument('--epochs', default=50, type=int)
+    parser.add_argument('--radiomics_mode', default="BiomedParse", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--radiomics_dim', default=512, choices=[851, 768, 512], type=int)
     parser.add_argument('--radiomics_aggregation', default=False, type=bool,
                         help="if radiomic features have not been aggregated yet and true, do spatial aggregation"
                         )
@@ -1370,7 +1397,7 @@ if __name__ == "__main__":
     else:
         save_clinical_dir = None
     if args.save_model_dir is not None:
-        save_model_dir = pathlib.Path(f"{args.save_model_dir}/{args.site}_response2therapy/{args.radiomics_mode}+{args.pathomics_mode}")
+        save_model_dir = pathlib.Path(f"{args.save_model_dir}/{args.site}_response2therapy/{args.outcome}_{args.subgroup}/{args.radiomics_mode}+{args.pathomics_mode}")
     else:
         save_model_dir = None
 
@@ -1411,24 +1438,23 @@ if __name__ == "__main__":
     test_ratio = 0.2
     train_ratio = 0.8 * 0.8
     valid_ratio = 0.8 * 0.2
-    data_types = ["radiomics", "pathomics"]
 
     if None not in (matched_pathomics_paths, matched_radiomics_paths):
         df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths, outcome=args.outcome, subgroup=args.subgroup)
         matched_pathomics_paths = [matched_pathomics_paths[i] for i in matched_i]
         matched_radiomics_paths = [matched_radiomics_paths[i] for i in matched_i]
-        kr, kp = data_types[0], data_types[1]
+        kr, kp = "radiomics", "pathomics"
         matched_graph_paths = [{kr : r, kp : p} for r, p in zip(matched_radiomics_paths, matched_pathomics_paths)]
     elif matched_pathomics_paths is not None and matched_radiomics_paths is None:
         df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths, outcome=args.outcome, subgroup=args.subgroup)
         matched_pathomics_paths = [matched_pathomics_paths[i] for i in matched_i]
-        kr, kp = data_types[0], data_types[1]
-        matched_graph_paths = [{kr : None, kp : p} for p in matched_pathomics_paths]
+        kr, kp = None, "pathomics"
+        matched_graph_paths = [{kp : p} for p in matched_pathomics_paths]
     elif matched_radiomics_paths is not None and matched_pathomics_paths is None:
         df, matched_i = matched_outcome_graph(save_clinical_dir, matched_radiomics_paths, outcome=args.outcome, subgroup=args.subgroup)
         matched_radiomics_paths = [matched_radiomics_paths[i] for i in matched_i]
-        kr, kp = data_types[0], data_types[1]
-        matched_graph_paths = [{kr : r, kp : None} for r in matched_radiomics_paths]
+        kr, kp = "radiomics", None
+        matched_graph_paths = [{kr : r} for r in matched_radiomics_paths]
     else:
         raise ValueError("Cannot find matched radiomics or pathomics!")
 
@@ -1448,6 +1474,17 @@ if __name__ == "__main__":
         y = df.to_numpy(dtype=np.float32).squeeze().tolist()
     else:
         raise ValueError(f'Unsupported outcome type: {args.outcome}')
+
+    # set omics paramters
+    omics_modes = {"radiomics": args.radiomics_mode, "pathomics": args.pathomics_mode}
+    omics_dims = {"radiomics": args.radiomics_dim, "pathomics": args.pathomics_dim}
+    omics_pool_ratio = {"radiomics": 0.7, "pathomics": 0.2}
+    data_types = [k for k in [kr, kp] if k is not None]
+    omics_modes = {k : omics_modes[k] for k in data_types}
+    omics_dims = {k : omics_dims[k] for k in data_types}
+    omics_pool_ratio = {k : omics_pool_ratio[k] for k in data_types}
+
+    # split dataset
     splits = generate_data_split(
         x=matched_graph_paths,
         y=y,
@@ -1478,8 +1515,10 @@ if __name__ == "__main__":
         shuffle=False,
         drop_last=False,
     )
-    omic_features = [{k: v.x_dict[k].numpy() for k in data_types} for v in loader]
-    omics_modes = {"radiomics": args.radiomics_mode, "pathomics": args.pathomics_mode}
+    if len(data_types) > 1:
+        omic_features = [{k: v.x_dict[k].numpy() for k in data_types} for v in loader]
+    else:
+        omic_features = [{k: v.x.numpy() for k in data_types} for v in loader]
     for k, v in omics_modes.items():
         node_features = [d[k] for d in omic_features]
         node_features = np.concatenate(node_features, axis=0)
@@ -1489,15 +1528,6 @@ if __name__ == "__main__":
         joblib.dump(node_scaler, scaler_path)
 
     # training
-    # omics_modes = {"radiomics": args.radiomics_mode, "pathomics": args.pathomics_mode}
-    # omics_dims = {"radiomics": args.radiomics_dim, "pathomics": args.pathomics_dim}
-    # omics_pool_ratio = {"radiomics": 0.7, "pathomics": 0.2}
-    omics_modes = {"radiomics": args.radiomics_mode}
-    omics_dims = {"radiomics": args.radiomics_dim}
-    omics_pool_ratio = {"radiomics": 0.7}
-    # omics_modes = {"pathomics": args.pathomics_mode}
-    # omics_dims = {"pathomics": args.pathomics_dim}
-    # omics_pool_ratio = {"pathomics": 0.2}
     split_path = f"{save_model_dir}/response2therapy_{args.radiomics_mode}_{args.pathomics_mode}_splits.dat"
     scaler_paths = {k: f"{save_model_dir}/response2therapy_{k}_{v}_scaler.dat" for k, v in omics_modes.items()}
     training(

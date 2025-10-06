@@ -74,7 +74,6 @@ save_model_dir="/home/sg2162/rds/hpc-work/Experiments/outcomes"
 
 python analysis/outcome_prediction/m_therapy_response.py \
             --img_dir $img_dir \
-            --outcome pcr+subtype \
             --save_radiomics_dir $save_radiomics_dir \
             --save_clinical_dir $save_clinical_dir \
             --save_model_dir $save_model_dir  

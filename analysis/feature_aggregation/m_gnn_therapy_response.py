@@ -69,6 +69,7 @@ class TherapyGraphDataset(Dataset):
             graph_dict = {k: v.type(torch.float32) for k, v in graph_dict.items()}
             graph_dict["edge_index"] = graph_dict["edge_index"].type(torch.int64)
             graph = Data(**graph_dict)
+            del graph_dict
         else:
             graph_dict = {}
             for key in self.data_types:
@@ -737,13 +738,14 @@ class TherapyGraphArch(nn.Module):
         features = features.cpu().numpy()
         attention = attention.cpu().numpy()
         wsi_labels = None
-        try:
-            wsi_labels = wsi_graphs.y_dict[model.keys[0]].cpu().numpy()
-        except:
-            print("no y dict!")
         if hasattr(wsi_graphs, "y"):
             if wsi_graphs.y is not None:
                 wsi_labels = wsi_graphs.y.cpu().numpy()
+        else:
+            try:
+                wsi_labels = wsi_graphs.y_dict[model.keys[0]].cpu().numpy()
+            except:
+                print("no y dict!")
         if wsi_labels is not None:
             return [wsi_outputs, wsi_labels]
         else:
@@ -1003,17 +1005,19 @@ class CFLoss(nn.Module):
         return mmd_loss + self.beta*mse_loss
     
 class R2TLoss(nn.Module):
-    def __init__(self, tau_vi=1e-1, tau_ka=1e-2):
+    def __init__(self, tau_vi=1e-1, tau_ka=1e-2, binary_cls=False):
         super(R2TLoss, self).__init__()
         self.tau_vi = tau_vi
         self.tau_ka = tau_ka
         self.loss_vi = VILoss()
         self.loss_ka = CFLoss()
-        self.CE = nn.CrossEntropyLoss()
-        self.BCE = nn.BCEWithLogitsLoss()
+        if not binary_cls:
+            self.ce = nn.CrossEntropyLoss()
+        else:
+            self.ce = nn.BCEWithLogitsLoss()
 
     def forward(self, logits, labels, VIparas, KAparas):
-        loss_cls = self.BCE(logits, labels)
+        loss_cls = self.ce(logits, labels)
         if VIparas is not None:
             loss_vi = self.loss_vi(*VIparas)
             loss_cls = loss_cls + self.tau_vi * loss_vi
