@@ -217,7 +217,7 @@ def plot_coefficients(coefs, n_highlight):
     plt.subplots_adjust(left=0.2)
     plt.savefig("a_07explainable_AI/coefficients.jpg")
 
-def matched_outcome_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA", outcome=None):
+def matched_outcome_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA", outcome=None, subgroup=None):
     clinical_info_path = f"{save_clinical_dir}/{dataset}_clinical_and_imaging_info.xlsx"
     df = pd.read_excel(clinical_info_path, sheet_name='dataset_info')
     
@@ -230,6 +230,16 @@ def matched_outcome_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA
         df = df[df['her2'].notna()]
     else:
         raise ValueError(f'Unsuppored outcome type: {outcome}')
+    
+    if subgroup is not None:
+        if subgroup == "HR+/HER2-":
+            df = df[(df['hr'] == 1) & (df['her2'] == 0)]
+        elif subgroup == "HER2+":
+            df = df[df['her2'] == 1]
+        elif subgroup == "TNBC":
+            df = df[df['tumor_subtype'] == 'triple_negative']
+        else:
+            raise ValueError(f'Unsupported subgroup type: {subgroup}')
     logging.info(f"Clinical data strcuture: {df.shape}")
 
     # filter graph properties 
@@ -1270,6 +1280,7 @@ if __name__ == "__main__":
     parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--dataset', default="TCGA", type=str)
     parser.add_argument('--outcome', default="pcr", choices=["pcr", "hr", "her2"], type=str)
+    parser.add_argument('--subgroup', default="HR+/HER2-", choices=["HR+/HER2-", "HER2+", "TNBC", None])
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--phase', default="1st-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
@@ -1401,18 +1412,18 @@ if __name__ == "__main__":
     data_types = ["radiomics", "pathomics"]
 
     if None not in (matched_pathomics_paths, matched_radiomics_paths):
-        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths, outcome=args.outcome)
+        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths, outcome=args.outcome, subgroup=args.subgroup)
         matched_pathomics_paths = [matched_pathomics_paths[i] for i in matched_i]
         matched_radiomics_paths = [matched_radiomics_paths[i] for i in matched_i]
         kr, kp = data_types[0], data_types[1]
         matched_graph_paths = [{kr : r, kp : p} for r, p in zip(matched_radiomics_paths, matched_pathomics_paths)]
     elif matched_pathomics_paths is not None and matched_radiomics_paths is None:
-        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths, outcome=args.outcome)
+        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths, outcome=args.outcome, subgroup=args.subgroup)
         matched_pathomics_paths = [matched_pathomics_paths[i] for i in matched_i]
         kr, kp = data_types[0], data_types[1]
         matched_graph_paths = [{kr : None, kp : p} for p in matched_pathomics_paths]
     elif matched_radiomics_paths is not None and matched_pathomics_paths is None:
-        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_radiomics_paths, outcome=args.outcome)
+        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_radiomics_paths, outcome=args.outcome, subgroup=args.subgroup)
         matched_radiomics_paths = [matched_radiomics_paths[i] for i in matched_i]
         kr, kp = data_types[0], data_types[1]
         matched_graph_paths = [{kr : r, kp : None} for r in matched_radiomics_paths]
