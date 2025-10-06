@@ -1440,6 +1440,8 @@ if __name__ == "__main__":
         # df['tumor_subtype_int'], uniques = pd.factorize(df['tumor_subtype'])
         # print("Subtype mapping:", dict(enumerate(uniques)))
         y = df[['her2']].to_numpy(dtype=np.float32).squeeze().tolist()
+    elif args.outcome == "pcr+outcome":
+        
     else:
         raise ValueError(f'Unsupported outcome type: {args.outcome}')
     splits = generate_data_split(
