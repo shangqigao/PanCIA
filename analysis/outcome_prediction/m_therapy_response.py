@@ -1057,7 +1057,7 @@ def training(
     }
     arch_kwargs = {
         "dim_features": num_node_features,
-        "dim_target": 2,
+        "dim_target": 7,
         "layers": [256, 128, 256],
         "dropout": 0.5,
         "pool_ratio": pool_ratio,
@@ -1069,7 +1069,7 @@ def training(
     if BayesGNN:
         model_dir = model_dir / f"{omics_name}_Bayes_Response2Therapy_{conv}_{aggregation}"
     else:
-        model_dir = model_dir / f"{omics_name}_Response2Therapy_{conv}_{aggregation}_1e-1"
+        model_dir = model_dir / f"{omics_name}_Response2Therapy_{conv}_{aggregation}"
     optim_kwargs = {
         "lr": 3e-4,
         "weight_decay": {"ABMIL": 1.0e-5, "SPARRA": 0.0}[aggregation],
@@ -1470,7 +1470,7 @@ if __name__ == "__main__":
     # compute mean and std on training data for normalization 
     splits = joblib.load(split_path)
     train_graph_paths = [path for path, _ in splits[0]["train"]]
-    loader = SurvivalGraphDataset(train_graph_paths, mode="infer", data_types=data_types)
+    loader = TherapyGraphDataset(train_graph_paths, mode="infer", data_types=data_types)
     loader = DataLoader(
         loader,
         num_workers=8,

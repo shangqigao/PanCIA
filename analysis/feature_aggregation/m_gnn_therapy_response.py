@@ -1009,10 +1009,11 @@ class R2TLoss(nn.Module):
         self.tau_ka = tau_ka
         self.loss_vi = VILoss()
         self.loss_ka = CFLoss()
-        self.CrossEntropy = nn.CrossEntropyLoss()
+        self.CE = nn.CrossEntropyLoss()
+        self.BCE = nn.BCEWithLogitsLoss()
 
     def forward(self, logits, labels, VIparas, KAparas):
-        loss_cls = self.CrossEntropy(logits, labels)
+        loss_cls = self.BCE(logits, labels)
         if VIparas is not None:
             loss_vi = self.loss_vi(*VIparas)
             loss_cls = loss_cls + self.tau_vi * loss_vi
