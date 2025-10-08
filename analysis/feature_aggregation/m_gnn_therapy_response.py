@@ -511,7 +511,7 @@ class TherapyGraphArch(nn.Module):
                 L=input_emb_dim, 
                 D=256, 
                 dropout=0.25, 
-                n_classes=2
+                n_classes=2*input_emb_dim
             )
             # self.score_nn = ImportanceScoreArch(
             #     dim_features=input_emb_dim,
@@ -520,7 +520,7 @@ class TherapyGraphArch(nn.Module):
             #     dropout=self.dropout,
             #     conv=self.conv_name
             # )
-            input_emb_dim = 1
+            # input_emb_dim = 1
             hid_emb_dim = self.embedding_dims[0]
             self.inverse_score_nn = ImportanceScoreArch(
                 dim_features=input_emb_dim,
@@ -683,7 +683,7 @@ class TherapyGraphArch(nn.Module):
                 ds_enc_list.append(enc)
                 for n, msk in enumerate(msk_list[::-1]):
                     if n == 0:
-                        atte = gate_dict[k]
+                        atte = torch.mean(gate_dict[k], dim=1, keepdim=True)
                     else:
                         perm = perm_list[-n]
                         msk[perm] = atte
@@ -932,7 +932,7 @@ class VILoss(nn.Module):
             # subset = torch.randperm(len(enc))[:len(dec)]
             # enc = enc[subset]
             loss_ae += F.mse_loss(enc, dec)
-        print(loss_ae.item(), loss_kl.item(), precision.min().item(), precision.max().item())
+        # print(loss_ae.item(), loss_kl.item(), precision.min().item(), precision.max().item())
         return self.tau_ae * loss_ae + loss_kl
     
 def calc_mmd(f1, f2, sigmas, normalized=False):

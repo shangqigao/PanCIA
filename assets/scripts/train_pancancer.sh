@@ -5,17 +5,17 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-##SBATCH --time=0-36:00:00
-#SBATCH --time=0-00:10:00
+#SBATCH --time=0-36:00:00
+##SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-#SBATCH --qos=intr
+##SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
-conda activate biomedparse
+conda activate /home/sg2162/rds/hpc-work/miniconda3/PanCIA
 
 data_root="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/"
 export DETECTRON2_DATASETS=$data_root
@@ -60,4 +60,4 @@ srun --mpi=pmi2 python entry.py train \
             STROKE_SAMPLER.MAX_CANDIDATE 10 \
             LoRA.ENABLE True \
             WEIGHT True \
-            RESUME_FROM checkpoints/biomedparse_v1.pt
+            RESUME_FROM checkpoints/BiomedParse/biomedparse_v1.pt

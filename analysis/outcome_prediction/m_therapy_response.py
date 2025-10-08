@@ -1542,7 +1542,7 @@ if __name__ == "__main__":
         BayesGNN=False,
         pool_ratio=omics_pool_ratio,
         omic_keys=list(omics_modes.keys()),
-        aggregation=["ABMIL", "SPARRA"][0],
+        aggregation=["ABMIL", "SPARRA"][1],
         sampling_rate=1
     )
 

@@ -8,6 +8,7 @@ git+https://github.com/MaureenZOU/detectron2-xyz.git
 defusedxml
 einops==0.8.0
 imageio
+infinibatch
 kaleido==0.2.1
 kornia
 lifelines

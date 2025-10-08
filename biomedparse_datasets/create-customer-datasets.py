@@ -7,8 +7,8 @@ from create_annotations import *
 
 
 # provide the path to the dataset. There should be train, train_mask, test, test_mask under this folder
-targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor'
-if 'Breast_Tumor' in targetpath:
+targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/Uterus_Tumor'
+if 'MP_Breast' in targetpath:
     clinical_info_path = 'clinical_and_imaging_info.xlsx'
     df_clinic = pd.read_excel(clinical_info_path, sheet_name='dataset_info')
     df_clinic['pixel_spacing'] = df_clinic['pixel_spacing'].apply(ast.literal_eval)
@@ -35,15 +35,96 @@ for i in label_base:
 # Label ids of the dataset
 category_ids = {label_base[i]['name']: int(i) for i in label_base if 'name' in label_base[i]}
 
-# design breast cancer prompts
-def structured_breast_prompts(targetname):
-    if targetname == 'breast tumor':
+# design pan-cancer prompts
+def structured_pancancer_prompts(targetname):
+    if targetname == 'bladder tumor':
         prompts = [
-            "tumor located within fibroglandular tissue of the breast",
-            "abnormal mass inside the breast glandular tissue",
-            "breast tumor within dense breast tissue",
-            "abnormality embedded in fibroglandular tissue"
-        ] 
+            "tumor located within the bladder, adjacent to the prostate",
+            "mass lesion in the bladder near the uterus",
+            "bladder tumor close to the rectum",
+            "abnormal growth in the bladder extending toward the pelvic wall",
+            "lesion in the bladder adjacent to surrounding peritoneum"
+        ]
+    elif targetname == 'cervix tumor':
+        prompts = [
+            "tumor located within the cervix, adjacent to the bladder",
+            "mass lesion in the cervical canal near the uterus",
+            "cervical tumor close to the rectum",
+            "abnormal growth in the cervix extending toward the vaginal canal",
+            "lesion in the cervix adjacent to surrounding pelvic tissues"
+        ]
+    elif targetname == 'colon tumor':
+        prompts = [
+            "tumor located within the colon, near the small intestine",
+            "mass lesion in the ascending colon adjacent to the liver",
+            "colon tumor close to the sigmoid colon and bladder",
+            "abnormal growth in the transverse colon near the pancreas",
+            "lesion in the descending colon adjacent to the spleen"
+        ]
+    elif targetname == 'kidney tumor':
+        prompts = [
+            "tumor located within the kidney, near the liver",
+            "mass lesion in the left kidney adjacent to the spleen",
+            "kidney tumor close to the pancreas",
+            "abnormal growth in the right kidney near the inferior vena cava",
+            "lesion in the kidney extending toward perinephric fat"
+        ]
+    elif targetname == 'liver tumor':
+        prompts = [
+            "tumor located within the liver, adjacent to the right kidney",
+            "mass lesion in the liver near the stomach",
+            "liver tumor close to the diaphragm",
+            "abnormal growth in the liver adjacent to the portal vein and gallbladder",
+            "lesion in the left lobe of the liver near the spleen"
+        ]
+    elif targetname == 'lung tumor':
+        prompts = [
+            "tumor within the lung, adjacent to the heart",
+            "mass lesion in the upper lobe near the mediastinum",
+            "lung tumor close to the diaphragm",
+            "abnormal growth in the lower lobe near the liver",
+            "lesion in the lung adjacent to the pleura and ribs"
+        ]
+    elif targetname == 'ovary tumor':
+        prompts = [
+            "tumor located within the ovary, near the uterus",
+            "mass lesion in the ovary adjacent to the bladder",
+            "ovarian tumor close to the fallopian tube",
+            "abnormal growth in the ovary near the pelvic wall",
+            "lesion in the ovary extending toward peritoneal cavity"
+        ]
+    elif targetname == 'pancreas tumor':
+        prompts = [
+            "tumor within the pancreas, adjacent to the stomach",
+            "mass lesion in the pancreatic head near the duodenum",
+            "pancreatic tumor close to the left kidney",
+            "abnormal growth in the pancreas near the portal vein",
+            "lesion in the pancreatic tail adjacent to the spleen"
+        ]
+    elif targetname == 'prostate tumor':
+        prompts = [
+            "tumor within the prostate, adjacent to the bladder",
+            "mass lesion in the prostate near the rectum",
+            "prostate tumor close to the seminal vesicles",
+            "abnormal growth in the prostate extending toward the pelvic wall",
+            "lesion in the prostate adjacent to the urethra"
+        ]
+    elif targetname == 'uterus tumor':
+        prompts = [
+            "tumor within the uterus, adjacent to the bladder",
+            "mass lesion in the uterine wall near the rectum",
+            "uterine tumor close to the ovaries",
+            "abnormal growth in the uterus extending toward the pelvic cavity",
+            "lesion in the uterus adjacent to surrounding peritoneum"
+        ]
+    elif targetname == 'breast tumor':
+        prompts = [
+            "tumor located within the breast, adjacent to the chest wall",
+            "mass lesion in the upper breast near the pectoral muscle",
+            "breast tumor close to the axilla",
+            "abnormal growth in the lower breast extending toward subcutaneous fat",
+            "lesion in the breast adjacent to surrounding fibroglandular tissue"
+        ]
     elif targetname == 'fibroglandular tissue':
         prompts = [
             "fibroglandular tissue of the breast",
@@ -78,7 +159,7 @@ def create_prompts(filename, targetname, df_meta=None):
     slice_index = parts[-3]
     modality = parts[-2]
     site = parts[-1].split(".")[0]
-    prompts = structured_breast_prompts(targetname)
+    prompts = structured_pancancer_prompts(targetname)
     if prompts is None:
         prompts = ['tumor'] if 'tumor' in targetname else [targetname]
 
@@ -227,6 +308,6 @@ if __name__ == "__main__":
                 coco_format['images'].remove(im)
 
         with open(os.path.join(targetpath, "{}.json".format(keyword)),"w") as outfile:
-            json.dump(coco_format, outfile)
+            json.dump(coco_format, outfile, indent=4)
         
         print("Created %d annotations for %d images in folder: %s" % (annotation_cnt, len(coco_format['images']), mask_path))
