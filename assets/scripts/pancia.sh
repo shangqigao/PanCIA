@@ -54,6 +54,46 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --beta_params $beta_params \
 #             --meta_info $meta_info
 
+# radiology exclusion and inclusion
+data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
+save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+
+python analysis/data_preprocessiong/m_inclusion_exclusion.py \
+            --data_dir $data_dir \
+            --dataset TCGA \
+            --modality radiology \
+            --save_dir $save_dir
+
+# dicom to nifit
+# series="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_raw_series.json"
+
+# python analysis/data_preprocessiong/m_dicom2nii.py \
+#             --series $series \
+#             --dataset TCGA
+
+# pathology exclusion and inclusion
+# data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/pathomics"
+
+# python analysis/data_preprocessiong/m_inclusion_exclusion.py \
+#             --data_dir $data_dir \
+#             --dataset TCGA \
+#             --modality pathology \
+#             --save_dir $save_dir
+
+# subject exclusion and inclusion
+# included_nifti="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_nifti.json"
+# included_wsi="/home/sg2162/rds/hpc-work/Experiments/pathomics/TCGA_included_wsi.json"
+# meta_data="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_pathology_has_radiology.csv"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
+
+# python analysis/data_preprocessiong/m_sortout_subjects.py \
+#             --included_nifti $included_nifti \
+#             --included_wsi $included_wsi \
+#             --meta_data $meta_data \
+#             --dataset TCGA \
+#             --save_dir $save_dir
+
 # extract radiomic features
 # img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
 # lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"

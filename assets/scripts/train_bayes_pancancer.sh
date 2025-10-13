@@ -15,7 +15,7 @@
 
 ## activate environment
 source ~/.bashrc
-conda activate biomedparse
+conda activate /home/sg2162/rds/hpc-work/miniconda3/PanCIA
 
 data_root="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/"
 export DETECTRON2_DATASETS=$data_root
@@ -39,7 +39,7 @@ srun --mpi=pmi2 python entry.py train \
             TEST.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_PER_GPU 4 \
-            SOLVER.MAX_NUM_EPOCHS 5 \
+            SOLVER.MAX_NUM_EPOCHS 3 \
             SOLVER.BASE_LR 0.0001 \
             SOLVER.FIX_PARAM.decomposition False \
             SOLVER.FIX_PARAM.backbone True \
@@ -60,5 +60,8 @@ srun --mpi=pmi2 python entry.py train \
             ATTENTION_ARCH.QUERY_NUMBER 3 \
             STROKE_SAMPLER.MAX_CANDIDATE 10 \
             LoRA.ENABLE True \
-            LoRA.RESUME True \
-            LoRA.RESUME_FROM output_bayes_LoRA_multiphase_breast_heart_sqrt/pancia_bayes_seg_lang.yaml_conf~/run_1/00050092
+            WEIGHT True \
+            RESUME_FROM output_bayes_pancancer+/pancia_bayes_seg_lang.yaml_conf~/run_2/00075200/default/model_state_dict.pt
+            # LoRA.ENABLE True \
+            # LoRA.RESUME True \
+            # LoRA.RESUME_FROM output_bayes_LoRA_multiphase_breast_heart_sqrt/pancia_bayes_seg_lang.yaml_conf~/run_1/00050092

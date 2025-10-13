@@ -5,6 +5,7 @@ accelerate==0.25.0
 monai==0.9.0
 albumentations
 git+https://github.com/MaureenZOU/detectron2-xyz.git
+dcm2niix
 defusedxml
 einops==0.8.0
 imageio
