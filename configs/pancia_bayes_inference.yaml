@@ -5,6 +5,7 @@ SAVE_DIR: "../../data/output/test"
 base_path: "./"
 
 # Resume Logistic
+LoRA: True
 RESUME: false
 WEIGHT: false
 RESUME_FROM: ""
@@ -45,7 +46,7 @@ MODEL:
     PHI_RHO: 1e-6
     GAMMA_UPSILON: 2
     PHI_UPSILON: 1e-8
-    BAYES_LOSS_WEIGHT: 100
+    BAYES_LOSS_WEIGHT: 1000
     VIS_EVERY_N_STEPS: 500
   TEXT:
     ARCH: vlpencoder
@@ -209,9 +210,9 @@ ATTENTION_ARCH:
       spatial: "queries_object"
   SPATIAL_MEMORIES: 32
 
-# INPUT:
-#   PIXEL_MEAN: [123.675, 116.280, 103.530]
-#   PIXEL_STD: [58.395, 57.120, 57.375]
 INPUT:
-  PIXEL_MEAN: [64.284, 59.293, 59.962]
-  PIXEL_STD: [62.484, 60.865, 59.835]
+  PIXEL_MEAN: [123.675, 116.280, 103.530]
+  PIXEL_STD: [58.395, 57.120, 57.375]
+# INPUT:
+#   PIXEL_MEAN: [64.284, 59.293, 59.962]
+#   PIXEL_STD: [62.484, 60.865, 59.835]

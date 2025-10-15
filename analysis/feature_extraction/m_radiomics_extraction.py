@@ -30,7 +30,7 @@ if __name__ == "__main__":
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--feature_mode', default="SegVol", choices=["pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--feature_mode', default="SegVol", choices=["pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 512], type=int)
     parser.add_argument('--dilation_mm', default=10, type=float)
     parser.add_argument('--resolution', default=1, type=float)
