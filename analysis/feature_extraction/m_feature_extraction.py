@@ -1437,6 +1437,171 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
 
     return
 
+def extract_layer_by_layer_radiomics(img, mask, shell_thickness_mm=1.0, spacing=(1, 1. 1), method="shells"):
+    import os
+    import math
+    import numpy as np
+    import nibabel as nib
+    import pandas as pd
+    from scipy import ndimage
+    from radiomics import featureextractor  # pyradiomics
+
+    spacing = np.array(spacing, dtype=float)
+
+    # Ensure mask is binary
+    mask = (mask > 0).astype(np.uint8)
+    if mask.sum() == 0:
+        raise ValueError("Mask is empty!")
+
+    # Compute centroid (center of mass) in voxel space, then convert to mm coordinates
+    centroid_vox = ndimage.center_of_mass(mask)  # tuple of floats (z,y,x) or (x,y,z) depending on data layout
+    # nibabel uses array order (i,j,k) -> (x? careful). We'll treat centroid_vox as array indices (i,j,k)
+    centroid_vox = np.array(centroid_vox)  # in voxel indices (i, j, k) / (x? depends on your convention)
+    # convert to mm coordinates: voxel_index * spacing
+    centroid_mm = centroid_vox * spacing
+
+    # Precompute coordinate grid in mm for distance calculations
+    # Create arrays of voxel coordinates in mm (same shape as mask)
+    # We will use numpy's meshgrid with indexing='ij' (i=j=k order consistent with nibabel get_fdata)
+    shape = mask.shape
+    grid_indices = [np.arange(s) for s in shape]  # indices for each axis
+    zz, yy, xx = np.meshgrid(grid_indices[0], grid_indices[1], grid_indices[2], indexing='ij')  # shape matches mask
+
+    # convert grid to mm coords
+    zz_mm = zz * spacing[0]
+    yy_mm = yy * spacing[1]
+    xx_mm = xx * spacing[2]
+
+    # compute distance map (mm) from centroid
+    dist_map_mm = np.sqrt((zz_mm - centroid_mm[0])**2 + (yy_mm - centroid_mm[1])**2 + (xx_mm - centroid_mm[2])**2)
+    # Mask non-tumor voxels as large distance (or just ignore them when building layers)
+    dist_map_mm[mask == 0] = np.nan
+
+    # Prepare PyRadiomics extractor (default settings can be adjusted)
+    # Example settings: you may want to set 'binWidth', 'interpolator', etc.
+    settings = {
+        'binWidth': 25,
+        'resampledPixelSpacing': None,  # use None to skip resampling; set e.g. [1,1,1] if you want resampling
+        'label': 1,
+    }
+    extractor = featureextractor.RadiomicsFeatureExtractor(**settings)
+    # optionally, disable verbose logging:
+    extractor.disableAllFeatures()
+    # enable a few feature classes (example)
+    extractor.enableFeatureClassByName('firstorder')
+    extractor.enableFeatureClassByName('glcm')
+    # you can enable more classes as required
+
+    results_list = []
+
+    if method == "shells":
+        # concentric shells by distance from centroid.
+        max_dist = np.nanmax(dist_map_mm)
+        n_shells = int(math.ceil(max_dist / shell_thickness_mm))
+
+        for layer_idx in range(n_shells):
+            r_min = layer_idx * shell_thickness_mm
+            r_max = (layer_idx + 1) * shell_thickness_mm
+            # create binary layer mask: within [r_min, r_max)
+            layer_mask = np.zeros_like(mask, dtype=np.uint8)
+            cond = (dist_map_mm >= r_min) & (dist_map_mm < r_max)
+            layer_mask[np.where(cond)] = 1
+
+            # ensure only within tumor mask
+            layer_mask = layer_mask * mask
+
+            n_vox = int(layer_mask.sum())
+            if n_vox == 0:
+                # skip empty layers (near edges this can happen)
+                continue
+
+            # PyRadiomics expects nibabel image/label objects or file paths
+            # We can pass numpy arrays directly by constructing temporary images with nibabel and providing spacing in header,
+            # but easiest is to save temporary NIfTI files or use extractor.execute with sitting configuration.
+            # Here we use nibabel objects (extractor accepts SimpleITK or file paths; numpy arrays are handled by passing imagePath/labelPath)
+            # Simpler: save temporary mask and feed filepaths
+            tmp_mask_path = f"tmp_layer_mask_{layer_idx}.nii.gz"
+            tmp_img_path  = f"tmp_img_for_layer_{layer_idx}.nii.gz"
+            # create nib images with same affine as original
+            nib.save(nib.Nifti1Image(layer_mask.astype(np.uint8), img_nii.affine), tmp_mask_path)
+            nib.save(nib.Nifti1Image(img.astype(np.float32), img_nii.affine), tmp_img_path)
+
+            # extract features
+            try:
+                feature_vector = extractor.execute(tmp_img_path, tmp_mask_path)
+            except Exception as e:
+                print(f"Feature extraction failed for layer {layer_idx}: {e}")
+                feature_vector = {}
+
+            # collect basic info + features
+            row = {'method': 'shells', 'layer_index': layer_idx, 'r_min_mm': r_min, 'r_max_mm': r_max, 'n_voxels': n_vox}
+            # flatten feature_vector (radiomics returns many meta keys like 'diagnostics' we may filter)
+            for k, v in feature_vector.items():
+                # skip diagnostics and geometry keys if you want (or keep)
+                row[k] = v
+            results_list.append(row)
+
+            # cleanup tmp files
+            try:
+                os.remove(tmp_mask_path)
+                os.remove(tmp_img_path)
+            except OSError:
+                pass
+
+    elif method == "peeling":
+        # morphological peeling: iteratively erode mask and take difference to get layers
+        from scipy.ndimage import binary_erosion, generate_binary_structure
+
+        struct = generate_binary_structure(3, 1)  # 3D connectivity
+        current = mask.copy().astype(bool)
+        layer_idx = 0
+        while current.sum() > 0:
+            eroded = binary_erosion(current, structure=struct, iterations=1, border_value=0)
+            layer_mask = current ^ eroded  # voxels removed by this erosion = outer shell
+            layer_mask = layer_mask.astype(np.uint8)
+
+            n_vox = int(layer_mask.sum())
+            if n_vox == 0:
+                # if eroded removed nothing, break to avoid infinite loop
+                break
+
+            # Save temporary mask & image and run pyradiomics
+            tmp_mask_path = f"tmp_peel_mask_{layer_idx}.nii.gz"
+            tmp_img_path  = f"tmp_img_peel_{layer_idx}.nii.gz"
+            nib.save(nib.Nifti1Image(layer_mask, img_nii.affine), tmp_mask_path)
+            nib.save(nib.Nifti1Image(img.astype(np.float32), img_nii.affine), tmp_img_path)
+
+            try:
+                feature_vector = extractor.execute(tmp_img_path, tmp_mask_path)
+            except Exception as e:
+                print(f"Feature extraction failed for peel layer {layer_idx}: {e}")
+                feature_vector = {}
+
+            row = {'method': 'peeling', 'layer_index': layer_idx, 'n_voxels': n_vox}
+            for k, v in feature_vector.items():
+                row[k] = v
+            results_list.append(row)
+
+            # Prepare for next iteration
+            current = eroded
+            layer_idx += 1
+
+            # cleanup
+            try:
+                os.remove(tmp_mask_path)
+                os.remove(tmp_img_path)
+            except OSError:
+                pass
+
+    else:
+        raise ValueError("Unknown method. Use 'shells' or 'peeling'.")
+
+    # Save results to csv
+    df = pd.DataFrame(results_list)
+    df.to_csv(out_csv, index=False)
+    print(f"Saved {len(df)} layer feature rows to {out_csv}")
+
+
 
 
 if __name__ == "__main__":

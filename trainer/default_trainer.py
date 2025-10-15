@@ -211,7 +211,7 @@ class DefaultTrainer(UtilsTrainer, DistributedTrainer):
 
         if self.opt.get('WEIGHT', False):
             self.load_weight(self.opt['RESUME_FROM'], must_exist=True)
-            self.load_weight('/home/sg2162/rds/hpc-work/PanCIA/checkpoints/BiomedParse/biomedparse_v1.pt', must_exist=False)
+            # self.load_weight('/home/sg2162/rds/hpc-work/PanCIA/checkpoints/BiomedParse/biomedparse_v1.pt', must_exist=False)
 
         # create LoRA model
         if self.opt['LoRA'].get('ENABLE', False):
