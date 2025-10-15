@@ -61,7 +61,8 @@ class BayesianSEEM(nn.Module):
         interactive_mode: str,
         interactive_iter: str,
         dilation_kernel: torch.Tensor,
-        vis_every_n_steps: int
+        vis_every_n_steps: int,
+        return_feat_type: str
     ):
         """
         Args:
@@ -126,6 +127,7 @@ class BayesianSEEM(nn.Module):
 
         self.vis_every_n_steps = vis_every_n_steps
         self.vis_counter = 0
+        self.return_feat_type = return_feat_type
 
     @classmethod
     def from_config(cls, cfg):
@@ -205,6 +207,7 @@ class BayesianSEEM(nn.Module):
             "interactive_iter": interactive_iter,
             "dilation_kernel": dilation_kernel,
             "vis_every_n_steps": decomp_cfg['VIS_EVERY_N_STEPS'],
+            "return_feat_type": cfg['MODEL']['RETURN_FEAT_TYPE']
         }
 
     @property
@@ -372,8 +375,14 @@ class BayesianSEEM(nn.Module):
             extra['audio_class'] = gtext['class_emb']
         
         outputs = self.sem_seg_head.predictor(multi_scale_features, mask_features, target_queries=queries_grounding, extra=extra, task='demo')
-        # extra['deep_feature'] = mask_features
-        extra['deep_feature'] = decomp_outputs["upsilon"]
+        if self.return_feat_type == 'bayes_upsilon':
+            extra['deep_feature'] = decomp_outputs["upsilon"]
+        elif self.return_feat_type == 'bayes_feature':
+            extra['deep_feature'] = decomp_outputs["deep_feature"]
+        elif self.return_feat_type == 'mask_feature':
+            extra['deep_feature'] = mask_features
+        else:
+            raise ValueError(f"Cannot return unsupported feature type: {self.return_feat_type}")
         return outputs, images.tensor.shape, extra
 
     def evaluate(self, batched_inputs):

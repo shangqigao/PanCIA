@@ -155,5 +155,6 @@ class ResNet_shape(nn.Module):
     def forward(self, x):
         feat = self.lrelu(self.conv_first(x))
         out = self.body(feat)
+        deep_feat = out
         out = self.conv_last(self.lrelu(out))
-        return out
+        return out, deep_feat

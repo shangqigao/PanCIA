@@ -50,14 +50,14 @@ class BayesDec(nn.Module):
         return m, mu_m, log_var_m
 
     def generate_x(self, samples):
-        feature = self.res_shape(samples)
+        feature, deep_feat = self.res_shape(samples)
         mu_x, log_var_x = torch.chunk(feature, 2, dim=1)
         log_var_x = torch.clamp(log_var_x, -20, 0)
         x, _ = self.sample_normal_jit(mu_x, log_var_x)
-        return x, mu_x, log_var_x
+        return x, mu_x, log_var_x, deep_feat
 
     def forward(self, samples: torch.Tensor):
-        x, mu_x, log_var_x = self.generate_x(samples)
+        x, mu_x, log_var_x, deep_feat = self.generate_x(samples)
         m, mu_m, log_var_m = self.generate_m(samples)
 
         residual = samples - (x + m)
@@ -116,6 +116,7 @@ class BayesDec(nn.Module):
             "rho": mu_rho_hat,
             "upsilon": mu_upsilon_hat,
             "visualize": visualize,
+            "deep_feature": deep_feat
         }
         return out
 

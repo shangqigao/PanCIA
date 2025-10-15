@@ -35,6 +35,7 @@ MODEL:
   NAME: bayes_seem_model_demo
   HEAD: xdecoder_head
   DIM_PROJ: 512
+  RETURN_FEAT_TYPE: bayes_upsilon # bayes_upsilon, bayes_feature, mask_feature
   DECOMPOSITION:
     NAME: bayes_decomposition
     BAYES:

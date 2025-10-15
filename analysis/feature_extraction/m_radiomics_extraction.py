@@ -33,6 +33,7 @@ if __name__ == "__main__":
     parser.add_argument('--feature_mode', default="SegVol", choices=["pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 512], type=int)
     parser.add_argument('--dilation_mm', default=10, type=float)
+    parser.add_argument('--layer_method', default=None)
     parser.add_argument('--resolution', default=1, type=float)
     parser.add_argument('--units', default="mm", type=str)
     args = parser.parse_args()
@@ -108,13 +109,13 @@ if __name__ == "__main__":
     # )
 
     # visualize radiomics
-    radiomic_feature_visualization(
-        img_paths=img_paths[0:10],
-        save_feature_dir=save_feature_dir,
-        class_name=args.target,
-        mode="umap",
-        graph=True
-    )
+    # radiomic_feature_visualization(
+    #     img_paths=img_paths[0:10],
+    #     save_feature_dir=save_feature_dir,
+    #     class_name=args.target,
+    #     mode="umap",
+    #     graph=True
+    # )
 
     # visualize radiomic graph
     # visualize_radiomic_graph(
