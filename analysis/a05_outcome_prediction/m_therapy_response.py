@@ -1321,7 +1321,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_model_dir', default=None)
     parser.add_argument('--slide_mode', default="wsi", choices=["tile", "wsi"], type=str)
     parser.add_argument('--epochs', default=50, type=int)
-    parser.add_argument('--radiomics_mode', default="BiomedParse", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--radiomics_mode', default="BiomedParse", choices=["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
     parser.add_argument('--radiomics_dim', default=512, choices=[851, 768, 512], type=int)
     parser.add_argument('--radiomics_aggregation', default=False, type=bool,
                         help="if radiomic features have not been aggregated yet and true, do spatial aggregation"
@@ -1411,7 +1411,7 @@ if __name__ == "__main__":
     radiomics_aggregation = args.radiomics_aggregation # false if load patient-level features else true
     if None not in (img_paths, save_radiomics_dir):
         img_names = [p.name.replace('.nii.gz', '') for p in img_paths]
-        if args.radiomics_mode == "pyradiomics":
+        if args.radiomics_mode == "pyradiomics" or args.radiomics_mode == "BayesBP":
             radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}_radiomics.json" for p in img_names])
         else:
             radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}.json" for p in img_names])
@@ -1505,46 +1505,46 @@ if __name__ == "__main__":
     logging.info(f"Number of testing samples: {num_test}.")
 
     # compute mean and std on training data for normalization 
-    splits = joblib.load(split_path)
-    train_graph_paths = [path for path, _ in splits[0]["train"]]
-    loader = TherapyGraphDataset(train_graph_paths, mode="infer", data_types=data_types)
-    loader = DataLoader(
-        loader,
-        num_workers=8,
-        batch_size=1,
-        shuffle=False,
-        drop_last=False,
-    )
-    if len(data_types) > 1:
-        omic_features = [{k: v.x_dict[k].numpy() for k in data_types} for v in loader]
-    else:
-        omic_features = [{k: v.x.numpy() for k in data_types} for v in loader]
-    for k, v in omics_modes.items():
-        node_features = [d[k] for d in omic_features]
-        node_features = np.concatenate(node_features, axis=0)
-        node_scaler = StandardScaler(copy=False)
-        node_scaler.fit(node_features)
-        scaler_path = f"{save_model_dir}/response2therapy_{k}_{v}_scaler.dat"
-        joblib.dump(node_scaler, scaler_path)
+    # splits = joblib.load(split_path)
+    # train_graph_paths = [path for path, _ in splits[0]["train"]]
+    # loader = TherapyGraphDataset(train_graph_paths, mode="infer", data_types=data_types)
+    # loader = DataLoader(
+    #     loader,
+    #     num_workers=8,
+    #     batch_size=1,
+    #     shuffle=False,
+    #     drop_last=False,
+    # )
+    # if len(data_types) > 1:
+    #     omic_features = [{k: v.x_dict[k].numpy() for k in data_types} for v in loader]
+    # else:
+    #     omic_features = [{k: v.x.numpy() for k in data_types} for v in loader]
+    # for k, v in omics_modes.items():
+    #     node_features = [d[k] for d in omic_features]
+    #     node_features = np.concatenate(node_features, axis=0)
+    #     node_scaler = StandardScaler(copy=False)
+    #     node_scaler.fit(node_features)
+    #     scaler_path = f"{save_model_dir}/response2therapy_{k}_{v}_scaler.dat"
+    #     joblib.dump(node_scaler, scaler_path)
 
     # training
-    split_path = f"{save_model_dir}/response2therapy_{args.radiomics_mode}_{args.pathomics_mode}_splits.dat"
-    scaler_paths = {k: f"{save_model_dir}/response2therapy_{k}_{v}_scaler.dat" for k, v in omics_modes.items()}
-    training(
-        num_epochs=args.epochs,
-        split_path=split_path,
-        scaler_path=scaler_paths,
-        num_node_features=omics_dims,
-        model_dir=save_model_dir,
-        conv="GCNConv",
-        n_works=32,
-        batch_size=32,
-        BayesGNN=False,
-        pool_ratio=omics_pool_ratio,
-        omic_keys=list(omics_modes.keys()),
-        aggregation=["ABMIL", "SPARRA"][1],
-        sampling_rate=1
-    )
+    # split_path = f"{save_model_dir}/response2therapy_{args.radiomics_mode}_{args.pathomics_mode}_splits.dat"
+    # scaler_paths = {k: f"{save_model_dir}/response2therapy_{k}_{v}_scaler.dat" for k, v in omics_modes.items()}
+    # training(
+    #     num_epochs=args.epochs,
+    #     split_path=split_path,
+    #     scaler_path=scaler_paths,
+    #     num_node_features=omics_dims,
+    #     model_dir=save_model_dir,
+    #     conv="GCNConv",
+    #     n_works=32,
+    #     batch_size=32,
+    #     BayesGNN=False,
+    #     pool_ratio=omics_pool_ratio,
+    #     omic_keys=list(omics_modes.keys()),
+    #     aggregation=["ABMIL", "SPARRA"][1],
+    #     sampling_rate=1
+    # )
 
     # inference
     # inference(
@@ -1562,22 +1562,28 @@ if __name__ == "__main__":
     # )
 
     # response prediction from the splits
-    # outcome_classification(
-    #     split_path=split_path,
-    #     used=["radiomics", "pathomics", "radiopathomics"][0],
-    #     n_jobs=8,
-    #     radiomics_aggregation=radiomics_aggregation,
-    #     radiomics_aggregated_mode=args.radiomics_aggregated_mode,
-    #     pathomics_aggregation=pathomics_aggregation,
-    #     pathomics_aggregated_mode=args.pathomics_aggregated_mode,
-    #     radiomics_keys=None, #radiomic_propereties,
-    #     pathomics_keys=None, #["TUM", "NORM", "DEB"],
-    #     model=["RF", "XG", "LR", "SVC"][0],
-    #     refit=["accuracy", "f1", "roc_auc"][1],
-    #     feature_selection=True,
-    #     n_selected_features=128,
-    #     use_graph_properties=False
-    # )
+    if args.radiomics_mode == 'pyradiomics':
+        radiomics_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
+    elif args.radiomics_mode == 'BayesBP':
+        radiomics_keys = ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
+    else:
+        radiomics_keys = None
+    outcome_classification(
+        split_path=split_path,
+        used=["radiomics", "pathomics", "radiopathomics"][0],
+        n_jobs=8,
+        radiomics_aggregation=radiomics_aggregation,
+        radiomics_aggregated_mode=args.radiomics_aggregated_mode,
+        pathomics_aggregation=pathomics_aggregation,
+        pathomics_aggregated_mode=args.pathomics_aggregated_mode,
+        radiomics_keys=radiomics_keys, #radiomic_propereties,
+        pathomics_keys=None, #["TUM", "NORM", "DEB"],
+        model=["RF", "XG", "LR", "SVC"][0],
+        refit=["accuracy", "f1", "roc_auc"][1],
+        feature_selection=True,
+        n_selected_features=128,
+        use_graph_properties=False
+    )
 
     # visualize radiomics
     # splits = joblib.load(split_path)
