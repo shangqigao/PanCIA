@@ -96,11 +96,12 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
     """
 
     # Build model config
-    opt = load_opt_from_config_files([os.path.join(relative_path, "configs/biomedparse_inference.yaml")])
+    opt = load_opt_from_config_files([os.path.join(relative_path, "configs/pancia_bayes_inference.yaml")])
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
-    pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/MP_heart_LoRA_sqrt')
+    pretrained_pth = os.path.join(relative_path, 'checkpoints/Bayes_BiomedParse/Bayes_PanCancer_LoRA')
+    # pretrained_pth = os.path.join(relative_path, 'checkpoints/Bayes_BiomedParse/Bayes_PanCancer/model_state_dict.pt')
 
     if device == 'gpu':
         if not opt.get('LoRA', False):
@@ -166,7 +167,8 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
                     pixel_spacing = [spacing[i] for i in pixel_index]
                     meta_data['pixel_spacing'] = pixel_spacing
                 text_prompts = create_prompts(meta_data)
-                text_prompts = [text_prompts[2], text_prompts[9]]
+                # text_prompts = [text_prompts[2], text_prompts[9]]
+                text_prompts = [text_prompts[2]]
             else:
                 text_prompts = [target_name]
             # print(f"Segmenting slice [{i+1}/{len(images)}] ...")
@@ -258,17 +260,24 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
                 voxel_spacing.insert(0, z_spacing)
             mask_3d = remove_inconsistent_objects(mask_3d, spacing=voxel_spacing)
         final_mask = np.moveaxis(mask_3d, 0, slice_axis)
-        if save_radiomics: 
-            radiomic_feat = np.moveaxis(feat_4d, 0, slice_axis)
-            radiomic_feat = radiomic_feat[final_mask > 0]
-        
         logging.info(f"Saving predicted segmentation to {save_mask_path}")
         nifti_img = nib.Nifti1Image(final_mask, affine)
         nib.save(nifti_img, save_mask_path)
         if save_radiomics:
-            save_feat_path = f"{save_dir}/{img_name}.npy"
-            logging.info(f"Saving radiomic features to {save_feat_path}")
-            np.save(save_feat_path, radiomic_feat)
+            radiomic_feat = np.moveaxis(feat_4d, 0, slice_axis)
+            ndim = np.squeeze(radiomic_feat).ndim
+            if ndim == 3:
+                radiomic_feat = np.squeeze(radiomic_feat) * final_mask
+                save_feat_path = f"{save_dir}/{img_name}_radiomics.nii.gz"
+                nifti_img = nib.Nifti1Image(radiomic_feat, affine)
+                logging.info(f"Saving radiomic features to {save_feat_path}")
+                nib.save(nifti_img, save_feat_path)
+            else:
+                radiomic_feat = radiomic_feat[final_mask > 0]
+                save_feat_path = f"{save_dir}/{img_name}_radiomics.npy"
+                logging.info(f"Saving radiomic features to {save_feat_path}")
+                np.save(save_feat_path, radiomic_feat)       
+
     return
 
 def load_beta_params(modality, site, target):
@@ -288,7 +297,8 @@ def create_prompts(meta_data):
     site = meta_data['site']
     target_name = meta_data['target']
     # target = 'tumor' if 'tumor' in target_name else target_name
-    target = "tumor located within fibroglandular tissue of the breast"
+    # target = "tumor located within fibroglandular tissue of the breast"
+    target = "tumor located within the breast, adjacent to the chest wall"
 
     # basic_prompts = [
     #     f"{target_name} in {site} {modality}",
@@ -331,7 +341,7 @@ if __name__ == "__main__":
     parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--beta_params', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--modality', default="MRI", choices=["CT", "MRI"], type=str)
-    parser.add_argument('--phase', default="multiple", choices=["single", "multiple"], type=str)
+    parser.add_argument('--phase', default="single", choices=["single", "multiple"], type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
@@ -359,7 +369,7 @@ if __name__ == "__main__":
                 multiphase_keys = ["_0000.nii.gz", "_0001.nii.gz", "_0002.nii.gz"]
                 nii_paths = [p for p in nii_paths if any(k in p.name for k in multiphase_keys)]
                 img_paths.append(sorted(nii_paths))
-    # text_prompts = [f'{args.site} {args.target} in {args.site} {args.modality}']*len(img_paths)
+    # text_prompts = [f'{args.target} located within the {args.site} on {args.modality}']*len(img_paths)
     text_prompts = [f'{args.site} {args.target}']*len(img_paths)
     save_dir = pathlib.Path(args.save_dir)
 
@@ -406,6 +416,6 @@ if __name__ == "__main__":
         img_format=args.format,
         beta_params=None,
         prompt_ensemble=True,
-        save_radiomics=False,
+        save_radiomics=True,
         zoom_in=False
     )

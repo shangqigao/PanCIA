@@ -26,14 +26,14 @@ if __name__ == "__main__":
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
-    parser.add_argument('--phase', default="pre-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
+    parser.add_argument('--phase', default="1st-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
     parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--feature_mode', default="SegVol", choices=["pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
+    parser.add_argument('--feature_mode', default="BayesBP", choices=["pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 512], type=int)
     parser.add_argument('--dilation_mm', default=10, type=float)
-    parser.add_argument('--layer_method', default=None)
+    parser.add_argument('--layer_method', default="peeling")
     parser.add_argument('--resolution', default=1, type=float)
     parser.add_argument('--units', default="mm", type=str)
     args = parser.parse_args()
@@ -71,21 +71,22 @@ if __name__ == "__main__":
     
     # extract radiomics
     # warning: do not run this function in a loop
-    # extract_radiomic_feature(
-    #     img_paths=img_paths,
-    #     lab_paths=lab_paths,
-    #     feature_mode=args.feature_mode,
-    #     save_dir=save_feature_dir,
-    #     class_name=args.target,
-    #     prompts=text_prompts,
-    #     format=args.format,
-    #     modality=args.modality,
-    #     site=args.site,
-    #     dilation_mm=args.dilation_mm,
-    #     resolution=args.resolution,
-    #     units=args.units,
-    #     skip_exist=True
-    # )
+    extract_radiomic_feature(
+        img_paths=img_paths,
+        lab_paths=lab_paths,
+        feature_mode=args.feature_mode,
+        save_dir=save_feature_dir,
+        class_name=args.target,
+        prompts=text_prompts,
+        format=args.format,
+        modality=args.modality,
+        site=args.site,
+        dilation_mm=args.dilation_mm,
+        layer_method=args.layer_method,
+        resolution=args.resolution,
+        units=args.units,
+        skip_exist=True
+    )
 
     # construct image graph
     # construct_img_graph(

@@ -50,7 +50,7 @@ class BayesDec(nn.Module):
         return m, mu_m, log_var_m
 
     def generate_x(self, samples):
-        feature, deep_feat = self.res_shape(samples)
+        feature, deep_feat = self.res_shape(samples, return_feat=True)
         mu_x, log_var_x = torch.chunk(feature, 2, dim=1)
         log_var_x = torch.clamp(log_var_x, -20, 0)
         x, _ = self.sample_normal_jit(mu_x, log_var_x)

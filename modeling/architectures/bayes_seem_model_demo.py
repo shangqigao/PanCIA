@@ -376,7 +376,7 @@ class BayesianSEEM(nn.Module):
         
         outputs = self.sem_seg_head.predictor(multi_scale_features, mask_features, target_queries=queries_grounding, extra=extra, task='demo')
         if self.return_feat_type == 'bayes_upsilon':
-            extra['deep_feature'] = decomp_outputs["upsilon"]
+            extra['deep_feature'] = 1 / decomp_outputs["upsilon"]
         elif self.return_feat_type == 'bayes_feature':
             extra['deep_feature'] = decomp_outputs["deep_feature"]
         elif self.return_feat_type == 'mask_feature':

@@ -141,7 +141,7 @@ def extract_radiomic_feature(
         site='breast',
         label=1,
         dilation_mm=0,
-        layer_method="shells",
+        layer_method=None,
         resolution=None, 
         units="mm",
         n_jobs=32,
@@ -1456,6 +1456,32 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
 
     return
 
+def extract_feature_statistics(feature):
+    from scipy import stats
+
+    statistics = {}
+    # normal statistics
+    mean_v = float(np.mean(feature))
+    # median_v = np.median(feature)
+    max_v = float(np.max(feature))
+    min_v = float(np.min(feature))
+    statistics.update({'mean': mean_v, 'max': max_v, 'min': min_v})
+    
+    # high-order statistical moments
+    var_v = float(np.var(feature))
+    skewness = float(stats.skew(feature))
+    kurtosis = float(stats.kurtosis(feature))
+    entropy = float(stats.entropy(np.histogram(feature, bins=64)[0]))
+    statistics.update({'var': var_v, 'skewness': skewness, 'kurtosis': kurtosis, 'entropy': entropy})
+
+    # percentiles and robust measures
+    # iqr = np.percentile(feature, 75) - np.percentile(feature, 25)
+    # range_v = np.ptp(feature)
+    # mad = np.median(np.abs(feature - np.median(feature)))
+    # statistics.update({'iqr': iqr, 'range': range_v, 'mad': mad})
+
+    return statistics
+
 def extract_layer_by_layer_radiomics(img, mask, shell_thickness_mm=1.0, spacing=(1, 1, 1), method="shells"):
     import math
     from scipy import ndimage
@@ -1468,29 +1494,32 @@ def extract_layer_by_layer_radiomics(img, mask, shell_thickness_mm=1.0, spacing=
     if mask.sum() == 0:
         raise ValueError("Mask is empty!")
 
+    global_stats = {'layer_index': 'global_stats', 'n_voxels': int(mask.sum())}
+    global_stats.update(extract_feature_statistics(img[mask == 1]))
+
     # Compute centroid (center of mass) in voxel space, then convert to mm coordinates
     centroid_vox = ndimage.center_of_mass(mask)
     centroid_vox = np.array(centroid_vox)  
     centroid_mm = centroid_vox * spacing
 
-    # Precompute coordinate grid in mm for distance calculations
-    shape = mask.shape
-    grid_indices = [np.arange(s) for s in shape]  # indices for each axis
-    zz, yy, xx = np.meshgrid(grid_indices[0], grid_indices[1], grid_indices[2], indexing='ij')  # shape matches mask
-
-    # convert grid to mm coords
-    zz_mm = zz * spacing[0]
-    yy_mm = yy * spacing[1]
-    xx_mm = xx * spacing[2]
-
-    # compute distance map (mm) from centroid
-    dist_map_mm = np.sqrt((zz_mm - centroid_mm[0])**2 + (yy_mm - centroid_mm[1])**2 + (xx_mm - centroid_mm[2])**2)
-    # Mask non-tumor voxels as large distance (or just ignore them when building layers)
-    dist_map_mm[mask == 0] = np.nan
-
     results_list = []
 
     if method == "shells":
+        # Precompute coordinate grid in mm for distance calculations
+        shape = mask.shape
+        grid_indices = [np.arange(s) for s in shape]  # indices for each axis
+        zz, yy, xx = np.meshgrid(grid_indices[0], grid_indices[1], grid_indices[2], indexing='ij')  # shape matches mask
+
+        # convert grid to mm coords
+        zz_mm = zz * spacing[0]
+        yy_mm = yy * spacing[1]
+        xx_mm = xx * spacing[2]
+
+        # compute distance map (mm) from centroid
+        dist_map_mm = np.sqrt((zz_mm - centroid_mm[0])**2 + (yy_mm - centroid_mm[1])**2 + (xx_mm - centroid_mm[2])**2)
+        # Mask non-tumor voxels as large distance (or just ignore them when building layers)
+        dist_map_mm[mask == 0] = np.nan
+
         # concentric shells by distance from centroid.
         max_dist = np.nanmax(dist_map_mm)
         n_shells = int(math.ceil(max_dist / shell_thickness_mm))
@@ -1512,17 +1541,13 @@ def extract_layer_by_layer_radiomics(img, mask, shell_thickness_mm=1.0, spacing=
                 continue
 
             feature = img[layer_mask == 1]
-            mean_v = np.mean(feature)
-            std_v = np.std(feature)
-            median_v = np.median(feature)
-            max_v = np.max(feature)
-            min_v = np.min(feature)
 
             # collect basic info + features
             row = {'layer_index': layer_idx, 'r_min_mm': r_min, 'r_max_mm': r_max, 'n_voxels': n_vox}
-            row.update({'mean': mean_v, 'std': std_v, 'median': median_v, 'max': max_v, 'min': min_v})
+            row.update(extract_feature_statistics(feature))
             results_list.append(row)
-        results = {'method': 'shells', 'spacing': spacing.tolist(), 'centroid': centroid_mm, 'radiomics': results_list}
+        results_list = [global_stats] + results_list
+        results = {'method': 'shells', 'spacing': spacing.tolist(), 'centroid': centroid_mm.tolist(), 'radiomics': results_list}
     elif method == "peeling":
         # morphological peeling: iteratively erode mask and take difference to get layers
         from scipy.ndimage import binary_erosion, generate_binary_structure
@@ -1541,20 +1566,19 @@ def extract_layer_by_layer_radiomics(img, mask, shell_thickness_mm=1.0, spacing=
                 break
 
             feature = img[layer_mask == 1]
-            mean_v = np.mean(feature)
-            std_v = np.std(feature)
-            median_v = np.median(feature)
-            max_v = np.max(feature)
-            min_v = np.min(feature)
-
-            row = {'method': 'peeling', 'layer_index': layer_idx, 'n_voxels': n_vox}
-            row.update({'mean': mean_v, 'std': std_v, 'median': median_v, 'max': max_v, 'min': min_v})
+            
+            # collect basic info + features
+            row = {'layer_index': layer_idx, 'n_voxels': n_vox}
+            row.update(extract_feature_statistics(feature))
             results_list.append(row)
 
             # Prepare for next iteration
             current = eroded
             layer_idx += 1
-        results = {'method': 'peeling', 'spacing': spacing.tolist(), 'centroid': centroid_mm, 'radiomics': results_list}
+        num_layers = len(results_list)
+        for r in results_list: r.update({'layer_index': num_layers - r['layer_index'] - 1})
+        results_list = [global_stats] + results_list[::-1]
+        results = {'method': 'peeling', 'spacing': spacing.tolist(), 'centroid': centroid_mm.tolist(), 'radiomics': results_list}
     else:
         raise ValueError("Unknown method. Use 'shells' or 'peeling'.")
 
@@ -1714,11 +1738,11 @@ def extract_Bayes_BiomedParse_radiomics(
                 ensemble_prob.append(pred_prob)
             pred_prob = np.max(np.concatenate(ensemble_prob, axis=0), axis=0, keepdims=True)
             slice_feat = np.mean(np.stack(ensemble_feat, axis=0), axis=0, keepdims=True)
-            radiomic_feat.append(slice_feat.astype(np.float16))
+            radiomic_feat.append(slice_feat.astype(np.float32))
             if labels is None:
                 pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
             else:
-                pred_mask = labels[i, ...]
+                pred_mask = labels[i, ...].astype(np.uint8)
             masks.append(pred_mask)
 
         # Get feature array with shape [X, Y, Z, C]
@@ -1755,7 +1779,7 @@ def extract_Bayes_BiomedParse_radiomics(
             radiomic_feat = extract_layer_by_layer_radiomics(
                 radiomic_feat, final_mask, shell_thickness_mm, new_spacing, layer_method
             )
-            logging.info(f"Extracted ROI features of {len(radiomic_feat['radiomics'])} layers")
+            logging.info(f"Extracted ROI features from {len(radiomic_feat['radiomics'])} layers")
             logging.info(f"Saving radiomic features to {feature_path}")
             with open(feature_path, "w") as f:
                 json.dump(radiomic_feat, f, indent=4)
