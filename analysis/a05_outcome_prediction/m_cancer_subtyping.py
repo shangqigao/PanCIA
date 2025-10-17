@@ -29,8 +29,8 @@ from sklearn.metrics import balanced_accuracy_score as acc_scorer
 
 from utilities.m_utils import mkdir, select_wsi, load_json, create_pbar, rm_n_mkdir, reset_logging, recur_find_ext, select_checkpoints
 
-from analysis.feature_aggregation.m_gnn_cancer_subtyping import SubtypingGraphDataset, SubtypingGraphArch, SubtypingBayesGraphArch
-from analysis.feature_aggregation.m_gnn_survival_analysis import ScalarMovingAverage
+from analysis.a04_feature_aggregation.m_gnn_cancer_subtyping import SubtypingGraphDataset, SubtypingGraphArch, SubtypingBayesGraphArch
+from analysis.a04_feature_aggregation.m_gnn_survival_analysis import ScalarMovingAverage
 
 
 

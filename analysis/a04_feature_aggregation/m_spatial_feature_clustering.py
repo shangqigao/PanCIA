@@ -4,12 +4,15 @@ from sklearn.cluster import KMeans
 import numpy as np
 import json
 import pathlib
+import logging
+import joblib
 
 def cluster_radiomic_feature(
         img_paths, 
         feature_mode, 
         save_dir, 
         class_name,
+        n_clusters,
         n_jobs=32,
         skip_exist=False
     ):

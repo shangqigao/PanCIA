@@ -35,8 +35,8 @@ from xgboost import XGBClassifier
 
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
-from analysis.feature_aggregation.m_gnn_therapy_response import TherapyGraphDataset, TherapyGraphArch, TherapyBayesGraphArch
-from analysis.feature_aggregation.m_gnn_therapy_response import ScalarMovingAverage, R2TLoss
+from analysis.a04_feature_aggregation.m_gnn_therapy_response import TherapyGraphDataset, TherapyGraphArch, TherapyBayesGraphArch
+from analysis.a04_feature_aggregation.m_gnn_therapy_response import ScalarMovingAverage, R2TLoss
 # from analysis.feature_aggregation.m_graph_construction import visualize_radiomic_graph, visualize_pathomic_graph
 
 def prepare_graph_properties(data_dict, prop_keys=None, subgraphs=False, omics="radiomics"):

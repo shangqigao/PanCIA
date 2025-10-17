@@ -1,11 +1,6 @@
-import argparse
-import pathlib
-import nibabel as nib
 import numpy as np
 from scipy import stats, ndimage
 from scipy.ndimage import label, zoom
-from skimage.measure import regionprops
-from inference_utils.processing_utils import get_orientation
 
 def dice_coeff(a, b):
     inter = np.logical_and(a, b).sum()

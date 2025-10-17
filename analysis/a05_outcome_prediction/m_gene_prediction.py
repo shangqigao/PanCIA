@@ -36,8 +36,8 @@ from sklearn.linear_model import LogisticRegression as PlattScaling
 
 from utilities.m_utils import mkdir, select_wsi, load_json, create_pbar, rm_n_mkdir, reset_logging, recur_find_ext, select_checkpoints
 
-from analysis.feature_aggregation.m_gnn_gene_mutation import MutationGraphDataset, MutationGraphArch, MutationBayesGraphArch
-from analysis.feature_aggregation.m_gnn_gene_mutation import ScalarMovingAverage
+from analysis.a04_feature_aggregation.m_gnn_gene_mutation import MutationGraphDataset, MutationGraphArch, MutationBayesGraphArch
+from analysis.a04_feature_aggregation.m_gnn_gene_mutation import ScalarMovingAverage
 
 
 

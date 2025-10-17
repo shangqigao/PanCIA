@@ -1,19 +1,15 @@
 import sys
-sys.path.append('./')
+import os
+# Get the directory where the current script resides
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Add a relative subdirectory to sys.path
+relative_path = os.path.join(script_dir, '../../')
+sys.path.append(relative_path)
 
 import pathlib
 import logging
 import argparse
-from collections import defaultdict
-import pandas as pd
-import ast
-
-from analysis.feature_extraction.m_feature_extraction import extract_radiomic_feature
-from analysis.feature_aggregation.m_graph_construction import construct_img_graph
-from analysis.feature_aggregation.m_graph_construction import radiomic_feature_visualization
-from analysis.feature_aggregation.m_graph_construction import visualize_radiomic_graph
-from analysis.feature_aggregation.m_graph_construction import measure_graph_properties
-
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -71,24 +67,28 @@ if __name__ == "__main__":
     
     # extract radiomics
     # warning: do not run this function in a loop
-    extract_radiomic_feature(
-        img_paths=img_paths,
-        lab_paths=lab_paths,
-        feature_mode=args.feature_mode,
-        save_dir=save_feature_dir,
-        class_name=args.target,
-        prompts=text_prompts,
-        format=args.format,
-        modality=args.modality,
-        site=args.site,
-        dilation_mm=args.dilation_mm,
-        layer_method=args.layer_method,
-        resolution=args.resolution,
-        units=args.units,
-        skip_exist=True
-    )
+    # from analysis.a03_feature_extraction.m_feature_extraction import extract_radiomic_feature
+
+    # extract_radiomic_feature(
+    #     img_paths=img_paths,
+    #     lab_paths=lab_paths,
+    #     feature_mode=args.feature_mode,
+    #     save_dir=save_feature_dir,
+    #     class_name=args.target,
+    #     prompts=text_prompts,
+    #     format=args.format,
+    #     modality=args.modality,
+    #     site=args.site,
+    #     dilation_mm=args.dilation_mm,
+    #     layer_method=args.layer_method,
+    #     resolution=args.resolution,
+    #     units=args.units,
+    #     skip_exist=True
+    # )
 
     # cluster radiomics
+    from analysis.a04_feature_aggregation.m_spatial_feature_clustering import cluster_radiomic_feature 
+
     cluster_radiomic_feature(
         img_paths=img_paths, 
         feature_mode=args.feature_mode, 
@@ -99,6 +99,8 @@ if __name__ == "__main__":
     )
 
     # construct image graph
+    # from analysis.a04_feature_aggregation.m_graph_construction import construct_img_graph
+    
     # construct_img_graph(
     #     img_paths=img_paths,
     #     save_dir=save_feature_dir,
@@ -110,6 +112,8 @@ if __name__ == "__main__":
     # )
 
     # measure graph properties
+    # from analysis.a04_feature_aggregation.m_graph_construction import measure_graph_properties
+    
     # graph_paths = [save_feature_dir / pathlib.Path(p).name.replace(".nii.gz", f"_{class_name}.json") for p in img_paths]
     # measure_graph_properties(
     #     graph_paths=graph_paths,
@@ -120,6 +124,8 @@ if __name__ == "__main__":
     # )
 
     # visualize radiomics
+    # from analysis.a04_feature_aggregation.m_graph_construction import radiomic_feature_visualization
+    
     # radiomic_feature_visualization(
     #     img_paths=img_paths[0:10],
     #     save_feature_dir=save_feature_dir,
@@ -129,6 +135,8 @@ if __name__ == "__main__":
     # )
 
     # visualize radiomic graph
+    # from analysis.a04_feature_aggregation.m_graph_construction import visualize_radiomic_graph
+    
     # visualize_radiomic_graph(
     #     img_path=img_paths[0],
     #     lab_path=lab_paths[0],

@@ -28,7 +28,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # fit Beta distributions on training data
 # img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
 # save_dir="/home/sg2162/rds/hpc-work/PanCIA/analysis/tumor_segmentation"
-# srun --mpi=pmi2 python analysis/tumor_segmentation/m_fit_beta_distribution.py \
+# srun --mpi=pmi2 python analysis/a02_tumor_segmentation/m_fit_beta_distribution.py \
 #             --img_dir $img_dir \
 #             --save_dir $save_dir
 
@@ -37,7 +37,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # save_dir="/home/sg2162/rds/hpc-work/sanity-check/predictions"
 # beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
 # meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
-# srun python analysis/tumor_segmentation/m_tumor_segmentation.py \
+# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --img_dir $img_dir \
 #             --save_dir $save_dir \
 #             --beta_params $beta_params \
@@ -48,7 +48,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations/BiomedParse"
 # beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
 # meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
-# srun python analysis/tumor_segmentation/m_tumor_segmentation.py \
+# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --img_dir $img_dir \
 #             --save_dir $save_dir \
 #             --beta_params $beta_params \
@@ -58,7 +58,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
 # save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
 
-# python analysis/data_preprocessiong/m_inclusion_exclusion.py \
+# python analysis/a01_data_preprocessiong/m_inclusion_exclusion.py \
 #             --data_dir $data_dir \
 #             --dataset TCGA \
 #             --modality radiology \
@@ -67,7 +67,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # dicom to nifit
 # series="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_raw_series.json"
 
-# python analysis/data_preprocessiong/m_dicom2nii.py \
+# python analysis/a01_data_preprocessiong/m_dicom2nii.py \
 #             --series $series \
 #             --dataset TCGA
 
@@ -75,7 +75,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
 # save_dir="/home/sg2162/rds/hpc-work/Experiments/pathomics"
 
-# python analysis/data_preprocessiong/m_inclusion_exclusion.py \
+# python analysis/a01_data_preprocessiong/m_inclusion_exclusion.py \
 #             --data_dir $data_dir \
 #             --dataset TCGA \
 #             --modality pathology \
@@ -87,7 +87,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # meta_data="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_pathology_has_radiology.csv"
 # save_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
 
-# python analysis/data_preprocessiong/m_sortout_subjects.py \
+# python analysis/a01_data_preprocessiong/m_sortout_subjects.py \
 #             --included_nifti $included_nifti \
 #             --included_wsi $included_wsi \
 #             --meta_data $meta_data \
@@ -100,7 +100,7 @@ lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentatio
 save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
 meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
 
-srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
+srun --mpi=pmi2 python analysis/a03_feature_extraction/m_radiomics_extraction.py \
             --img_dir $img_dir \
             --lab_dir $lab_dir \
             --save_dir $save_dir \
@@ -112,7 +112,7 @@ srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
 # save_clinical_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
 # save_model_dir="/home/sg2162/rds/hpc-work/Experiments/outcomes"
 
-# python analysis/outcome_prediction/m_therapy_response.py \
+# python analysis/a05_outcome_prediction/m_therapy_response.py \
 #             --img_dir $img_dir \
 #             --save_radiomics_dir $save_radiomics_dir \
 #             --save_clinical_dir $save_clinical_dir \
@@ -125,7 +125,7 @@ srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
 # save_clinical_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
 # save_model_dir="/home/sg2162/rds/hpc-work/Experiments/outcomes"
 
-# python analysis/outcome_prediction/m_survival_analysis.py \
+# python analysis/a05_outcome_prediction/m_survival_analysis.py \
 #             --img_dir $img_dir \
 #             --outcome recurrence \
 #             --save_radiomics_dir $save_radiomics_dir \

@@ -42,9 +42,9 @@ from tiatoolbox.tools.graph import SlideGraphConstructor
 from tiatoolbox.utils.visualization import plot_graph, plot_map
 from tiatoolbox.utils.misc import imwrite
 
-from analysis.data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
-from analysis.data_preprocessiong.m_patch_extraction import prepare_annotation_reader
-from analysis.feature_extraction.m_feature_extraction import extract_cnn_pathomics, extract_composition_features
+from analysis.a01_data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
+from analysis.a01_data_preprocessiong.m_patch_extraction import prepare_annotation_reader
+from analysis.a03_feature_extraction.m_feature_extraction import extract_cnn_pathomics, extract_composition_features
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 def construct_pathomic_graph(wsi_name, wsi_feature_dir, save_path):
@@ -810,7 +810,7 @@ def visualize_radiomic_graph(
     from monai.transforms.utils import generate_spatial_bounding_box
 
     if feature_extractor == "SegVol":
-        from analysis.feature_extraction.m_feature_extraction import SegVol_image_transforms
+        from analysis.a03_feature_extraction.m_feature_extraction import SegVol_image_transforms
 
         transform = SegVol_image_transforms(keys, spacing)
     elif feature_extractor == "BiomedParse":
@@ -1116,7 +1116,7 @@ if __name__ == "__main__":
                 args.units,
             )
         elif args.feature_mode == "cnn":
-            output_list = extract_cnn_pathomic_features(
+            output_list = extract_cnn_pathomics(
                 [wsi_path],
                 [msk_path],
                 wsi_feature_dir,
@@ -1129,8 +1129,8 @@ if __name__ == "__main__":
     wsi_name = pathlib.Path(wsi_path).stem
     graph_path = pathlib.Path(f"{wsi_feature_dir}/{wsi_name}.json")
     if not args.pre_generated:
-        construct_graph(wsi_name, wsi_feature_dir, graph_path)
-    visualize_graph(wsi_path, graph_path, resolution=args.resolution, units=args.units)
+        construct_pathomic_graph(wsi_name, wsi_feature_dir, graph_path)
+    visualize_pathomic_graph(wsi_path, graph_path, resolution=args.resolution, units=args.units)
 
 
 

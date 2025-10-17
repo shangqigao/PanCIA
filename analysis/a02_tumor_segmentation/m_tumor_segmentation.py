@@ -28,7 +28,7 @@ from inference_utils.inference import interactive_infer_image
 from inference_utils.processing_utils import read_dicom
 from inference_utils.processing_utils import read_nifti_inplane
 
-from analysis.tumor_segmentation.m_post_processing import remove_inconsistent_objects
+from analysis.a02_tumor_segmentation.m_post_processing import remove_inconsistent_objects
 from peft import LoraConfig, get_peft_model
 
 def extract_radiology_segmentation(

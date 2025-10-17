@@ -1,12 +1,17 @@
 import sys
-sys.path.append('../')
+import os
+# Get the directory where the current script resides
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Add a relative subdirectory to sys.path
+relative_path = os.path.join(script_dir, '../../')
+sys.path.append(relative_path)
 
 import matplotlib.pyplot as plt
 import argparse
 import pathlib
 import logging
 import joblib
-import random
 
 import numpy as np
 from utilities.m_utils import mkdir

@@ -1,5 +1,11 @@
 import sys
-sys.path.append('../')
+import os
+# Get the directory where the current script resides
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Add a relative subdirectory to sys.path
+relative_path = os.path.join(script_dir, '../../')
+sys.path.append(relative_path)
 
 import cv2
 import pathlib
@@ -18,7 +24,7 @@ from utilities.m_utils import mkdir, load_json
 from tiatoolbox.wsicore.wsireader import WSIReader, VirtualWSIReader, WSIMeta
 from tiatoolbox.tools import patchextraction
 from tiatoolbox.utils.misc import imwrite, imread
-from analysis.data_preprocessiong.m_stain_normalization import wsi_stain_normalization
+from analysis.a01_data_preprocessiong.m_stain_normalization import wsi_stain_normalization
 
 
 def prepare_annotation_reader(wsi_path, wsi_ann_path, lab_dict, resolution=0.5, units="mpp"):

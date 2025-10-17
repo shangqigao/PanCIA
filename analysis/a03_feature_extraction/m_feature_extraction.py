@@ -1,5 +1,11 @@
 import sys
-sys.path.append('../')
+import os
+# Get the directory where the current script resides
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Add a relative subdirectory to sys.path
+root_dir = os.path.join(script_dir, '../../')
+sys.path.append(root_dir)
 
 import random
 import torch
@@ -8,49 +14,20 @@ import pathlib
 import joblib
 import argparse
 import pathlib
-import timm
-import cv2
 import logging
 import json
-import PIL
-import skimage
 
 import numpy as np
-import albumentations as A
-
-from albumentations.pytorch import ToTensorV2
-from utilities.m_utils import recur_find_ext, rmdir, select_checkpoints, mkdir
-from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig, NucleusInstanceSegmentor
-from tiatoolbox.models.architecture.vanilla import CNNBackbone, CNNModel
-from tiatoolbox.tools.stainnorm import get_normalizer
-from tiatoolbox.data import stain_norm_target
-from tiatoolbox.wsicore.wsireader import WSIReader
-from tiatoolbox.tools.patchextraction import PatchExtractor
+from utilities.m_utils import rmdir, mkdir
 from tiatoolbox.utils.misc import imwrite
 
-from shapely.geometry import box as shapely_box
-from shapely.strtree import STRtree
 from pprint import pprint
-from scipy.ndimage import zoom
-
-from radiomics import featureextractor
-import radiomics
-
-from monai.transforms.utils import generate_spatial_bounding_box
-from monai.transforms.utils import get_largest_connected_component_mask
-from inference_utils.processing_utils import get_orientation
 
 SEED = 5
 random.seed(SEED)
 rng = np.random.default_rng(SEED)
 torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
-
-# Get the directory where the current script resides
-script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Add a relative subdirectory to sys.path
-root_dir = os.path.join(script_dir, '../../')
 
 def extract_pathomic_feature(
         wsi_paths, 
@@ -238,6 +215,11 @@ def extract_radiomic_feature(
     return
 
 def extract_cnn_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
+    from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig
+    from tiatoolbox.models.architecture.vanilla import CNNBackbone
+    from albumentations.pytorch import ToTensorV2
+    import albumentations as A
+
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -309,30 +291,6 @@ def extract_cnn_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
 
     return output_map_list
 
-class CNNClassifier(CNNModel):
-    def __init__(self, backbone, num_classes=1):
-        super().__init__(backbone, num_classes)
-    
-    def forward(self, imgs):
-        feat = self.feat_extract(imgs)
-        gap_feat = self.pool(feat)
-        return torch.flatten(gap_feat, 1)
-
-    @staticmethod
-    def infer_batch(model, batch_data, on_gpu):
-        device = "cuda" if on_gpu else "cpu"
-        image = batch_data.to(device).type(torch.float32)
-        model.eval()
-        with torch.inference_mode():
-            output = model(image)
-        return [output.cpu().numpy()]    
-
-    def load(self, feature_path, classifier_path):
-        feature_state_dict = torch.load(feature_path)
-        self.feat_extract.load_state_dict(feature_state_dict)
-        classifier_state_dict = torch.load(classifier_path)
-        self.classifier.load_state_dict(classifier_state_dict)
-
 class ViT(torch.nn.Module):
     def __init__(self, model256_path):
         super().__init__()
@@ -353,6 +311,10 @@ class ViT(torch.nn.Module):
         return [output.cpu().numpy()]
     
 def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
+    from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig
+    from albumentations.pytorch import ToTensorV2
+    import albumentations as A
+
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -428,6 +390,7 @@ def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
 class UNI(torch.nn.Module):
     def __init__(self, model_path):
         super().__init__()
+        import timm
         self.model = timm.create_model(
             model_name="vit_large_patch16_224", 
             img_size=224, 
@@ -452,6 +415,11 @@ class UNI(torch.nn.Module):
         return [output.cpu().numpy()]
     
 def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
+    from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig
+    from albumentations.pytorch import ToTensorV2
+    import albumentations as A
+    import cv2
+
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -544,6 +512,9 @@ class CONCH(torch.nn.Module):
         return [output.cpu().numpy()]
     
 def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
+    from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig
+    import PIL
+
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -644,6 +615,11 @@ class CHIEF(torch.nn.Module):
         return [output.cpu().numpy()]
 
 def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
+    from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig
+    from albumentations.pytorch import ToTensorV2
+    import albumentations as A
+    import cv2
+
     ioconfig = IOSegmentorConfig(
         input_resolutions=[{"units": units, "resolution": resolution},],
         output_resolutions=[{"units": units, "resolution": resolution},],
@@ -740,6 +716,10 @@ def extract_chief_wsi_level_features(patch_feature_paths, anatomic=13, on_gpu=Tr
     return
 
 def extract_composition_features(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp"):
+    from tiatoolbox.models import NucleusInstanceSegmentor
+    from tiatoolbox.tools.stainnorm import get_normalizer
+    from tiatoolbox.data import stain_norm_target
+
     inst_segmentor = NucleusInstanceSegmentor(
         pretrained_model="hovernet_fast-pannuke",
         batch_size=16,
@@ -803,6 +783,11 @@ def get_cell_compositions(
         resolution = 0.5,
         units = "mpp",
 ):
+    from tiatoolbox.wsicore.wsireader import WSIReader
+    from tiatoolbox.tools.patchextraction import PatchExtractor
+    from shapely.geometry import box as shapely_box
+    from shapely.strtree import STRtree
+
     if pathlib.Path(wsi_path).suffix == ".jpg":
         reader = WSIReader.open(wsi_path, mpp=(resolution, resolution))
     else:
@@ -851,6 +836,8 @@ def get_cell_compositions(
 
 def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, dilation_mm=0, resolution=None, units="mm", n_jobs=32, skip_exist=False):
     import nibabel as nib
+    import radiomics
+    from radiomics import featureextractor
 
     # Get the PyRadiomics logger (default log-level = INFO)
     logger = radiomics.logger
@@ -906,6 +893,10 @@ def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, 
     return
 
 def extract_VOI(image, label, patch_size, padding, output_shape=None):
+    from monai.transforms.utils import generate_spatial_bounding_box
+    from monai.transforms.utils import get_largest_connected_component_mask
+    import skimage
+
     assert image.ndim == 3
     label = get_largest_connected_component_mask(label)
     s, e = generate_spatial_bounding_box(np.expand_dims(label, 0))
@@ -987,6 +978,9 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
     from monai.inferers import SlidingWindowInferer
     from scipy.ndimage import binary_dilation
     import nibabel as nib
+    import skimage
+    from scipy.ndimage import zoom
+    from inference_utils.processing_utils import get_orientation
     
     roi_size = (32, 256, 256)
     patch_size = (4, 16, 16)
@@ -1272,8 +1266,10 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     """
     from PIL import Image
     import nibabel as nib
+    import skimage
     from skimage.morphology import disk
     from scipy.ndimage import binary_dilation
+    from scipy.ndimage import zoom
 
     logging.getLogger("modeling").setLevel(logging.ERROR)
     from modeling.BaseModel import BaseModel
@@ -1285,6 +1281,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     from inference_utils.inference import interactive_infer_image
     from inference_utils.processing_utils import read_dicom
     from inference_utils.processing_utils import read_nifti_inplane
+    from inference_utils.processing_utils import get_orientation
     from peft import LoraConfig, get_peft_model
 
     # Build model config
@@ -1596,8 +1593,10 @@ def extract_Bayes_BiomedParse_radiomics(
     """
     from PIL import Image
     import nibabel as nib
+    import skimage
     from skimage.morphology import disk
     from scipy.ndimage import binary_dilation
+    from scipy.ndimage import zoom
 
     logging.getLogger("modeling").setLevel(logging.ERROR)
     from modeling.BaseModel import BaseModel
@@ -1609,6 +1608,7 @@ def extract_Bayes_BiomedParse_radiomics(
     from inference_utils.inference import interactive_infer_image
     from inference_utils.processing_utils import read_dicom
     from inference_utils.processing_utils import read_nifti_inplane
+    from inference_utils.processing_utils import get_orientation
     from peft import LoraConfig, get_peft_model
 
     # Build model config
@@ -1805,6 +1805,7 @@ if __name__ == "__main__":
     parser.add_argument('--feature_mode', default="cnn", type=str)
     args = parser.parse_args()
 
+    from tiatoolbox.wsicore.wsireader import WSIReader
     wsi = WSIReader.open(args.slide_path)
     mask = wsi.tissue_mask(method=args.mask_method, resolution=1.25, units="power")
     pprint(wsi.info.as_dict())
