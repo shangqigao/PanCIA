@@ -1792,7 +1792,6 @@ def extract_Bayes_BiomedParse_radiomics(
 
     return
 
-
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()

@@ -88,6 +88,16 @@ if __name__ == "__main__":
         skip_exist=True
     )
 
+    # cluster radiomics
+    cluster_radiomic_feature(
+        img_paths=img_paths, 
+        feature_mode=args.feature_mode, 
+        save_dir=save_feature_dir, 
+        class_name=args.target,
+        n_jobs=32,
+        skip_exist=True
+    )
+
     # construct image graph
     # construct_img_graph(
     #     img_paths=img_paths,
