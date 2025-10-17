@@ -100,7 +100,7 @@ lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentatio
 save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
 meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
 
-srun --mpi=pmi2 python analysis/a03_feature_extraction/m_radiomics_extraction.py \
+python analysis/a03_feature_extraction/m_radiomics_extraction.py \
             --img_dir $img_dir \
             --lab_dir $lab_dir \
             --save_dir $save_dir \

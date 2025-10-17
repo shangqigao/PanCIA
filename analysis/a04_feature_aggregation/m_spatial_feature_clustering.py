@@ -62,7 +62,6 @@ def Bayes_radiomics_pooling(feature_path, save_path, n_clusters=3):
     df_scaled['cluster'] = kmeans.fit_predict(df_scaled[features_for_clustering])
 
     # Step 3: Pool features per cluster and store in DataFrame
-    pooled_data = {}
     for c in range(n_clusters):
         cluster_df = df[df_scaled['cluster']==c]
         if cluster_df.empty:

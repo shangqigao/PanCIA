@@ -90,10 +90,11 @@ if __name__ == "__main__":
     from analysis.a04_feature_aggregation.m_spatial_feature_clustering import cluster_radiomic_feature 
 
     cluster_radiomic_feature(
-        img_paths=img_paths, 
+        img_paths=img_paths[:1], 
         feature_mode=args.feature_mode, 
         save_dir=save_feature_dir, 
         class_name=args.target,
+        n_clusters=3,
         n_jobs=32,
         skip_exist=True
     )
