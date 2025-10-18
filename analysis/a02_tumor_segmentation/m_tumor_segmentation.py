@@ -31,6 +31,21 @@ from inference_utils.processing_utils import read_nifti_inplane
 from analysis.a02_tumor_segmentation.m_post_processing import remove_inconsistent_objects
 from peft import LoraConfig, get_peft_model
 
+CT_sites = {
+    'kidney': 'abdomen',
+    'breast': 'breast',
+    'liver': 'liver',
+    'bladder': 'pelvis',
+    'uterus': 'pelvis',
+    'ovary': 'pelvis',
+    'lung': 'lung',
+    'cervix': 'pelvis',
+    'stomach': 'abdomen',
+    'prostate': 'pelvis',
+    'esophagus': 'lung',
+    'colon': 'colon',
+}
+
 def extract_radiology_segmentation(
         img_paths, 
         text_prompts,
@@ -123,7 +138,7 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
     if isinstance(modality, str): modality = [modality] * len(img_paths)
     if isinstance(site, str): site = [site] * len(img_paths)
 
-    for idx, (img_path, target_name) in enumerate(zip(img_paths, text_prompts)):
+    for idx, (img_path, text_prompt) in enumerate(zip(img_paths, text_prompts)):
         if isinstance(img_path, list):
             img_name = pathlib.Path(img_path[0]).name.replace("_0000.nii.gz", "")
         else:
@@ -140,14 +155,15 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
 
         # read slices from dicom or nifti
         is_CT = modality[idx] == 'CT'
+        ct_site = CT_sites[site[idx]]
         if format[idx] == 'dicom':
             dicom_dir = pathlib.Path(img_path)
             assert pathlib.Path(img_path).is_dir()
             dicom_paths = sorted(dicom_dir.glob('*.dcm'))
-            images = [read_dicom(p, is_CT, site[idx], keep_size=True, return_spacing=True) for p in dicom_paths]
+            images = [read_dicom(p, is_CT, ct_site, keep_size=True, return_spacing=True) for p in dicom_paths]
             slice_axis, affine = 0, np.eye(4)
         elif format[idx] == 'nifti':
-            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, site[idx], keep_size=True, return_spacing=True)
+            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, ct_site, keep_size=True, return_spacing=True)
         else:
             raise ValueError(f'Only support DICOM or NIFTI, but got {format[idx]}')
 
@@ -167,7 +183,7 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
                 meta_data['slice_index'] = f'{i:03}'
                 meta_data['modality'] = modality[idx]
                 meta_data['site'] = site[idx]
-                meta_data['target'] = target_name
+                meta_data['target'] = text_prompt
                 if len(spacing) == 2:
                     meta_data['pixel_spacing'] = spacing
                 else:
@@ -175,22 +191,22 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
                     pixel_index = list(set([0, 1, 2]) - {slice_axis})
                     pixel_spacing = [spacing[i] for i in pixel_index]
                     meta_data['pixel_spacing'] = pixel_spacing
-                text_prompts = create_prompts(meta_data)
-                # text_prompts = [text_prompts[2], text_prompts[9]]
-                text_prompts = [text_prompts[2]]
+                prompts = create_prompts(meta_data)
+                # prompts = [prompts[2], prompts[9]]
+                prompts = [prompts[2]]
             else:
-                text_prompts = [target_name]
+                prompts = [text_prompt]
             # print(f"Segmenting slice [{i+1}/{len(images)}] ...")
 
             # resize_mask=False would keep mask size to be (1024, 1024)
             ensemble_prob = []
             ensemble_feat = []
-            for text_prompt in text_prompts:
+            for prompt in prompts:
                 if save_radiomics:
-                    pred_prob, feature = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=True, return_feature=True)
+                    pred_prob, feature = interactive_infer_image(model, Image.fromarray(img), prompt, resize_mask=True, return_feature=True)
                     ensemble_feat.append(np.transpose(feature, (1, 2, 0)))
                 else:
-                    pred_prob = interactive_infer_image(model, Image.fromarray(img), text_prompt, resize_mask=True, return_feature=False)
+                    pred_prob = interactive_infer_image(model, Image.fromarray(img), prompt, resize_mask=True, return_feature=False)
                 ensemble_prob.append(pred_prob)
             pred_prob = np.max(np.concatenate(ensemble_prob, axis=0), axis=0, keepdims=True)
             if beta_params is not None:
@@ -223,8 +239,8 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
                     zoom_img = img[y_min:y_max+1, x_min:x_max+1]
 
                     ensemble_prob = []
-                    for text_prompt in text_prompts:
-                        zoom_pred_prob = interactive_infer_image(model, Image.fromarray(zoom_img), text_prompt, resize_mask=True, return_feature=False)
+                    for prompt in prompts:
+                        zoom_pred_prob = interactive_infer_image(model, Image.fromarray(zoom_img), prompt, resize_mask=True, return_feature=False)
                         ensemble_prob.append(zoom_pred_prob)
                     zoom_pred_prob = np.max(np.concatenate(ensemble_prob, axis=0), axis=0, keepdims=True)
                     zoom_pred_prob = np.maximum(pred_prob[:, y_min:y_max+1, x_min:x_max+1], zoom_pred_prob)
@@ -501,14 +517,14 @@ if __name__ == "__main__":
     # warning: do not run this function in a loop
     logging.info(f"starting segmentation on {dataset_info['name']}...")
     extract_radiology_segmentation(
-        img_paths=dataset_info['img_paths'],
-        text_prompts=dataset_info['text_prompts'],
+        img_paths=dataset_info['img_paths'][0:2800],
+        text_prompts=dataset_info['text_prompts'][0:2800],
         model_mode=args.model,
         save_dir=save_dir,
-        modality=dataset_info['modality'],
-        site=dataset_info['site'],
+        modality=dataset_info['modality'][0:2800],
+        site=dataset_info['site'][0:2800],
         meta_list=dataset_info['meta_list'],
-        img_format=dataset_info['img_format'],
+        img_format=dataset_info['img_format'][0:2800],
         beta_params=None,
         prompt_ensemble=False,
         save_radiomics=False,
