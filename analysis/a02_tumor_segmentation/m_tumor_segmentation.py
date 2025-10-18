@@ -34,10 +34,9 @@ from peft import LoraConfig, get_peft_model
 def extract_radiology_segmentation(
         img_paths, 
         text_prompts,
-        class_name,
         model_mode, 
         save_dir,
-        is_CT=True,
+        modality='CT',
         site='kidney',
         meta_list=None,
         img_format='nifti',
@@ -64,7 +63,7 @@ def extract_radiology_segmentation(
             text_prompts,
             save_dir,
             format=img_format,
-            is_CT=is_CT,
+            modality=modality,
             site=site,
             meta_list=meta_list,
             beta_params=beta_params,
@@ -78,7 +77,7 @@ def extract_radiology_segmentation(
     return
 
 def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
-                                  format='nifti', is_CT=True, site=None, 
+                                  format='nifti', modality='MR', site='breast', 
                                   meta_list=None, beta_params=None, 
                                   prompt_ensemble=False, save_radiomics=False,
                                   zoom_in=False, device="gpu", skip_exist=False):
@@ -120,6 +119,10 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
     with torch.no_grad():
         model.model.sem_seg_head.predictor.lang_encoder.get_text_embeddings(BIOMED_CLASSES + ["background"], is_eval=True)
 
+    if isinstance(format, str): format = [format] * len(img_paths)
+    if isinstance(modality, str): modality = [modality] * len(img_paths)
+    if isinstance(site, str): site = [site] * len(img_paths)
+
     for idx, (img_path, target_name) in enumerate(zip(img_paths, text_prompts)):
         if isinstance(img_path, list):
             img_name = pathlib.Path(img_path[0]).name.replace("_0000.nii.gz", "")
@@ -131,16 +134,17 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
             continue
 
         # read slices from dicom or nifti
-        if format == 'dicom':
+        is_CT = modality[idx] == 'CT'
+        if format[idx] == 'dicom':
             dicom_dir = pathlib.Path(img_path)
             assert pathlib.Path(img_path).is_dir()
             dicom_paths = sorted(dicom_dir.glob('*.dcm'))
-            images = [read_dicom(p, is_CT, site, keep_size=True, return_spacing=True) for p in dicom_paths]
+            images = [read_dicom(p, is_CT, site[idx], keep_size=True, return_spacing=True) for p in dicom_paths]
             slice_axis, affine = 0, np.eye(4)
-        elif format == 'nifti':
-            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, site, keep_size=True, return_spacing=True)
+        elif format[idx] == 'nifti':
+            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, site[idx], keep_size=True, return_spacing=True)
         else:
-            raise ValueError(f'Only support DICOM or NIFTI, but got {format}')
+            raise ValueError(f'Only support DICOM or NIFTI, but got {format[idx]}')
 
         mask_3d = []
         image_4d = []
@@ -156,8 +160,8 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
                 assert isinstance(meta_data, dict)
                 meta_data['view'] = phase
                 meta_data['slice_index'] = f'{i:03}'
-                meta_data['modality'] = 'CT' if is_CT else 'MRI'
-                meta_data['site'] = site
+                meta_data['modality'] = modality[idx]
+                meta_data['site'] = site[idx]
                 meta_data['target'] = target_name
                 if len(spacing) == 2:
                     meta_data['pixel_spacing'] = spacing
@@ -252,7 +256,7 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
             mask_3d = remove_inconsistent_objects(mask_3d, prob_3d=prob_3d, image_4d=image_4d, beta_params=beta_params)
         else:
             logging.info("Post-processing by removing spatially inconsistent objects")
-            if format == 'dicom':
+            if format[idx] == 'dicom':
                 voxel_spacing = None
             else:
                 voxel_spacing = spacing.tolist()
@@ -335,31 +339,17 @@ def create_prompts(meta_data):
     
     return basic_prompts + meta_prompts
 
-if __name__ == "__main__":
-    ## argument parser
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
-    parser.add_argument('--beta_params', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
-    parser.add_argument('--modality', default="MRI", choices=["CT", "MRI"], type=str)
-    parser.add_argument('--phase', default="single", choices=["single", "multiple"], type=str)
-    parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
-    parser.add_argument('--site', default="breast", type=str)
-    parser.add_argument('--target', default="tumor", type=str)
-    parser.add_argument('--meta_info', default=None)
-    parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--model_mode', default="BiomedParse", choices=["SegVol", "BiomedParse"], type=str)
-    args = parser.parse_args()
-
-    if args.format == 'dicom':
-        img_paths = pathlib.Path(args.img_dir).glob('*')
+def prepare_MAMAMIA_info(img_dir, img_format='nifti', phase='single', site='breast', meta_info=None):
+    if img_format == 'dicom':
+        img_paths = pathlib.Path(img_dir).glob('*')
         img_paths = [p for p in img_paths if p.is_dir()]
         patient_ids = [p.name for p in img_paths]
     else:
-        if args.phase == "single":
-            img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0001.nii.gz'))
+        if phase == "single":
+            img_paths = sorted(pathlib.Path(img_dir).rglob('*_0001.nii.gz'))
             patient_ids = [p.parent.name for p in img_paths]
         else:
-            case_paths = sorted(pathlib.Path(args.img_dir).glob('*'))
+            case_paths = sorted(pathlib.Path(img_dir).glob('*'))
             case_paths = [p for p in case_paths if p.is_dir()]
             img_paths = []
             patient_ids = []
@@ -369,15 +359,14 @@ if __name__ == "__main__":
                 multiphase_keys = ["_0000.nii.gz", "_0001.nii.gz", "_0002.nii.gz"]
                 nii_paths = [p for p in nii_paths if any(k in p.name for k in multiphase_keys)]
                 img_paths.append(sorted(nii_paths))
-    # text_prompts = [f'{args.target} located within the {args.site} on {args.modality}']*len(img_paths)
-    text_prompts = [f'{args.site} {args.target}']*len(img_paths)
-    save_dir = pathlib.Path(args.save_dir)
+    text_prompts = [f'tumor located within the {site}, adjacent to the chest wall on MRI']*len(img_paths)
+    # text_prompts = [f'{site} {target}']*len(img_paths)
 
     # read clinical and imaging info
-    if args.meta_info is not None:
-        df_meta = pd.read_excel(args.meta_info, sheet_name='dataset_info')
+    if meta_info is not None:
+        df_meta = pd.read_excel(meta_info, sheet_name='dataset_info')
         df_meta['pixel_spacing'] = df_meta['pixel_spacing'].apply(ast.literal_eval)
-        parent_path = pathlib.Path(args.meta_info).parent
+        parent_path = pathlib.Path(meta_info).parent
         meta_list = []
         for patient_id in patient_ids:
             field_strength = df_meta.loc[df_meta["patient_id"] == patient_id, 'field_strength'].values[0]
@@ -397,25 +386,125 @@ if __name__ == "__main__":
             meta_list.append(meta_data)
     else:
         meta_list = None
+    
+    dataset_info = {
+        'name': 'MAMA-MIA',
+        'img_paths': img_paths,
+        'text_prompts': text_prompts,
+        'modality': ['MRI']*len(img_paths),
+        'site': ['breast']*len(img_paths),
+        'meta_list': meta_list,
+        'img_format': ['nifti']*len(img_paths)
+    }
+    return dataset_info
 
-    with open(args.beta_params, 'r') as f:
+def prepare_TCGA_info(img_json, img_format='nifti'):
+    assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
+
+    project_site = {
+        "TCGA-KIRC": 'kidney',
+        "TCGA-BRCA": 'breast',
+        "TCGA-LIHC": 'liver',
+        "TCGA-BLCA": 'bladder',
+        "TCGA-UCEC": 'uterus',
+        "TCGA-OV":   'ovary',
+        "TCGA-LUAD": 'lung',
+        "TCGA-CESC": 'cervix',
+        "TCGA-KIRP": 'kidney',
+        "TCGA-STAD": 'stomach',
+        "TCGA-LUSC": 'lung',
+        "TCGA-PRAD": 'prostate',
+        "TCGA-ESCA": 'esophagus',
+        "TCGA-KICH": 'kidney',
+        "TCGA-COAD": 'colon',
+    }
+    prompt_template = {
+        'kidney': 'tumor located within the kidney, near the liver',
+        'breast': 'tumor located within the breast, adjacent to the chest wall',
+        'liver': 'tumor located within the liver, adjacent to the right kidney',
+        'bladder': 'tumor located within the bladder, adjacent to the prostate',
+        'uterus': 'tumor within the uterus, adjacent to the bladder',
+        'ovary': 'tumor located within the ovary, near the uterus',
+        'lung': 'tumor within the lung, adjacent to the heart',
+        'cervix': 'tumor located within the cervix, adjacent to the bladder',
+        'stomach': 'tumor located within the stomach, adjacent to the pancreas and liver',
+        'prostate': 'tumor within the prostate, adjacent to the bladder',
+        'esophagus': 'tumor located within the esophagus, adjacent to the trachea and stomach',
+        'colon': 'tumor located within the colon, near the small intestine',
+    }
+    with open(img_json, 'r') as f:
         data = json.load(f)
-        beta_params = data[f"{args.modality}-{args.site}"][args.target]
+    included_subjects = data['included subjects']
+    img_paths = []
+    for k, v in included_subjects.items(): img_paths += v['radiology']
+    images, site, modality, prompts = [], [], [], [], []
+    for img_path in img_paths:
+        folds = str(img_path).split('/')
+        project = folds[-3]
+        img_mod = {'MR': 'MRI', 'CT': 'CT'}[folds[-4]]
+        if project_site.get(project, False):
+            images.append(img_path)
+            img_site = project_site[project]
+            site.append(img_site)
+            modality.append(img_mod)
+            target = prompt_template[img_site]
+            prompts.append(f"{target} on {img_mod}")
+    
+    dataset_info = {
+        'name': 'TCGA',
+        'img_paths': images,
+        'text_prompts': prompts,
+        'modality': modality,
+        'site': site,
+        'meta_list': None,
+        'img_format': [img_format] * len(images)
+    }
+
+    return dataset_info
+
+if __name__ == "__main__":
+    ## argument parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
+    parser.add_argument('--dataset', default="MAMAMIA", type=str)
+    parser.add_argument('--phase', default="single", choices=["single", "multiple"], type=str)
+    parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
+    parser.add_argument('--meta_info', default=None)
+    parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
+    parser.add_argument('--model', default="BiomedParse", choices=["SegVol", "BiomedParse"], type=str)
+    args = parser.parse_args()
+
+    save_dir = pathlib.Path(args.save_dir)
+
+    if args.dataset == 'MAMAMIA':
+        dataset_info = prepare_MAMAMIA_info(
+            img_dir=args.img_dir,
+            img_format=args.format,
+            phase=args.phase,
+            meta_info=args.meta_info
+        )
+    elif args.dataset == 'TCGA':
+        dataset_info = prepare_TCGA_info(
+            img_json=args.img_dir,
+            img_format=args.format
+        )
+    else:
+        raise ValueError(f'Dataset {args.dataset} is currently unsupported')
 
     # extract radiology segmentation
     # warning: do not run this function in a loop
+    logging.info(f"starting segmentation on {dataset_info['name']}...")
     extract_radiology_segmentation(
-        img_paths=img_paths,
-        text_prompts=text_prompts,
-        class_name=args.target,
-        model_mode=args.model_mode,
+        img_paths=dataset_info['img_paths'],
+        text_prompts=dataset_info['text_prompts'],
+        model_mode=args.model,
         save_dir=save_dir,
-        is_CT=args.modality == 'CT',
-        site=args.site,
-        meta_list=meta_list,
-        img_format=args.format,
+        modality=dataset_info['modality'],
+        site=dataset_info['site'],
+        meta_list=dataset_info['meta_list'],
+        img_format=dataset_info['img_format'],
         beta_params=None,
-        prompt_ensemble=True,
-        save_radiomics=True,
+        prompt_ensemble=False,
+        save_radiomics=False,
         zoom_in=False
     )
