@@ -25,6 +25,7 @@ export PYTHONUNBUFFERED=1   # if running Python
 export SLURM_EXPORT_ENV=ALL
 stdbuf -oL -eL echo "Starting job at $(date)"
 
+#---------------MAMA-MIA----------------
 # fit Beta distributions on training data
 # img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
 # save_dir="/home/sg2162/rds/hpc-work/PanCIA/analysis/tumor_segmentation"
@@ -33,15 +34,15 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # tumor segmentation sanity test
-img_dir="/home/sg2162/rds/hpc-work/sanity-check/images"
-save_dir="/home/sg2162/rds/hpc-work/sanity-check/predictions"
-beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
-meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
-srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-            --img_dir $img_dir \
-            --save_dir $save_dir \
-            --beta_params $beta_params \
-            --meta_info $meta_info
+# img_dir="/home/sg2162/rds/hpc-work/sanity-check/images"
+# save_dir="/home/sg2162/rds/hpc-work/sanity-check/predictions"
+# beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
+# meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
+# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+#             --img_dir $img_dir \
+#             --save_dir $save_dir \
+#             --beta_params $beta_params \
+#             --meta_info $meta_info
 
 # tumor segmentation MAMA-MIA
 # img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
@@ -54,6 +55,19 @@ srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --beta_params $beta_params \
 #             --meta_info $meta_info
 
+# extract radiomic features
+# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
+# lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+# meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
+
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py \
+#             --img_dir $img_dir \
+#             --lab_dir $lab_dir \
+#             --save_dir $save_dir \
+#             --meta_info $meta_info 
+
+#----------------Pan-Cancer--------------------
 # radiology exclusion and inclusion
 # data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
 # save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
@@ -94,17 +108,14 @@ srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --dataset TCGA \
 #             --save_dir $save_dir
 
-# extract radiomic features
-# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
-# lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"
-# save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
-# meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
-
-# python analysis/a03_feature_extraction/m_radiomics_extraction.py \
-#             --img_dir $img_dir \
-#             --lab_dir $lab_dir \
-#             --save_dir $save_dir \
-#             --meta_info $meta_info 
+# tumor segmentation
+img_dir="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
+srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+            --img_dir $img_dir \
+            --dataset TCGA \
+            --save_dir $save_dir
+    
 
 # classification
 # img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"

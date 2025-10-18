@@ -127,7 +127,12 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
         if isinstance(img_path, list):
             img_name = pathlib.Path(img_path[0]).name.replace("_0000.nii.gz", "")
         else:
-            img_name = pathlib.Path(img_path).name.replace("_0001.nii.gz", "")
+            if '/MAMA-MIA/' in str(img_path):
+                img_name = pathlib.Path(img_path).name.replace("_0001.nii.gz", "")
+            elif '/TCGA_NIFTI/' in str(img_path):
+                img_name = str(img_path).split('/TCGA_NIFTI/')[-1].replace(".nii.gz", "")
+            else:
+                img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         save_mask_path = pathlib.Path(f"{save_dir}/{img_name}.nii.gz")
         if save_mask_path.exists() and skip_exist:
             logging.info(f"{save_mask_path.name} has existed, skip!")
@@ -266,6 +271,7 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
         final_mask = np.moveaxis(mask_3d, 0, slice_axis)
         logging.info(f"Saving predicted segmentation to {save_mask_path}")
         nifti_img = nib.Nifti1Image(final_mask, affine)
+        os.makedirs(os.path.dirname(save_mask_path), exist_ok=True)
         nib.save(nifti_img, save_mask_path)
         if save_radiomics:
             radiomic_feat = np.moveaxis(feat_4d, 0, slice_axis)
