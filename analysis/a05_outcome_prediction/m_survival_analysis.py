@@ -1696,7 +1696,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--wsi_dir', default=None)
     parser.add_argument('--img_dir', default=None)
-    parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--dataset', default="TCGA", type=str)
     parser.add_argument('--outcome', default="recurrence", choices=["os", "recurrence"], type=str)
     parser.add_argument('--modality', default="MRI", type=str)
@@ -1710,7 +1710,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_model_dir', default=None)
     parser.add_argument('--slide_mode', default="wsi", choices=["tile", "wsi"], type=str)
     parser.add_argument('--epochs', default=20, type=int)
-    parser.add_argument('--radiomics_mode', default="pyradiomics", choices=["None", "pyradiomics", "SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--radiomics_mode', default="BayesBP", choices=["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
     parser.add_argument('--radiomics_dim', default=768, choices=[107, 768, 768], type=int)
     parser.add_argument('--radiomics_aggregation', default=False, type=bool,
                         help="if radiomic features have not been aggregated yet and true, do spatial aggregation"
@@ -1809,6 +1809,8 @@ if __name__ == "__main__":
         img_names = [p.name.replace('.nii.gz', '') for p in img_paths]
         if args.radiomics_mode == "pyradiomics":
             radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}_radiomics.json" for p in img_names])
+        elif args.radiomics_mode == "BayesBP":
+            radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}_radiomics_pooled.json" for p in img_names])
         else:
             radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}.json" for p in img_names])
     else:
@@ -1876,6 +1878,12 @@ if __name__ == "__main__":
     logging.info(f"Number of testing samples: {num_test}.")
 
     # survival analysis from the splits
+    if args.radiomics_mode == 'pyradiomics':
+        radiomics_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
+    elif args.radiomics_mode == 'BayesBP':
+        radiomics_keys = ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
+    else:
+        radiomics_keys = None
     survival(
         split_path=split_path,
         used=["radiomics", "pathomics", "radiopathomics"][0],
@@ -1884,9 +1892,9 @@ if __name__ == "__main__":
         radiomics_aggregated_mode=args.radiomics_aggregated_mode,
         pathomics_aggregation=pathomics_aggregation,
         pathomics_aggregated_mode=args.pathomics_aggregated_mode,
-        radiomics_keys=None, #radiomic_propereties,
+        radiomics_keys=radiomics_keys, #radiomic_propereties,
         pathomics_keys=None, #["TUM", "NORM", "DEB"],
-        model=["RSF", "CoxPH", "Coxnet", "FastSVM"][3],
+        model=["RSF", "CoxPH", "Coxnet", "FastSVM"][2],
         scorer=["cindex", "cindex-ipcw", "auc", "ibs"][2],
         feature_selection=True,
         n_bootstraps=0,

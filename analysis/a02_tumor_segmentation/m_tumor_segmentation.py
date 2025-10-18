@@ -96,11 +96,11 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
     """
 
     # Build model config
-    opt = load_opt_from_config_files([os.path.join(relative_path, "configs/pancia_bayes_inference.yaml")])
+    opt = load_opt_from_config_files([os.path.join(relative_path, "configs/biomedparse_inference.yaml")])
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
-    pretrained_pth = os.path.join(relative_path, 'checkpoints/Bayes_BiomedParse/Bayes_PanCancer_LoRA')
+    pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/PanCancer_LoRA')
     # pretrained_pth = os.path.join(relative_path, 'checkpoints/Bayes_BiomedParse/Bayes_PanCancer/model_state_dict.pt')
 
     if device == 'gpu':

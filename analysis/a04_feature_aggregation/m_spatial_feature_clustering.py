@@ -7,6 +7,8 @@ import pathlib
 import logging
 import joblib
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
 def cluster_radiomic_feature(
         img_paths, 
         feature_mode, 
@@ -46,10 +48,12 @@ def Bayes_radiomics_pooling(feature_path, save_path, n_clusters=3):
     with open(feature_path, 'r') as f:
         data = json.load(f)
 
-    assert len(data['radiomics']) > n_clusters, 'sample size less than the number of clusters'
-    pooled_data = {f"global.{k}": v for k, v in data['radiomics'][0].items() if k != "layer_index"}
-    df = pd.DataFrame(data['radiomics'][1:])
+    df_ori = pd.DataFrame(data['radiomics'][1:])
+    df = df_ori.dropna().reset_index(drop=True)
+    df['layer_index'] = range(len(df))
+    assert len(df) >= n_clusters, 'sample size less than the number of clusters'
 
+    pooled_data = {f"global.{k}": v for k, v in data['radiomics'][0].items() if k != "layer_index"}
 
     # Step 1: Standardize features for clustering (exclude max/min)
     features_for_clustering = ['mean','var','skewness','kurtosis','entropy']
@@ -113,7 +117,7 @@ def cluster_Bayes_BiomedParse_radiomics(img_paths, save_dir, class_name="tumour"
         return
     
     # construct graphs in parallel
-    joblib.Parallel(n_jobs=n_jobs)(
+    joblib.Parallel(n_jobs=n_jobs, backend="threading")(
         joblib.delayed(_feature_clustering)(idx, img_path)
         for idx, img_path in enumerate(img_paths)
     )

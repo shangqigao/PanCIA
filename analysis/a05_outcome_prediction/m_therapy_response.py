@@ -315,7 +315,7 @@ def randomforest(split_idx, tr_X, tr_y, refit, n_jobs):
     ax.axvline(gcv.best_params_["model__max_depth"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"analysis/a05_outcome_prediction/cross_validation_fold{split_idx}.jpg")
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -363,7 +363,7 @@ def xgboost(split_idx, tr_X, tr_y, refit, n_jobs):
     ax.axvline(gcv.best_params_["model__max_depth"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"analysis/a05_outcome_prediction/cross_validation_fold{split_idx}.jpg")
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -414,7 +414,7 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
     ax.axvline(gcv.best_params_["model__C"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"analysis/a05_outcome_prediction/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     # best_model = gcv.best_estimator_.named_steps["model"]
@@ -431,7 +431,7 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
     # ax.set_xlabel("coefficient")
     # ax.grid(True)
     # plt.subplots_adjust(left=0.3)
-    # plt.savefig(f"analysis/outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
+    # plt.savefig(f"analysis/a05_outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -478,7 +478,7 @@ def svc(split_idx, tr_X, tr_y, refit, n_jobs):
     ax.axvline(gcv.best_params_["model__C"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"analysis/a05_outcome_prediction/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     # best_model = gcv.best_estimator_.named_steps["model"]
@@ -495,7 +495,7 @@ def svc(split_idx, tr_X, tr_y, refit, n_jobs):
     # ax.set_xlabel("coefficient")
     # ax.grid(True)
     # plt.subplots_adjust(left=0.3)
-    # plt.savefig(f"analysis/outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
+    # plt.savefig(f"analysis/a05_outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -603,6 +603,7 @@ def outcome_classification(
     model="LR",
     refit="roc_auc",
     feature_selection=True,
+    feature_var_threshold=1e-4,
     n_selected_features=64,
     use_graph_properties=False
     ):
@@ -735,7 +736,7 @@ def outcome_classification(
         # feature selection
         if feature_selection:
             print("Selecting features...")
-            selector = VarianceThreshold(threshold=1e-4)
+            selector = VarianceThreshold(threshold=feature_var_threshold)
             selector.fit(tr_X)
             selected_names = selector.get_feature_names_out().tolist()
             num_removed = len(tr_X.columns) - len(selected_names)
@@ -1308,7 +1309,7 @@ if __name__ == "__main__":
     parser.add_argument('--img_dir', default=None)
     parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--dataset', default="TCGA", type=str)
-    parser.add_argument('--outcome', default="pcr+subtype", choices=["pcr", "hr", "her2", "pcr+subtype"], type=str)
+    parser.add_argument('--outcome', default="pcr", choices=["pcr", "hr", "her2", "pcr+subtype"], type=str)
     parser.add_argument('--subgroup', default='Overall', choices=["HR+/HER2-", "HER2+", "TNBC", 'Overall'])
     parser.add_argument('--modality', default="MRI", type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
@@ -1321,7 +1322,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_model_dir', default=None)
     parser.add_argument('--slide_mode', default="wsi", choices=["tile", "wsi"], type=str)
     parser.add_argument('--epochs', default=50, type=int)
-    parser.add_argument('--radiomics_mode', default="BiomedParse", choices=["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
+    parser.add_argument('--radiomics_mode', default="BayesBP", choices=["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
     parser.add_argument('--radiomics_dim', default=512, choices=[851, 768, 512], type=int)
     parser.add_argument('--radiomics_aggregation', default=False, type=bool,
                         help="if radiomic features have not been aggregated yet and true, do spatial aggregation"
@@ -1411,8 +1412,10 @@ if __name__ == "__main__":
     radiomics_aggregation = args.radiomics_aggregation # false if load patient-level features else true
     if None not in (img_paths, save_radiomics_dir):
         img_names = [p.name.replace('.nii.gz', '') for p in img_paths]
-        if args.radiomics_mode == "pyradiomics" or args.radiomics_mode == "BayesBP":
+        if args.radiomics_mode == "pyradiomics":
             radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}_radiomics.json" for p in img_names])
+        elif args.radiomics_mode == "BayesBP":
+            radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}_radiomics_pooled.json" for p in img_names])
         else:
             radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}.json" for p in img_names])
     else:
@@ -1565,7 +1568,8 @@ if __name__ == "__main__":
     if args.radiomics_mode == 'pyradiomics':
         radiomics_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
     elif args.radiomics_mode == 'BayesBP':
-        radiomics_keys = ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
+        radiomics_keys = ["n_voxels"]
+        # radiomics_keys = ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
     else:
         radiomics_keys = None
     outcome_classification(
@@ -1578,9 +1582,10 @@ if __name__ == "__main__":
         pathomics_aggregated_mode=args.pathomics_aggregated_mode,
         radiomics_keys=radiomics_keys, #radiomic_propereties,
         pathomics_keys=None, #["TUM", "NORM", "DEB"],
-        model=["RF", "XG", "LR", "SVC"][0],
+        model=["RF", "XG", "LR", "SVC"][3],
         refit=["accuracy", "f1", "roc_auc"][1],
         feature_selection=True,
+        feature_var_threshold=1e-20,
         n_selected_features=128,
         use_graph_properties=False
     )
