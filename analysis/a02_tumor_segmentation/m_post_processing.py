@@ -54,7 +54,8 @@ def remove_inconsistent_objects(mask_3d, min_slices=4, min_dice=0.0, spacing=Non
 
     Args:
         mask_3d: 3D numpy array (binary mask).
-        min_slices: Minimum number of slices an object must appear in. 1 percentile=13, min=6
+        min_slices: Minimum number of slices an object must appear in. 
+            if spacing is not None, it represents expected minimal physical size (mm) 
         min_dice: Minimum Dice similarity between slices to consider consistent.
         spacing: orginal voxel spacing (z, x, y)
         new_spacing: new spacing for resampling

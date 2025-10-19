@@ -4,8 +4,58 @@ from pathlib import Path
 import json
 import argparse
 import logging
+import nibabel as nib
+import numpy as np
+import json
+import os
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+def check_3D_affine(nii_path):
+    """ check if image is 3D and affine is valid
+    """
+    try:
+        nii = nib.load(nii_path)
+    except Exception:
+        return False, "Error loading nifti"
+
+    try:
+        data = nii.get_fdata()
+    except Exception:
+        return False, "Error getting nii array"
+        
+    affine = nii.affine
+    shape = np.squeeze(data).shape
+    if len(shape) == 4 or len(shape) < 3:
+        return False, "image is not 3D"
+    # Must be 4x4
+    if affine.shape != (4, 4):
+        return False, "Affine is not 4x4"
+
+    # Must be finite numbers
+    if not np.isfinite(affine).all():
+        return False, "Affine contains NaN or Inf"
+
+    # Rotation/scale block must be full rank
+    A = affine[:3, :3]
+    rank = np.linalg.matrix_rank(A)
+    if rank < 3:
+        return False, f"Affine rank-deficient (rank={rank})"
+
+    # Voxel sizes should be positive
+    voxel_sizes = np.sqrt((A ** 2).sum(axis=0))
+    if np.any(voxel_sizes <= 0):
+        return False, f"Invalid voxel sizes: {voxel_sizes}"
+
+    # Try to derive axis codes
+    try:
+        axcodes = nib.aff2axcodes(affine)
+        if None in axcodes:
+            return False, f"Cannot derive axis codes: {axcodes}"
+    except Exception:
+        return False, "Error deriving axis codes from affine"
+
+    return True, f"shape: {shape}, voxel sizes: {voxel_sizes}, axcodes: {axcodes}"
 
 def convert_series(idx, dicom_dir, output_dir):
     logging.info(f"Processing [{idx + 1} / {len(series_dirs)}] ...")
@@ -24,6 +74,18 @@ def convert_series(idx, dicom_dir, output_dir):
         print(f"Return code: {e.returncode}")
     except Exception as e:
         print(f"[Exception] Unexpected error for: {dicom_dir} → {e}")
+    
+    img_paths = Path(output_dir).glob('*.nii.gz')
+    for img_path in img_paths:
+        img_path = str(img_path)
+        json_path = img_path.replace('.nii.gz', '.json')
+        valid, mess = check_3D_affine(img_path)
+        if not valid:
+            print(f">>>>Warning: {mess}, will remove nifti and json files")
+            os.remove(img_path)
+            os.remove(json_path)
+        else:
+            print(f"Got valid image of {mess}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -46,12 +108,13 @@ if __name__ == "__main__":
     included_nifit = []
     excluded_nifit = []
     for d in output_dirs:
-        niis = Path(d).glob('*.nii.gz')
-        niis = [str(p) for p in niis]
+        niis = list(Path(d).glob('*.nii.gz'))
         if len(niis) > 1: 
             excluded_nifit += niis
         elif len(niis) == 1:
             included_nifit += niis
+        else:
+            print("No nifti file in this folder")
     save_path = f"{args.save_dir}/{args.dataset}_included_nifti.json"
     data_dict = {"included nifti": included_nifit, "excluded nifti": excluded_nifit}
     with open(save_path, "w") as f:

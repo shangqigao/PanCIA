@@ -79,11 +79,11 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # dicom to nifit
-# series="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_raw_series.json"
+series="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_raw_series.json"
 
-# python analysis/a01_data_preprocessiong/m_dicom2nii.py \
-#             --series $series \
-#             --dataset TCGA
+python analysis/a01_data_preprocessiong/m_dicom2nii.py \
+            --series $series \
+            --dataset TCGA
 
 # pathology exclusion and inclusion
 # data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
@@ -109,12 +109,12 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # pan-cancer segmentation
-radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
-srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-            --radiology $radiology \
-            --dataset TCGA \
-            --save_dir $save_dir
+# radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
+# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+#             --radiology $radiology \
+#             --dataset TCGA \
+#             --save_dir $save_dir
     
 
 # classification
