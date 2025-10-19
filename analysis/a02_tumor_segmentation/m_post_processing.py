@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from scipy import stats, ndimage
 from scipy.ndimage import label, zoom
@@ -106,7 +107,7 @@ def remove_inconsistent_objects(mask_3d, min_slices=4, min_dice=0.0, spacing=Non
         if consistent:
             cleaned[component] = 1
 
-    print(f"Removed {num_objects} of {num} objects with spatial inconsistency!")
+    logging.info(f"Removed {num_objects} of {num} objects with spatial inconsistency!")
     cleaned = keep_largest_components(cleaned)
     # resample to orginal shape
     if spacing is not None:

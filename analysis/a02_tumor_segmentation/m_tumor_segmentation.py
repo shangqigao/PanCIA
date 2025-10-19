@@ -18,6 +18,8 @@ import numpy as np
 import nibabel as nib
 import pandas as pd
 from PIL import Image
+
+logging.getLogger("modeling").setLevel(logging.ERROR)
 from modeling.BaseModel import BaseModel
 from modeling import build_model
 from utilities.distributed import init_distributed
@@ -30,6 +32,8 @@ from inference_utils.processing_utils import read_nifti_inplane
 
 from analysis.a02_tumor_segmentation.m_post_processing import remove_inconsistent_objects
 from peft import LoraConfig, get_peft_model
+
+from tiatoolbox import logger
 
 CT_sites = {
     'kidney': 'abdomen',
@@ -139,6 +143,8 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
     if isinstance(site, str): site = [site] * len(img_paths)
 
     for idx, (img_path, text_prompt) in enumerate(zip(img_paths, text_prompts)):
+        logger.info("Segmenting image: {}/{}...".format(idx + 1, len(img_paths)))
+
         if isinstance(img_path, list):
             img_name = pathlib.Path(img_path[0]).name.replace("_0000.nii.gz", "")
         else:
@@ -150,7 +156,7 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
                 img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         save_mask_path = pathlib.Path(f"{save_dir}/{img_name}.nii.gz")
         if save_mask_path.exists() and skip_exist:
-            logging.info(f"{save_mask_path.name} has existed, skip!")
+            logger.info(f"{save_mask_path.name} has existed, skip!")
             continue
 
         # read slices from dicom or nifti
@@ -273,10 +279,10 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
         if beta_params is not None:
             prob_3d = np.concatenate(prob_3d, axis=0)
             image_4d = np.stack(image_4d, axis=0)
-            logging.info("Post-processing by removing both unconfident predictions and spatially inconsistent objects")
+            logger.info("Post-processing by removing both unconfident predictions and spatially inconsistent objects")
             mask_3d = remove_inconsistent_objects(mask_3d, prob_3d=prob_3d, image_4d=image_4d, beta_params=beta_params)
         else:
-            logging.info("Post-processing by removing spatially inconsistent objects")
+            logger.info("Post-processing by removing spatially inconsistent objects")
             if format[idx] == 'dicom':
                 voxel_spacing = None
             else:
@@ -285,7 +291,7 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
                 voxel_spacing.insert(0, z_spacing)
             mask_3d = remove_inconsistent_objects(mask_3d, spacing=voxel_spacing)
         final_mask = np.moveaxis(mask_3d, 0, slice_axis)
-        logging.info(f"Saving predicted segmentation to {save_mask_path}")
+        logger.info(f"Saving predicted segmentation to {save_mask_path}")
         nifti_img = nib.Nifti1Image(final_mask, affine)
         os.makedirs(os.path.dirname(save_mask_path), exist_ok=True)
         nib.save(nifti_img, save_mask_path)
@@ -296,12 +302,12 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
                 radiomic_feat = np.squeeze(radiomic_feat) * final_mask
                 save_feat_path = f"{save_dir}/{img_name}_radiomics.nii.gz"
                 nifti_img = nib.Nifti1Image(radiomic_feat, affine)
-                logging.info(f"Saving radiomic features to {save_feat_path}")
+                logger.info(f"Saving radiomic features to {save_feat_path}")
                 nib.save(nifti_img, save_feat_path)
             else:
                 radiomic_feat = radiomic_feat[final_mask > 0]
                 save_feat_path = f"{save_dir}/{img_name}_radiomics.npy"
-                logging.info(f"Saving radiomic features to {save_feat_path}")
+                logger.info(f"Saving radiomic features to {save_feat_path}")
                 np.save(save_feat_path, radiomic_feat)       
 
     return
@@ -459,7 +465,7 @@ def prepare_TCGA_info(img_json, img_format='nifti'):
     included_subjects = data['included subjects']
     img_paths = []
     for k, v in included_subjects.items(): img_paths += v['radiology']
-    images, site, modality, prompts = [], [], [], [], []
+    images, site, modality, prompts = [], [], [], []
     for img_path in img_paths:
         folds = str(img_path).split('/')
         project = folds[-3]
@@ -515,16 +521,16 @@ if __name__ == "__main__":
 
     # extract radiology segmentation
     # warning: do not run this function in a loop
-    logging.info(f"starting segmentation on {dataset_info['name']}...")
+    logger.info(f"starting segmentation on {dataset_info['name']}...")
     extract_radiology_segmentation(
-        img_paths=dataset_info['img_paths'][0:2800],
-        text_prompts=dataset_info['text_prompts'][0:2800],
+        img_paths=dataset_info['img_paths'][2800:],
+        text_prompts=dataset_info['text_prompts'][2800:],
         model_mode=args.model,
         save_dir=save_dir,
-        modality=dataset_info['modality'][0:2800],
-        site=dataset_info['site'][0:2800],
+        modality=dataset_info['modality'][2800:],
+        site=dataset_info['site'][2800:],
         meta_list=dataset_info['meta_list'],
-        img_format=dataset_info['img_format'][0:2800],
+        img_format=dataset_info['img_format'][2800:],
         beta_params=None,
         prompt_ensemble=False,
         save_radiomics=False,

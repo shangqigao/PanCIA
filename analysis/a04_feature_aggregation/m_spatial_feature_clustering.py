@@ -4,10 +4,9 @@ from sklearn.cluster import KMeans
 import numpy as np
 import json
 import pathlib
-import logging
 import joblib
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+from tiatoolbox import logger
 
 def cluster_radiomic_feature(
         img_paths, 
@@ -104,15 +103,15 @@ def cluster_Bayes_BiomedParse_radiomics(img_paths, save_dir, class_name="tumour"
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         save_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics_pooled.json")
         if save_path.exists() and skip_exist:
-            logging.info(f"{save_path.name} has existed, skip!")
+            logger.info(f"{save_path.name} has existed, skip!")
             return
 
         feature_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.json")
         if not feature_path.exists(): 
-            logging.info(f"{feature_path.name} doesn't exist, skip!")
+            logger.info(f"{feature_path.name} doesn't exist, skip!")
             return
             
-        logging.info("clustering Bayesian radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+        logger.info("clustering Bayesian radiomics: {}/{}...".format(idx + 1, len(img_paths)))
         Bayes_radiomics_pooling(feature_path, save_path, n_clusters)
         return
     
