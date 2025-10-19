@@ -34,7 +34,7 @@ def extract_pathomic_feature(
         wsi_msk_paths, 
         feature_mode, 
         save_dir, 
-        mode, 
+        mode='wsi', 
         resolution=0.5, 
         units="mpp",
         skip_exist=False
@@ -74,6 +74,16 @@ def extract_pathomic_feature(
         )
     elif feature_mode == "UNI":
         _ = extract_uni_pathomics(
+            wsi_paths=wsi_paths,
+            msk_paths=wsi_msk_paths,
+            save_dir=save_dir,
+            mode=mode,
+            resolution=resolution,
+            units=units,
+            skip_exist=skip_exist
+        )
+    elif feature_mode == "UNI2":
+        _ = extract_uni2_pathomics(
             wsi_paths=wsi_paths,
             msk_paths=wsi_msk_paths,
             save_dir=save_dir,
@@ -308,7 +318,7 @@ class ViT(torch.nn.Module):
         model.eval()
         with torch.inference_mode():
             output = model(image)
-        return [output.cpu().numpy()]
+        return [output.cpu().numpy().astype(np.float16)]
     
 def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
     from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig
@@ -412,7 +422,7 @@ class UNI(torch.nn.Module):
         model.eval()
         with torch.inference_mode():
             output = model(image)
-        return [output.cpu().numpy()]
+        return [output.cpu().numpy().astype(np.float16)]
     
 def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
     from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig
@@ -492,6 +502,120 @@ def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
 
     return output_map_list
 
+class UNI2(torch.nn.Module):
+    def __init__(self, model_path):
+        super().__init__()
+        import timm
+        timm_kwargs = {
+            'model_name': 'vit_giant_patch14_224',
+            'img_size': 224, 
+            'patch_size': 14, 
+            'depth': 24,
+            'num_heads': 24,
+            'init_values': 1e-5, 
+            'embed_dim': 1536,
+            'mlp_ratio': 2.66667*2,
+            'num_classes': 0, 
+            'no_embed_class': True,
+            'mlp_layer': timm.layers.SwiGLUPacked, 
+            'act_layer': torch.nn.SiLU, 
+            'reg_tokens': 8, 
+            'dynamic_img_size': True
+        }
+        self.model = timm.create_model(**timm_kwargs)
+        self.model.load_state_dict(torch.load(model_path, map_location="cpu"), strict=True)
+    
+    def forward(self, imgs):
+        feat = self.model(imgs)
+        return torch.flatten(feat, 1)
+
+    @staticmethod
+    def infer_batch(model, batch_data, on_gpu):
+        device = "cuda" if on_gpu else "cpu"
+        image = batch_data.to(device).type(torch.float32)
+        model.eval()
+        with torch.inference_mode():
+            output = model(image)
+        return [output.cpu().numpy().astype(np.float16)]
+    
+def extract_uni2_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
+    from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig
+    from albumentations.pytorch import ToTensorV2
+    import albumentations as A
+    import cv2
+
+    ioconfig = IOSegmentorConfig(
+        input_resolutions=[{"units": units, "resolution": resolution},],
+        output_resolutions=[{"units": units, "resolution": resolution},],
+        patch_input_shape=[256, 256],
+        patch_output_shape=[256, 256],
+        stride_shape=[256, 256],
+        save_resolution={"units": "mpp", "resolution": 8.0}
+    )
+    
+    pretrained_path = os.path.join(root_dir, 'checkpoints/UNI2-h/pytorch_model.bin')
+    model = UNI2(pretrained_path)
+    ## define preprocessing function
+    mean = (0.485, 0.456, 0.406)
+    std = (0.229, 0.224, 0.225)
+    TS = A.Compose([A.Resize(224, 224, cv2.INTER_CUBIC), A.Normalize(mean, std), ToTensorV2()])
+    def _preproc_func(img):
+        return TS(image=img)["image"]
+    def _postproc_func(img):
+        return img
+    model.preproc_func = _preproc_func
+    model.postproc_func = _postproc_func
+
+    extractor = DeepFeatureExtractor(
+        batch_size=128, 
+        model=model, 
+        num_loader_workers=32, 
+    )
+
+    if skip_exist:
+        new_wsi_paths, new_msk_paths = [], []
+        for wsi_path, msk_path in zip(wsi_paths, msk_paths):
+            wsi_name = pathlib.Path(wsi_path).name
+            feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
+            if feature_path.exists() and skip_exist:
+                logging.info(f"{feature_path.name} has existed, skip!")
+            else:
+                new_wsi_paths.append(wsi_path)
+                new_msk_paths.append(msk_path)
+    else:
+        new_wsi_paths = wsi_paths
+        new_msk_paths = msk_paths
+
+    # create temporary dir
+    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
+    rmdir(tmp_save_dir)
+    output_map_list = extractor.predict(
+        new_wsi_paths,
+        new_msk_paths,
+        mode=mode,
+        ioconfig=ioconfig,
+        on_gpu=True,
+        crash_on_exception=True,
+        save_dir=tmp_save_dir,
+    )
+    
+    for input_path, output_path in output_map_list:
+        input_name = pathlib.Path(input_path).stem
+        output_parent_dir = pathlib.Path(output_path).parent.parent
+
+        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
+        src_path.rename(new_path)
+
+        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
+        src_path.rename(new_path)
+
+    # remove temporary dir
+    rmdir(tmp_save_dir)
+
+    return output_map_list
+
 class CONCH(torch.nn.Module):
     def __init__(self, cfg, ckpt_path, device):
         super().__init__()
@@ -509,7 +633,7 @@ class CONCH(torch.nn.Module):
         model.eval()
         with torch.inference_mode():
             output = model(images)
-        return [output.cpu().numpy()]
+        return [output.cpu().numpy().astype(np.float16)]
     
 def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
     from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig
@@ -612,7 +736,7 @@ class CHIEF(torch.nn.Module):
         model.eval()
         with torch.inference_mode():
             output = model(image)
-        return [output.cpu().numpy()]
+        return [output.cpu().numpy().astype(np.float16)]
 
 def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, units="mpp", skip_exist=False):
     from tiatoolbox.models import DeepFeatureExtractor, IOSegmentorConfig
@@ -1765,6 +1889,7 @@ def extract_Bayes_BiomedParse_radiomics(
 
         if layer_method is None:
             # extract radiomic features of tumor regions
+            radiomic_feat = radiomic_feat.astype(np.float16)
             radiomic_feat = radiomic_feat[final_mask > 0]
             radiomic_memory = radiomic_feat.nbytes / 1024**2
             radiomic_coord = np.argwhere(final_mask > 0)

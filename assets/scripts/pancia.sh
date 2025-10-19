@@ -109,10 +109,10 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # pan-cancer segmentation
-img_dir="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
 save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
 srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-            --img_dir $img_dir \
+            --radiology $radiology \
             --dataset TCGA \
             --save_dir $save_dir
     

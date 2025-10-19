@@ -487,7 +487,7 @@ def prepare_TCGA_info(img_json, img_format='nifti'):
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
+    parser.add_argument('--radiology', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--dataset', default="MAMAMIA", type=str)
     parser.add_argument('--phase', default="single", choices=["single", "multiple"], type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
@@ -500,14 +500,14 @@ if __name__ == "__main__":
 
     if args.dataset == 'MAMAMIA':
         dataset_info = prepare_MAMAMIA_info(
-            img_dir=args.img_dir,
+            img_dir=args.radiology,
             img_format=args.format,
             phase=args.phase,
             meta_info=args.meta_info
         )
     elif args.dataset == 'TCGA':
         dataset_info = prepare_TCGA_info(
-            img_json=args.img_dir,
+            img_json=args.radiology,
             img_format=args.format
         )
     else:
