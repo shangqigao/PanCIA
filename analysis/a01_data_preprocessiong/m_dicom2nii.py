@@ -1,15 +1,23 @@
+import os
+import sys
+
+# Get the directory where the current script resides
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Add a relative subdirectory to sys.path
+relative_path = os.path.join(script_dir, '../../')
+sys.path.append(relative_path)
+
 from joblib import Parallel, delayed
 import subprocess
 from pathlib import Path
 import json
 import argparse
-import logging
 import nibabel as nib
 import numpy as np
 import json
-import os
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+from tiatoolbox import logger
 
 def check_3D_affine(nii_path):
     """ check if image is 3D and affine is valid
@@ -58,7 +66,7 @@ def check_3D_affine(nii_path):
     return True, f"shape: {shape}, voxel sizes: {voxel_sizes}, axcodes: {axcodes}"
 
 def convert_series(idx, dicom_dir, output_dir):
-    logging.info(f"Processing [{idx + 1} / {len(series_dirs)}] ...")
+    logger.info(f"Processing [{idx + 1} / {len(series_dirs)}] ...")
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     try:
         subprocess.run([
@@ -70,22 +78,21 @@ def convert_series(idx, dicom_dir, output_dir):
             str(dicom_dir)
         ], check=True)
     except subprocess.CalledProcessError as e:
-        print(f"[Error] dcm2niix failed for: {dicom_dir}")
-        print(f"Return code: {e.returncode}")
+        logger.info(f"[Error] dcm2niix failed for: {dicom_dir}")
+        logger.info(f"Return code: {e.returncode}")
     except Exception as e:
-        print(f"[Exception] Unexpected error for: {dicom_dir} → {e}")
+        logger.info(f"[Exception] Unexpected error for: {dicom_dir} → {e}")
     
     img_paths = Path(output_dir).glob('*.nii.gz')
     for img_path in img_paths:
         img_path = str(img_path)
-        json_path = img_path.replace('.nii.gz', '.json')
         valid, mess = check_3D_affine(img_path)
         if not valid:
-            print(f">>>>Warning: {mess}, will remove nifti and json files")
-            os.remove(img_path)
-            os.remove(json_path)
+            new_img_path = img_path.replace('.nii.gz', '_excluded.nii.gz')
+            logger.info(f">>>>Warning: {mess}, renamed as {new_img_path}")
+            Path(img_path).rename(Path(new_img_path))
         else:
-            print(f"Got valid image of {mess}")
+            logger.info(f"Got valid image of {mess}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -108,15 +115,19 @@ if __name__ == "__main__":
     included_nifit = []
     excluded_nifit = []
     for d in output_dirs:
-        niis = list(Path(d).glob('*.nii.gz'))
+        niis = Path(d).glob('*.nii.gz')
+        niis = [str(p) for p in niis]
         if len(niis) > 1: 
             excluded_nifit += niis
         elif len(niis) == 1:
-            included_nifit += niis
+            if '_excluded.nii.gz' in niis[0]:
+                excluded_nifit += niis
+            else:
+                included_nifit += niis
         else:
-            print("No nifti file in this folder")
+            logger.info("No nifti file in this folder")
     save_path = f"{args.save_dir}/{args.dataset}_included_nifti.json"
     data_dict = {"included nifti": included_nifit, "excluded nifti": excluded_nifit}
     with open(save_path, "w") as f:
         json.dump(data_dict, f, indent=4)
-    print(f"Included {len(included_nifit)} nifti, excluded {len(excluded_nifit)}")
+    logger.info(f"Included {len(included_nifit)} nifti, excluded {len(excluded_nifit)}")

@@ -11,12 +11,10 @@ import pydicom
 import argparse
 import pathlib
 import json
-import logging
 import joblib
 
+from tiatoolbox import logger
 from tiatoolbox.wsicore.wsireader import WSIReader 
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def is_included_dicom(ds):
     desc = ds.get("SeriesDescription", "").lower()
@@ -35,14 +33,14 @@ def is_included_wsi(wsi_path):
     try:
         wsi = WSIReader.open(wsi_path)
         if wsi.info.mpp is None and wsi.info.objective_power is None:
-            logging.info(f"No required mpp or power info for {wsi_name}")
+            logger.info(f"No required mpp or power info for {wsi_name}")
             del wsi
             return False
         else:
             del wsi
             return True
     except:
-        logging.info(f"Cannot open {wsi_name}")
+        logger.info(f"Cannot open {wsi_name}")
         return False
 
 if __name__ == "__main__":
@@ -62,7 +60,7 @@ if __name__ == "__main__":
     series_paths = [p for p in series_paths]
 
     def _inclusion_exclusion(idx, path):
-        logging.info(f"Processing [{idx + 1} / {len(series_paths)}] ...")
+        logger.info(f"Processing [{idx + 1} / {len(series_paths)}] ...")
         if args.modality == 'radiology':
             dicom_files = path.glob('*.dcm')
             raw_dicoms = []
@@ -75,14 +73,14 @@ if __name__ == "__main__":
             if all(raw_dicoms):
                 return ("included", str(path))
             else:
-                logging.info(f"Excluding series {path.name}")
+                logger.info(f"Excluding series {path.name}")
                 return ("excluded", str(path))
         else:
             valid_wsi = is_included_wsi(path)
             if valid_wsi:
                 return ("included", str(path))
             else:
-                logging.info(f"Excluding wsi {path.name}")
+                logger.info(f"Excluding wsi {path.name}")
                 return ("excluded", str(path))
 
     # process in parallel
@@ -93,8 +91,8 @@ if __name__ == "__main__":
     # Merge results
     included_series = [p for t, p in results if t == "included"]
     excluded_series = [p for t, p in results if t == "excluded"]
-    print(f"Totally {len(included_series)} raw series included")
-    print(f"Totally {len(excluded_series)} series excluded")
+    logger.info(f"Totally {len(included_series)} raw series included")
+    logger.info(f"Totally {len(excluded_series)} series excluded")
     if args.modality == 'radiology':
         save_path = f"{args.save_dir}/{args.dataset}_included_raw_series.json"
     else:

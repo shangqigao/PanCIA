@@ -1,11 +1,20 @@
+import os
+import sys
+
+# Get the directory where the current script resides
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Add a relative subdirectory to sys.path
+relative_path = os.path.join(script_dir, '../../')
+sys.path.append(relative_path)
+
 from joblib import Parallel, delayed
 from pathlib import Path
 import json
 import argparse
-import logging
 import pandas as pd
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+from tiatoolbox import logger
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -32,7 +41,7 @@ if __name__ == "__main__":
 
     subject_ids = df['Subject ID'].unique().tolist()
     def _inclusion_exclusion(idx, subject_id):
-        logging.info(f"Processing [{idx + 1} / {len(subject_ids)}] ...")
+        logger.info(f"Processing [{idx + 1} / {len(subject_ids)}] ...")
         df_subject = df[df['Subject ID'] == subject_id].copy()
         df_subject['Study Date'] = pd.to_datetime(df['Study Date'], format='%Y-%m-%d')
         df_subject = df_subject.sort_values(by='Study Date')
@@ -46,7 +55,7 @@ if __name__ == "__main__":
         if not pathology.empty and not radiology.empty: 
             return ("included", subject_id, subject_dict)
         else:
-            logging.info(f"Excluding subject {subject_id}")
+            logger.info(f"Excluding subject {subject_id}")
             return ("excluded", subject_id, subject_dict)
     # process in parallel
     results = Parallel(n_jobs=32, backend="threading")(
@@ -56,8 +65,8 @@ if __name__ == "__main__":
     # Merge results
     included_subjects = {s : d for t, s, d in results if t == "included"}
     excluded_subjects = {s : d for t, s, d in results if t == "excluded"}
-    print(f"Totally {len(included_subjects)} subjects included")
-    print(f"Totally {len(excluded_subjects)} subjects excluded")
+    logger.info(f"Totally {len(included_subjects)} subjects included")
+    logger.info(f"Totally {len(excluded_subjects)} subjects excluded")
     save_path = f"{args.save_dir}/{args.dataset}_included_subjects.json"
     data_dict = {"included subjects": included_subjects, "excluded subjects": excluded_subjects}
     with open(save_path, "w") as f:

@@ -10,7 +10,6 @@ sys.path.append(relative_path)
 import matplotlib.pyplot as plt
 import argparse
 import pathlib
-import logging
 import joblib
 
 import numpy as np
@@ -18,6 +17,7 @@ from utilities.m_utils import mkdir
 from tiatoolbox.wsicore.wsireader import WSIReader, VirtualWSIReader, WSIMeta
 from tiatoolbox.utils.misc import imwrite, imread
 from tiatoolbox.tools import tissuemask
+from tiatoolbox import logger
 from pprint import pprint
 
 def generate_wsi_tissue_mask(wsi_paths, save_msk_dir=None, method="otsu", n_jobs=8, resolution=1.25, units="power"):
@@ -34,7 +34,7 @@ def generate_wsi_tissue_mask(wsi_paths, save_msk_dir=None, method="otsu", n_jobs
     def _extract_wsi_thumbs(path):
         if pathlib.Path(path).suffix == ".jpg":
             img_name = pathlib.Path(path).stem
-            logging.info(f"Reading image: {img_name}...")
+            logger.info(f"Reading image: {img_name}...")
             img = imread(path)
             metadata = WSIMeta(
                 mpp=np.array([0.5, 0.5]),
@@ -48,7 +48,7 @@ def generate_wsi_tissue_mask(wsi_paths, save_msk_dir=None, method="otsu", n_jobs
             wsi = VirtualWSIReader(img, info=metadata)
         else:
             img_name = pathlib.Path(path).stem
-            logging.info(f"Reading WSI: {img_name}...")
+            logger.info(f"Reading WSI: {img_name}...")
             wsi = WSIReader.open(path)
         wsi_thumb = wsi.slide_thumbnail(resolution=resolution, units=units)
         # wsi_thumb = np.array(wsi_thumb, np.uint8)
@@ -77,7 +77,7 @@ def generate_wsi_tissue_mask(wsi_paths, save_msk_dir=None, method="otsu", n_jobs
         masker = tissuemask.OtsuTissueMasker()
     
     # fitting all images to compute threshold
-    logging.info(f"Fitting {len(wsi_paths)} images...")
+    logger.info(f"Fitting {len(wsi_paths)} images...")
     masker.fit(wsi_thumbs)
 
     if save_msk_dir is not None:
@@ -87,7 +87,7 @@ def generate_wsi_tissue_mask(wsi_paths, save_msk_dir=None, method="otsu", n_jobs
             wsi_name = pathlib.Path(path).stem
             msk_thumb = masker.transform([wsi_thumb])[0]
             save_msk_path = save_msk_dir / f"{wsi_name}.jpg"
-            logging.info(f"Saving tissue mask {wsi_name}.jpg")
+            logger.info(f"Saving tissue mask {wsi_name}.jpg")
             imwrite(save_msk_path, msk_thumb.astype(np.uint8)*255)
         return
     else:
