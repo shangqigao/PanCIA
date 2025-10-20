@@ -87,17 +87,17 @@ if __name__ == "__main__":
     # )
 
     # cluster radiomics
-    from analysis.a04_feature_aggregation.m_spatial_feature_clustering import cluster_radiomic_feature 
+    # from analysis.a04_feature_aggregation.m_spatial_feature_clustering import cluster_radiomic_feature 
 
-    cluster_radiomic_feature(
-        img_paths=img_paths, 
-        feature_mode=args.feature_mode, 
-        save_dir=save_feature_dir, 
-        class_name=args.target,
-        n_clusters=3,
-        n_jobs=32,
-        skip_exist=False
-    )
+    # cluster_radiomic_feature(
+    #     img_paths=img_paths, 
+    #     feature_mode=args.feature_mode, 
+    #     save_dir=save_feature_dir, 
+    #     class_name=args.target,
+    #     n_clusters=3,
+    #     n_jobs=32,
+    #     skip_exist=False
+    # )
 
     # construct image graph
     # from analysis.a04_feature_aggregation.m_graph_construction import construct_img_graph

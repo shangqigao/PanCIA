@@ -115,7 +115,18 @@ srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
             --radiology $radiology \
             --dataset TCGA \
             --save_dir $save_dir
-    
+
+# extract radiomic features
+# radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+# lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+# meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
+
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py \
+#             --img_dir $img_dir \
+#             --lab_dir $lab_dir \
+#             --save_dir $save_dir \
+#             --meta_info $meta_info 
 
 # classification
 # img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
