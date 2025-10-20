@@ -523,16 +523,17 @@ if __name__ == "__main__":
     # warning: do not run this function in a loop
     logger.info(f"starting segmentation on {dataset_info['name']}...")
     extract_radiology_segmentation(
-        img_paths=dataset_info['img_paths'][2500:],
-        text_prompts=dataset_info['text_prompts'][2500:],
+        img_paths=dataset_info['img_paths'][:2500],
+        text_prompts=dataset_info['text_prompts'][:2500],
         model_mode=args.model,
         save_dir=save_dir,
-        modality=dataset_info['modality'][2500:],
-        site=dataset_info['site'][2500:],
+        modality=dataset_info['modality'][:2500],
+        site=dataset_info['site'][:2500],
         meta_list=dataset_info['meta_list'],
-        img_format=dataset_info['img_format'][2500:],
+        img_format=dataset_info['img_format'][:2500],
         beta_params=None,
         prompt_ensemble=False,
         save_radiomics=False,
-        zoom_in=False
+        zoom_in=False,
+        skip_exist=True
     )

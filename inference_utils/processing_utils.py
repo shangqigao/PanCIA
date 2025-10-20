@@ -264,7 +264,9 @@ def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spa
             phase, slice_axis, pixel_spacing = get_orientation(affine)
             phases.append(phase)
             slice_axises.append(slice_axis)
-            image_list.append(nii.get_fdata())
+            image = nii.get_fdata()
+            image = np.squeeze(image)
+            image_list.append(image)
         assert len(list(set(phases))) == 1, f"Inconsistent scanning phase: {phases}"
         assert len(list(set(slice_axises))), f"Inconsistent slice axis: {slice_axises}"
         image_array = np.stack(image_list, axis=-1)
@@ -274,6 +276,7 @@ def read_nifti_inplane(image_path, is_CT, site=None, keep_size=False, return_spa
         affine = nii.affine
         phase, slice_axis, pixel_spacing = get_orientation(affine)
         image_array = nii.get_fdata()
+        image_array = np.squeeze(image_array)
 
     # resample to given resolution
     if resolution is not None:

@@ -128,6 +128,15 @@ srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --save_dir $save_dir \
 #             --meta_info $meta_info 
 
+# extract pathomic features
+# pathology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/pathomics"
+
+# python analysis/a03_feature_extraction/m_pathomics_extraction.py \
+#             --pathology $pathology \
+#             --dataset TCGA \
+#             --save_dir $save_dir
+
 # classification
 # img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
 # save_radiomics_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"

@@ -1,6 +1,9 @@
+
 import nibabel as nib
 import numpy as np
 import json
+import pathlib
+from PIL import Image
 
 def get_orientation(affine):
     ornt = nib.orientations.io_orientation(affine)
@@ -79,13 +82,103 @@ def load_valid_affine(img, verbose=False):
 
     return affine
 
-nifit_path = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_NIFTI/Radiology/CT/TCGA-OV/1.3.6.1.4.1.14519.5.2.1.7777.4007.233005020700722095334542706028/_3.nii.gz'
+def prepare_TCGA_info(img_json, img_format='nifti'):
+    assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
+
+    project_site = {
+        "TCGA-KIRC": 'kidney',
+        "TCGA-BRCA": 'breast',
+        "TCGA-LIHC": 'liver',
+        "TCGA-BLCA": 'bladder',
+        "TCGA-UCEC": 'uterus',
+        "TCGA-OV":   'ovary',
+        "TCGA-LUAD": 'lung',
+        "TCGA-CESC": 'cervix',
+        "TCGA-KIRP": 'kidney',
+        "TCGA-STAD": 'stomach',
+        "TCGA-LUSC": 'lung',
+        "TCGA-PRAD": 'prostate',
+        "TCGA-ESCA": 'esophagus',
+        "TCGA-KICH": 'kidney',
+        "TCGA-COAD": 'colon',
+    }
+    prompt_template = {
+        'kidney': 'tumor located within the kidney, near the liver',
+        'breast': 'tumor located within the breast, adjacent to the chest wall',
+        'liver': 'tumor located within the liver, adjacent to the right kidney',
+        'bladder': 'tumor located within the bladder, adjacent to the prostate',
+        'uterus': 'tumor within the uterus, adjacent to the bladder',
+        'ovary': 'tumor located within the ovary, near the uterus',
+        'lung': 'tumor within the lung, adjacent to the heart',
+        'cervix': 'tumor located within the cervix, adjacent to the bladder',
+        'stomach': 'tumor located within the stomach, adjacent to the pancreas and liver',
+        'prostate': 'tumor within the prostate, adjacent to the bladder',
+        'esophagus': 'tumor located within the esophagus, adjacent to the trachea and stomach',
+        'colon': 'tumor located within the colon, near the small intestine',
+    }
+    with open(img_json, 'r') as f:
+        data = json.load(f)
+    included_subjects = data['included subjects']
+    img_paths = []
+    for k, v in included_subjects.items(): img_paths += v['radiology']
+    images, site, modality, prompts = [], [], [], []
+    for img_path in img_paths:
+        folds = str(img_path).split('/')
+        project = folds[-3]
+        img_mod = {'MR': 'MRI', 'CT': 'CT'}[folds[-4]]
+        if project_site.get(project, False):
+            images.append(img_path)
+            img_site = project_site[project]
+            site.append(img_site)
+            modality.append(img_mod)
+            target = prompt_template[img_site]
+            prompts.append(f"{target} on {img_mod}")
+    
+    dataset_info = {
+        'name': 'TCGA',
+        'img_paths': images,
+        'text_prompts': prompts,
+        'modality': modality,
+        'site': site,
+        'meta_list': None,
+        'img_format': [img_format] * len(images)
+    }
+    return dataset_info
+
+# nifit_path = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_NIFTI/Radiology/CT/TCGA-OV/1.3.6.1.4.1.14519.5.2.1.7777.4007.233005020700722095334542706028/_3.nii.gz'
 # nifit_path = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_NIFTI/Radiology/CT/TCGA-UCEC/1.3.6.1.4.1.14519.5.2.1.3344.4020.198095390502821890860366659919/6.1_02_0_ABDOMEN_PELVIS_3.nii.gz'
+
+data = prepare_TCGA_info('/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json')
+nifit_path = data['img_paths'][2500+447]
+
+for text in data['text_prompts'][::50]:
+    print(text)
+
 nii = nib.load(nifit_path)
 affine = load_valid_affine(nii, verbose=False)
 phase, axis, spacing = get_orientation(affine)
 image_array = nii.get_fdata()
-print('Image shape is', image_array.shape)
+print('Image shape before squeeze', image_array.shape)
+image_array = np.squeeze(image_array)
+print('Image shape after squeeze', image_array.shape)
+print(f"Phase: {phase}, Axis: {axis}, Spacing: {spacing}")
+
+image_data = image_array[:, :, 0]
+if image_data.max() > 0:
+    lower_bound, upper_bound = np.percentile(
+        image_data[image_data > 0], 0.5
+    ), np.percentile(image_data[image_data > 0], 99.5)
+else:
+    lower_bound, upper_bound = 0, 0
+image_data_pre = np.clip(image_data, lower_bound, upper_bound)
+image_data_pre = (
+    (image_data_pre - image_data_pre.min())
+    / (image_data_pre.max() - image_data_pre.min())
+    * 255.0
+)
+image_array = np.stack([image_data_pre]*3, axis=-1).astype(np.uint8)
+print(image_array.shape)
+print(Image.fromarray(image_array).size)
 
 json_path = nifit_path.replace('.nii.gz', '.json')
 with open(json_path, 'r') as f:

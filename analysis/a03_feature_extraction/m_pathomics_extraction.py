@@ -10,13 +10,14 @@ sys.path.append(relative_path)
 
 import json
 import pathlib
-import logging
 import torch
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 import argparse
 import warnings
 warnings.filterwarnings('ignore')
+
+from tiatoolbox import logger
 
 if __name__ == "__main__":
     ## argument parser
@@ -38,58 +39,58 @@ if __name__ == "__main__":
     included_subjects = data['included subjects']
     wsi_paths = []
     for k, v in included_subjects.items(): wsi_paths += v['pathology']
-    logging.info("The number of selected WSIs on {}: {}".format(args.dataset, len(wsi_paths)))
+    logger.info("The number of selected WSIs on {}: {}".format(args.dataset, len(wsi_paths)))
     
     ## set save dir
     save_msk_dir = pathlib.Path(f"{args.save_dir}/{args.dataset}_pathomic_masks")
     save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.dataset}_pathomic_features/{args.feature_mode}")
     
     # generate wsi tissue mask batch by batch
-    from analysis.a01_data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
-    bs = 32
-    nb = len(wsi_paths) // bs if len(wsi_paths) % bs == 0 else len(wsi_paths) // bs + 1
-    for i in range(0, nb):
-        logging.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
-        start = i * bs
-        end = min(len(wsi_paths), (i + 1) * bs)
-        batch_wsi_paths = wsi_paths[start:end]
-        generate_wsi_tissue_mask(
-            wsi_paths=batch_wsi_paths,
-            save_msk_dir=save_msk_dir,
-            n_jobs=32,
-            method=args.mask_method,
-            resolution=1.25,
-            units="power"
-        )
-
-    # extract wsi feature patch by patch
-    # from analysis.a03_feature_extraction.m_feature_extraction import extract_pathomic_feature
-    # msk_paths = [save_msk_dir / f"{p.stem}.jpg" for p in wsi_paths]
-    # logging.info("The number of extracted tissue masks on {}: {}".format(args.dataset, len(msk_paths)))
+    # from analysis.a01_data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
     # bs = 32
     # nb = len(wsi_paths) // bs if len(wsi_paths) % bs == 0 else len(wsi_paths) // bs + 1
     # for i in range(0, nb):
-    #     logging.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
+    #     logger.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
     #     start = i * bs
     #     end = min(len(wsi_paths), (i + 1) * bs)
     #     batch_wsi_paths = wsi_paths[start:end]
-    #     batch_msk_paths = msk_paths[start:end]
-    #     extract_pathomic_feature(
+    #     generate_wsi_tissue_mask(
     #         wsi_paths=batch_wsi_paths,
-    #         wsi_msk_paths=batch_msk_paths,
-    #         feature_mode=args.feature_mode,
-    #         save_dir=save_feature_dir,
-    #         resolution=args.resolution,
-    #         units=args.units,
-    #         skip_exist=True
+    #         save_msk_dir=save_msk_dir,
+    #         n_jobs=8,
+    #         method=args.mask_method,
+    #         resolution=1.25,
+    #         units="power"
     #     )
+
+    # extract wsi feature patch by patch
+    from analysis.a03_feature_extraction.m_feature_extraction import extract_pathomic_feature
+    msk_paths = [save_msk_dir / f"{p.stem}.jpg" for p in wsi_paths]
+    logger.info("The number of extracted tissue masks on {}: {}".format(args.dataset, len(msk_paths)))
+    bs = 32
+    nb = len(wsi_paths) // bs if len(wsi_paths) % bs == 0 else len(wsi_paths) // bs + 1
+    for i in range(0, nb):
+        logger.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
+        start = i * bs
+        end = min(len(wsi_paths), (i + 1) * bs)
+        batch_wsi_paths = wsi_paths[start:end]
+        batch_msk_paths = msk_paths[start:end]
+        extract_pathomic_feature(
+            wsi_paths=batch_wsi_paths,
+            wsi_msk_paths=batch_msk_paths,
+            feature_mode=args.feature_mode,
+            save_dir=save_feature_dir,
+            resolution=args.resolution,
+            units=args.units,
+            skip_exist=True
+        )
 
     # construct wsi graph
     # from analysis.a04_feature_aggregation.m_graph_construction import construct_wsi_graph
     # bs = 32
     # nb = len(wsi_paths) // bs if len(wsi_paths) % bs == 0 else len(wsi_paths) // bs + 1
     # for i in range(0, nb):
-    #     logging.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
+    #     logger.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
     #     start = i * bs
     #     end = min(len(wsi_paths), (i + 1) * bs)
     #     batch_wsi_paths = wsi_paths[start:end]
@@ -191,7 +192,7 @@ if __name__ == "__main__":
     # from analysis.a04_feature_aggregation.m_graph_construction import visualize_pathomic_graph
     # for wsi_path in wsi_paths:
     #     wsi_name = pathlib.Path(wsi_path).stem 
-    #     logging.info(f"Visualizing graph of {wsi_name}...")
+    #     logger.info(f"Visualizing graph of {wsi_name}...")
     #     graph_path = save_feature_dir / f"{wsi_name}.json"
     #     label_path = save_feature_dir / f"{wsi_name}.label.npy"
     #     # subgraph can be {key: int, ..., key: int}, a dict of mutiple classes
@@ -209,11 +210,11 @@ if __name__ == "__main__":
     #             subgraph_id = subgraph
     #         else:
     #             subgraph_id = {k: [v, v + 1] for k, v in subgraph.items()}
-    #         logging.info(f"Visualizing subgraph for {class_name} of {wsi_name}...")
+    #         logger.info(f"Visualizing subgraph for {class_name} of {wsi_name}...")
     #     else:
     #         class_name = "pathomics"
     #         subgraph_id = None
-    #         logging.info(f"Visualizing slide graph for {wsi_name}...")
+    #         logger.info(f"Visualizing slide graph for {wsi_name}...")
     #     visualize_pathomic_graph(
     #         wsi_path=wsi_path,
     #         graph_path=graph_path,
