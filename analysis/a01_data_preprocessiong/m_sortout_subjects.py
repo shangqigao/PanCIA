@@ -15,6 +15,7 @@ import argparse
 import pandas as pd
 
 from tiatoolbox import logger
+from utilities.constants import PANCIA_PROJECT_SITE
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -43,6 +44,9 @@ if __name__ == "__main__":
     def _inclusion_exclusion(idx, subject_id):
         logger.info(f"Processing [{idx + 1} / {len(subject_ids)}] ...")
         df_subject = df[df['Subject ID'] == subject_id].copy()
+        project_id = df_subject['Collection Name'].unique().tolist()
+        in_projects = PANCIA_PROJECT_SITE.get(project_id[0], False)
+        assert len(project_id) == 1, "Found one subject belongs to multiple projects"
         df_subject['Study Date'] = pd.to_datetime(df['Study Date'], format='%Y-%m-%d')
         df_subject = df_subject.sort_values(by='Study Date')
         pathology = df_wsi[df_wsi['Subject ID'] == subject_id]
@@ -52,7 +56,7 @@ if __name__ == "__main__":
                 'radiology': radiology['Series Path'].tolist(),
                 'pathology': pathology['WSI Path'].tolist()
         }
-        if not pathology.empty and not radiology.empty: 
+        if in_projects and not pathology.empty and not radiology.empty: 
             return ("included", subject_id, subject_dict)
         else:
             logger.info(f"Excluding subject {subject_id}")

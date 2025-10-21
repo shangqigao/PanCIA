@@ -24,7 +24,7 @@ from modeling.BaseModel import BaseModel
 from modeling import build_model
 from utilities.distributed import init_distributed
 from utilities.arguments import load_opt_from_config_files
-from utilities.constants import BIOMED_CLASSES
+from utilities.constants import BIOMED_CLASSES, PANCIA_PROJECT_SITE, PANCIA_PROMPT_TEMPLETES
 
 from inference_utils.inference import interactive_infer_image
 from inference_utils.processing_utils import read_dicom
@@ -428,38 +428,6 @@ def prepare_MAMAMIA_info(img_dir, img_format='nifti', phase='single', site='brea
 
 def prepare_TCGA_info(img_json, img_format='nifti'):
     assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
-
-    project_site = {
-        "TCGA-KIRC": 'kidney',
-        "TCGA-BRCA": 'breast',
-        "TCGA-LIHC": 'liver',
-        "TCGA-BLCA": 'bladder',
-        "TCGA-UCEC": 'uterus',
-        "TCGA-OV":   'ovary',
-        "TCGA-LUAD": 'lung',
-        "TCGA-CESC": 'cervix',
-        "TCGA-KIRP": 'kidney',
-        "TCGA-STAD": 'stomach',
-        "TCGA-LUSC": 'lung',
-        "TCGA-PRAD": 'prostate',
-        "TCGA-ESCA": 'esophagus',
-        "TCGA-KICH": 'kidney',
-        "TCGA-COAD": 'colon',
-    }
-    prompt_template = {
-        'kidney': 'tumor located within the kidney, near the liver',
-        'breast': 'tumor located within the breast, adjacent to the chest wall',
-        'liver': 'tumor located within the liver, adjacent to the right kidney',
-        'bladder': 'tumor located within the bladder, adjacent to the prostate',
-        'uterus': 'tumor within the uterus, adjacent to the bladder',
-        'ovary': 'tumor located within the ovary, near the uterus',
-        'lung': 'tumor within the lung, adjacent to the heart',
-        'cervix': 'tumor located within the cervix, adjacent to the bladder',
-        'stomach': 'tumor located within the stomach, adjacent to the pancreas and liver',
-        'prostate': 'tumor within the prostate, adjacent to the bladder',
-        'esophagus': 'tumor located within the esophagus, adjacent to the trachea and stomach',
-        'colon': 'tumor located within the colon, near the small intestine',
-    }
     with open(img_json, 'r') as f:
         data = json.load(f)
     included_subjects = data['included subjects']
@@ -470,12 +438,12 @@ def prepare_TCGA_info(img_json, img_format='nifti'):
         folds = str(img_path).split('/')
         project = folds[-3]
         img_mod = {'MR': 'MRI', 'CT': 'CT'}[folds[-4]]
-        if project_site.get(project, False):
+        if PANCIA_PROJECT_SITE.get(project, False):
             images.append(img_path)
-            img_site = project_site[project]
+            img_site = PANCIA_PROJECT_SITE[project]
             site.append(img_site)
             modality.append(img_mod)
-            target = prompt_template[img_site]
+            target = PANCIA_PROMPT_TEMPLETES[img_site]
             prompts.append(f"{target} on {img_mod}")
     
     dataset_info = {

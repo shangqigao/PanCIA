@@ -1,3 +1,36 @@
+PANCIA_PROJECT_SITE = {
+    "TCGA-KIRC": 'kidney',
+    "TCGA-BRCA": 'breast',
+    "TCGA-LIHC": 'liver',
+    "TCGA-BLCA": 'bladder',
+    "TCGA-UCEC": 'uterus',
+    "TCGA-OV":   'ovary',
+    "TCGA-LUAD": 'lung',
+    "TCGA-CESC": 'cervix',
+    "TCGA-KIRP": 'kidney',
+    "TCGA-STAD": 'stomach',
+    "TCGA-LUSC": 'lung',
+    "TCGA-PRAD": 'prostate',
+    "TCGA-ESCA": 'esophagus',
+    "TCGA-KICH": 'kidney',
+    "TCGA-COAD": 'colon',
+}
+
+PANCIA_PROMPT_TEMPLETES = {
+    'kidney': 'tumor located within the kidney, near the liver',
+    'breast': 'tumor located within the breast, adjacent to the chest wall',
+    'liver': 'tumor located within the liver, adjacent to the right kidney',
+    'bladder': 'tumor located within the bladder, adjacent to the prostate',
+    'uterus': 'tumor within the uterus, adjacent to the bladder',
+    'ovary': 'tumor located within the ovary, near the uterus',
+    'lung': 'tumor within the lung, adjacent to the heart',
+    'cervix': 'tumor located within the cervix, adjacent to the bladder',
+    'stomach': 'tumor located within the stomach, adjacent to the pancreas and liver',
+    'prostate': 'tumor within the prostate, adjacent to the bladder',
+    'esophagus': 'tumor located within the esophagus, adjacent to the trachea and stomach',
+    'colon': 'tumor located within the colon, near the small intestine',
+}
+
 BIOMED_CLASSES = ['liver', 'lung', 'kidney', 'pancreas', 'heart anatomies', 'brain anatomies', 
                 'eye anatomies', 'vessel', 'other organ', 'tumor', 'infection', 'other lesion', 
                 'fluid disturbance', 'other abnormality', 'histology structure', 'other']
