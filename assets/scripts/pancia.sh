@@ -109,12 +109,12 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # pan-cancer segmentation
-radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
-srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-            --radiology $radiology \
-            --dataset TCGA \
-            --save_dir $save_dir
+# radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
+# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+#             --radiology $radiology \
+#             --dataset TCGA \
+#             --save_dir $save_dir
 
 # extract radiomic features
 # radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
@@ -129,13 +129,13 @@ srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --meta_info $meta_info 
 
 # extract pathomic features
-# pathology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-# save_dir="/home/sg2162/rds/hpc-work/Experiments/pathomics"
+pathology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+save_dir="/home/sg2162/rds/hpc-work/Experiments/pathomics"
 
-# python analysis/a03_feature_extraction/m_pathomics_extraction.py \
-#             --pathology $pathology \
-#             --dataset TCGA \
-#             --save_dir $save_dir
+python analysis/a03_feature_extraction/m_pathomics_extraction.py \
+            --pathology $pathology \
+            --dataset TCGA \
+            --save_dir $save_dir
 
 # classification
 # img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"

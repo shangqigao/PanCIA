@@ -45,8 +45,8 @@ if __name__ == "__main__":
         logger.info(f"Processing [{idx + 1} / {len(subject_ids)}] ...")
         df_subject = df[df['Subject ID'] == subject_id].copy()
         project_id = df_subject['Collection Name'].unique().tolist()
-        in_projects = PANCIA_PROJECT_SITE.get(project_id[0], False)
         assert len(project_id) == 1, "Found one subject belongs to multiple projects"
+        in_projects = PANCIA_PROJECT_SITE.get(project_id[0], False)
         df_subject['Study Date'] = pd.to_datetime(df['Study Date'], format='%Y-%m-%d')
         df_subject = df_subject.sort_values(by='Study Date')
         pathology = df_wsi[df_wsi['Subject ID'] == subject_id]

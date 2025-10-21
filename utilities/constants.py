@@ -14,6 +14,11 @@ PANCIA_PROJECT_SITE = {
     "TCGA-ESCA": 'esophagus',
     "TCGA-KICH": 'kidney',
     "TCGA-COAD": 'colon',
+    "CPTAC-CCRCC": 'kidney',
+    "CPTAC-LSCC": 'lung',
+    "CPTAC-LUAD": 'lung',
+    "CPTAC-PDA": 'pancreas',
+    "CPTAC-UCEC": 'uterus',
 }
 
 PANCIA_PROMPT_TEMPLETES = {
@@ -29,6 +34,7 @@ PANCIA_PROMPT_TEMPLETES = {
     'prostate': 'tumor within the prostate, adjacent to the bladder',
     'esophagus': 'tumor located within the esophagus, adjacent to the trachea and stomach',
     'colon': 'tumor located within the colon, near the small intestine',
+    'pancreas': 'tumor within the pancreas, adjacent to the stomach',
 }
 
 BIOMED_CLASSES = ['liver', 'lung', 'kidney', 'pancreas', 'heart anatomies', 'brain anatomies', 

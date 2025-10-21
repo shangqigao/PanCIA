@@ -15,9 +15,7 @@ import json
 import argparse
 import nibabel as nib
 import numpy as np
-import json
-
-from tiatoolbox import logger
+import logging
 
 def check_3D_affine(nii_path):
     """ check if image is 3D and affine is valid
@@ -34,7 +32,7 @@ def check_3D_affine(nii_path):
         
     affine = nii.affine
     shape = np.squeeze(data).shape
-    if len(shape) == 4 or len(shape) < 3:
+    if len(data.shape) != 3 or len(shape) != 3:
         return False, "image is not 3D"
     # Must be 4x4
     if affine.shape != (4, 4):
@@ -66,7 +64,7 @@ def check_3D_affine(nii_path):
     return True, f"shape: {shape}, voxel sizes: {voxel_sizes}, axcodes: {axcodes}"
 
 def convert_series(idx, dicom_dir, output_dir):
-    logger.info(f"Processing [{idx + 1} / {len(series_dirs)}] ...")
+    logging.info(f"Processing [{idx + 1} / {len(series_dirs)}] ...")
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     try:
         subprocess.run([
@@ -78,10 +76,10 @@ def convert_series(idx, dicom_dir, output_dir):
             str(dicom_dir)
         ], check=True)
     except subprocess.CalledProcessError as e:
-        logger.info(f"[Error] dcm2niix failed for: {dicom_dir}")
-        logger.info(f"Return code: {e.returncode}")
+        logging.info(f"[Error] dcm2niix failed for: {dicom_dir}")
+        logging.info(f"Return code: {e.returncode}")
     except Exception as e:
-        logger.info(f"[Exception] Unexpected error for: {dicom_dir} → {e}")
+        logging.info(f"[Exception] Unexpected error for: {dicom_dir} → {e}")
     
     img_paths = Path(output_dir).glob('*.nii.gz')
     for img_path in img_paths:
@@ -89,10 +87,10 @@ def convert_series(idx, dicom_dir, output_dir):
         valid, mess = check_3D_affine(img_path)
         if not valid:
             new_img_path = img_path.replace('.nii.gz', '_excluded.nii.gz')
-            logger.info(f">>>>Warning: {mess}, renamed as {new_img_path}")
+            logging.info(f">>>>Warning: {mess}, renamed as {new_img_path}")
             Path(img_path).rename(Path(new_img_path))
         else:
-            logger.info(f"Got valid image of {mess}")
+            logging.info(f"Got valid image of {mess}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -125,9 +123,9 @@ if __name__ == "__main__":
             else:
                 included_nifit += niis
         else:
-            logger.info("No nifti file in this folder")
+            logging.info("No nifti file in this folder")
     save_path = f"{args.save_dir}/{args.dataset}_included_nifti.json"
     data_dict = {"included nifti": included_nifit, "excluded nifti": excluded_nifit}
     with open(save_path, "w") as f:
         json.dump(data_dict, f, indent=4)
-    logger.info(f"Included {len(included_nifit)} nifti, excluded {len(excluded_nifit)}")
+    logging.info(f"Included {len(included_nifit)} nifti, excluded {len(excluded_nifit)}")

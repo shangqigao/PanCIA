@@ -46,27 +46,7 @@ if __name__ == "__main__":
     save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.dataset}_pathomic_features/{args.feature_mode}")
     
     # generate wsi tissue mask batch by batch
-    # from analysis.a01_data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
-    # bs = 32
-    # nb = len(wsi_paths) // bs if len(wsi_paths) % bs == 0 else len(wsi_paths) // bs + 1
-    # for i in range(0, nb):
-    #     logger.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
-    #     start = i * bs
-    #     end = min(len(wsi_paths), (i + 1) * bs)
-    #     batch_wsi_paths = wsi_paths[start:end]
-    #     generate_wsi_tissue_mask(
-    #         wsi_paths=batch_wsi_paths,
-    #         save_msk_dir=save_msk_dir,
-    #         n_jobs=8,
-    #         method=args.mask_method,
-    #         resolution=1.25,
-    #         units="power"
-    #     )
-
-    # extract wsi feature patch by patch
-    from analysis.a03_feature_extraction.m_feature_extraction import extract_pathomic_feature
-    msk_paths = [save_msk_dir / f"{p.stem}.jpg" for p in wsi_paths]
-    logger.info("The number of extracted tissue masks on {}: {}".format(args.dataset, len(msk_paths)))
+    from analysis.a01_data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
     bs = 32
     nb = len(wsi_paths) // bs if len(wsi_paths) % bs == 0 else len(wsi_paths) // bs + 1
     for i in range(0, nb):
@@ -74,16 +54,36 @@ if __name__ == "__main__":
         start = i * bs
         end = min(len(wsi_paths), (i + 1) * bs)
         batch_wsi_paths = wsi_paths[start:end]
-        batch_msk_paths = msk_paths[start:end]
-        extract_pathomic_feature(
+        generate_wsi_tissue_mask(
             wsi_paths=batch_wsi_paths,
-            wsi_msk_paths=batch_msk_paths,
-            feature_mode=args.feature_mode,
-            save_dir=save_feature_dir,
-            resolution=args.resolution,
-            units=args.units,
-            skip_exist=True
+            save_msk_dir=save_msk_dir,
+            n_jobs=8,
+            method=args.mask_method,
+            resolution=1.25,
+            units="power"
         )
+
+    # extract wsi feature patch by patch
+    # from analysis.a03_feature_extraction.m_feature_extraction import extract_pathomic_feature
+    # msk_paths = [save_msk_dir / f"{p.stem}.jpg" for p in wsi_paths]
+    # logger.info("The number of extracted tissue masks on {}: {}".format(args.dataset, len(msk_paths)))
+    # bs = 32
+    # nb = len(wsi_paths) // bs if len(wsi_paths) % bs == 0 else len(wsi_paths) // bs + 1
+    # for i in range(0, nb):
+    #     logger.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
+    #     start = i * bs
+    #     end = min(len(wsi_paths), (i + 1) * bs)
+    #     batch_wsi_paths = wsi_paths[start:end]
+    #     batch_msk_paths = msk_paths[start:end]
+    #     extract_pathomic_feature(
+    #         wsi_paths=batch_wsi_paths,
+    #         wsi_msk_paths=batch_msk_paths,
+    #         feature_mode=args.feature_mode,
+    #         save_dir=save_feature_dir,
+    #         resolution=args.resolution,
+    #         units=args.units,
+    #         skip_exist=True
+    #     )
 
     # construct wsi graph
     # from analysis.a04_feature_aggregation.m_graph_construction import construct_wsi_graph
