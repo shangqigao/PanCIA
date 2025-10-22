@@ -194,7 +194,7 @@ def extract_radiomic_feature(
             class_name=class_name,
             label=label,
             format=format,
-            is_CT=modality == 'CT',
+            modality=modality,
             dilation_mm=dilation_mm,
             site=site,
             resolution=resolution,
@@ -211,7 +211,7 @@ def extract_radiomic_feature(
             class_name=class_name,
             label=label,
             format=format,
-            is_CT=modality == 'CT',
+            modality=modality,
             dilation_mm=dilation_mm,
             site=site,
             layer_method=layer_method,
@@ -1371,7 +1371,7 @@ def create_prompts(meta_data):
         bilateral_mri = meta_data['bilateral']
         lateral = 'bilateral' if bilateral_mri == 1 else 'unilateral'
         manufacturer = meta_data['scanner_manufacturer']
-        meta_prompts = [
+        meta_prompts format= [
             f"a {modality} scan of the {lateral} {site}, {view} view, slice {slice_index}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
             f"{lateral} {site} {modality} in {view} view at slice {slice_index} with spacing {x_spacing:.2f}x{y_spacing:.2f} mm, includes {target}",
             f"{view} slice {slice_index} from a {field_strength}T {manufacturer} {modality} of the {lateral} {site}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
@@ -1382,7 +1382,7 @@ def create_prompts(meta_data):
     return basic_prompts + meta_prompts
 
 def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, class_name, 
-                                  label=1, format='nifti', is_CT=True, site=None,
+                                  label=1, format='nifti', modality='CT', site=None,
                                   meta_list=None, prompt_ensemble=False,
                                   dilation_mm=0, resolution=None, units="mm", device="cuda", skip_exist=False):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
@@ -1400,7 +1400,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     from modeling import build_model
     from utilities.distributed import init_distributed
     from utilities.arguments import load_opt_from_config_files
-    from utilities.constants import BIOMED_CLASSES
+    from utilities.constants import BIOMED_CLASSES, CT_SITES
 
     from inference_utils.inference import interactive_infer_image
     from inference_utils.processing_utils import read_dicom
@@ -1433,10 +1433,14 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         model.model.sem_seg_head.predictor.lang_encoder.get_text_embeddings(BIOMED_CLASSES + ["background"], is_eval=True)
 
     mkdir(save_dir)
+    if isinstance(format, str): format = [format] * len(img_paths)
+    if isinstance(modality, str): modality = [modality] * len(img_paths)
+    if isinstance(site, str): site = [site] * len(img_paths)
+
     for idx, (img_path, lab_path, target_name) in enumerate(zip(img_paths, lab_paths, text_prompts)):
-        if format == 'dicom':
+        if [idx] == 'dicom':
             img_name = pathlib.Path(img_path[0]).parent.name
-        elif format == 'nifti':
+        elif format[idx] == 'nifti':
             if isinstance(img_path, list):
                 img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
             else:
@@ -1449,18 +1453,20 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
         # read slices from dicom or nifti
-        if format == 'dicom':
+        is_CT = modality[idx] == 'CT'
+        ct_site = CT_SITES[site[idx]]
+        if format[idx] == 'dicom':
             dicom_dir = pathlib.Path(img_path)
             assert pathlib.Path(img_path).is_dir()
             dicom_paths = sorted(dicom_dir.glob('*.dcm'))
-            images = [read_dicom(p, is_CT, site, keep_size=True, return_spacing=True) for p in dicom_paths]
+            images = [read_dicom(p, is_CT, ct_site, keep_size=True, return_spacing=True) for p in dicom_paths]
             slice_axis, affine = 0, np.eye(4)
-        elif format == 'nifti':
-            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, site, keep_size=True, return_spacing=True, resolution=resolution)
+        elif format[idx] == 'nifti':
+            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, ct_site, keep_size=True, return_spacing=True, resolution=resolution)
         else:
-            raise ValueError(f'Only support DICOM or NIFTI, but got {format}')
+            raise ValueError(f'Only support DICOM or NIFTI, but got {format[idx]}')
 
-        if format == 'nifti' and lab_path is not None:
+        if format[idx] == 'nifti' and lab_path is not None:
             assert f'{lab_path}'.endswith(('.nii', '.nii.gz'))
             nii = nib.load(lab_path)
             affine = nii.affine
@@ -1512,8 +1518,8 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
                 assert isinstance(meta_data, dict)
                 meta_data['view'] = phase
                 meta_data['slice_index'] = f'{i:03}'
-                meta_data['modality'] = 'CT' if is_CT else 'MRI'
-                meta_data['site'] = site
+                meta_data['modality'] = modality[idx]
+                meta_data['site'] = site[idx]
                 meta_data['target'] = target_name
                 meta_data['pixel_spacing'] = pixel_spacing
                 text_prompts = create_prompts(meta_data)
@@ -1707,7 +1713,7 @@ def extract_layer_by_layer_radiomics(img, mask, shell_thickness_mm=1.0, spacing=
 
 def extract_Bayes_BiomedParse_radiomics(
         img_paths, lab_paths, text_prompts, save_dir, class_name, 
-        label=1, format='nifti', is_CT=True, site=None,
+        label=1, format='nifti', modality='CT', site=None,
         meta_list=None, prompt_ensemble=False,
         dilation_mm=0, shell_thickness_mm=1.0, layer_method=None,
         resolution=None, units="mm", device="cuda", skip_exist=False
@@ -1727,7 +1733,7 @@ def extract_Bayes_BiomedParse_radiomics(
     from modeling import build_model
     from utilities.distributed import init_distributed
     from utilities.arguments import load_opt_from_config_files
-    from utilities.constants import BIOMED_CLASSES
+    from utilities.constants import BIOMED_CLASSES, CT_SITES
 
     from inference_utils.inference import interactive_infer_image
     from inference_utils.processing_utils import read_dicom
@@ -1760,10 +1766,14 @@ def extract_Bayes_BiomedParse_radiomics(
         model.model.sem_seg_head.predictor.lang_encoder.get_text_embeddings(BIOMED_CLASSES + ["background"], is_eval=True)
 
     mkdir(save_dir)
+    if isinstance(format, str): format = [format] * len(img_paths)
+    if isinstance(modality, str): modality = [modality] * len(img_paths)
+    if isinstance(site, str): site = [site] * len(img_paths)
+
     for idx, (img_path, lab_path, target_name) in enumerate(zip(img_paths, lab_paths, text_prompts)):
-        if format == 'dicom':
+        if format[idx] == 'dicom':
             img_name = pathlib.Path(img_path[0]).parent.name
-        elif format == 'nifti':
+        elif format[idx] == 'nifti':
             if isinstance(img_path, list):
                 img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
             else:
@@ -1779,18 +1789,20 @@ def extract_Bayes_BiomedParse_radiomics(
         logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
         # read slices from dicom or nifti
-        if format == 'dicom':
+        is_CT = modality[idx] == 'CT'
+        ct_site = CT_SITES[site[idx]]
+        if format[idx] == 'dicom':
             dicom_dir = pathlib.Path(img_path)
             assert pathlib.Path(img_path).is_dir()
             dicom_paths = sorted(dicom_dir.glob('*.dcm'))
-            images = [read_dicom(p, is_CT, site, keep_size=True, return_spacing=True) for p in dicom_paths]
+            images = [read_dicom(p, is_CT, ct_site, keep_size=True, return_spacing=True) for p in dicom_paths]
             slice_axis, affine = 0, np.eye(4)
-        elif format == 'nifti':
-            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, site, keep_size=True, return_spacing=True, resolution=resolution)
+        elif format[idx] == 'nifti':
+            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, ct_site, keep_size=True, return_spacing=True, resolution=resolution)
         else:
-            raise ValueError(f'Only support DICOM or NIFTI, but got {format}')
+            raise ValueError(f'Only support DICOM or NIFTI, but got {format[idx]}')
 
-        if format == 'nifti' and lab_path is not None:
+        if format[idx] == 'nifti' and lab_path is not None:
             assert f'{lab_path}'.endswith(('.nii', '.nii.gz'))
             nii = nib.load(lab_path)
             affine = nii.affine
@@ -1842,8 +1854,8 @@ def extract_Bayes_BiomedParse_radiomics(
                 assert isinstance(meta_data, dict)
                 meta_data['view'] = phase
                 meta_data['slice_index'] = f'{i:03}'
-                meta_data['modality'] = 'CT' if is_CT else 'MRI'
-                meta_data['site'] = site
+                meta_data['modality'] = modality[idx]
+                meta_data['site'] = site[idx]
                 meta_data['target'] = target_name
                 meta_data['pixel_spacing'] = pixel_spacing
                 text_prompts = create_prompts(meta_data)

@@ -8,7 +8,6 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 relative_path = os.path.join(script_dir, '../../')
 sys.path.append(relative_path)
 
-import ast
 import json
 import torch
 import pathlib
@@ -16,7 +15,6 @@ import argparse
 import logging
 import numpy as np
 import nibabel as nib
-import pandas as pd
 from PIL import Image
 
 logging.getLogger("modeling").setLevel(logging.ERROR)
@@ -24,31 +22,18 @@ from modeling.BaseModel import BaseModel
 from modeling import build_model
 from utilities.distributed import init_distributed
 from utilities.arguments import load_opt_from_config_files
-from utilities.constants import BIOMED_CLASSES, PANCIA_PROJECT_SITE, PANCIA_PROMPT_TEMPLETES
+from utilities.constants import BIOMED_CLASSES, CT_SITES
 
 from inference_utils.inference import interactive_infer_image
 from inference_utils.processing_utils import read_dicom
 from inference_utils.processing_utils import read_nifti_inplane
 
+from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_MAMAMIA_info
+from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_TCGA_radiology_info
 from analysis.a02_tumor_segmentation.m_post_processing import remove_inconsistent_objects
 from peft import LoraConfig, get_peft_model
 
 from tiatoolbox import logger
-
-CT_sites = {
-    'kidney': 'abdomen',
-    'breast': 'breast',
-    'liver': 'liver',
-    'bladder': 'pelvis',
-    'uterus': 'pelvis',
-    'ovary': 'pelvis',
-    'lung': 'lung',
-    'cervix': 'pelvis',
-    'stomach': 'abdomen',
-    'prostate': 'pelvis',
-    'esophagus': 'lung',
-    'colon': 'colon',
-}
 
 def extract_radiology_segmentation(
         img_paths, 
@@ -161,7 +146,7 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
 
         # read slices from dicom or nifti
         is_CT = modality[idx] == 'CT'
-        ct_site = CT_sites[site[idx]]
+        ct_site = CT_SITES[site[idx]]
         if format[idx] == 'dicom':
             dicom_dir = pathlib.Path(img_path)
             assert pathlib.Path(img_path).is_dir()
@@ -367,97 +352,6 @@ def create_prompts(meta_data):
     
     return basic_prompts + meta_prompts
 
-def prepare_MAMAMIA_info(img_dir, img_format='nifti', phase='single', site='breast', meta_info=None):
-    if img_format == 'dicom':
-        img_paths = pathlib.Path(img_dir).glob('*')
-        img_paths = [p for p in img_paths if p.is_dir()]
-        patient_ids = [p.name for p in img_paths]
-    else:
-        if phase == "single":
-            img_paths = sorted(pathlib.Path(img_dir).rglob('*_0001.nii.gz'))
-            patient_ids = [p.parent.name for p in img_paths]
-        else:
-            case_paths = sorted(pathlib.Path(img_dir).glob('*'))
-            case_paths = [p for p in case_paths if p.is_dir()]
-            img_paths = []
-            patient_ids = []
-            for path in case_paths:
-                patient_ids.append(path.name)
-                nii_paths = path.glob("*.nii.gz")
-                multiphase_keys = ["_0000.nii.gz", "_0001.nii.gz", "_0002.nii.gz"]
-                nii_paths = [p for p in nii_paths if any(k in p.name for k in multiphase_keys)]
-                img_paths.append(sorted(nii_paths))
-    text_prompts = [f'tumor located within the {site}, adjacent to the chest wall on MRI']*len(img_paths)
-    # text_prompts = [f'{site} {target}']*len(img_paths)
-
-    # read clinical and imaging info
-    if meta_info is not None:
-        df_meta = pd.read_excel(meta_info, sheet_name='dataset_info')
-        df_meta['pixel_spacing'] = df_meta['pixel_spacing'].apply(ast.literal_eval)
-        parent_path = pathlib.Path(meta_info).parent
-        meta_list = []
-        for patient_id in patient_ids:
-            field_strength = df_meta.loc[df_meta["patient_id"] == patient_id, 'field_strength'].values[0]
-            bilateral_mri = df_meta.loc[df_meta["patient_id"] == patient_id, 'bilateral_mri'].values[0]
-            lateral = 'bilateral' if bilateral_mri == 1 else 'unilateral'
-            manufacturer = df_meta.loc[df_meta["patient_id"] == patient_id, 'manufacturer'].values[0]
-            meta_data = {
-                'field_strength': field_strength, 
-                'bilateral': lateral, 
-                'scanner_manufacturer': manufacturer
-            }
-            patient_info_path = f'{parent_path}/patient_info_files/{patient_id}.json'
-            with open(patient_info_path, 'r') as file: 
-                patient_info = json.load(file)
-            breast_coords = patient_info["primary_lesion"]["breast_coordinates"]
-            meta_data.update({"breast_coordinates": breast_coords})
-            meta_list.append(meta_data)
-    else:
-        meta_list = None
-    
-    dataset_info = {
-        'name': 'MAMA-MIA',
-        'img_paths': img_paths,
-        'text_prompts': text_prompts,
-        'modality': ['MRI']*len(img_paths),
-        'site': ['breast']*len(img_paths),
-        'meta_list': meta_list,
-        'img_format': ['nifti']*len(img_paths)
-    }
-    return dataset_info
-
-def prepare_TCGA_info(img_json, img_format='nifti'):
-    assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
-    with open(img_json, 'r') as f:
-        data = json.load(f)
-    included_subjects = data['included subjects']
-    img_paths = []
-    for k, v in included_subjects.items(): img_paths += v['radiology']
-    images, site, modality, prompts = [], [], [], []
-    for img_path in img_paths:
-        folds = str(img_path).split('/')
-        project = folds[-3]
-        img_mod = {'MR': 'MRI', 'CT': 'CT'}[folds[-4]]
-        if PANCIA_PROJECT_SITE.get(project, False):
-            images.append(img_path)
-            img_site = PANCIA_PROJECT_SITE[project]
-            site.append(img_site)
-            modality.append(img_mod)
-            target = PANCIA_PROMPT_TEMPLETES[img_site]
-            prompts.append(f"{target} on {img_mod}")
-    
-    dataset_info = {
-        'name': 'TCGA',
-        'img_paths': images,
-        'text_prompts': prompts,
-        'modality': modality,
-        'site': site,
-        'meta_list': None,
-        'img_format': [img_format] * len(images)
-    }
-
-    return dataset_info
-
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
@@ -480,7 +374,7 @@ if __name__ == "__main__":
             meta_info=args.meta_info
         )
     elif args.dataset == 'TCGA':
-        dataset_info = prepare_TCGA_info(
+        dataset_info = prepare_TCGA_radiology_info(
             img_json=args.radiology,
             img_format=args.format
         )
@@ -491,14 +385,14 @@ if __name__ == "__main__":
     # warning: do not run this function in a loop
     logger.info(f"starting segmentation on {dataset_info['name']}...")
     extract_radiology_segmentation(
-        img_paths=dataset_info['img_paths'][:2500],
-        text_prompts=dataset_info['text_prompts'][:2500],
+        img_paths=dataset_info['img_paths'],
+        text_prompts=dataset_info['text_prompts'],
         model_mode=args.model,
         save_dir=save_dir,
-        modality=dataset_info['modality'][:2500],
-        site=dataset_info['site'][:2500],
+        modality=dataset_info['modality'],
+        site=dataset_info['site'],
         meta_list=dataset_info['meta_list'],
-        img_format=dataset_info['img_format'][:2500],
+        img_format=dataset_info['img_format'],
         beta_params=None,
         prompt_ensemble=False,
         save_radiomics=False,

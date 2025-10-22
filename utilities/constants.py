@@ -37,6 +37,21 @@ PANCIA_PROMPT_TEMPLETES = {
     'pancreas': 'tumor within the pancreas, adjacent to the stomach',
 }
 
+CT_SITES = {
+    'kidney': 'abdomen',
+    'breast': 'breast',
+    'liver': 'liver',
+    'bladder': 'pelvis',
+    'uterus': 'pelvis',
+    'ovary': 'pelvis',
+    'lung': 'lung',
+    'cervix': 'pelvis',
+    'stomach': 'abdomen',
+    'prostate': 'pelvis',
+    'esophagus': 'lung',
+    'colon': 'colon',
+}
+
 BIOMED_CLASSES = ['liver', 'lung', 'kidney', 'pancreas', 'heart anatomies', 'brain anatomies', 
                 'eye anatomies', 'vessel', 'other organ', 'tumor', 'infection', 'other lesion', 
                 'fluid disturbance', 'other abnormality', 'histology structure', 'other']

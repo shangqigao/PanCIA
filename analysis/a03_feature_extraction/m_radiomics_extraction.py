@@ -13,20 +13,20 @@ import argparse
 import warnings
 warnings.filterwarnings('ignore')
 
+from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_MAMAMIA_info
+from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_TCGA_radiology_info
+
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('--img_dir', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
+    parser.add_argument('--radiology', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
+    parser.add_argument('--dataset', default="MAMAMIA", type=str)
     parser.add_argument('--lab_dir', default=None)
-    parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
+    parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
     parser.add_argument('--meta_info', default=None)
-    parser.add_argument('--modality', default="MRI", type=str)
-    parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
-    parser.add_argument('--phase', default="1st-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
-    parser.add_argument('--site', default="breast", type=str)
     parser.add_argument('--target', default="tumor", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--feature_mode', default="BayesBP", choices=["pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
+    parser.add_argument('--feature_mode', default="pyradiomics", choices=["pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 512], type=int)
     parser.add_argument('--dilation_mm', default=10, type=float)
     parser.add_argument('--layer_method', default="peeling")
@@ -35,56 +35,49 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ## get image and label paths
-    if args.format == 'dicom':
-        dicom_cases = pathlib.Path(args.img_dir).glob('*')
-        dicom_cases = [p for p in dicom_cases if p.is_dir()]
-        img_paths = [sorted(p.glob('*.dcm')) for p in dicom_cases]
-    elif args.format == 'nifti':
-        if args.phase == "pre-contrast":
-            img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0000.nii.gz'))
-        elif args.phase == "1st-contrast":
-            img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0001.nii.gz'))
-        elif args.phase == "2nd-contrast":
-            img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0002.nii.gz'))
-        else:
-            case_paths = sorted(pathlib.Path(args.img_dir).glob('*'))
-            case_paths = [p for p in case_paths if p.is_dir()]
-            img_paths = []
-            for path in case_paths:
-                nii_paths = path.glob("*.nii.gz")
-                multiphase_keys = ["_0000.nii.gz", "_0001.nii.gz", "_0002.nii.gz"]
-                nii_paths = [p for p in nii_paths if any(k in p.name for k in multiphase_keys)]
-                img_paths.append(sorted(nii_paths))
-        if args.lab_dir is not None:
-            lab_paths = sorted(pathlib.Path(f"{args.lab_dir}/{args.lab_mode}").glob('*.nii.gz'))
-        else:
-            lab_paths = [None]*len(img_paths)
-    logging.info("The number of images on {}: {}".format(args.site, len(img_paths)))
-    text_prompts = [[f'{args.site} {args.target}']]*len(img_paths)
+    if args.dataset == 'MAMAMIA':
+        dataset_info = prepare_MAMAMIA_info(
+            img_dir=args.radiology,
+            lab_dir=args.lab_dir,
+            lab_mode=args.lab_mode,
+            img_format=args.format,
+            phase='pre-contrast',
+            meta_info=args.meta_info
+        )
+    elif args.dataset == 'TCGA':
+        dataset_info = prepare_TCGA_radiology_info(
+            img_json=args.radiology,
+            lab_dir=args.lab_dir,
+            lab_mode=args.lab_mode,
+            img_format=args.format
+        )
+    else:
+        raise ValueError(f'Dataset {args.dataset} is currently unsupported')
     
     ## set save dir
-    save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.site}_{args.modality}_radiomic_features/{args.feature_mode}/{args.phase}/{args.lab_mode}")
+    save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.dataset}_radiomic_features/{args.feature_mode}/{args.lab_mode}")
     
     # extract radiomics
     # warning: do not run this function in a loop
-    # from analysis.a03_feature_extraction.m_feature_extraction import extract_radiomic_feature
 
-    # extract_radiomic_feature(
-    #     img_paths=img_paths,
-    #     lab_paths=lab_paths,
-    #     feature_mode=args.feature_mode,
-    #     save_dir=save_feature_dir,
-    #     class_name=args.target,
-    #     prompts=text_prompts,
-    #     format=args.format,
-    #     modality=args.modality,
-    #     site=args.site,
-    #     dilation_mm=args.dilation_mm,
-    #     layer_method=args.layer_method,
-    #     resolution=args.resolution,
-    #     units=args.units,
-    #     skip_exist=True
-    # )
+    from analysis.a03_feature_extraction.m_feature_extraction import extract_radiomic_feature
+
+    extract_radiomic_feature(
+        img_paths=dataset_info['img_paths'],
+        lab_paths=dataset_info['lab_paths'],
+        feature_mode=args.feature_mode,
+        save_dir=save_feature_dir,
+        class_name=args.target,
+        prompts=dataset_info['text_prompts'],
+        format=dataset_info['img_format'],
+        modality=dataset_info['modality'],
+        site=dataset_info['site'],
+        dilation_mm=args.dilation_mm,
+        layer_method=args.layer_method,
+        resolution=args.resolution,
+        units=args.units,
+        skip_exist=True
+    )
 
     # cluster radiomics
     # from analysis.a04_feature_aggregation.m_spatial_feature_clustering import cluster_radiomic_feature 
