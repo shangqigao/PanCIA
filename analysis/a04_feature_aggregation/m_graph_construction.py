@@ -45,13 +45,56 @@ from analysis.a01_data_preprocessiong.m_patch_extraction import prepare_annotati
 from analysis.a03_feature_extraction.m_feature_extraction import extract_cnn_pathomics, extract_composition_features
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-def construct_pathomic_graph(wsi_name, wsi_feature_dir, save_path):
+def construct_pathomic_graph(
+        wsi_name, 
+        wsi_feature_dir, 
+        save_path,
+        window_size=30**3
+    ):
+    """construct whole slide graph
+    Args:
+        window_size (int): the size for sliding window, reduce it if out of memory
+    """
+    from tiatoolbox import logger
     positions = np.load(f"{wsi_feature_dir}/{wsi_name}_coordinates.npy")
     features = np.load(f"{wsi_feature_dir}/{wsi_name}_pathomics.npy")
-    graph_dict = SlideGraphConstructor.build(positions[:, :2], features, feature_range_thresh=None)
+    if (len(features) > 0) and (len(features) <= window_size):
+        num_windows = 1
+    else:
+        num_windows = len(features) // window_size
+    logger.info(f"Splitting input feature into {num_windows} window(s)...")
+
+    # construct graphs in parallel
+    logger.info("Constructing graphs on windows one-by-one...")
+    list_graph_dicts = []
+    for i in range(num_windows):
+        start = i * window_size
+        end = len(features) if i == (num_windows - 1) else (i + 1) * window_size
+        patch_positions = positions[start : end]
+        patch_features = features[start : end]
+        graph_dict = SlideGraphConstructor.build(
+            patch_positions[:, :2], 
+            patch_features, 
+            feature_range_thresh=None
+        )
+        list_graph_dicts.append(graph_dict)
+
+    # concatenate a list of graphs
+    logger.info("Concatenating all subgraphs constructed on the sliding windows...")
+    new_graph_dict = {k: [] for k in list_graph_dicts[0].keys()}
+    for graph_dict in list_graph_dicts:
+        coordinate_shift = len(new_graph_dict["x"])
+        for k, v in graph_dict.items():
+            if k == "edge_index":
+                new_graph_dict[k] += (v.T + coordinate_shift).tolist()
+            elif k == "cluster_points":
+                new_graph_dict[k] += v
+            else:
+                new_graph_dict[k] += v.tolist()
+    num_nodes = len(new_graph_dict["x"])
+    logger.info(f"Constructed a graph of {num_nodes} nodes from {len(features)} features!")
+
     with save_path.open("w") as handle:
-        new_graph_dict = {k: v.tolist() for k, v in graph_dict.items() if k != "cluster_points"}
-        new_graph_dict.update({"cluster_points": graph_dict["cluster_points"]})
         json.dump(new_graph_dict, handle, indent=4)
 
 def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_exist=False):
