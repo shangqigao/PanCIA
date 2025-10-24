@@ -272,8 +272,12 @@ def extract_cnn_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         new_msk_paths = msk_paths
 
     # create temporary dir
-    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
-    rmdir(tmp_save_dir)
+    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_0")
+    counter = 1
+    while tmp_save_dir.exists():
+        tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_{counter}")
+        counter += 1
+
     output_map_list = extractor.predict(
         new_wsi_paths,
         new_msk_paths,
@@ -368,8 +372,12 @@ def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         new_msk_paths = msk_paths
 
     # create temporary dir
-    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
-    rmdir(tmp_save_dir)
+    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_0")
+    counter = 1
+    while tmp_save_dir.exists():
+        tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_{counter}")
+        counter += 1
+
     output_map_list = extractor.predict(
         new_wsi_paths,
         new_msk_paths,
@@ -473,8 +481,12 @@ def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         new_msk_paths = msk_paths
 
     # create temporary dir
-    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
-    rmdir(tmp_save_dir)
+    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_0")
+    counter = 1
+    while tmp_save_dir.exists():
+        tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_{counter}")
+        counter += 1
+    
     output_map_list = extractor.predict(
         new_wsi_paths,
         new_msk_paths,
@@ -587,8 +599,12 @@ def extract_uni2_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5,
         new_msk_paths = msk_paths
 
     # create temporary dir
-    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
-    rmdir(tmp_save_dir)
+    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_0")
+    counter = 1
+    while tmp_save_dir.exists():
+        tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_{counter}")
+        counter += 1
+
     output_map_list = extractor.predict(
         new_wsi_paths,
         new_msk_paths,
@@ -682,8 +698,12 @@ def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
         new_msk_paths = msk_paths
 
     # create temporary dir
-    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
-    rmdir(tmp_save_dir)
+    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_0")
+    counter = 1
+    while tmp_save_dir.exists():
+        tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_{counter}")
+        counter += 1
+
     output_map_list = extractor.predict(
         new_wsi_paths,
         new_msk_paths,
@@ -787,8 +807,12 @@ def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
         new_msk_paths = msk_paths
 
     # create temporary dir
-    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp")
-    rmdir(tmp_save_dir)
+    tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_0")
+    counter = 1
+    while tmp_save_dir.exists():
+        tmp_save_dir = pathlib.Path(f"{save_dir}/tmp_{counter}")
+        counter += 1
+        
     output_map_list = extractor.predict(
         new_wsi_paths,
         new_msk_paths,
