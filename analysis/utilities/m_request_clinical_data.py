@@ -2,7 +2,7 @@ import requests
 import pandas as pd
 import os
 
-def request_clinical_data_by_project(project_ids, save_dir):
+def request_clinical_data_by_project(project_ids, save_dir, dataset='TCGA-RCC'):
     fields = [
         "case_id",
         "submitter_id",
@@ -73,12 +73,12 @@ def request_clinical_data_by_project(project_ids, save_dir):
 
     # Display the first few rows of the survival data
     print(df.head())
-    mkdir(save_dir)
-    df.to_csv(f"{save_dir}/TCGA_PanKidney_survival_data.csv", index=False)
+    os.makedirs(save_dir, exist_ok=True)
+    df.to_csv(f"{save_dir}/{dataset}_survival_data.csv", index=False)
     print("Survival data saved to CSV")
     return
 
-def request_survival_data_by_submitter(submitter_ids, save_dir):
+def request_survival_data_by_submitter(submitter_ids, save_dir, dataset='TCGA'):
     fields = [
         "case_id",
         "submitter_id",
@@ -144,6 +144,6 @@ def request_survival_data_by_submitter(submitter_ids, save_dir):
     df = pd.DataFrame(survival_data)
     print(df.head())
 
-    mkdir(save_dir)
-    df.to_csv(f"{save_dir}/GDC_survival_data_by_submitter.csv", index=False)
-    print(f"Survival data saved to {save_dir}/GDC_survival_data_by_submitter.csv")
+    os.makedirs(save_dir, exist_ok=True)
+    df.to_csv(f"{save_dir}/{dataset}_survival_data_by_submitter.csv", index=False)
+    print(f"Survival data saved to {save_dir}/{dataset}_survival_data_by_submitter.csv")

@@ -1,5 +1,12 @@
+import os
 import sys
-sys.path.append('./')
+
+# Get the directory where the current script resides
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Add a relative subdirectory to sys.path
+relative_path = os.path.join(script_dir, '../../')
+sys.path.append(relative_path)
 
 import requests
 import argparse
@@ -9,7 +16,6 @@ import warnings
 import joblib
 import copy
 import json
-import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -56,86 +62,8 @@ from analysis.a04_feature_aggregation.m_gnn_survival_analysis import SurvivalGra
 from analysis.a04_feature_aggregation.m_gnn_survival_analysis import ScalarMovingAverage, CoxSurvLoss
 from analysis.a04_feature_aggregation.m_graph_construction import visualize_radiomic_graph, visualize_pathomic_graph
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-
-def request_survival_data(project_ids, save_dir):
-    fields = [
-        "case_id",
-        "submitter_id",
-        "project.project_id",
-        "demographic.vital_status",
-        "demographic.days_to_death",
-        "diagnoses.days_to_last_follow_up",
-        "diagnoses.ajcc_pathologic_stage"
-        ]
-
-    fields = ",".join(fields)
-
-    cases_endpt = "https://api.gdc.cancer.gov/cases"
-
-    # This set of filters is nested under an 'and' operator.
-    filters = {
-        "op": "and",
-        "content":[
-            {
-            "op": "in",
-            "content":{
-                "field": "cases.project.project_id",
-                "value": project_ids #"TCGA-KIRP", "TCGA-KIRC", "TCGA-KICH"
-                }
-            }
-        ]
-    }
-
-    # A POST is used, so the filter parameters can be passed directly as a Dict object.
-    params = {
-        "filters": filters,
-        "fields": fields,
-        "format": "JSON",
-        "size": "2000"
-        }
-
-
-    # Send the request to GDC API
-    response = requests.post(cases_endpt, json=params)
-
-    # Check if the request was successful
-    if response.status_code == 200:
-        print("Query successful")
-        json_data = response.json()
-    else:
-        print(f"Query failed with status code: {response.status_code}")
-        exit()
-
-    # Extract the clinical data
-    cases = json_data['data']['hits']
-    print("The number of cases:", len(cases))
-
-    # Convert the clinical data into a pandas DataFrame
-    survival_data = []
-
-    for case in cases:
-        survival_data.append({
-            'case_id': case['case_id'],
-            'submitter_id': case['submitter_id'],
-            'project_id': case['project']['project_id'],
-            'days_to_last_follow_up': case['diagnoses'][0].get('days_to_last_follow_up', None),
-            'ajcc_pathologic_stage': case['diagnoses'][0].get('ajcc_pathologic_stage', None),
-            'days_to_death': case['demographic'].get('days_to_death', None),
-            'vital_status': case['demographic'].get('vital_status', None)
-        })
-
-    df = pd.DataFrame(survival_data)
-
-    # Display the first few rows of the survival data
-    print(df.head())
-    mkdir(save_dir)
-    df.to_csv(f"{save_dir}/TCGA_PanKidney_survival_data.csv", index=False)
-    print("Survival data saved to CSV")
-    return
-
-def plot_survival_curve(save_dir):
-    df = pd.read_csv(f"{save_dir}/TCGA_PanKidney_survival_data.csv")
+def plot_survival_curve(data_path):
+    df = pd.read_csv(data_path)
 
     # Prepare the survival data
     df['event'] = df['vital_status'].apply(lambda x: True if x == 'Dead' else False)
@@ -278,26 +206,42 @@ def prepare_graph_pathomics(
 def prepare_graph_radiomics(
     idx, 
     graph_path, 
-    mode="mean+max"
+    mode="mean+max",
+    pooling="mean"
     ):
-    graph_dict = load_json(graph_path)
-    feature = np.array(graph_dict["x"])
-    assert feature.ndim == 2
+    feat_list = []
+    for path in graph_path:
+        graph_dict = load_json(path)
+        feature = np.array(graph_dict["x"])
+        assert feature.ndim == 2
 
-    if mode == "mean":
-        feat_list = np.mean(feature, axis=0).tolist()
-    elif mode == "max":
-        feat_list = np.max(feature, axis=0).tolist()
-    elif mode == "min":
-        feat_list = np.min(feature, axis=0).tolist()
-    elif mode == "std":
-        feat_list = np.std(feature, axis=0).tolist()
-    elif mode == "kmeans":
-        kmeans = KMeans(n_clusters=4)
-        feat_list = kmeans.fit(feature).cluster_centers_
-        feat_list = feat_list.flatten().tolist()
-    elif "mean+max":
-        feat_list = np.mean(feature, axis=0).tolist() + np.max(feature, axis=0).tolist()
+        if mode == "mean":
+            feat = np.mean(feature, axis=0)
+        elif mode == "max":
+            feat = np.max(feature, axis=0)
+        elif mode == "min":
+            feat = np.min(feature, axis=0)
+        elif mode == "std":
+            feat = np.std(feature, axis=0)
+        elif mode == "kmeans":
+            kmeans = KMeans(n_clusters=4)
+            feat = kmeans.fit(feature).cluster_centers_
+            feat = feat.flatten()
+        else:
+            raise ValueError(f"Unsupport aggregation mode: {mode}")
+        feat_list.append(feat)
+    
+    # patient-level pooling
+    if pooling == "mean":
+        feat_list = np.array(feat_list).mean(axis=0).tolist()
+    elif pooling == "max":
+        feat_list = np.array(feat_list).max(axis=0).tolist()
+    elif pooling == "min":
+        feat_list = np.array(feat_list).min(axis=0).tolist()
+    elif pooling == "std":
+        feat_list = np.array(feat_list).std(axis=0).tolist()
+    else:
+        raise ValueError(f"Unsupport patient pooling: {pooling}")
         
     feat_dict = {}
     for i, feat in enumerate(feat_list):
@@ -305,13 +249,54 @@ def prepare_graph_radiomics(
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
-def load_wsi_level_features(idx, wsi_feature_path):
-    feat_list = np.array(np.load(wsi_feature_path)).squeeze().tolist()
+def load_wsi_level_features(idx, wsi_feature_path, pooling="mean"):
+    feat_list = []
+    for path in wsi_feature_path:
+        feat = np.array(np.load(path)).squeeze()
+        feat_list.append(feat)
+
+    # patient-level pooling
+    if pooling == "mean":
+        feat_list = np.array(feat_list).mean(axis=0).tolist()
+    elif pooling == "max":
+        feat_list = np.array(feat_list).max(axis=0).tolist()
+    elif pooling == "min":
+        feat_list = np.array(feat_list).min(axis=0).tolist()
+    elif pooling == "std":
+        feat_list = np.array(feat_list).std(axis=0).tolist()
+    else:
+        raise ValueError(f"Unsupport patient pooling: {pooling}")
+    
     feat_dict = {}
     for i, feat in enumerate(feat_list):
         k = f"pathomics.feature{i}"
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
+
+def prepare_patient_outcome(outcome_file, dataset="MAMA-MIA", outcome=None):
+    if dataset == "MAMA-MIA":
+        df = pd.read_excel(outcome_file, sheet_name='dataset_info')
+    elif dataset == "TCGA":
+        df = pd.read_csv(outcome_file)
+    else:
+        raise NotImplementedError
+    
+    # Prepare survival data
+    if outcome == 'os':
+        df = df[df['days_to_death'].notna()]
+        df['event'] = df['days_to_death'].apply(lambda x: True if x > 0 else False)
+        df['duration'] = df['days_to_death']
+        df.loc[df['days_to_death'] == 0, 'duration'] = df['days_to_follow_up']
+    elif outcome == 'recurrence':
+        df = df[df['days_to_recurrence'].notna()]
+        df['event'] = df['days_to_recurrence'].apply(lambda x: True if x > 0 else False)
+        df['duration'] = df['days_to_recurrence']
+        df.loc[df['days_to_recurrence'] == 0, 'duration'] = df['days_to_follow_up']
+    else:
+        raise ValueError(f'Unsuppored outcome type: {outcome}')
+    logging.info(f"Clinical data strcuture: {df.shape}")
+
+    return df
 
 def plot_coefficients(coefs, n_highlight):
     _, ax = plt.subplots(figsize=(9, 6))
@@ -333,56 +318,6 @@ def plot_coefficients(coefs, n_highlight):
     ax.set_ylabel("coefficient")
     plt.subplots_adjust(left=0.2)
     plt.savefig(f"{script_dir}/coefficients.jpg")
-
-def matched_outcome_graph(save_clinical_dir, save_graph_paths, dataset="MAMA-MIA", outcome=None):
-    clinical_info_path = f"{save_clinical_dir}/{dataset}_clinical_and_imaging_info.xlsx"
-    df = pd.read_excel(clinical_info_path, sheet_name='dataset_info')
-    
-    # Prepare the response to therapy data
-    if outcome == 'os':
-        df = df[df['days_to_death'].notna()]
-        df['event'] = df['days_to_death'].apply(lambda x: True if x > 0 else False)
-        df['duration'] = df['days_to_death']
-        df.loc[df['days_to_death'] == 0, 'duration'] = df['days_to_follow_up']
-    elif outcome == 'recurrence':
-        df = df[df['days_to_recurrence'].notna()]
-        df['event'] = df['days_to_recurrence'].apply(lambda x: True if x > 0 else False)
-        df['duration'] = df['days_to_recurrence']
-        df.loc[df['days_to_recurrence'] == 0, 'duration'] = df['days_to_follow_up']
-    else:
-        raise ValueError(f'Unsuppored outcome type: {outcome}')
-    logging.info(f"Clinical data strcuture: {df.shape}")
-
-    # filter graph properties 
-    graph_names = [pathlib.Path(p).stem for p in save_graph_paths]
-    graph_ids = [f"{n}".split("_")[0:2] for n in graph_names]
-    graph_ids = ["_".join(d) for d in graph_ids]
-    df = df[df["patient_id"].isin(graph_ids)]
-    matched_indices = [graph_ids.index(d) for d in df["patient_id"]]
-    logging.info(f"The number of matched clinical samples are {len(matched_indices)}")
-    return df, matched_indices
-
-def matched_pathomics_radiomics(save_pathomics_paths, save_radiomics_paths, save_clinical_dir, dataset="TCGA-RCC", project_ids=None):
-    df = pd.read_csv(f"{save_clinical_dir}/TCIA_{dataset}_mappings.csv")
-    if project_ids is not None: df = df[df["Collection Name"].isin(project_ids)]
-
-    df = df[["Subject ID", "Series ID"]]
-    pathomics_names = [pathlib.Path(p).stem for p in save_pathomics_paths]
-    pathomics_ids = [f"{n}".split("-")[0:3] for n in pathomics_names]
-    pathomics_ids = ["-".join(d) for d in pathomics_ids]
-    radiomics_names = [pathlib.Path(p).stem for p in save_radiomics_paths]
-    radiomics_all_ids = [f"{n}".split(".")[0:13] for n in radiomics_names]
-    radiomics_end_ids = [f"{d[-1]}".split("_")[0] for d in radiomics_all_ids]
-    radiomics_ids = [id1[0:12] + [id2] for id1, id2 in zip(radiomics_all_ids, radiomics_end_ids)]
-    radiomics_ids = [".".join(d) for d in radiomics_ids]
-
-    df = df[df["Subject ID"].isin(pathomics_ids) & df["Series ID"].isin(radiomics_ids)] 
-    matched_pathomics_indices, matched_radiomics_indices = [], []
-    for subject_id, series_id in zip(df["Subject ID"], df["Series ID"]):
-        matched_pathomics_indices.append(pathomics_ids.index(subject_id))
-        matched_radiomics_indices.append(radiomics_ids.index(series_id))
-    logging.info(f"The number of matched pathomic and radiomic cases are {len(matched_pathomics_indices)}")
-    return matched_pathomics_indices, matched_radiomics_indices
 
 def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
     # COX regreession
