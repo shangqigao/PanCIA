@@ -963,47 +963,49 @@ def extract_pyradiomics(img_paths, lab_paths, save_dir, class_name, label=None, 
     import radiomics
     from radiomics import featureextractor
 
-    # Get the PyRadiomics logger (default log-level = INFO)
-    logger = radiomics.logger
-    logger.setLevel(logging.DEBUG)  # set level to DEBUG to include debug log messages in log file
-
-    # Write out all log entries to a file
-    handler = logging.FileHandler(filename=f"testLog.{class_name}.txt", mode='w')
-    formatter = logging.Formatter('%(levelname)s:%(name)s: %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
     settings = {}
     settings['resampledPixelSpacing'] = [resolution, resolution, resolution]
     settings['correctMask'] = True
     settings['maskDilation'] = int(dilation_mm)
 
-    extractor = featureextractor.RadiomicsFeatureExtractor(**settings)
-    extractor.enableImageTypeByName('Wavelet')
     os.makedirs(save_dir, exist_ok=True)
     def _extract_radiomics(idx, img_path, lab_path):
+        from tiatoolbox import logger
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        save_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.json")
+        parent_name = pathlib.Path(img_path).parent.name
+        save_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics.json")
+        save_path.parent.mkdir(parents=True, exist_ok=True)
         if save_path.exists() and skip_exist:
-            logging.info(f"{save_path.name} has existed, skip!")
+            logger.info(f"{save_path.name} has existed, skip!")
             return
         
-        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+        logger.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
         # skip if mask is empty
         nii = nib.load(lab_path)
         label_arr = nii.get_fdata()
-        if np.sum(label_arr > 0) < 1: 
+        if np.sum(label_arr > 0) <= 1: 
             lab_name = pathlib.Path(lab_path).name
-            logging.info(f"Skip case {lab_name}, because no foreground found!")
+            logger.info(f"Skip case {lab_name}, because no foreground found!")
             return
         del label_arr
 
-        features = extractor.execute(str(img_path), str(lab_path), label)
+        try:
+            extractor = featureextractor.RadiomicsFeatureExtractor(**settings)
+            extractor.enableImageTypeByName('Wavelet')
+            features = extractor.execute(str(img_path), str(lab_path), label)
+        except ValueError as e:
+            if "Bounding box of ROI" in str(e):
+                logger.info(f"⚠️ Skipped {img_path}: ROI outside image bounds")
+                return
+            else:
+                raise
+                
         for k, v in features.items():
             if isinstance(v, np.ndarray):
                 features[k] = v.tolist()
 
-        logging.info(f"Saving radiomic features to {save_path}")
+        logger.info(f"Saving radiomic features to {save_path}")
         with save_path.open("w") as handle:
             json.dump(features, handle, indent=4)
 
@@ -1141,11 +1143,13 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
     
     for idx, (img_path, lab_path) in enumerate(zip(img_paths, lab_paths)):
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        feature_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy")
+        parent_name = pathlib.Path(img_path).parent.name
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics.npy")
         if feature_path.exists() and skip_exist:
             logging.info(f"{feature_path.name} has existed, skip!")
             continue
-        
+        feature_path.parent.mkdir(parents=True, exist_ok=True)
+
         logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
         case_dict = {"image": img_path, "label": lab_path}
         data = transform(case_dict)
@@ -1220,7 +1224,7 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
         logging.info(f"Saving radiomics in the resolution of {spacing}...")
         logging.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, feature)
-        coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
+        coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{class_name}_coordinates.npy"
         logging.info(f"Saving feature coordinates to {coordinates_path}")
         np.save(coordinates_path, coordinates)
     return
@@ -1313,10 +1317,12 @@ def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=
     
     for idx, (case, data) in enumerate(zip(case_dicts, data_dicts)):
         img_name = pathlib.Path(case["image"]).name.replace(".nii.gz", "")
-        feature_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy")
+        parent_name = pathlib.Path(case["image"]).parent.name
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics.npy")
         if feature_path.exists() and skip_exist:
             logging.info(f"{feature_path.name} has existed, skip!")
             continue
+        feature_path.parent.mkdir(parents=True, exist_ok=True)
         
         logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(case_dicts)))
         image = data["image"].squeeze().numpy()
@@ -1331,7 +1337,7 @@ def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, class_name, label=
         feature = feature.squeeze().cpu().numpy()
         logging.info(f"Saving radiomics...")
         np.save(feature_path, feature)
-        coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
+        coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{class_name}_coordinates.npy"
         np.save(coordinates_path, np.array(bbox))
     return
 
@@ -1371,7 +1377,7 @@ def create_prompts(meta_data):
         bilateral_mri = meta_data['bilateral']
         lateral = 'bilateral' if bilateral_mri == 1 else 'unilateral'
         manufacturer = meta_data['scanner_manufacturer']
-        meta_prompts format= [
+        meta_prompts = [
             f"a {modality} scan of the {lateral} {site}, {view} view, slice {slice_index}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
             f"{lateral} {site} {modality} in {view} view at slice {slice_index} with spacing {x_spacing:.2f}x{y_spacing:.2f} mm, includes {target}",
             f"{view} slice {slice_index} from a {field_strength}T {manufacturer} {modality} of the {lateral} {site}, pixel spacing {x_spacing:.2f}x{y_spacing:.2f} mm, showing {target}",
@@ -1438,17 +1444,21 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     if isinstance(site, str): site = [site] * len(img_paths)
 
     for idx, (img_path, lab_path, target_name) in enumerate(zip(img_paths, lab_paths, text_prompts)):
-        if [idx] == 'dicom':
+        if format[idx] == 'dicom':
             img_name = pathlib.Path(img_path[0]).parent.name
+            parent_name = pathlib.Path(img_path[0]).parent.name
         elif format[idx] == 'nifti':
             if isinstance(img_path, list):
                 img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
+                parent_name = pathlib.Path(img_path[0]).parent.name
             else:
                 img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        feature_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy")
+                parent_name = pathlib.Path(img_path).parent.name
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics.npy")
         if feature_path.exists() and skip_exist:
             logging.info(f"{feature_path.name} has existed, skip!")
             continue
+        feature_path.parent.mkdir(parents=True, exist_ok=True)
 
         logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
@@ -1571,7 +1581,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         logging.info(f"Extracted ROI feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}MiB)")
         logging.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, radiomic_feat)
-        coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
+        coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{class_name}_coordinates.npy"
         logging.info(f"Saving feature coordinates to {coordinates_path}")
         np.save(coordinates_path, radiomic_coord)
 
@@ -1773,18 +1783,22 @@ def extract_Bayes_BiomedParse_radiomics(
     for idx, (img_path, lab_path, target_name) in enumerate(zip(img_paths, lab_paths, text_prompts)):
         if format[idx] == 'dicom':
             img_name = pathlib.Path(img_path[0]).parent.name
+            parent_name = pathlib.Path(img_path[0]).parent.name
         elif format[idx] == 'nifti':
             if isinstance(img_path, list):
                 img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
+                parent_name = pathlib.Path(img_path[0]).parent.name
             else:
                 img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+                parent_name = pathlib.Path(img_path).parent.name
         if layer_method is None:
-            feature_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy")
+            feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics.npy")
         else:
-            feature_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.json")
+            feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics.json")
         if feature_path.exists() and skip_exist:
             logging.info(f"{feature_path.name} has existed, skip!")
             continue
+        feature_path.parent.mkdir(parents=True, exist_ok=True)
 
         logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
@@ -1909,7 +1923,7 @@ def extract_Bayes_BiomedParse_radiomics(
             logging.info(f"Extracted ROI feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}MiB)")
             logging.info(f"Saving radiomic features to {feature_path}")
             np.save(feature_path, radiomic_feat)
-            coordinates_path = f"{save_dir}/{img_name}_{class_name}_coordinates.npy"
+            coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{class_name}_coordinates.npy"
             logging.info(f"Saving feature coordinates to {coordinates_path}")
             np.save(coordinates_path, radiomic_coord)
         else:

@@ -3,7 +3,6 @@ sys.path.append('../')
 
 import os
 import pathlib
-import logging
 import json
 import torch
 import joblib
@@ -14,7 +13,6 @@ import os
 import pathlib
 import json
 import argparse
-import logging
 import umap
 
 import seaborn as sns
@@ -63,25 +61,26 @@ def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_ex
         save_dir (str): directory of reading feature and saving graph
     """
     def _construct_graph(idx, wsi_path):
+        from tiatoolbox import logger
         wsi_name = pathlib.Path(wsi_path).stem
         graph_path = pathlib.Path(f"{save_dir}/{wsi_name}.json")
         if graph_path.exists() and skip_exist:
-            logging.info(f"{graph_path.name} has existed, skip!")
+            logger.info(f"{graph_path.name} has existed, skip!")
             return
         
         if not pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy").exists(): 
-            logging.info(f"{wsi_name}_pathomics.npy doesn't exist, skip!")
+            logger.info(f"{wsi_name}_pathomics.npy doesn't exist, skip!")
             return
 
-        logging.info("constructing graph: {}/{}...".format(idx + 1, len(wsi_paths)))
+        logger.info("constructing graph: {}/{}...".format(idx + 1, len(wsi_paths)))
         construct_pathomic_graph(wsi_name, save_dir, graph_path)
         if delete_npy:
             pathomics_npy = f"{wsi_name}_pathomics.npy"
             os.remove(f"{save_dir}/{pathomics_npy}")
-            logging.info(f"{pathomics_npy} deleted")
+            logger.info(f"{pathomics_npy} deleted")
             coordinates_npy = f"{wsi_name}_coordinates.npy"
             os.remove(f"{save_dir}/{coordinates_npy}")
-            logging.info(f"{coordinates_npy} deleted")
+            logger.info(f"{coordinates_npy} deleted")
         return
     
     # construct graphs in parallel
@@ -102,16 +101,17 @@ def construct_radiomic_graph(
     Args:
         window_size (int): the size for sliding window, reduce it if out of memory
     """
+    from tiatoolbox import logger
     positions = np.load(f"{img_feature_dir}/{img_name}_{class_name}_coordinates.npy")
     features = np.load(f"{img_feature_dir}/{img_name}_{class_name}_radiomics.npy")
     if (len(features) > 0) and (len(features) <= window_size):
         num_windows = 1
     else:
         num_windows = len(features) // window_size
-    logging.info(f"Splitting input feature into {num_windows} window(s)...")
+    logger.info(f"Splitting input feature into {num_windows} window(s)...")
 
     # construct graphs in parallel
-    logging.info("Constructing graphs on windows one-by-one...")
+    logger.info("Constructing graphs on windows one-by-one...")
     list_graph_dicts = []
     for i in range(num_windows):
         start = i * window_size
@@ -131,7 +131,7 @@ def construct_radiomic_graph(
         list_graph_dicts.append(graph_dict)
 
     # concatenate a list of graphs
-    logging.info("Concatenating all subgraphs constructed on the sliding windows...")
+    logger.info("Concatenating all subgraphs constructed on the sliding windows...")
     new_graph_dict = {k: [] for k in list_graph_dicts[0].keys()}
     for graph_dict in list_graph_dicts:
         coordinate_shift = len(new_graph_dict["x"])
@@ -143,7 +143,7 @@ def construct_radiomic_graph(
             else:
                 new_graph_dict[k] += v.tolist()
     num_nodes = len(new_graph_dict["x"])
-    logging.info(f"Constructed a graph of {num_nodes} nodes from {len(features)} features!")
+    logger.info(f"Constructed a graph of {num_nodes} nodes from {len(features)} features!")
     with save_path.open("w") as handle:
         json.dump(new_graph_dict, handle, indent=4)
 
@@ -155,26 +155,27 @@ def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30
         delete_npy: if true, numpy array features will be deleted
     """
     def _construct_graph(idx, img_path):
+        from tiatoolbox import logger
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         graph_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}.json")
         if graph_path.exists() and skip_exist:
-            logging.info(f"{graph_path.name} has existed, skip!")
+            logger.info(f"{graph_path.name} has existed, skip!")
             return
 
         if not pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy").exists(): 
-            logging.info(f"{img_name}_{class_name}_radiomics.npy doesn't exist, skip!")
+            logger.info(f"{img_name}_{class_name}_radiomics.npy doesn't exist, skip!")
             return
             
-        logging.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
+        logger.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
         construct_radiomic_graph(img_name, save_dir, graph_path, class_name, window_size)
 
         if delete_npy:
             radiomics_npy = f"{img_name}_{class_name}_radiomics.npy"
             os.remove(f"{save_dir}/{radiomics_npy}")
-            logging.info(f"{radiomics_npy} deleted")
+            logger.info(f"{radiomics_npy} deleted")
             coordinates_npy = f"{img_name}_{class_name}_coordinates.npy"
             os.remove(f"{save_dir}/{coordinates_npy}")
-            logging.info(f"{coordinates_npy} deleted")
+            logger.info(f"{coordinates_npy} deleted")
         return
     
     # construct graphs in parallel
@@ -192,10 +193,11 @@ def extract_minimum_spanning_tree(wsi_graph_paths, save_dir, n_jobs=8):
         save_dir (str): directory of saving minimum spanning tree
     """
     def _extract_mst(idx, graph_path):
+        from tiatoolbox import logger
         with pathlib.Path(graph_path).open() as fptr:
             original_graph_dict = json.load(fptr)
         graph_dict = {k: np.array(v) for k, v in original_graph_dict.items() if k != "cluster_points"}
-        logging.info("extracting minimum spanning tree: {}/{}...".format(idx + 1, len(wsi_graph_paths)))
+        logger.info("extracting minimum spanning tree: {}/{}...".format(idx + 1, len(wsi_graph_paths)))
         feature = graph_dict["x"]
         edge_index = graph_dict["edge_index"]
         rows, cols = edge_index[0, :], edge_index[1, :]
@@ -246,6 +248,7 @@ def generate_label_from_annotation(
         Array of labels of nodes
         Number of nodes
     """
+    from tiatoolbox import logger
     wsi_name = pathlib.Path(wsi_path).stem
     wsi_reader, ann_readers, _ = prepare_annotation_reader(
         wsi_path=wsi_path, 
@@ -286,7 +289,7 @@ def generate_label_from_annotation(
         joblib.delayed(_bbox_to_label)(bbox) for bbox in node_bboxes
         )
     if np.sum(np.array(labels) > 0) == 0:
-        logging.warning(f"The nodes of {wsi_name} are all background!")
+        logger.warning(f"The nodes of {wsi_name} are all background!")
     return np.array(labels), len(xy)
 
 def generate_label_from_classification(
@@ -346,6 +349,7 @@ def generate_node_label(
         resolution (int): the resolution of reading annotation, should be the same the resolution of node
         units (str): the units of resolution, e.g., mpp
     """
+    from tiatoolbox import logger
     save_lab_dir = pathlib.Path(save_lab_dir)
     mkdir(save_lab_dir)
     # finding threshold of masking tissue from all is better than each
@@ -358,7 +362,7 @@ def generate_node_label(
         )
     count_nodes = 0
     for idx, (wsi_path, annot_path, graph_path) in enumerate(zip(wsi_paths, wsi_annot_paths, wsi_graph_paths)):
-        logging.info("annotating nodes of graph: {}/{}...".format(idx + 1, len(wsi_graph_paths)))
+        logger.info("annotating nodes of graph: {}/{}...".format(idx + 1, len(wsi_graph_paths)))
         wsi_name = pathlib.Path(wsi_path).stem
         if anno_type == "annotation":
             patch_labels, num_nodes = generate_label_from_annotation(
@@ -382,9 +386,9 @@ def generate_node_label(
             raise NotImplementedError
         count_nodes += num_nodes
         save_lab_path = f"{save_lab_dir}/{wsi_name}.label.npy"
-        logging.info(f"Saving node label {wsi_name}.label.npy")
+        logger.info(f"Saving node label {wsi_name}.label.npy")
         np.save(save_lab_path, patch_labels)
-    logging.info(f"Totally {count_nodes} nodes in {len(wsi_graph_paths)} graphs!")
+    logger.info(f"Totally {count_nodes} nodes in {len(wsi_graph_paths)} graphs!")
     return
 
 def measure_subgraph_properties(
@@ -436,7 +440,8 @@ def measure_graph_properties(
     n_jobs=8
     ):
     def _measure_graph_properties(idx, graph_path, label_path):
-        logging.info("Measuring graph properties: {}/{}...".format(idx + 1, len(graph_paths)))
+        from tiatoolbox import logger
+        logger.info("Measuring graph properties: {}/{}...".format(idx + 1, len(graph_paths)))
         wsi_name = pathlib.Path(graph_path).stem
         if subgraph_dict is None:
             prop_dict = measure_subgraph_properties(graph_path, label_path)
@@ -465,7 +470,7 @@ def plot_graph_properties(
     min_percentile=0,
     max_percentile=100
     ):
-
+    from tiatoolbox import logger
     prop_list = [load_json(p) for p in prop_paths]
     
     if subgraph_dict is None:
@@ -485,7 +490,7 @@ def plot_graph_properties(
             property_dict.update({f"Subgraph {k}": graph_prop_dict[k][prop_key]})
 
     # plot
-    logging.info(f"Visualizing {plotted} of the graph property {prop_key}...")
+    logger.info(f"Visualizing {plotted} of the graph property {prop_key}...")
     plt.figure()
     i, D = 1, []
     for k, v in property_dict.items():
@@ -545,7 +550,7 @@ def plot_graph_properties(
             ax.set_ylabel(f"{prop_key}")
         ax.set_title(f"Comparison of {prop_key}")
     plt.savefig(f"a_05feature_aggregation/graph_{prop_key}.jpg") 
-    logging.info("Visualization done!") 
+    logger.info("Visualization done!") 
     return
 
 def visualize_pathomic_graph(
@@ -563,6 +568,7 @@ def visualize_pathomic_graph(
         save_title="pathomics graph",
         save_wsi=False
     ):
+    from tiatoolbox import logger
     if pathlib.Path(wsi_path).suffix == ".jpg":
         NODE_RESOLUTION = {"resolution": resolution, "units": units}
         PLOT_RESOLUTION = {"resolution": resolution / 4, "units": units}
@@ -634,7 +640,7 @@ def visualize_pathomic_graph(
     node_resolution = reader.slide_dimensions(**NODE_RESOLUTION)
     plot_resolution = reader.slide_dimensions(**PLOT_RESOLUTION)
     fx = np.array(node_resolution) / np.array(plot_resolution)
-    logging.info(f"The downsampling scale is {fx}")
+    logger.info(f"The downsampling scale is {fx}")
     node_coordinates = np.array(graph.coordinates + 128) / fx
     edges = np.array(graph.edge_index.T)
     if show_map:
@@ -807,6 +813,7 @@ def visualize_radiomic_graph(
         remove_front_corner=True,
         n_jobs=32
     ):
+    from tiatoolbox import logger
     from monai.transforms.utils import generate_spatial_bounding_box
 
     if feature_extractor == "SegVol":
@@ -833,16 +840,16 @@ def visualize_radiomic_graph(
     e = np.array(e) + np.array(padding)
     s = np.clip(s, 0, np.array(label.shape) - 1)
     e = np.clip(e, 0, np.array(label.shape))
-    logging.info(f"Coordinates start from {s}, end by {e}")
+    logger.info(f"Coordinates start from {s}, end by {e}")
 
     img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-    logging.info(f"loading graph of {img_name}")
+    logger.info(f"loading graph of {img_name}")
     graph_path = pathlib.Path(f"{save_graph_dir}/{img_name}_{class_name}.json")
     graph_dict = load_json(graph_path)
     cluster_points = graph_dict["cluster_points"]
     graph_dict = {k: v for k, v in graph_dict.items() if k != "cluster_points"}
     node_coordinates = graph_dict["coordinates"]
-    logging.info(f"The number of nodes: {len(node_coordinates)}")
+    logger.info(f"The number of nodes: {len(node_coordinates)}")
     node_label = [label[int(c[0]), int(c[1]), int(c[2])] for c in node_coordinates]
 
     edges = graph_dict["edge_index"]
@@ -851,7 +858,7 @@ def visualize_radiomic_graph(
     kept_nodes = [_condition(n, c) for n in node_coordinates]
     edge_nodes = [(node_coordinates[p1], node_coordinates[p2]) for p1, p2 in edges]
     kept_edges = [all([_condition(s, c), _condition(e, c)]) for s, e in edge_nodes]
-    logging.info(f"loaded graph !!!")
+    logger.info(f"loaded graph !!!")
     
     if attention is None:
         voi = image[s[0]:e[0], s[1]:e[1], s[2]:e[2]]
@@ -944,14 +951,15 @@ def visualize_radiomic_graph(
         margin=dict(l=0, r=0, b=0, t=40)
     )
     fig.write_image(f"analysis/feature_aggregation/image_graph_{save_name}.jpg")
-    print("Visualization Done!")
+    logger.info("Visualization Done!")
     
 def pathomic_feature_visualization(wsi_paths, save_feature_dir, mode="tsne", save_label_dir=None, graph=True, n_class=None, features=None, colors=None):
+    from tiatoolbox import logger
     if features is None or colors is None:
         features, colors = [], []
         for i, wsi_path in enumerate(wsi_paths):
             wsi_name = pathlib.Path(wsi_path).stem
-            logging.info(f"loading feature of {wsi_name}")
+            logger.info(f"loading feature of {wsi_name}")
             if graph:
                 feature_path = pathlib.Path(f"{save_feature_dir}/{wsi_name}.json")
                 graph_dict = load_json(feature_path)
@@ -1011,11 +1019,12 @@ def pathomic_feature_visualization(wsi_paths, save_feature_dir, mode="tsne", sav
     print("Visualization done!")
 
 def radiomic_feature_visualization(img_paths, save_feature_dir, class_name="tumour", mode="tsne", graph=True, n_class=None, features=None, colors=None):
+    from tiatoolbox import logger
     if features is None or colors is None:
         features, colors = [], []
         for i, img_path in enumerate(img_paths):
             img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-            logging.info(f"loading feature of {img_name}")
+            logger.info(f"loading feature of {img_name}")
             if graph:
                 feature_path = pathlib.Path(f"{save_feature_dir}/{img_name}_{class_name}.json")
                 graph_dict = load_json(feature_path)

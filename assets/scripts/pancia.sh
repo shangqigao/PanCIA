@@ -117,25 +117,24 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # extract radiomic features
-# radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-# lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
-# save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
-# meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
+radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
+save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/radiomics"
 
-# python analysis/a03_feature_extraction/m_radiomics_extraction.py \
-#             --img_dir $img_dir \
-#             --lab_dir $lab_dir \
-#             --save_dir $save_dir \
-#             --meta_info $meta_info 
-
-# extract pathomic features
-pathology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-save_dir="/home/sg2162/rds/hpc-work/Experiments/pathomics"
-
-python analysis/a03_feature_extraction/m_pathomics_extraction.py \
-            --pathology $pathology \
+python analysis/a03_feature_extraction/m_radiomics_extraction.py \
+            --radiology $radiology \
             --dataset TCGA \
+            --lab_dir $lab_dir \
             --save_dir $save_dir
+        
+# extract pathomic features
+# pathology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/pathomics"
+
+# python analysis/a03_feature_extraction/m_pathomics_extraction.py \
+#             --pathology $pathology \
+#             --dataset TCGA \
+#             --save_dir $save_dir
 
 # classification
 # img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"

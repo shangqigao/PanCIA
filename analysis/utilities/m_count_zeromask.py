@@ -2,7 +2,7 @@ import os
 import nibabel as nib
 import numpy as np
 
-folder = "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations/BiomedParse"
+folder = "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg/BiomedParse"
 
 total_files = 0
 empty_files = []
@@ -26,6 +26,10 @@ for root, _, files in os.walk(folder):
 
                 if np.all(data == 0):
                     zero_mask_files.append(path)
+                    print('Found zero mask!')
+
+                if np.sum(data) == 1:
+                    print('mask only contains 1 segmented voxel!')
 
             except Exception as e:
                 print(f"Error reading {path}: {e}")

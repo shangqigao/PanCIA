@@ -20,6 +20,7 @@ if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument('--radiology', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
+    parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--dataset', default="MAMAMIA", type=str)
     parser.add_argument('--lab_dir', default=None)
     parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
@@ -28,7 +29,7 @@ if __name__ == "__main__":
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
     parser.add_argument('--feature_mode', default="pyradiomics", choices=["pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
     parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 512], type=int)
-    parser.add_argument('--dilation_mm', default=10, type=float)
+    parser.add_argument('--dilation_mm', default=0, type=float)
     parser.add_argument('--layer_method', default="peeling")
     parser.add_argument('--resolution', default=1, type=float)
     parser.add_argument('--units', default="mm", type=str)
@@ -55,13 +56,13 @@ if __name__ == "__main__":
         raise ValueError(f'Dataset {args.dataset} is currently unsupported')
     
     ## set save dir
-    save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.dataset}_radiomic_features/{args.feature_mode}/{args.lab_mode}")
+    save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.dataset}_radiomic_features/{args.feature_mode}/segmentator_{args.lab_mode}")
     
     # extract radiomics
     # warning: do not run this function in a loop
 
     from analysis.a03_feature_extraction.m_feature_extraction import extract_radiomic_feature
-
+    print("Number of images", len(dataset_info['img_paths']))
     extract_radiomic_feature(
         img_paths=dataset_info['img_paths'],
         lab_paths=dataset_info['lab_paths'],
@@ -76,6 +77,7 @@ if __name__ == "__main__":
         layer_method=args.layer_method,
         resolution=args.resolution,
         units=args.units,
+        n_jobs=32,
         skip_exist=True
     )
 
