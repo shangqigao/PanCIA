@@ -26,7 +26,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset', default="TCGA-RCC", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/pathomics", type=str)
     parser.add_argument('--mask_method', default='otsu', choices=["otsu", "morphological"], help='method of tissue masking')
-    parser.add_argument('--feature_mode', default="conch", choices=["cnn", "vit", "uni", "conch", "chief", "uni2"], type=str)
+    parser.add_argument('--feature_mode', default="UNI", choices=["CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"], type=str)
     parser.add_argument('--node_features', default=37, choices=[2048, 384, 1024, 35, 768, 1536], type=int)
     parser.add_argument('--resolution', default=20, type=float)
     parser.add_argument('--units', default="power", type=str)
@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     # extract wsi feature patch by patch
     from analysis.a03_feature_extraction.m_feature_extraction import extract_pathomic_feature
-    msk_paths = [save_msk_dir / f"{p.stem}.jpg" for p in wsi_paths]
+    msk_paths = [save_msk_dir / f"{pathlib.Path(p).stem}.jpg" for p in wsi_paths]
     logger.info("The number of extracted tissue masks on {}: {}".format(args.dataset, len(msk_paths)))
     extract_pathomic_feature(
         wsi_paths=wsi_paths,
