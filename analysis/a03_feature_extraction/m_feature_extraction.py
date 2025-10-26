@@ -292,11 +292,11 @@ def extract_cnn_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        src_path = pathlib.Path(f"{output_path}.position.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        src_path = pathlib.Path(f"{output_path}.features.0.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 
@@ -392,11 +392,11 @@ def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        src_path = pathlib.Path(f"{output_path}.position.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        src_path = pathlib.Path(f"{output_path}.features.0.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 
@@ -501,11 +501,11 @@ def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        src_path = pathlib.Path(f"{output_path}.position.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        src_path = pathlib.Path(f"{output_path}.features.0.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 
@@ -619,11 +619,11 @@ def extract_uni2_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5,
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        src_path = pathlib.Path(f"{output_path}.position.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        src_path = pathlib.Path(f"{output_path}.features.0.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 
@@ -718,11 +718,11 @@ def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        src_path = pathlib.Path(f"{output_path}.position.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        src_path = pathlib.Path(f"{output_path}.features.0.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 
@@ -827,11 +827,11 @@ def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
         input_name = pathlib.Path(input_path).stem
         output_parent_dir = pathlib.Path(output_path).parent.parent
 
-        src_path = pathlib.Path(f"{output_path}_coordinates.npy")
+        src_path = pathlib.Path(f"{output_path}.position.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_coordinates.npy")
         src_path.rename(new_path)
 
-        src_path = pathlib.Path(f"{output_path}_pathomics.npy")
+        src_path = pathlib.Path(f"{output_path}.features.0.npy")
         new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
         src_path.rename(new_path)
 

@@ -117,24 +117,12 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # extract radiomic features
-# radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-# lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
-# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/radiomics"
-
-# python analysis/a03_feature_extraction/m_radiomics_extraction.py \
-#             --radiology $radiology \
-#             --dataset TCGA \
-#             --lab_dir $lab_dir \
-#             --save_dir $save_dir
+# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
         
 # extract pathomic features
-# pathology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/pathomics"
-
-# python analysis/a03_feature_extraction/m_pathomics_extraction.py \
-#             --pathology $pathology \
-#             --dataset TCGA \
-#             --save_dir $save_dir
+# pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_pathomics_extraction.py --config_files $pathomics_config
 
 # classification
 # img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
@@ -149,6 +137,6 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_model_dir $save_model_dir  
 
 
-# survival
+# survival analysis
 survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
 python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
