@@ -1672,7 +1672,7 @@ if __name__ == "__main__":
     
     if opt.get('SAVE_MODEL_DIR', False):
         save_model_dir = pathlib.Path(opt['SAVE_MODEL_DIR'])
-        save_model_dir = save_model_dir / f"{opt['DATASET']}_survival_{opt['OUCOME']['VALUE']}"
+        save_model_dir = save_model_dir / f"{opt['DATASET']}_survival_{opt['OUTCOME']['VALUE']}"
         save_model_dir = save_model_dir / f"{radiomics_mode}+{pathomics_mode}"
     else:
         save_model_dir = None
@@ -1681,10 +1681,10 @@ if __name__ == "__main__":
     df_outcome = prepare_patient_outcome(
         outcome_file=opt['SAVE_OUTCOME_FILE'],
         dataset=opt['DATASET'],
-        outcome=opt['OUCOME']['VALUE']
+        outcome=opt['OUTCOME']['VALUE']
     )
     subject_ids = df_outcome['submitter_id'].to_list()
-    logger.info(f"Found {len(subject_ids)} subjects with outcomes")
+    logger.info(f"Found {len(subject_ids)} subjects with survival outcomes")
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
     

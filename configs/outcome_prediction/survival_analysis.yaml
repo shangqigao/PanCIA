@@ -2,7 +2,7 @@
 DATASET: TCGA
 DATA_INFO: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
 OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
-OUCOME:
+OUTCOME:
   VALUE: "os"
   CHOICES: ["os", "recurrence"]
 SAVE_OUTCOME_FILE: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_survival_data_by_submitter.csv"
