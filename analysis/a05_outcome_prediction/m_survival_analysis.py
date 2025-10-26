@@ -814,15 +814,15 @@ def load_radiomics(
         n_jobs
     ):
 
-    if radiomics_aggregated_mode in ["MeanPooling", "ABMIL", "SPARRA"]:
+    if radiomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
         radiomics_paths = []
         for p in data:
-            path = pathlib.Path(p[0]["radiomics"])
-            dir = path.parents[0] / radiomics_aggregated_mode / f"0{split_idx}"
+            path = pathlib.Path(p[0][1]["radiomics"])
+            dir = path.parents[1] / radiomics_aggregated_mode / f"0{split_idx}"
             name = path.name.replace(".json", ".npy")
-            radiomics_paths.append(dir / name)
+            radiomics_paths.append(dir / path.parent.name / name)
     else:
-        radiomics_paths = [p[0]["radiomics"] for p in data]
+        radiomics_paths = [p[0][1]["radiomics"] for p in data]
 
     if radiomics_aggregation:
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
@@ -858,15 +858,15 @@ def load_pathomics(
         n_jobs
     ):
 
-    if pathomics_aggregated_mode in ["MeanPooling", "ABMIL", "SPARRA"]:
+    if pathomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
         pathomics_paths = []
         for p in data:
-            path = pathlib.Path(p[0]["pathomics"])
+            path = pathlib.Path(p[0][1]["pathomics"])
             dir = path.parents[0] / pathomics_aggregated_mode / f"0{split_idx}"
             name = path.name.replace(".json", ".npy")
             pathomics_paths.append(dir / name)
     else:
-        pathomics_paths = [p[0]["pathomics"] for p in data]
+        pathomics_paths = [p[0][1]["pathomics"] for p in data]
 
     if pathomics_aggregation:
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
@@ -896,7 +896,7 @@ def survival(
         split_path,
         radiomics_keys=None,
         pathomics_keys=None,
-        used="all", 
+        omics="radiopathomics", 
         n_jobs=32,
         radiomics_aggregation=False,
         radiomics_aggregated_mode=None,
@@ -924,7 +924,7 @@ def survival(
         te_y = te_y.to_records(index=False)
 
         # Concatenate multi-omics if required
-        if used == "radiopathomics":
+        if omics == "radiopathomics":
             radiomics_tr_X = load_radiomics(
                 split_idx=split_idx,
                 data=data_tr,
@@ -976,7 +976,7 @@ def survival(
             print(pathomics_te_X.head())
 
             te_X = pd.concat([radiomics_te_X, pathomics_te_X], axis=1)
-        elif used == "pathomics":
+        elif omics == "pathomics":
             pathomics_tr_X = load_pathomics(
                 split_idx=split_idx,
                 data=data_tr,
@@ -1002,7 +1002,7 @@ def survival(
             print(pathomics_te_X.head())
 
             tr_X, te_X = pathomics_tr_X, pathomics_te_X
-        elif used == "radiomics":
+        elif omics == "radiomics":
             radiomics_tr_X = load_radiomics(
                 split_idx=split_idx,
                 data=data_tr,
@@ -1173,7 +1173,7 @@ def survival(
     print(f"p-value: {pvalue}")
     ax.set_ylabel("Survival Probability")
     plt.subplots_adjust(left=0.2, bottom=0.2)
-    plt.savefig(f"{script_dir}/{used}_survival_curve.png")
+    plt.savefig(f"{script_dir}/{omics}_survival_curve.png")
     return
 
 def generate_data_split(
@@ -1229,17 +1229,17 @@ def generate_data_split(
         else:
             train_x, train_y = x_, y_
 
-        train_x_list = []
-        for i in train_x: train_x_list + list(i.values())
-        test_x_list = []
-        for i in test_x: test_x_list + list(i.values())
+        train_x_subjects = []
+        for i in train_x: train_x_subjects.append(i[0])
+        test_x_subjects = []
+        for i in test_x: test_x_subjects.append(i[0])
         if valid > 0:
-            valid_x_list = []
-            for i in valid_x: valid_x_list + list(i.values())
-            assert len(set(train_x_list).intersection(set(valid_x_list))) == 0
-            assert len(set(valid_x_list).intersection(set(test_x_list))) == 0
+            valid_x_subjects = []
+            for i in valid_x: valid_x_subjects.append(i[0])
+            assert len(set(train_x_subjects).intersection(set(valid_x_subjects))) == 0
+            assert len(set(valid_x_subjects).intersection(set(test_x_subjects))) == 0
         else:
-            assert len(set(train_x_list).intersection(set(test_x_list))) == 0
+            assert len(set(train_x_subjects).intersection(set(test_x_subjects))) == 0
 
         if valid > 0:
             splits.append(
@@ -1629,180 +1629,78 @@ def test(
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('--wsi_dir', default=None)
-    parser.add_argument('--img_dir', default=None)
-    parser.add_argument('--lab_mode', default="expert", choices=["expert", "nnUNet", "BiomedParse"], type=str)
-    parser.add_argument('--dataset', default="TCGA", type=str)
-    parser.add_argument('--outcome', default="recurrence", choices=["os", "recurrence"], type=str)
-    parser.add_argument('--modality', default="MRI", type=str)
-    parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
-    parser.add_argument('--phase', default="1st-contrast", choices=["pre-contrast", "1st-contrast", "2nd-contrast", "multiple"], type=str)
-    parser.add_argument('--site', default="breast", type=str)
-    parser.add_argument('--target', default="tumor", type=str)
-    parser.add_argument('--save_pathomics_dir', default=None)
-    parser.add_argument('--save_radiomics_dir', default=None)
-    parser.add_argument('--save_clinical_dir', default=None)
-    parser.add_argument('--save_model_dir', default=None)
-    parser.add_argument('--slide_mode', default="wsi", choices=["tile", "wsi"], type=str)
-    parser.add_argument('--epochs', default=20, type=int)
-    parser.add_argument('--radiomics_mode', default="BayesBP", choices=["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
-    parser.add_argument('--radiomics_dim', default=768, choices=[107, 768, 768], type=int)
-    parser.add_argument('--radiomics_aggregation', default=False, type=bool,
-                        help="if radiomic features have not been aggregated yet and true, do spatial aggregation"
-                        )
-    parser.add_argument('--radiomics_aggregated_mode', default="None", choices=["None", "MeanPooling", "ABMIL", "SPARRA"], type=str, 
-                        help="if radiomic features have been aggregated, specify which mode, defaut is none"
-                        )
-    parser.add_argument('--pathomics_mode', default="None", choices=["None", "cnn", "vit", "uni", "conch", "chief"], type=str)
-    parser.add_argument('--pathomics_dim', default=1024, choices=[2048, 384, 1024, 35, 768], type=int)
-    parser.add_argument('--pathomics_aggregated_mode', default="None", choices=["None", "MeanPooling", "ABMIL", "SPARRA", "radiopathomics_SPARRA"], type=str, 
-                        help="if pathomic features have been aggregated, specify which mode, defaut is none"
-                        )
-    parser.add_argument('--pathomics_aggregation', default=False, type=bool,
-                        help="if pathomic features have not been aggregated yet and true, do spatial aggregation"
-                        )
-    parser.add_argument('--resolution', default=20, type=float)
-    parser.add_argument('--units', default="power", type=str)
+    parser.add_argument('--config_files', nargs='+', required=True, help='Path(s) to the config file(s).')
     args = parser.parse_args()
-
-    if args.wsi_dir is None and args.img_dir is None:
-        raise ValueError("Neither radiology nor pathology provided, please provide at least one!")
     
-    ## get wsi path
-    if args.wsi_dir is not None:
-        wsi_dir = pathlib.Path(args.wsi_dir) / args.dataset / 'Pathology'
-        all_paths = sorted(pathlib.Path(wsi_dir).rglob("*.svs"))
-        excluded_wsi = ["TCGA-5P-A9KC-01Z-00-DX1", "TCGA-5P-A9KA-01Z-00-DX1", "TCGA-UZ-A9PQ-01Z-00-DX1"]
-        wsi_paths = []
-        for path in all_paths:
-            wsi_name = f"{path}".split("/")[-1].split(".")[0]
-            if wsi_name not in excluded_wsi: wsi_paths.append(path)
-        logging.info(f"The number of WSIs on {args.dataset}: {len(wsi_paths)}")
-    else:
-        wsi_paths = None
+    from utilities.arguments import load_opt_from_config_files
+    opt = load_opt_from_config_files(args.config_files)
+    radiomics_mode = opt['RADIOMICS']['SEGMENTATOR']['VALUE']
+    pathomics_mode = opt['PATHOMICS']['MODE']['VALUE']
 
-    ## get image and label paths
-    if args.img_dir is not None:
-        if args.format == 'dicom':
-            dicom_cases = pathlib.Path(args.img_dir).glob('*')
-            dicom_cases = [p for p in dicom_cases if p.is_dir()]
-            img_paths = [sorted(p.glob('*.dcm')) for p in dicom_cases]
-        elif args.format == 'nifti':
-            if args.phase == "pre-contrast":
-                img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0000.nii.gz'))
-            elif args.phase == "1st-contrast":
-                img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0001.nii.gz'))
-            elif args.phase == "2nd-contrast":
-                img_paths = sorted(pathlib.Path(args.img_dir).rglob('*_0002.nii.gz'))
-            else:
-                case_paths = sorted(pathlib.Path(args.img_dir).glob('*'))
-                case_paths = [p for p in case_paths if p.is_dir()]
-                img_paths = []
-                for path in case_paths:
-                    nii_paths = path.glob("*.nii.gz")
-                    multiphase_keys = ["_0000.nii.gz", "_0001.nii.gz", "_0002.nii.gz"]
-                    nii_paths = [p for p in nii_paths if any(k in p.name for k in multiphase_keys)]
-                    img_paths.append(sorted(nii_paths))
-        logging.info(f"The number of {args.modality} images on {args.site}: {len(img_paths)}")
+    if opt['DATASET'] == "MAMAMIA":
+        from analysis.a05_outcome_prediction.m_prepare_omics_info import prepare_MAMAMIA_omics_info
+        omics_info = prepare_MAMAMIA_omics_info(
+            img_dir=opt['DATA_INFO'],
+            save_omics_dir=opt['OMICS_DIR'],
+            segmentator=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
+            radiomics_mode=radiomics_mode,
+            radiomics_suffix=opt['RADIOMICS']['SUFFIX'],
+        )
+    elif opt['DATASET'] == "TCGA":
+        from analysis.a05_outcome_prediction.m_prepare_omics_info import prepare_TCGA_omics_info
+        omics_info = prepare_TCGA_omics_info(
+            dataset_json=opt['DATA_INFO'],
+            save_omics_dir=opt['OMICS_DIR'],
+            radiomics_mode=radiomics_mode,
+            segmentator=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
+            radiomics_suffix=opt['RADIOMICS']['SUFFIX'],
+            pathomics_mode=pathomics_mode,
+            pathomics_suffix=opt['PATHOMICS']['SUFFIX']
+        )
     else:
-        img_paths = None
+        raise NotImplementedError
+
+    if not pathlib.Path(opt['SAVE_OUTCOME_FILE']).exists():
+        from analysis.utilities.m_request_clinical_data import request_survival_data_by_submitter
+        save_clinical_dir = pathlib.Path(opt['SAVE_OUTCOME_FILE']).parent
+        subject_ids = list(omics_info['omics_paths'].keys())
+        request_survival_data_by_submitter(
+            submitter_ids=subject_ids,
+            save_dir=save_clinical_dir,
+            dataset=opt['DATASET']
+        )
     
-    ## set save dir
-    if args.save_pathomics_dir is not None:
-        save_pathomics_dir = pathlib.Path(f"{args.save_pathomics_dir}/{args.site}_{args.slide_mode}_pathomic_features/{args.pathomics_mode}")
-    else:
-        save_pathomics_dir = None
-    if args.save_radiomics_dir is not None:
-        save_radiomics_dir = pathlib.Path(f"{args.save_radiomics_dir}/{args.site}_{args.modality}_radiomic_features/{args.radiomics_mode}/{args.phase}/{args.lab_mode}")
-    else:
-        save_radiomics_dir = None
-    if args.save_clinical_dir is not None:
-        save_clinical_dir = pathlib.Path(f"{args.save_clinical_dir}")
-    else:
-        save_clinical_dir = None
-    if args.save_model_dir is not None:
-        save_model_dir = pathlib.Path(f"{args.save_model_dir}/{args.site}_response2therapy/{args.radiomics_mode}+{args.pathomics_mode}")
+    if opt.get('SAVE_MODEL_DIR', False):
+        save_model_dir = pathlib.Path(opt['SAVE_MODEL_DIR'])
+        save_model_dir = save_model_dir / f"{opt['DATASET']}_survival_{opt['OUCOME']['VALUE']}"
+        save_model_dir = save_model_dir / f"{radiomics_mode}+{pathomics_mode}"
     else:
         save_model_dir = None
 
-    # request survial data by GDC API
-    # project_ids = ["TCGA-KIRP", "TCGA-KIRC", "TCGA-KICH"]
-    # request_survival_data(project_ids, save_clinical_dir)
+    # load patient outcomes
+    df_outcome = prepare_patient_outcome(
+        outcome_file=opt['SAVE_OUTCOME_FILE'],
+        dataset=opt['DATASET'],
+        outcome=opt['OUCOME']['VALUE']
+    )
+    subject_ids = df_outcome['submitter_id'].to_list()
+    logger.info(f"Found {len(subject_ids)} subjects with outcomes")
 
-    # plot survival curve
-    # plot_survival_curve(save_clinical_dir)
-
-    # survival analysis
-    pathomics_aggregation = args.pathomics_aggregation # false if load aggregated features else true
-    if None not in (wsi_paths, save_pathomics_dir):
-        pathomics_paths = sorted([save_pathomics_dir / f"{p.stem}.json" for p in wsi_paths])
-    else:
-        pathomics_paths = None
-
-    radiomics_aggregation = args.radiomics_aggregation # false if load patient-level features else true
-    if None not in (img_paths, save_radiomics_dir):
-        img_names = [p.name.replace('.nii.gz', '') for p in img_paths]
-        if args.radiomics_mode == "pyradiomics":
-            radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}_radiomics.json" for p in img_names])
-        elif args.radiomics_mode == "BayesBP":
-            radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}_radiomics_pooled.json" for p in img_names])
-        else:
-            radiomics_paths = sorted([save_radiomics_dir / f"{p}_{args.target}.json" for p in img_names])
-    else:
-        radiomics_paths = None
-
-    # matching radiomics and pathomics
-    if None not in (pathomics_paths, radiomics_paths):
-        matched_pathomics_indices, matched_radiomics_indices = matched_pathomics_radiomics(
-            save_pathomics_paths=pathomics_paths,
-            save_radiomics_paths=radiomics_paths,
-            save_clinical_dir=save_clinical_dir,
-            dataset=args.dataset,
-            project_ids=None #["TCGA-KIRC"]
-        )
-        matched_pathomics_paths = [pathomics_paths[i] for i in matched_pathomics_indices]
-        matched_radiomics_paths = [radiomics_paths[i] for i in matched_radiomics_indices]
-    else:
-        matched_pathomics_paths = pathomics_paths
-        matched_radiomics_paths = radiomics_paths
+    omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
+    
+    y = df_outcome[['duration', 'event']].to_numpy(dtype=np.float32).tolist()
 
     # split data set
-    num_folds = 5
-    test_ratio = 0.2
-    train_ratio = 0.8 * 0.8
-    valid_ratio = 0.8 * 0.2
-    data_types = ["radiomics", "pathomics"]
-
-    if None not in (matched_pathomics_paths, matched_radiomics_paths):
-        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths, outcome=args.outcome)
-        matched_pathomics_paths = [matched_pathomics_paths[i] for i in matched_i]
-        matched_radiomics_paths = [matched_radiomics_paths[i] for i in matched_i]
-        kr, kp = data_types[0], data_types[1]
-        matched_graph_paths = [{kr : r, kp : p} for r, p in zip(matched_radiomics_paths, matched_pathomics_paths)]
-    elif matched_pathomics_paths is not None and matched_radiomics_paths is None:
-        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_pathomics_paths, outcome=args.outcome)
-        matched_pathomics_paths = [matched_pathomics_paths[i] for i in matched_i]
-        kr, kp = data_types[0], data_types[1]
-        matched_graph_paths = [{kr : None, kp : p} for p in matched_pathomics_paths]
-    elif matched_radiomics_paths is not None and matched_pathomics_paths is None:
-        df, matched_i = matched_outcome_graph(save_clinical_dir, matched_radiomics_paths, outcome=args.outcome)
-        matched_radiomics_paths = [matched_radiomics_paths[i] for i in matched_i]
-        kr, kp = data_types[0], data_types[1]
-        matched_graph_paths = [{kr : r, kp : None} for r in matched_radiomics_paths]
-    else:
-        raise ValueError("Cannot find matched radiomics or pathomics!")
-    
-    y = df[['duration', 'event']].to_numpy(dtype=np.float32).tolist()
     splits = generate_data_split(
-        x=matched_graph_paths,
+        x=omics_paths,
         y=y,
-        train=train_ratio,
-        valid=valid_ratio,
-        test=test_ratio,
-        num_folds=num_folds
+        train=opt['SPLIT']['TRAIN_RATIO'],
+        valid=opt['SPLIT']['VALID_RATIO'],
+        test=opt['SPLIT']['TEST_RATIO'],
+        num_folds=opt['SPLIT']['FOLDS']
     )
     mkdir(save_model_dir)
-    split_path = f"{save_model_dir}/survival_{args.radiomics_mode}_{args.pathomics_mode}_splits.dat"
+    split_path = f"{save_model_dir}/survival_{radiomics_mode}_{pathomics_mode}_splits.dat"
     joblib.dump(splits, split_path)
     splits = joblib.load(split_path)
     num_train = len(splits[0]["train"])
@@ -1813,27 +1711,29 @@ if __name__ == "__main__":
     logging.info(f"Number of testing samples: {num_test}.")
 
     # survival analysis from the splits
-    if args.radiomics_mode == 'pyradiomics':
-        radiomics_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
-    elif args.radiomics_mode == 'BayesBP':
-        radiomics_keys = ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
+    if opt['RADIOMICS'].get('KEYS', False):
+        radiomics_keys = opt['RADIOMICS']['KEYS']
     else:
         radiomics_keys = None
+    if opt['PATHOMICS'].get('KEYS', False):
+        pathomics_keys = opt['PATHOMICS']['KEYS']
+    else:
+        pathomics_keys = None
     survival(
         split_path=split_path,
-        used=["radiomics", "pathomics", "radiopathomics"][0],
-        n_jobs=8,
-        radiomics_aggregation=radiomics_aggregation,
-        radiomics_aggregated_mode=args.radiomics_aggregated_mode,
-        pathomics_aggregation=pathomics_aggregation,
-        pathomics_aggregated_mode=args.pathomics_aggregated_mode,
-        radiomics_keys=radiomics_keys, #radiomic_propereties,
-        pathomics_keys=None, #["TUM", "NORM", "DEB"],
-        model=["RSF", "CoxPH", "Coxnet", "FastSVM"][2],
-        scorer=["cindex", "cindex-ipcw", "auc", "ibs"][2],
-        feature_selection=True,
-        n_bootstraps=0,
-        use_graph_properties=False
+        omics=opt['USED_OMICS'],
+        n_jobs=opt['N_JOBS'],
+        radiomics_aggregation=opt['RADIOMICS']['AGGREGATION'],
+        radiomics_aggregated_mode=opt['RADIOMICS']['AGGREGATED_MODE']['VALUE'],
+        pathomics_aggregation=opt['PATHOMICS']['AGGREGATION'],
+        pathomics_aggregated_mode=opt['PATHOMICS']['AGGREGATED_MODE']['VALUE'],
+        radiomics_keys=radiomics_keys,
+        pathomics_keys=pathomics_keys,
+        model=opt['MODEL']['VALUE'],
+        scorer=opt['SCORER']['VALUE'],
+        feature_selection=opt['FEATURE_SELECTION'],
+        n_bootstraps=opt['N_BOOTSTRAPS'],
+        use_graph_properties=opt['USE_GRAPH_PROPERTIES']
     )
 
     # compute mean and std on training data for normalization 

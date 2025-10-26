@@ -2,47 +2,30 @@ import sys
 sys.path.append('../')
 
 import os
-import pathlib
-import json
-import torch
 import joblib
 import argparse
-import numpy as np
 import torch
-import os
 import pathlib
 import json
-import argparse
 import umap
 
 import seaborn as sns
-from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.manifold import TSNE
 from matplotlib import pyplot as plt
 from scipy.special import softmax
-from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import minimum_spanning_tree
 
 import numpy as np
 import networkx as nx
 import plotly.graph_objects as go
 from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable, get_cmap
-from torch_geometric.data import Data
-from torch_geometric.utils import subgraph
-from torch_geometric import transforms
 from pprint import pprint
 from utilities.m_utils import mkdir, load_json, concat_dict_list
 
-from tiatoolbox.wsicore.wsireader import WSIReader, VirtualWSIReader
-from tiatoolbox.tools.graph import SlideGraphConstructor
 from tiatoolbox.utils.visualization import plot_graph, plot_map
 from tiatoolbox.utils.misc import imwrite
 
-from analysis.a01_data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
-from analysis.a01_data_preprocessiong.m_patch_extraction import prepare_annotation_reader
-from analysis.a03_feature_extraction.m_feature_extraction import extract_cnn_pathomics, extract_composition_features
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 def construct_pathomic_graph(
@@ -56,6 +39,8 @@ def construct_pathomic_graph(
         window_size (int): the size for sliding window, reduce it if out of memory
     """
     from tiatoolbox import logger
+    from tiatoolbox.tools.graph import SlideGraphConstructor
+
     positions = np.load(f"{wsi_feature_dir}/{wsi_name}_coordinates.npy")
     features = np.load(f"{wsi_feature_dir}/{wsi_name}_pathomics.npy")
     if (len(features) > 0) and (len(features) <= window_size):
@@ -106,7 +91,7 @@ def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_ex
     def _construct_graph(idx, wsi_path):
         from tiatoolbox import logger
         wsi_name = pathlib.Path(wsi_path).stem
-        graph_path = pathlib.Path(f"{save_dir}/{wsi_name}.json")
+        graph_path = pathlib.Path(f"{save_dir}/{wsi_name}_graph.json")
         if graph_path.exists() and skip_exist:
             logger.info(f"{graph_path.name} has existed, skip!")
             return
@@ -145,6 +130,8 @@ def construct_radiomic_graph(
         window_size (int): the size for sliding window, reduce it if out of memory
     """
     from tiatoolbox import logger
+    from tiatoolbox.tools.graph import SlideGraphConstructor
+
     positions = np.load(f"{img_feature_dir}/{img_name}_{class_name}_coordinates.npy")
     features = np.load(f"{img_feature_dir}/{img_name}_{class_name}_radiomics.npy")
     if (len(features) > 0) and (len(features) <= window_size):
@@ -200,24 +187,26 @@ def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30
     def _construct_graph(idx, img_path):
         from tiatoolbox import logger
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        graph_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}.json")
+        parent_name = pathlib.Path(img_path).parent.name
+        save_feat_dir = f"{save_dir}/{parent_name}"
+        graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_graph.json")
         if graph_path.exists() and skip_exist:
             logger.info(f"{graph_path.name} has existed, skip!")
             return
 
-        if not pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.npy").exists(): 
+        if not pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_radiomics.npy").exists(): 
             logger.info(f"{img_name}_{class_name}_radiomics.npy doesn't exist, skip!")
             return
             
         logger.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
-        construct_radiomic_graph(img_name, save_dir, graph_path, class_name, window_size)
+        construct_radiomic_graph(img_name, save_feat_dir, graph_path, class_name, window_size)
 
         if delete_npy:
             radiomics_npy = f"{img_name}_{class_name}_radiomics.npy"
-            os.remove(f"{save_dir}/{radiomics_npy}")
+            os.remove(f"{save_feat_dir}/{radiomics_npy}")
             logger.info(f"{radiomics_npy} deleted")
             coordinates_npy = f"{img_name}_{class_name}_coordinates.npy"
-            os.remove(f"{save_dir}/{coordinates_npy}")
+            os.remove(f"{save_feat_dir}/{coordinates_npy}")
             logger.info(f"{coordinates_npy} deleted")
         return
     
@@ -237,6 +226,9 @@ def extract_minimum_spanning_tree(wsi_graph_paths, save_dir, n_jobs=8):
     """
     def _extract_mst(idx, graph_path):
         from tiatoolbox import logger
+        from scipy.sparse import csr_matrix
+        from scipy.sparse.csgraph import minimum_spanning_tree
+
         with pathlib.Path(graph_path).open() as fptr:
             original_graph_dict = json.load(fptr)
         graph_dict = {k: np.array(v) for k, v in original_graph_dict.items() if k != "cluster_points"}
@@ -292,6 +284,9 @@ def generate_label_from_annotation(
         Number of nodes
     """
     from tiatoolbox import logger
+    from tiatoolbox.wsicore.wsireader import VirtualWSIReader
+    from analysis.a01_data_preprocessiong.m_patch_extraction import prepare_annotation_reader
+
     wsi_name = pathlib.Path(wsi_path).stem
     wsi_reader, ann_readers, _ = prepare_annotation_reader(
         wsi_path=wsi_path, 
@@ -393,6 +388,8 @@ def generate_node_label(
         units (str): the units of resolution, e.g., mpp
     """
     from tiatoolbox import logger
+    from analysis.a01_data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
+
     save_lab_dir = pathlib.Path(save_lab_dir)
     mkdir(save_lab_dir)
     # finding threshold of masking tissue from all is better than each
@@ -436,9 +433,12 @@ def generate_node_label(
 
 def measure_subgraph_properties(
     graph_path,
-    label_path,
+    label_path=None,
     subgraph_ids=None,    
     ):
+    from scipy.sparse import csr_matrix
+    from torch_geometric.utils import subgraph
+
     graph_dict = load_json(graph_path)
     
     if subgraph_ids is None:
@@ -446,6 +446,7 @@ def measure_subgraph_properties(
         feature = graph_dict["x"]
         edge_index = graph_dict["edge_index"]
     else:
+        assert label_path is not None, 'labels of subgraphs should be given'
         graph_dict = {k: torch.tensor(v) for k, v in graph_dict.items() if k != "cluster_points"}
         label = np.load(label_path)
         if label.ndim == 2: label = np.argmax(label, axis=1)
@@ -479,22 +480,33 @@ def measure_graph_properties(
     graph_paths,
     label_paths,
     save_dir,
+    with_parent_name=False,
     subgraph_dict=None,
     n_jobs=8
     ):
     def _measure_graph_properties(idx, graph_path, label_path):
         from tiatoolbox import logger
         logger.info("Measuring graph properties: {}/{}...".format(idx + 1, len(graph_paths)))
-        wsi_name = pathlib.Path(graph_path).stem
+        if not pathlib.Path(graph_path).exists():
+            logger.info(f"{graph_path} doesn't exist, skip!")
+            return
+        graph_name = pathlib.Path(graph_path).stem
+        parent_name = pathlib.Path(graph_path).parent.name
         if subgraph_dict is None:
             prop_dict = measure_subgraph_properties(graph_path, label_path)
-            save_path = pathlib.Path(f"{save_dir}/{wsi_name}.graph.properties.json")
+            if with_parent_name:
+                save_path = pathlib.Path(f"{save_dir}/{parent_name}/{graph_name}.graph.properties.json")
+            else:
+                save_path = pathlib.Path(f"{save_dir}/{graph_name}.graph.properties.json")
         else:
             prop_dict = {}
             for cls, ids in subgraph_dict.items():
                 subgraph_prop_dict = measure_subgraph_properties(graph_path, label_path, ids)
                 prop_dict.update({cls: subgraph_prop_dict})
-            save_path = pathlib.Path(f"{save_dir}/{wsi_name}.subgraphs.properties.json")
+            if with_parent_name:
+                save_path = pathlib.Path(f"{save_dir}/{parent_name}/{graph_name}.subgraphs.properties.json")
+            else:
+                save_path = pathlib.Path(f"{save_dir}/{graph_name}.subgraphs.properties.json")
         with save_path.open("w") as handle:
             json.dump(prop_dict, handle)
     
@@ -612,6 +624,10 @@ def visualize_pathomic_graph(
         save_wsi=False
     ):
     from tiatoolbox import logger
+    from torch_geometric.data import Data
+    from torch_geometric.utils import subgraph
+    from tiatoolbox.wsicore.wsireader import WSIReader
+
     if pathlib.Path(wsi_path).suffix == ".jpg":
         NODE_RESOLUTION = {"resolution": resolution, "units": units}
         PLOT_RESOLUTION = {"resolution": resolution / 4, "units": units}
@@ -998,6 +1014,8 @@ def visualize_radiomic_graph(
     
 def pathomic_feature_visualization(wsi_paths, save_feature_dir, mode="tsne", save_label_dir=None, graph=True, n_class=None, features=None, colors=None):
     from tiatoolbox import logger
+    from sklearn.decomposition import PCA
+
     if features is None or colors is None:
         features, colors = [], []
         for i, wsi_path in enumerate(wsi_paths):
@@ -1063,17 +1081,20 @@ def pathomic_feature_visualization(wsi_paths, save_feature_dir, mode="tsne", sav
 
 def radiomic_feature_visualization(img_paths, save_feature_dir, class_name="tumour", mode="tsne", graph=True, n_class=None, features=None, colors=None):
     from tiatoolbox import logger
+    from sklearn.decomposition import PCA
+
     if features is None or colors is None:
         features, colors = [], []
         for i, img_path in enumerate(img_paths):
             img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+            parent_name = pathlib.Path(img_path).parent.name
             logger.info(f"loading feature of {img_name}")
             if graph:
-                feature_path = pathlib.Path(f"{save_feature_dir}/{img_name}_{class_name}.json")
+                feature_path = pathlib.Path(f"{save_feature_dir}/{parent_name}/{img_name}_{class_name}_graph.json")
                 graph_dict = load_json(feature_path)
                 feature = np.array(graph_dict["x"])
             else:
-                feature_path = pathlib.Path(f"{save_feature_dir}/{img_name}_{class_name}_radiomics.npy")
+                feature_path = pathlib.Path(f"{save_feature_dir}/{parent_name}/{img_name}_{class_name}_radiomics.npy")
                 feature = np.load(feature_path)
             features.append(feature)
             label = np.argmax(softmax(feature, axis=1), axis=1)
@@ -1133,6 +1154,10 @@ if __name__ == "__main__":
     parser.add_argument('--resolution', default=20, type=float)
     parser.add_argument('--units', default="power", type=str)
     args = parser.parse_args()
+
+    from tiatoolbox.wsicore.wsireader import WSIReader
+    from analysis.a03_feature_extraction.m_feature_extraction import extract_cnn_pathomics
+    from analysis.a03_feature_extraction.m_feature_extraction import extract_composition_features
 
     if not args.pre_generated:
         wsi = WSIReader.open(args.slide_path)

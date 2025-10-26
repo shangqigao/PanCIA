@@ -22,109 +22,95 @@ from tiatoolbox import logger
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('--pathology', default="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/TCGA/WSI")
-    parser.add_argument('--dataset', default="TCGA-RCC", type=str)
-    parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/pathomics", type=str)
-    parser.add_argument('--mask_method', default='otsu', choices=["otsu", "morphological"], help='method of tissue masking')
-    parser.add_argument('--feature_mode', default="UNI", choices=["CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"], type=str)
-    parser.add_argument('--node_features', default=37, choices=[2048, 384, 1024, 35, 768, 1536], type=int)
-    parser.add_argument('--resolution', default=20, type=float)
-    parser.add_argument('--units', default="power", type=str)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config_files', nargs='+', required=True, help='Path(s) to the config file(s).')
     args = parser.parse_args()
 
+    from utilities.arguments import load_opt_from_config_files
+    opt = load_opt_from_config_files(args.config_files)
+
     ## get wsi path
-    assert pathlib.Path(args.pathology).suffix == '.json', 'only support loading info from json file'
-    with open(args.pathology, 'r') as f:
+    assert pathlib.Path(opt['PATHOLOGY']).suffix == '.json', 'only support loading info from json file'
+    with open(opt['PATHOLOGY'], 'r') as f:
         data = json.load(f)
     included_subjects = data['included subjects']
     wsi_paths = []
     for k, v in included_subjects.items(): wsi_paths += v['pathology']
-    logger.info("The number of selected WSIs on {}: {}".format(args.dataset, len(wsi_paths)))
+    logger.info("The number of selected WSIs on {}: {}".format(opt['DATASET'], len(wsi_paths)))
     
     ## set save dir
-    save_msk_dir = pathlib.Path(f"{args.save_dir}/{args.dataset}_pathomic_masks")
-    save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.dataset}_pathomic_features/{args.feature_mode}")
+    save_msk_dir = pathlib.Path(f"{opt['SAVE_DIR']}/{opt['DATASET']}_pathomic_masks")
+    pathomics_mode = opt['PATHOMICS']['MODE']['VALUE']
+    save_feature_dir = pathlib.Path(f"{opt['SAVE_DIR']}/{opt['DATASET']}_pathomic_features/{pathomics_mode}")
     
     # generate wsi tissue mask batch by batch
-    # from analysis.a01_data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
-    # bs = 32
-    # nb = len(wsi_paths) // bs if len(wsi_paths) % bs == 0 else len(wsi_paths) // bs + 1
-    # for i in range(0, nb):
-    #     logger.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
-    #     start = i * bs
-    #     end = min(len(wsi_paths), (i + 1) * bs)
-    #     batch_wsi_paths = wsi_paths[start:end]
-    #     generate_wsi_tissue_mask(
-    #         wsi_paths=batch_wsi_paths,
-    #         save_msk_dir=save_msk_dir,
-    #         n_jobs=8,
-    #         method=args.mask_method,
-    #         resolution=1.25,
-    #         units="power"
-    #     )
+    if opt['PATHOMICS']['TASKS']['TISSUE_MASKING']:
+        from analysis.a01_data_preprocessiong.m_tissue_masking import generate_wsi_tissue_mask
+        bs = 32
+        nb = len(wsi_paths) // bs if len(wsi_paths) % bs == 0 else len(wsi_paths) // bs + 1
+        for i in range(0, nb):
+            logger.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
+            start = i * bs
+            end = min(len(wsi_paths), (i + 1) * bs)
+            batch_wsi_paths = wsi_paths[start:end]
+            generate_wsi_tissue_mask(
+                wsi_paths=batch_wsi_paths,
+                save_msk_dir=save_msk_dir,
+                n_jobs=8,
+                method=opt['MASKING_METHOD']['VALUE'],
+                resolution=1.25,
+                units="power"
+            )
 
     # extract wsi feature patch by patch
-    from analysis.a03_feature_extraction.m_feature_extraction import extract_pathomic_feature
-    msk_paths = [save_msk_dir / f"{pathlib.Path(p).stem}.jpg" for p in wsi_paths]
-    logger.info("The number of extracted tissue masks on {}: {}".format(args.dataset, len(msk_paths)))
-    extract_pathomic_feature(
-        wsi_paths=wsi_paths[2000:],
-        wsi_msk_paths=msk_paths[2000:],
-        feature_mode=args.feature_mode,
-        save_dir=save_feature_dir,
-        resolution=args.resolution,
-        units=args.units,
-        skip_exist=True
-    )
+    if opt['PATHOMICS']['TASKS']['EXTRACTION']:
+        from analysis.a03_feature_extraction.m_feature_extraction import extract_pathomic_feature
+        msk_paths = [save_msk_dir / f"{pathlib.Path(p).stem}.jpg" for p in wsi_paths]
+        logger.info("The number of extracted tissue masks on {}: {}".format(opt['DATASET'], len(msk_paths)))
+        extract_pathomic_feature(
+            wsi_paths=wsi_paths,
+            wsi_msk_paths=msk_paths[2000:],
+            feature_mode=pathomics_mode,
+            save_dir=save_feature_dir,
+            resolution=opt['PATHOMICS']['RESOLUTION'],
+            units=opt['PATHOMICS']['UNITS'],
+            skip_exist=opt['PATHOMICS']['SKIP_EXITS']
+        )
 
     # construct wsi graph
-    # from analysis.a04_feature_aggregation.m_graph_construction import construct_wsi_graph
-    # bs = 32
-    # nb = len(wsi_paths) // bs if len(wsi_paths) % bs == 0 else len(wsi_paths) // bs + 1
-    # for i in range(0, nb):
-    #     logger.info(f"Processing WSIs of batch [{i+1}/{nb}] ...")
-    #     start = i * bs
-    #     end = min(len(wsi_paths), (i + 1) * bs)
-    #     batch_wsi_paths = wsi_paths[start:end]
-    #     construct_wsi_graph(
-    #         wsi_paths=batch_wsi_paths,
-    #         save_dir=save_feature_dir,
-    #         n_jobs=1,
-    #         delete_npy=False,
-    #         skip_exist=True
-    #     )
-
-    # # extract minimum spanning tree
-    # from analysis.a04_feature_aggregation.m_graph_construction import extract_minimum_spanning_tree
-    # wsi_graph_paths = [save_feature_dir / f"{p.stem}.json" for p in wsi_paths]
-    # extract_minimum_spanning_tree(
-    #     wsi_graph_paths=wsi_graph_paths,
-    #     save_dir=save_feature_dir,
-    #     n_jobs=8
-    # )
+    if opt['PATHOMICS']['TASKS']['GRAPH_CONSTRUCTION']:
+        from analysis.a04_feature_aggregation.m_graph_construction import construct_wsi_graph
+        construct_wsi_graph(
+            wsi_paths=wsi_paths,
+            save_dir=save_feature_dir,
+            n_jobs=opt['N_JOBS'],
+            delete_npy=opt['PATHOMICS']['DELETE_NPY'],
+            skip_exist=opt['PATHOMICS']['True']
+        )
 
     # measure graph properties
-    # from analysis.a04_feature_aggregation.m_graph_construction import measure_graph_properties
-    # wsi_graph_paths = [save_feature_dir / f"{p.stem}.json" for p in wsi_paths]
-    # wsi_label_paths = [save_feature_dir / f"{p.stem}.label.npy" for p in wsi_paths]
-    # subgraph_dict = {
-    #     "ADI": [0, 4],
-    #     "BACK": [5, 8],
-    #     "DEB": [9, 11],
-    #     "LYM": [12, 16],
-    #     "MUC": [17, 20],
-    #     "MUS": [21, 25],
-    #     "NORM": [26, 26],
-    #     "STR": [27, 31],
-    #     "TUM": [32, 34]
-    # }
-    # measure_graph_properties(
-    #     graph_paths=wsi_graph_paths,
-    #     label_paths=wsi_label_paths,
-    #     save_dir=save_feature_dir,
-    #     subgraph_dict=None,
-    #     n_jobs=32
-    # )
+    if opt['PATHOMICS']['TASKS']['MEASURE_GRAPH_PROPERTIES']:
+        from analysis.a04_feature_aggregation.m_graph_construction import measure_graph_properties
+        wsi_graph_paths = [save_feature_dir / f"{p.stem}_graph.json" for p in wsi_paths]
+        wsi_label_paths = [save_feature_dir / f"{p.stem}_label.npy" for p in wsi_paths]
+        subgraph_dict = {
+            "ADI": [0, 4],
+            "BACK": [5, 8],
+            "DEB": [9, 11],
+            "LYM": [12, 16],
+            "MUC": [17, 20],
+            "MUS": [21, 25],
+            "NORM": [26, 26],
+            "STR": [27, 31],
+            "TUM": [32, 34]
+        }
+        measure_graph_properties(
+            graph_paths=wsi_graph_paths,
+            label_paths=wsi_label_paths,
+            save_dir=save_feature_dir,
+            subgraph_dict=None,
+            n_jobs=opt['N_JOBS']
+        )
 
     # visualize feature
     # from analysis.a04_feature_aggregation.m_graph_construction import pathomic_feature_visualization

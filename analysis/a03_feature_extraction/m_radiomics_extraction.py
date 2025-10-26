@@ -19,127 +19,128 @@ from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_TCGA
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('--radiology', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
-    parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
-    parser.add_argument('--dataset', default="MAMAMIA", type=str)
-    parser.add_argument('--lab_dir', default=None)
-    parser.add_argument('--lab_mode', default="BiomedParse", choices=["expert", "nnUNet", "BiomedParse"], type=str)
-    parser.add_argument('--meta_info', default=None)
-    parser.add_argument('--target', default="tumor", type=str)
-    parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--feature_mode', default="pyradiomics", choices=["pyradiomics", "SegVol", "BiomedParse", "BayesBP"], type=str)
-    parser.add_argument('--feature_dim', default=768, choices=[2048, 768, 512], type=int)
-    parser.add_argument('--dilation_mm', default=0, type=float)
-    parser.add_argument('--layer_method', default="peeling")
-    parser.add_argument('--resolution', default=1, type=float)
-    parser.add_argument('--units', default="mm", type=str)
+    parser.add_argument('--config_files', nargs='+', required=True, help='Path(s) to the config file(s).')
     args = parser.parse_args()
+    
+    from utilities.arguments import load_opt_from_config_files
+    opt = load_opt_from_config_files(args.config_files)
+    if opt.get('META_INFO', False):
+        meta_info = opt['META_INFO']
+    else:
+        meta_info = None
 
     ## get image and label paths
-    if args.dataset == 'MAMAMIA':
+    if opt['DATASET'] == 'MAMAMIA':
         dataset_info = prepare_MAMAMIA_info(
-            img_dir=args.radiology,
-            lab_dir=args.lab_dir,
-            lab_mode=args.lab_mode,
-            img_format=args.format,
+            img_dir=opt['RADIOLOGY'],
+            lab_dir=opt['LABEL_DIR'],
+            lab_mode=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
+            img_format=opt['DATA_FORMAT'],
             phase='pre-contrast',
-            meta_info=args.meta_info
+            meta_info=meta_info
         )
-    elif args.dataset == 'TCGA':
+    elif opt['DATASET'] == 'TCGA':
         dataset_info = prepare_TCGA_radiology_info(
-            img_json=args.radiology,
-            lab_dir=args.lab_dir,
-            lab_mode=args.lab_mode,
-            img_format=args.format
+            img_json=opt['RADIOLOGY'],
+            lab_dir=opt['LABEL_DIR'],
+            lab_mode=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
+            img_format=opt['DATA_FORMAT']
         )
     else:
-        raise ValueError(f'Dataset {args.dataset} is currently unsupported')
+        raise NotImplementedError
     
     ## set save dir
-    save_feature_dir = pathlib.Path(f"{args.save_dir}/{args.dataset}_radiomic_features/{args.feature_mode}/segmentator_{args.lab_mode}")
+    save_feature_dir = pathlib.Path(opt['SAVE_DIR'])
+    save_feature_dir = save_feature_dir / f"{opt['DATASET']}_radiomic_features"
+    save_feature_dir = save_feature_dir / f"{opt['RADIOMICS']['MODE']['VALUE']}"
+    save_feature_dir = save_feature_dir / f"segmentator_{opt['RADIOMICS']['SEGMENTATOR']['VALUE']}"
     
     # extract radiomics
     # warning: do not run this function in a loop
-
-    from analysis.a03_feature_extraction.m_feature_extraction import extract_radiomic_feature
-    print("Number of images", len(dataset_info['img_paths']))
-    extract_radiomic_feature(
-        img_paths=dataset_info['img_paths'],
-        lab_paths=dataset_info['lab_paths'],
-        feature_mode=args.feature_mode,
-        save_dir=save_feature_dir,
-        class_name=args.target,
-        prompts=dataset_info['text_prompts'],
-        format=dataset_info['img_format'],
-        modality=dataset_info['modality'],
-        site=dataset_info['site'],
-        dilation_mm=args.dilation_mm,
-        layer_method=args.layer_method,
-        resolution=args.resolution,
-        units=args.units,
-        n_jobs=32,
-        skip_exist=True
-    )
+    if opt['RADIOMICS']['TASKS']['EXTRACTION']:
+        from analysis.a03_feature_extraction.m_feature_extraction import extract_radiomic_feature
+        print("Number of images", len(dataset_info['img_paths']))
+        extract_radiomic_feature(
+            img_paths=dataset_info['img_paths'],
+            lab_paths=dataset_info['lab_paths'],
+            feature_mode=opt['RADIOMICS']['MODE']['VALUE'],
+            save_dir=save_feature_dir,
+            class_name=opt['RADIOMICS']['TARGET'],
+            prompts=dataset_info['text_prompts'],
+            format=dataset_info['img_format'],
+            modality=dataset_info['modality'],
+            site=dataset_info['site'],
+            dilation_mm=opt['RADIOMICS']['DILATION_MM'],
+            layer_method=opt['RADIOMICS']['LAYER_METHOD']['VALUE'],
+            resolution=opt['RADIOMICS']['RESOLUTION'],
+            units=opt['RADIOMICS']['UNITS'],
+            n_jobs=opt['N_JOBS'],
+            skip_exist=opt['RADIOMICS']['SKIP_EXITS']
+        )
 
     # cluster radiomics
-    # from analysis.a04_feature_aggregation.m_spatial_feature_clustering import cluster_radiomic_feature 
-
-    # cluster_radiomic_feature(
-    #     img_paths=img_paths, 
-    #     feature_mode=args.feature_mode, 
-    #     save_dir=save_feature_dir, 
-    #     class_name=args.target,
-    #     n_clusters=3,
-    #     n_jobs=32,
-    #     skip_exist=False
-    # )
+    if opt['RADIOMICS']['TASKS']['CLUSTREING']:
+        from analysis.a04_feature_aggregation.m_spatial_feature_clustering import cluster_radiomic_feature 
+        cluster_radiomic_feature(
+            img_paths=dataset_info['img_paths'], 
+            feature_mode=opt['RADIOMICS']['MODE']['VALUE'], 
+            save_dir=save_feature_dir, 
+            class_name=opt['RADIOMICS']['TARGET'],
+            n_clusters=3,
+            n_jobs=opt['N_JOBS'],
+            skip_exist=opt['RADIOMICS']['SKIP_EXITS']
+        )
 
     # construct image graph
-    # from analysis.a04_feature_aggregation.m_graph_construction import construct_img_graph
-    
-    # construct_img_graph(
-    #     img_paths=img_paths,
-    #     save_dir=save_feature_dir,
-    #     class_name=args.target,
-    #     window_size=30**3,
-    #     n_jobs=32,
-    #     delete_npy=True,
-    #     skip_exist=True
-    # )
+    if opt['RADIOMICS']['TASKS']['GRAPH_CONSTRUCTION']:
+        from analysis.a04_feature_aggregation.m_graph_construction import construct_img_graph
+        construct_img_graph(
+            img_paths=dataset_info['img_paths'],
+            save_dir=save_feature_dir,
+            class_name=opt['RADIOMICS']['TARGET'],
+            window_size=30**3,
+            n_jobs=opt['N_JOBS'],
+            delete_npy=opt['RADIOMICS']['DELETE_NPY'],
+            skip_exist=opt['RADIOMICS']['SKIP_EXITS']
+        )
 
     # measure graph properties
-    # from analysis.a04_feature_aggregation.m_graph_construction import measure_graph_properties
-    
-    # graph_paths = [save_feature_dir / pathlib.Path(p).name.replace(".nii.gz", f"_{class_name}.json") for p in img_paths]
-    # measure_graph_properties(
-    #     graph_paths=graph_paths,
-    #     label_paths=lab_paths,
-    #     save_dir=save_feature_dir,
-    #     subgraph_dict=None,
-    #     n_jobs=32
-    # )
+    if opt['RADIOMICS']['TASKS']['MEASURE_GRAPH_PROPERTIES']:
+        from analysis.a04_feature_aggregation.m_graph_construction import measure_graph_properties
+        parent_names = [pathlib.Path(p).parent.name for p in dataset_info['img_paths']]
+        graph_suffix = f"_{opt['RADIOMICS']['TARGET']}_graph.json"
+        graph_names = [pathlib.Path(p).name.replace(".nii.gz", graph_suffix) for p in dataset_info['img_paths']]
+        graph_paths = [save_feature_dir / p / g for p, g in zip(parent_names, graph_names)]
+        measure_graph_properties(
+            graph_paths=graph_paths,
+            label_paths=[None] * len(graph_paths),
+            save_dir=save_feature_dir,
+            with_parent_name=True,
+            subgraph_dict=None,
+            n_jobs=32
+        )
 
     # visualize radiomics
-    # from analysis.a04_feature_aggregation.m_graph_construction import radiomic_feature_visualization
-    
-    # radiomic_feature_visualization(
-    #     img_paths=img_paths[0:10],
-    #     save_feature_dir=save_feature_dir,
-    #     class_name=args.target,
-    #     mode="umap",
-    #     graph=True
-    # )
+    if opt['RADIOMICS']['TASKS']['VISUALIZE_RADIOMICS']:
+        from analysis.a04_feature_aggregation.m_graph_construction import radiomic_feature_visualization
+        radiomic_feature_visualization(
+            img_paths=dataset_info['img_paths'][0:10],
+            save_feature_dir=save_feature_dir,
+            class_name=opt['RADIOMICS']['TARGET'],
+            mode="umap",
+            graph=True
+        )
 
     # visualize radiomic graph
-    # from analysis.a04_feature_aggregation.m_graph_construction import visualize_radiomic_graph
-    
-    # visualize_radiomic_graph(
-    #     img_path=img_paths[0],
-    #     lab_path=lab_paths[0],
-    #     save_graph_dir=save_feature_dir,
-    #     class_name=args.target,
-    #     spacing=tuple([args.resolution]*3),
-    #     feature_extractor=args.feature_mode,
-    #     remove_front_corner=False
-    # )
+    if opt['RADIOMICS']['TASKS']['VISUALIZE_GRAPH']:
+        from analysis.a04_feature_aggregation.m_graph_construction import visualize_radiomic_graph
+        visualize_radiomic_graph(
+            img_path=dataset_info['img_paths'][0],
+            lab_path=dataset_info['lab_paths'][0],
+            save_graph_dir=save_feature_dir,
+            class_name=opt['RADIOMICS']['TARGET'],
+            spacing=tuple([opt['RADIOMICS']['RESOLUTION']]*3),
+            feature_extractor=opt['RADIOMICS']['MODE']['VALUE'],
+            remove_front_corner=False
+        )
 

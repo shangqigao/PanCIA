@@ -99,7 +99,7 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
     """
 
     # Build model config
-    opt = load_opt_from_config_files([os.path.join(relative_path, "configs/biomedparse_inference.yaml")])
+    opt = load_opt_from_config_files([os.path.join(relative_path, "configs/radiology_segmentation/biomedparse_inference.yaml")])
     opt = init_distributed(opt)
 
     # Load model from pretrained weights

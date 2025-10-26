@@ -1,0 +1,25 @@
+# Define parameters of pathomics
+DATASET: TCGA
+PATHOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+SAVE_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/pathomics"
+N_JOBS: 32
+
+# Define parameters of pathomics
+PATHOMICS:
+  MASKING_METHOD:
+    VALUE: "otsu"
+    CHOICES: ["otsu", "morphological"]
+  MODE:
+    VALUE: "UNI"
+    CHOICES: ["CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
+  TASKS:
+    TISSUE_MASKING: True
+    EXTRACTION: True
+    GRAPH_CONSTRUCTION: True
+    MEASURE_GRAPH_PROPERTIES: True
+    VISUALIZE_PATHOMICS: False
+    VISUALIZE_GRAPH: False
+  RESOLUTION: 20
+  UNITS: "power"
+  SKIP_EXITS: True
+  DELETE_NPY: True
