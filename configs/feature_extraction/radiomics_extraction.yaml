@@ -13,20 +13,20 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "pyradiomics"
+    VALUE: "BayesBP"
     CHOICES: ["pyradiomics", "SegVol", "BiomedParse", "BayesBP"]
   LAYER_METHOD:
-    VALUE: "peeling"
-    CHOICES: ["shells", "peeling"]
+    VALUE: null
+    CHOICES: [null, "shells", "peeling"]
   TASKS:
     EXTRACTION: True
-    CLUSTREING: False
-    GRAPH_CONSTRUCTION: True
-    MEASURE_GRAPH_PROPERTIES: True
+    CLUSTERING: False
+    GRAPH_CONSTRUCTION: False
+    MEASURE_GRAPH_PROPERTIES: False
     VISUALIZE_RADIOMICS: False
     VISUALIZE_GRAPH: False
   DILATION_MM: 10
   RESOLUTION: 1
   UNITS: "mm"
   SKIP_EXITS: True
-  DELETE_NPY: True
+  DELETE_NPY: False

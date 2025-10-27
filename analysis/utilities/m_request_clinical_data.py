@@ -147,3 +147,209 @@ def request_survival_data_by_submitter(submitter_ids, save_dir, dataset='TCGA'):
     os.makedirs(save_dir, exist_ok=True)
     df.to_csv(f"{save_dir}/{dataset}_survival_data_by_submitter.csv", index=False)
     print(f"Survival data saved to {save_dir}/{dataset}_survival_data_by_submitter.csv")
+
+def request_survival_data_by_project_new(project_ids, save_dir, dataset='TCGA-RCC'):
+    fields = [
+        "case_id",
+        "submitter_id",
+        "project.project_id",
+        "demographic.gender",
+        "demographic.race",
+        "demographic.age_at_index",
+        "demographic.vital_status",
+        "demographic.days_to_death",
+        "follow_ups.days_to_follow_up",
+        "follow_ups.days_to_recurrence",
+        "diagnoses.ajcc_pathologic_stage",
+        "diagnoses.ajcc_pathologic_m"
+        ]
+
+    fields = ",".join(fields)
+
+    cases_endpt = "https://api.gdc.cancer.gov/cases"
+
+    # This set of filters is nested under an 'and' operator.
+    filters = {
+        "op": "and",
+        "content":[
+            {
+            "op": "in",
+            "content":{
+                "field": "cases.project.project_id",
+                "value": project_ids #"TCGA-KIRP", "TCGA-KIRC", "TCGA-KICH"
+                }
+            }
+        ]
+    }
+
+    # A POST is used, so the filter parameters can be passed directly as a Dict object.
+    params = {
+        "filters": filters,
+        "fields": fields,
+        "format": "JSON",
+        "size": "2000"
+        }
+
+
+    # Send the request to GDC API
+    response = requests.post(cases_endpt, json=params)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        print("Query successful")
+        json_data = response.json()
+    else:
+        print(f"Query failed with status code: {response.status_code}")
+        exit()
+
+    # Extract the clinical data
+    cases = json_data['data']['hits']
+    print("The number of cases:", len(cases))
+
+    # Convert the clinical data into a pandas DataFrame
+    survival_data = []
+
+    for case in cases:
+        if case.get('follow_ups', False):
+            follow_ups = case['follow_ups']
+            days_to_follow_up = [c.get('days_to_follow_up', None) for c in follow_ups]
+            days_to_follow_up = [d for d in days_to_follow_up if d is not None]
+            days_to_last_follow_up = max(days_to_follow_up) if len(days_to_follow_up) > 0 else None
+            days_to_recurrence = [c.get('days_to_recurrence', None) for c in follow_ups]
+            days_to_recurrence = [d for d in days_to_recurrence if d is not None]
+            days_to_recurrence = min(days_to_recurrence) if len(days_to_recurrence) > 0 else None
+        else:
+            days_to_last_follow_up = None
+            days_to_recurrence = None
+        if 'diagnoses' in list(case.keys()):
+            ajcc_pathologic_stage = case['diagnoses'][0].get('ajcc_pathologic_stage', None)
+            ajcc_pathologic_m = case['diagnoses'][0].get('ajcc_pathologic_m', None)
+        else:
+            ajcc_pathologic_stage = None
+            ajcc_pathologic_m = None
+        survival_data.append({
+            'case_id': case['case_id'],
+            'submitter_id': case['submitter_id'],
+            'project_id': case['project']['project_id'],
+            'days_to_last_follow_up': days_to_last_follow_up,
+            'days_to_recurrence': days_to_recurrence,
+            'ajcc_pathologic_stage': ajcc_pathologic_stage,
+            'ajcc_pathologic_m': ajcc_pathologic_m,
+            'days_to_death': case['demographic'].get('days_to_death', None),
+            'vital_status': case['demographic'].get('vital_status', None),
+            'gender': case['demographic'].get('gender', None),
+            'race': case['demographic'].get('race', None),
+            'age': case['demographic'].get('age_at_index', None)
+        })
+
+    df = pd.DataFrame(survival_data)
+
+    # Display the first few rows of the survival data
+    print(df.head())
+    os.makedirs(save_dir, exist_ok=True)
+    df.to_csv(f"{save_dir}/{dataset}_survival_data_by_project.csv", index=False)
+    print(f"Survival data saved to {save_dir}/{dataset}_survival_data_by_project.csv")
+    return
+
+def request_survival_data_by_submitter_new(submitter_ids, save_dir, dataset='TCGA'):
+    fields = [
+        "case_id",
+        "submitter_id",
+        "project.project_id",
+        "demographic.gender",
+        "demographic.race",
+        "demographic.age_at_index",
+        "demographic.vital_status",
+        "demographic.days_to_death",
+        "follow_ups.days_to_follow_up",
+        "follow_ups.days_to_recurrence",
+        "diagnoses.ajcc_pathologic_stage",
+        "diagnoses.ajcc_pathologic_m"
+        ]
+
+    fields = ",".join(fields)
+
+    cases_endpt = "https://api.gdc.cancer.gov/cases"
+
+    # 🔹 Filter by submitter_id instead of project_id
+    filters = {
+        "op": "and",
+        "content": [
+            {
+                "op": "in",
+                "content": {
+                    "field": "cases.submitter_id",
+                    "value": submitter_ids  # e.g., ["TCGA-AB-1234", "TCGA-CD-5678"]
+                }
+            }
+        ]
+    }
+
+    # A POST is used, so the filter parameters can be passed directly as a Dict object.
+    params = {
+        "filters": filters,
+        "fields": fields,
+        "format": "JSON",
+        "size": "2000"
+        }
+
+
+    # Send the request to GDC API
+    response = requests.post(cases_endpt, json=params)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        print("Query successful")
+        json_data = response.json()
+    else:
+        print(f"Query failed with status code: {response.status_code}")
+        exit()
+
+    # Extract the clinical data
+    cases = json_data['data']['hits']
+    print("The number of cases:", len(cases))
+
+    # Convert the clinical data into a pandas DataFrame
+    survival_data = []
+
+    for case in cases:
+        if case.get('follow_ups', False):
+            follow_ups = case['follow_ups']
+            days_to_follow_up = [c.get('days_to_follow_up', None) for c in follow_ups]
+            days_to_follow_up = [d for d in days_to_follow_up if d is not None]
+            days_to_last_follow_up = max(days_to_follow_up) if len(days_to_follow_up) > 0 else None
+            days_to_recurrence = [c.get('days_to_recurrence', None) for c in follow_ups]
+            days_to_recurrence = [d for d in days_to_recurrence if d is not None]
+            days_to_recurrence = min(days_to_recurrence) if len(days_to_recurrence) > 0 else None
+        else:
+            days_to_last_follow_up = None
+            days_to_recurrence = None
+        if 'diagnoses' in list(case.keys()):
+            ajcc_pathologic_stage = case['diagnoses'][0].get('ajcc_pathologic_stage', None)
+            ajcc_pathologic_m = case['diagnoses'][0].get('ajcc_pathologic_m', None)
+        else:
+            ajcc_pathologic_stage = None
+            ajcc_pathologic_m = None
+        survival_data.append({
+            'case_id': case['case_id'],
+            'submitter_id': case['submitter_id'],
+            'project_id': case['project']['project_id'],
+            'days_to_last_follow_up': days_to_last_follow_up,
+            'days_to_recurrence': days_to_recurrence,
+            'ajcc_pathologic_stage': ajcc_pathologic_stage,
+            'ajcc_pathologic_m': ajcc_pathologic_m,
+            'days_to_death': case['demographic'].get('days_to_death', None),
+            'vital_status': case['demographic'].get('vital_status', None),
+            'gender': case['demographic'].get('gender', None),
+            'race': case['demographic'].get('race', None),
+            'age': case['demographic'].get('age_at_index', None)
+        })
+
+    df = pd.DataFrame(survival_data)
+
+    # Display the first few rows of the survival data
+    print(df.head())
+    os.makedirs(save_dir, exist_ok=True)
+    df.to_csv(f"{save_dir}/{dataset}_survival_data_by_submitter.csv", index=False)
+    print(f"Survival data saved to {save_dir}/{dataset}_survival_data_by_submitter.csv")
+    return

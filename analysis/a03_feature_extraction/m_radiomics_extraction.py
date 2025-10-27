@@ -61,15 +61,15 @@ if __name__ == "__main__":
         from analysis.a03_feature_extraction.m_feature_extraction import extract_radiomic_feature
         print("Number of images", len(dataset_info['img_paths']))
         extract_radiomic_feature(
-            img_paths=dataset_info['img_paths'],
-            lab_paths=dataset_info['lab_paths'],
+            img_paths=dataset_info['img_paths'][3600:],
+            lab_paths=dataset_info['lab_paths'][3600:],
             feature_mode=opt['RADIOMICS']['MODE']['VALUE'],
             save_dir=save_feature_dir,
             class_name=opt['RADIOMICS']['TARGET'],
-            prompts=dataset_info['text_prompts'],
-            format=dataset_info['img_format'],
-            modality=dataset_info['modality'],
-            site=dataset_info['site'],
+            prompts=dataset_info['text_prompts'][3600:],
+            format=dataset_info['img_format'][3600:],
+            modality=dataset_info['modality'][3600:],
+            site=dataset_info['site'][3600:],
             dilation_mm=opt['RADIOMICS']['DILATION_MM'],
             layer_method=opt['RADIOMICS']['LAYER_METHOD']['VALUE'],
             resolution=opt['RADIOMICS']['RESOLUTION'],
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         )
 
     # cluster radiomics
-    if opt['RADIOMICS']['TASKS']['CLUSTREING']:
+    if opt['RADIOMICS']['TASKS']['CLUSTERING']:
         from analysis.a04_feature_aggregation.m_spatial_feature_clustering import cluster_radiomic_feature 
         cluster_radiomic_feature(
             img_paths=dataset_info['img_paths'], 

@@ -1439,7 +1439,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     from peft import LoraConfig, get_peft_model
 
     # Build model config
-    opt = load_opt_from_config_files(["configs/biomedparse_inference.yaml"])
+    opt = load_opt_from_config_files(["configs/radiology_segmentation/biomedparse_inference.yaml"])
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
@@ -1776,7 +1776,7 @@ def extract_Bayes_BiomedParse_radiomics(
     from peft import LoraConfig, get_peft_model
 
     # Build model config
-    opt = load_opt_from_config_files(["configs/pancia_bayes_inference.yaml"])
+    opt = load_opt_from_config_files(["configs/radiology_segmentation/pancia_bayes_inference.yaml"])
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
@@ -1912,7 +1912,10 @@ def extract_Bayes_BiomedParse_radiomics(
                 ensemble_prob.append(pred_prob)
             pred_prob = np.max(np.concatenate(ensemble_prob, axis=0), axis=0, keepdims=True)
             slice_feat = np.mean(np.stack(ensemble_feat, axis=0), axis=0, keepdims=True)
-            radiomic_feat.append(slice_feat.astype(np.float32))
+            if layer_method is None:
+                radiomic_feat.append(slice_feat.astype(np.float16))
+            else:
+                radiomic_feat.append(slice_feat.astype(np.float32))
             if labels is None:
                 pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
             else:

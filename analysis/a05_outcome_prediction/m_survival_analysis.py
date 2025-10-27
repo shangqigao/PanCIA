@@ -128,23 +128,40 @@ def prepare_graph_properties(data_dict, prop_keys=None, subgraphs=False, omics="
                     properties[key] = np.std(prop_dict[k])
     return properties
 
-def load_radiomic_properties(idx, radiomic_path, prop_keys=None):
-    suffix = pathlib.Path(radiomic_path).suffix
-    if suffix == ".json":
-        if prop_keys is None: 
-            prop_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
-        data_dict = load_json(radiomic_path)
-        properties = {}
-        for key, value in data_dict.items():
-            selected = [((k in key) and ("diagnostics" not in key)) for k in prop_keys]
-            if any(selected): properties[key] = value
-    elif suffix == ".npy":
-        feature = np.load(radiomic_path)
-        feat_list = np.array(feature).squeeze().tolist()
-        properties = {}
-        for i, feat in enumerate(feat_list):
-            k = f"radiomics.feature{i}"
-            properties[k] = feat
+def load_radiomic_properties(idx, radiomic_paths, prop_keys=None, pooling="mean"):
+    properties_list = []
+    for radiomic_path in radiomic_paths:
+        suffix = pathlib.Path(radiomic_path).suffix
+        if suffix == ".json":
+            if prop_keys is None: 
+                prop_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
+            data_dict = load_json(radiomic_path)
+            properties = {}
+            for key, value in data_dict.items():
+                selected = [((k in key) and ("diagnostics" not in key)) for k in prop_keys]
+                if any(selected): properties[key] = value
+        elif suffix == ".npy":
+            feature = np.load(radiomic_path)
+            feat_list = np.array(feature).squeeze().tolist()
+            properties = {}
+            for i, feat in enumerate(feat_list):
+                k = f"radiomics.feature{i}"
+                properties[k] = feat
+        properties_list.append(properties)
+
+    # patient-level pooling
+    df = pd.DataFrame(properties_list)
+    if pooling == "mean":
+        properties = df.mean(numeric_only=True).to_dict()
+    elif pooling == "max":
+        properties = df.max(numeric_only=True).to_dict()
+    elif pooling == "min":
+        properties = df.min(numeric_only=True).to_dict()
+    elif pooling == "std":
+        properties = df.std(numeric_only=True).to_dict()
+    else:
+        raise ValueError(f"Unsupport patient pooling: {pooling}")
+
     return {f"{idx}": properties}
 
 def prepare_graph_pathomics(
@@ -276,24 +293,37 @@ def load_wsi_level_features(idx, wsi_feature_path, pooling="mean"):
 def prepare_patient_outcome(outcome_file, dataset="MAMA-MIA", outcome=None):
     if dataset == "MAMA-MIA":
         df = pd.read_excel(outcome_file, sheet_name='dataset_info')
+        # Prepare survival data
+        if outcome == 'OS':
+            df = df[df['days_to_death'].notna()]
+            df['event'] = df['days_to_death'].apply(lambda x: True if x > 0 else False)
+            df['duration'] = df['days_to_death']
+            df.loc[df['days_to_death'] == 0, 'duration'] = df['days_to_follow_up']
+        elif outcome == 'Recurrence':
+            df = df[df['days_to_recurrence'].notna()]
+            df['event'] = df['days_to_recurrence'].apply(lambda x: True if x > 0 else False)
+            df['duration'] = df['days_to_recurrence']
+            df.loc[df['days_to_recurrence'] == 0, 'duration'] = df['days_to_follow_up']
+        else:
+            raise ValueError(f'Unsuppored outcome type: {outcome}')
     elif dataset == "TCGA":
         df = pd.read_csv(outcome_file)
+        # Prepare the survival data
+        if outcome == 'OS':
+            df['event'] = df['vital_status'].apply(lambda x: True if x == 'Dead' else False)
+            df['duration'] = df['days_to_death'].fillna(df['days_to_last_follow_up'])
+            df = df[df['duration'].notna()]
+        elif outcome == "DFS":
+            df.fillna(float('inf'), inplace=True)
+            df['event'] = df.apply(lambda row: True if row['days_to_recurrence'] < float('inf') or 
+                                row['days_to_death'] < float('inf') else False, axis=1)
+            df['duration'] = df[['days_to_recurrence', 'days_to_death', 'days_to_last_follow_up']].min(axis=1)
+            df = df[df['duration'].notna()]
+        else:
+            raise ValueError(f'Unsuppored outcome type: {outcome}')
     else:
         raise NotImplementedError
     
-    # Prepare survival data
-    if outcome == 'os':
-        df = df[df['days_to_death'].notna()]
-        df['event'] = df['days_to_death'].apply(lambda x: True if x > 0 else False)
-        df['duration'] = df['days_to_death']
-        df.loc[df['days_to_death'] == 0, 'duration'] = df['days_to_follow_up']
-    elif outcome == 'recurrence':
-        df = df[df['days_to_recurrence'].notna()]
-        df['event'] = df['days_to_recurrence'].apply(lambda x: True if x > 0 else False)
-        df['duration'] = df['days_to_recurrence']
-        df.loc[df['days_to_recurrence'] == 0, 'duration'] = df['days_to_follow_up']
-    else:
-        raise ValueError(f'Unsuppored outcome type: {outcome}')
     logging.info(f"Clinical data strcuture: {df.shape}")
 
     return df
@@ -1634,7 +1664,7 @@ if __name__ == "__main__":
     
     from utilities.arguments import load_opt_from_config_files
     opt = load_opt_from_config_files(args.config_files)
-    radiomics_mode = opt['RADIOMICS']['SEGMENTATOR']['VALUE']
+    radiomics_mode = opt['RADIOMICS']['MODE']['VALUE']
     pathomics_mode = opt['PATHOMICS']['MODE']['VALUE']
 
     if opt['DATASET'] == "MAMAMIA":
@@ -1660,11 +1690,13 @@ if __name__ == "__main__":
     else:
         raise NotImplementedError
 
+    logger.info(f"Found {len(omics_info['omics_paths'])} subjects with omics")
+
     if not pathlib.Path(opt['SAVE_OUTCOME_FILE']).exists():
-        from analysis.utilities.m_request_clinical_data import request_survival_data_by_submitter
+        from analysis.utilities.m_request_clinical_data import request_survival_data_by_submitter_new
         save_clinical_dir = pathlib.Path(opt['SAVE_OUTCOME_FILE']).parent
         subject_ids = list(omics_info['omics_paths'].keys())
-        request_survival_data_by_submitter(
+        request_survival_data_by_submitter_new(
             submitter_ids=subject_ids,
             save_dir=save_clinical_dir,
             dataset=opt['DATASET']
@@ -1721,7 +1753,7 @@ if __name__ == "__main__":
         pathomics_keys = None
     survival(
         split_path=split_path,
-        omics=opt['USED_OMICS'],
+        omics=opt['USED_OMICS']['VALUE'],
         n_jobs=opt['N_JOBS'],
         radiomics_aggregation=opt['RADIOMICS']['AGGREGATION'],
         radiomics_aggregated_mode=opt['RADIOMICS']['AGGREGATED_MODE']['VALUE'],

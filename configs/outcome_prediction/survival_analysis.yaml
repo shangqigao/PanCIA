@@ -3,23 +3,23 @@ DATASET: TCGA
 DATA_INFO: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
 OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 OUTCOME:
-  VALUE: "os"
-  CHOICES: ["os", "recurrence"]
+  VALUE: "OS"
+  CHOICES: ["OS", "Recurrence", "DFS"]
 SAVE_OUTCOME_FILE: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_survival_data_by_submitter.csv"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 USED_OMICS:
-  VALUE: "radiopathomics"
+  VALUE: "radiomics"
   CHOICES: ["radiomics", "pathomics", "radiopathomics"]
 N_JOBS: 8
 MODEL:
-  VALUE: "RSF"
+  VALUE: "Coxnet"
   CHOICES: ["RSF", "CoxPH", "Coxnet", "FastSVM"]
 SCORER:
   VALUE: "auc"
   CHOICES: ["cindex", "cindex-ipcw", "auc", "ibs"]
 FEATURE_SELECTION: True
 N_BOOTSTRAPS: False
-USE_GRAPH_PROPERTIES: True
+USE_GRAPH_PROPERTIES: False
 
 # Define parameters of radiomics
 RADIOMICS:
@@ -30,7 +30,7 @@ RADIOMICS:
   MODE:
     VALUE: "None"
     CHOICES: ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP"]
-  # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
+  KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
   # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
   AGGREGATION: False
   AGGREGATED_MODE:
@@ -43,10 +43,10 @@ RADIOMICS:
 # Define parameters of pathomics
 PATHOMICS:
   MODE:
-    VALUE: "None"
+    VALUE: "UNI"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
   # KEYS: ["TUM", "NORM", "DEB"]
-  AGGREGATION: False
+  AGGREGATION: True
   AGGREGATED_MODE:
     VALUE: "None"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]

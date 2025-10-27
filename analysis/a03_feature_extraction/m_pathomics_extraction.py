@@ -85,7 +85,7 @@ if __name__ == "__main__":
             save_dir=save_feature_dir,
             n_jobs=opt['N_JOBS'],
             delete_npy=opt['PATHOMICS']['DELETE_NPY'],
-            skip_exist=opt['PATHOMICS']['True']
+            skip_exist=opt['PATHOMICS']['SKIP_EXITS']
         )
 
     # measure graph properties
