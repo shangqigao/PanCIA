@@ -223,7 +223,7 @@ def prepare_graph_pathomics(
 def prepare_graph_radiomics(
     idx, 
     graph_path, 
-    mode="mean+max",
+    mode="mean",
     pooling="mean"
     ):
     feat_list = []
