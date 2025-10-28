@@ -2,24 +2,16 @@
 DATASET: TCGA
 DATA_INFO: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
 OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
+SAVE_OUTCOME_FILE: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_survival_data_by_submitter.csv"
+SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
   VALUE: "OS"
   CHOICES: ["OS", "Recurrence", "DFS"]
-SAVE_OUTCOME_FILE: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_survival_data_by_submitter.csv"
-SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
-USED_OMICS:
-  VALUE: "pathomics"
-  CHOICES: ["radiomics", "pathomics", "radiopathomics"]
-N_JOBS: 8
-MODEL:
-  VALUE: "Coxnet"
-  CHOICES: ["RSF", "CoxPH", "Coxnet", "FastSVM"]
-SCORER:
-  VALUE: "auc"
-  CHOICES: ["cindex", "cindex-ipcw", "auc", "ibs"]
-FEATURE_SELECTION: True
-N_BOOTSTRAPS: False
-USE_GRAPH_PROPERTIES: False
+TASKS:
+  TRAIN: False
+  INFERENCE: False
+  TEST: False
+  PREDICTION: True
 
 # Define parameters of radiomics
 RADIOMICS:
@@ -69,7 +61,7 @@ ARCH:
   DROPOUT: 0.5
   POOL_RATIO:
     RAIOMICS: 0.7
-    PATHOMIC: 0.2
+    PATHOMICS: 0.2
   OMICS: ["radiomics", "pathomics"]
   AGGREGATION:
     VALUE: "SPARRA"
@@ -87,4 +79,26 @@ TRAIN:
 
 INFERENCE:
   PRE_TRAINED: ""
+  N_WORKS: 32
+  BATCH_SIZE: 8
   SAVE_OMICS: True
+
+TEST:
+  PRE_TRAINED: ""
+  N_WORKS: 1
+  BATCH_SIZE: 1
+
+PREDICTION:
+  USED_OMICS:
+    VALUE: "pathomics"
+    CHOICES: ["radiomics", "pathomics", "radiopathomics"]
+  N_JOBS: 8
+  MODEL:
+    VALUE: "Coxnet"
+    CHOICES: ["RSF", "CoxPH", "Coxnet", "FastSVM"]
+  SCORER:
+    VALUE: "auc"
+    CHOICES: ["cindex", "cindex-ipcw", "auc", "ibs"]
+  FEATURE_SELECTION: True
+  N_BOOTSTRAPS: False
+  USE_GRAPH_PROPERTIES: False
