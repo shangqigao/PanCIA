@@ -1824,19 +1824,19 @@ if __name__ == "__main__":
             pathomics_keys = None
         survival(
             split_path=split_path,
-            omics=opt['USED_OMICS']['VALUE'],
-            n_jobs=opt['N_JOBS'],
+            omics=opt['PREDICTION']['USED_OMICS']['VALUE'],
+            n_jobs=opt['PREDICTION']['N_JOBS'],
             radiomics_aggregation=opt['RADIOMICS']['AGGREGATION'],
             radiomics_aggregated_mode=opt['RADIOMICS']['AGGREGATED_MODE']['VALUE'],
             pathomics_aggregation=opt['PATHOMICS']['AGGREGATION'],
             pathomics_aggregated_mode=opt['PATHOMICS']['AGGREGATED_MODE']['VALUE'],
             radiomics_keys=radiomics_keys,
             pathomics_keys=pathomics_keys,
-            model=opt['MODEL']['VALUE'],
-            scorer=opt['SCORER']['VALUE'],
-            feature_selection=opt['FEATURE_SELECTION'],
-            n_bootstraps=opt['N_BOOTSTRAPS'],
-            use_graph_properties=opt['USE_GRAPH_PROPERTIES']
+            model=opt['PREDICTION']['MODEL']['VALUE'],
+            scorer=opt['PREDICTION']['SCORER']['VALUE'],
+            feature_selection=opt['PREDICTION']['FEATURE_SELECTION'],
+            n_bootstraps=opt['PREDICTION']['N_BOOTSTRAPS'],
+            use_graph_properties=opt['PREDICTION']['USE_GRAPH_PROPERTIES']
         )
 
     # visualize radiomics

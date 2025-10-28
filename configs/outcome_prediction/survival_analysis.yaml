@@ -42,7 +42,7 @@ PATHOMICS:
   AGGREGATED_MODE:
     VALUE: "None"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
-  SUFFIX: "_pathomics.json"
+  SUFFIX: "_graph.json"
   RESOLUTION: 20
   UNITS: "power"
 
