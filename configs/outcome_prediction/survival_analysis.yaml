@@ -8,7 +8,7 @@ OUTCOME:
 SAVE_OUTCOME_FILE: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_survival_data_by_submitter.csv"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 USED_OMICS:
-  VALUE: "radiomics"
+  VALUE: "pathomics"
   CHOICES: ["radiomics", "pathomics", "radiopathomics"]
 N_JOBS: 8
 MODEL:
