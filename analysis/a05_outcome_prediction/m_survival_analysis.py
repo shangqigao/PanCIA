@@ -186,12 +186,12 @@ def prepare_graph_pathomics(
         }
         subgraph_ids = [subgraph_dict[k] for k in subgraphs]
     graph_dict = load_json(graph_path)
-    label_path = f"{graph_path}".replace(".json", ".label.npy")
-    label = np.load(label_path)
-    if label.ndim == 2: label = np.argmax(label, axis=1)
     feature = np.array(graph_dict["x"])
     assert feature.ndim == 2
     if subgraph_ids is not None:
+        label_path = f"{graph_path}".replace(".json", ".label.npy")
+        label = np.load(label_path)
+        if label.ndim == 2: label = np.argmax(label, axis=1)
         subset = label < 0
         for ids in subgraph_ids:
             ids_subset = np.logical_and(label >= ids[0], label <= ids[1])

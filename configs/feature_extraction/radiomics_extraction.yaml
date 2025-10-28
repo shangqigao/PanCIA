@@ -19,9 +19,9 @@ RADIOMICS:
     VALUE: null
     CHOICES: [null, "shells", "peeling"]
   TASKS:
-    EXTRACTION: True
+    EXTRACTION: False
     CLUSTERING: False
-    GRAPH_CONSTRUCTION: False
+    GRAPH_CONSTRUCTION: True
     MEASURE_GRAPH_PROPERTIES: False
     VISUALIZE_RADIOMICS: False
     VISUALIZE_GRAPH: False
@@ -29,4 +29,4 @@ RADIOMICS:
   RESOLUTION: 1
   UNITS: "mm"
   SKIP_EXITS: True
-  DELETE_NPY: False
+  DELETE_NPY: False # if true, only constructed graphs will be saved 
