@@ -364,7 +364,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', default="BiomedParse", choices=["SegVol", "BiomedParse"], type=str)
     args = parser.parse_args()
 
-    save_dir = pathlib.Path(args.save_dir)
+    save_dir = pathlib.Path(args.save_dir) / args.model
 
     if args.dataset == 'MAMAMIA':
         dataset_info = prepare_MAMAMIA_info(

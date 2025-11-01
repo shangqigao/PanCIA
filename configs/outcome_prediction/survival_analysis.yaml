@@ -20,15 +20,15 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "None"
+    VALUE: "BayesBP"
     CHOICES: ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP"]
-  KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
+  # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
   # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
-  AGGREGATION: False
+  AGGREGATION: True
   AGGREGATED_MODE:
     VALUE: "None"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
-  SUFFIX: "_tumor_radiomics.json"
+  SUFFIX: "_tumor_graph.json"
   RESOLUTION: 1
   UNITS: "mm"
 
@@ -90,9 +90,9 @@ TEST:
 
 PREDICTION:
   USED_OMICS:
-    VALUE: "pathomics"
+    VALUE: "radiopathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
-  N_JOBS: 8
+  N_JOBS: 32
   MODEL:
     VALUE: "Coxnet"
     CHOICES: ["RSF", "CoxPH", "Coxnet", "FastSVM"]

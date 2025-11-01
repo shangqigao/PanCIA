@@ -9,7 +9,7 @@ radiomics_dims = {
     "None": None,
     "pyradiomics": 851,
     "SegVol": 768,
-    "BiomedParse": 1024,
+    "BiomedParse": 512,
     "BayesBP": 64,
 }
 
