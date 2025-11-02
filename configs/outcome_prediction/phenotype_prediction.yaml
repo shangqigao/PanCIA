@@ -1,0 +1,104 @@
+# Define parameters of survival analysis
+DATASET: TCGA
+DATA_INFO: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
+SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_survival_data_by_submitter.csv"
+SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
+OUTCOME:
+  VALUE: "ImmuneSubtype"
+  CHOICES: ["ImmuneSubtype", "MolecularSubtype", "SampleType"]
+TASKS:
+  TRAIN: False
+  INFERENCE: False
+  TEST: False
+  PREDICTION: True
+
+# Define parameters of radiomics
+RADIOMICS:
+  TARGET: "tumor"
+  SEGMENTATOR:
+    VALUE: "BiomedParse"
+    CHOICES: ["expert", "nnUNet", "BiomedParse"]
+  MODE:
+    VALUE: "BayesBP"
+    CHOICES: ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP"]
+  # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
+  # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
+  AGGREGATION: True
+  AGGREGATED_MODE:
+    VALUE: "None"
+    CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
+  SUFFIX: "_tumor_graph.json"
+  RESOLUTION: 1
+  UNITS: "mm"
+
+# Define parameters of pathomics
+PATHOMICS:
+  MODE:
+    VALUE: "UNI"
+    CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
+  # KEYS: ["TUM", "NORM", "DEB"]
+  AGGREGATION: True
+  AGGREGATED_MODE:
+    VALUE: "None"
+    CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
+  SUFFIX: "_graph.json"
+  RESOLUTION: 20
+  UNITS: "power"
+
+# Define parameters of deep aggregation
+SPLIT:
+  FOLDS: 5
+  TEST_RATIO: 0.2
+  VALID_RATIO: 0.1
+  TRAIN_RATIO: 0.7
+
+ARCH:
+  GNN: "GCNConv"
+  BayesGNN: False
+  DIM_TARGET: 1
+  LAYERS: [256, 128, 256]
+  DROPOUT: 0.5
+  POOL_RATIO:
+    RAIOMICS: 0.7
+    PATHOMICS: 0.2
+  OMICS: ["radiomics", "pathomics"]
+  AGGREGATION:
+    VALUE: "SPARRA"
+    CHOICES: ["ABMIL", "SPARRA"]
+
+TRAIN:
+  EPOCHS: 20
+  N_WORKS: 32
+  BATCH_SIZE: 32
+  SAMPLING_RATE: 1.0
+  LR: 3e-4
+  WIEGHT_DECAY:
+    ABMIL: 1.0e-5
+    SPARRA: 0.0
+
+INFERENCE:
+  PRE_TRAINED: ""
+  N_WORKS: 32
+  BATCH_SIZE: 8
+  SAVE_OMICS: True
+
+TEST:
+  PRE_TRAINED: ""
+  N_WORKS: 1
+  BATCH_SIZE: 1
+
+PREDICTION:
+  USED_OMICS:
+    VALUE: "radiopathomics"
+    CHOICES: ["radiomics", "pathomics", "radiopathomics"]
+  N_JOBS: 32
+  MODEL:
+    VALUE: "SVC"
+    CHOICES: ["RF", "XG", "LR", "SVC"]
+  REFIT:
+    VALUE: "f1"
+    CHOICES: ["accuracy", "f1", "roc_auc"]
+  FEATURE_SELECTION: True
+  N_BOOTSTRAPS: False
+  USE_GRAPH_PROPERTIES: False
