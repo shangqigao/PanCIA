@@ -270,43 +270,37 @@ def load_wsi_level_features(idx, wsi_feature_path, pooling="mean"):
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
-def prepare_patient_outcome(outcome_dir, dataset="MAMA-MIA", outcome=None):
-    if dataset == "MAMA-MIA":
-        df = pd.read_excel(outcome_file, sheet_name='dataset_info')
-        # Prepare survival data
-        if outcome == 'OS':
-            df = df[df['days_to_death'].notna()]
-            df['event'] = df['days_to_death'].apply(lambda x: True if x > 0 else False)
-            df['duration'] = df['days_to_death']
-            df.loc[df['days_to_death'] == 0, 'duration'] = df['days_to_follow_up']
-        elif outcome == 'Recurrence':
-            df = df[df['days_to_recurrence'].notna()]
-            df['event'] = df['days_to_recurrence'].apply(lambda x: True if x > 0 else False)
-            df['duration'] = df['days_to_recurrence']
-            df.loc[df['days_to_recurrence'] == 0, 'duration'] = df['days_to_follow_up']
-        else:
-            raise ValueError(f'Unsuppored outcome type: {outcome}')
-    elif dataset == "TCGA":
+def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None):
+    if outcome == "ImmuneSubtype":
+        outcome_file = f"{outcome_dir}/phenotypes/immune_subtype/immune_subtype.csv"
         df = pd.read_csv(outcome_file)
-        # Prepare the survival data
-        if outcome == 'OS':
-            df['event'] = df['vital_status'].apply(lambda x: True if x == 'Dead' else False)
-            df['duration'] = df['days_to_death'].fillna(df['days_to_last_follow_up'])
-            df = df[df['duration'].notna()]
-        elif outcome == "DFS":
-            df.fillna(float('inf'), inplace=True)
-            df['event'] = df.apply(lambda row: True if row['days_to_recurrence'] < float('inf') or 
-                                row['days_to_death'] < float('inf') else False, axis=1)
-            df['duration'] = df[['days_to_recurrence', 'days_to_death', 'days_to_last_follow_up']].min(axis=1)
-            df = df[df['duration'].notna()]
-        else:
-            raise ValueError(f'Unsuppored outcome type: {outcome}')
+        df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
+        df_matched = df[df["SubjectID"].isin(subject_ids)]
+        df_matched = df_matched[df_matched["Subtype_Immune_Model_Based"].notna()]
+        df_matched["PhenotypeClass"], uniques = pd.factorize(df_matched["Subtype_Immune_Model_Based"])
+        print("Immune subtype mapping:", dict(enumerate(uniques)))
+    elif outcome == "MolecularSubtype":
+        outcome_file = f"{outcome_dir}/phenotypes/molecular_subtype/molecular_subtype.csv"
+        df = pd.read_csv(outcome_file)
+        df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
+        df_matched = df[df["SubjectID"].isin(subject_ids)]
+        df_matched = df_matched[df_matched["Subtype_Selected"].notna()]
+        df_matched["PhenotypeClass"], uniques = pd.factorize(df_matched["Subtype_Selected"])
+        print("Molecular subtype mapping:", dict(enumerate(uniques)))
+    elif outcome == "PrimaryDisease":
+        outcome_file = f"{outcome_dir}/phenotypes/sample_type_and_primary_disease/sample_type_primary_disease.csv"
+        df = pd.read_csv(outcome_file)
+        df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
+        df_matched = df[df["SubjectID"].isin(subject_ids)]
+        df_matched = df_matched[df_matched["_primary_disease"].notna()]
+        df_matched["PhenotypeClass"], uniques = pd.factorize(df_matched["_primary_disease"])
+        print("Primary disease mapping:", dict(enumerate(uniques)))
     else:
         raise NotImplementedError
-    
-    logging.info(f"Clinical data strcuture: {df.shape}")
 
-    return df
+    logging.info(f"Phenotype data strcuture: {df_matched.shape}")
+
+    return df_matched
 
 def plot_coefficients(coefs, n_highlight):
     _, ax = plt.subplots(figsize=(9, 6))
@@ -883,7 +877,7 @@ def generate_data_split(
         random_state=seed,
     )
 
-    l = np.array([status for _, status in y])
+    l = np.array(y)
 
     splits = []
     for train_valid_idx, test_idx in outer_splitter.split(x, l):
@@ -1141,13 +1135,14 @@ def training(
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
         "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION']
+        "aggregation": arch_opt['AGGREGATION'],
+        'binary_cls': arch_opt['BINARY_CLS']
     }
     omics_name = "_".join(arch_opt['OMICS'])
     if arch_opt['BayesGNN']:
-        model_dir = model_dir / f"{omics_name}_Bayes_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']}"
+        model_dir = model_dir / f"{omics_name}_Bayes_Phenotype_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']}"
     else:
-        model_dir = model_dir / f"{omics_name}_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']}"
+        model_dir = model_dir / f"{omics_name}_Phenotype_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']}"
     optim_kwargs = {
         "lr": 3e-4,
         "weight_decay": {
@@ -1211,7 +1206,8 @@ def inference(
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
         "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION']
+        "aggregation": arch_opt['AGGREGATION'],
+        'binary_cls': arch_opt['BINARY_CLS']
     }
     omics_name = "_".join(arch_opt['OMICS'])
 
@@ -1330,7 +1326,8 @@ def test(
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
         "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION']
+        "aggregation": arch_opt['AGGREGATION'],
+        'binary_cls': arch_opt['BINARY_CLS']
     }
 
     # BayesGNN = True
@@ -1399,15 +1396,15 @@ if __name__ == "__main__":
     # load patient outcomes
     df_outcome = prepare_patient_outcome(
         outcome_file=opt['SAVE_OUTCOME_FILE'],
-        dataset=opt['DATASET'],
+        subject_ids=list(omics_info['omics_paths'].keys()),
         outcome=opt['OUTCOME']['VALUE']
     )
-    subject_ids = df_outcome['submitter_id'].to_list()
-    logger.info(f"Found {len(subject_ids)} subjects with survival outcomes")
+    subject_ids = df_outcome['SubjectID'].to_list()
+    logger.info(f"Found {len(subject_ids)} subjects with phenotypes")
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
     
-    y = df_outcome[['duration', 'event']].to_numpy(dtype=np.float32).tolist()
+    y = df_outcome['PhenotypeClass'].to_numpy(dtype=np.float32).tolist()
 
     # split data set
     splits = generate_data_split(
@@ -1505,8 +1502,9 @@ if __name__ == "__main__":
             pathomics_keys=pathomics_keys,
             model=opt['PREDICTION']['MODEL']['VALUE'],
             refit=opt['PREDICTION']['REFIT']['VALUE'],
-            feature_selection=opt['PREDICTION']['FEATURE_SELECTION'],
-            n_bootstraps=opt['PREDICTION']['N_BOOTSTRAPS'],
+            feature_selection=opt['PREDICTION']['FEATURE_SELECTION']['VALUE'],
+            feature_var_threshold=opt['PREDICTION']['FEATURE_SELECTION']['VAR_THRESHOLD'],
+            n_selected_features=opt['PREDICTION']['FEATURE_SELECTION']['NUM_FEATURES'],
             use_graph_properties=opt['PREDICTION']['USE_GRAPH_PROPERTIES']
         )
 

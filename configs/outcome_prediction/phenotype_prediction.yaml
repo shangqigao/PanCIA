@@ -6,7 +6,7 @@ SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_survival_
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
   VALUE: "ImmuneSubtype"
-  CHOICES: ["ImmuneSubtype", "MolecularSubtype", "SampleType"]
+  CHOICES: ["ImmuneSubtype", "MolecularSubtype", "PrimaryDisease"]
 TASKS:
   TRAIN: False
   INFERENCE: False
@@ -54,9 +54,10 @@ SPLIT:
   TRAIN_RATIO: 0.7
 
 ARCH:
+  BINARY_CLS: False #binary classification or multi classfication
+  DIM_TARGET: 1
   GNN: "GCNConv"
   BayesGNN: False
-  DIM_TARGET: 1
   LAYERS: [256, 128, 256]
   DROPOUT: 0.5
   POOL_RATIO:
@@ -99,6 +100,8 @@ PREDICTION:
   REFIT:
     VALUE: "f1"
     CHOICES: ["accuracy", "f1", "roc_auc"]
-  FEATURE_SELECTION: True
-  N_BOOTSTRAPS: False
+  FEATURE_SELECTION:
+    VALUE: True
+    VAR_THRESHOLD: 1e-4
+    NUM_FEATURES: 64
   USE_GRAPH_PROPERTIES: False
