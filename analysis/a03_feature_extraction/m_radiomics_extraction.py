@@ -61,15 +61,15 @@ if __name__ == "__main__":
         from analysis.a03_feature_extraction.m_feature_extraction import extract_radiomic_feature
         print("Number of images", len(dataset_info['img_paths']))
         extract_radiomic_feature(
-            img_paths=dataset_info['img_paths'][2500:],
-            lab_paths=dataset_info['lab_paths'][2500:],
+            img_paths=dataset_info['img_paths'],
+            lab_paths=dataset_info['lab_paths'],
             feature_mode=opt['RADIOMICS']['MODE']['VALUE'],
             save_dir=save_feature_dir,
             class_name=opt['RADIOMICS']['TARGET'],
-            prompts=dataset_info['text_prompts'][2500:],
-            format=dataset_info['img_format'][2500:],
-            modality=dataset_info['modality'][2500:],
-            site=dataset_info['site'][2500:],
+            prompts=dataset_info['text_prompts'],
+            format=dataset_info['img_format'],
+            modality=dataset_info['modality'],
+            site=dataset_info['site'],
             dilation_mm=opt['RADIOMICS']['DILATION_MM'],
             layer_method=opt['RADIOMICS']['LAYER_METHOD']['VALUE'],
             resolution=opt['RADIOMICS']['RESOLUTION'],
