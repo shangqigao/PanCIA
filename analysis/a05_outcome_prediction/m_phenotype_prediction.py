@@ -1395,7 +1395,7 @@ if __name__ == "__main__":
 
     # load patient outcomes
     df_outcome = prepare_patient_outcome(
-        outcome_file=opt['SAVE_OUTCOME_FILE'],
+        outcome_dir=opt['SAVE_OUTCOME_dir'],
         subject_ids=list(omics_info['omics_paths'].keys()),
         outcome=opt['OUTCOME']['VALUE']
     )

@@ -2,7 +2,7 @@
 DATASET: TCGA
 DATA_INFO: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
 OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
-SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_survival_data_by_submitter.csv"
+SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
   VALUE: "ImmuneSubtype"
