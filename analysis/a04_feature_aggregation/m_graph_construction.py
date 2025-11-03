@@ -1,7 +1,13 @@
-import sys
-sys.path.append('../')
-
 import os
+import sys
+
+# Get the directory where the current script resides
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Add a relative subdirectory to sys.path
+relative_path = os.path.join(script_dir, '../../')
+sys.path.append(relative_path)
+
 import joblib
 import argparse
 import torch
@@ -604,7 +610,7 @@ def plot_graph_properties(
             ax.set_xlabel("subject ID")
             ax.set_ylabel(f"{prop_key}")
         ax.set_title(f"Comparison of {prop_key}")
-    plt.savefig(f"a_05feature_aggregation/graph_{prop_key}.jpg") 
+    plt.savefig(f"{relative_path}/figures/plots/graph_{prop_key}.jpg") 
     logger.info("Visualization done!") 
     return
 
@@ -709,7 +715,7 @@ def visualize_pathomic_graph(
     thumb = reader.slide_thumbnail(**PLOT_RESOLUTION)
     if save_wsi:
         wsi = reader.slide_thumbnail(resolution=10, units="power")
-        wsi_path = "a_05feature_aggregation/wsi.jpg"
+        wsi_path = f"{relative_path}/figures/plots/wsi.jpg"
         imwrite(wsi_path, wsi)
         
     thumb_bbox = None
@@ -782,7 +788,7 @@ def visualize_pathomic_graph(
                 cluster_colors=node_colors
             )
         img_name = pathlib.Path(wsi_path).stem
-        img_path = f"a_06semantic_segmentation/wsi_bladder_tumour_maps/{img_name}.png"
+        img_path = f"{relative_path}/figures/plots/wsi_bladder_tumour_maps/{img_name}.png"
         imwrite(img_path, thumb_overlaid)
         plt.figure(figsize=(20,5))
         plt.subplot(1,2,1)
@@ -806,7 +812,7 @@ def visualize_pathomic_graph(
         # sm = ScalarMappable(cmap=cmap, norm=norm)
         # cbar = fig.colorbar(sm, ax=ax, extend="both")
         # cbar.minorticks_on()
-        plt.savefig("analysis/feature_aggregation/wsi_graph.jpg")
+        plt.savefig(f"{relative_path}/figures/plots/wsi_graph.jpg")
     else:
         if not show_map:
             thumb_overlaid = plot_graph(
@@ -854,7 +860,7 @@ def visualize_pathomic_graph(
         cbar.minorticks_on()
         plt.subplot(2,2,3)
         plt.imshow(thumb_tile)
-        plt.savefig(f"analysis/feature_aggregation/wsi_graph_{save_name}.jpg")
+        plt.savefig(f"{relative_path}/figures/plots/wsi_graph_{save_name}.jpg")
 
 def visualize_radiomic_graph(
         img_path,
@@ -950,7 +956,7 @@ def visualize_radiomic_graph(
         opacity=0.1, # needs to be small to see through all surfaces
         surface_count=17, # needs to be a large number for good volume rendering
         ))
-    fig.write_image(f"analysis/feature_aggregation/image_voi_{save_name}.jpg")
+    fig.write_image(f"{relative_path}/figures/plots/image_voi_{save_name}.jpg")
 
     node_coordinates = np.array(node_coordinates) 
     kept_nodes = np.array(kept_nodes)
@@ -1009,7 +1015,7 @@ def visualize_radiomic_graph(
         ),
         margin=dict(l=0, r=0, b=0, t=40)
     )
-    fig.write_image(f"analysis/feature_aggregation/image_graph_{save_name}.jpg")
+    fig.write_image(f"{relative_path}/figures/plots/image_graph_{save_name}.jpg")
     logger.info("Visualization Done!")
     
 def pathomic_feature_visualization(wsi_paths, save_feature_dir, mode="tsne", save_label_dir=None, graph=True, n_class=None, features=None, colors=None):
@@ -1076,7 +1082,7 @@ def pathomic_feature_visualization(wsi_paths, save_feature_dir, mode="tsne", sav
     plt.ylim(-25, 25)
     ax.axis('off')
     ax.axis('tight') 
-    plt.savefig(f'analysis/feature_aggregation/{mode}_visualization.jpg')
+    plt.savefig(f'{relative_path}/figures/plots/{mode}_visualization.jpg')
     print("Visualization done!")
 
 def radiomic_feature_visualization(img_paths, save_feature_dir, class_name="tumour", mode="tsne", graph=True, n_class=None, features=None, colors=None):
@@ -1135,7 +1141,7 @@ def radiomic_feature_visualization(img_paths, save_feature_dir, class_name="tumo
     plt.ylim(-25, 25)
     ax.axis('off')
     ax.axis('tight') 
-    plt.savefig(f'analysis/feature_aggregation/{mode}_visualization.jpg')
+    plt.savefig(f'{relative_path}/figures/plots/{mode}_visualization.jpg')
     print("Visualization done!")
 
 

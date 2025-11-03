@@ -125,4 +125,3 @@ log*
 checkpoints
 .DS_Store
 **/.DS_Store
-analysis/outcome_prediction/*.jpg

@@ -270,13 +270,18 @@ def load_wsi_level_features(idx, wsi_feature_path, pooling="mean"):
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
-def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None):
+def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, minimum_per_class=20):
     if outcome == "ImmuneSubtype":
         outcome_file = f"{outcome_dir}/phenotypes/immune_subtype/immune_subtype.csv"
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
         df_matched = df_matched[df_matched["Subtype_Immune_Model_Based"].notna()]
+        counts = df_matched["Subtype_Immune_Model_Based"].value_counts()
+        print("Before filtering:", counts)
+        valid_classes = counts[counts >= minimum_per_class].index
+        df_matched = df_matched[df_matched["Subtype_Immune_Model_Based"].isin(valid_classes)]
+        print("After filtering:", df_matched["Subtype_Immune_Model_Based"].value_counts())
         df_matched["PhenotypeClass"], uniques = pd.factorize(df_matched["Subtype_Immune_Model_Based"])
         print("Immune subtype mapping:", dict(enumerate(uniques)))
     elif outcome == "MolecularSubtype":
@@ -285,6 +290,10 @@ def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None):
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
         df_matched = df_matched[df_matched["Subtype_Selected"].notna()]
+        counts = df_matched["Subtype_Selected"].value_counts()
+        valid_classes = counts[counts >= minimum_per_class].index
+        df_matched = df_matched[df_matched["Subtype_Selected"].isin(valid_classes)]
+        print(df_matched["Subtype_Selected"].value_counts())
         df_matched["PhenotypeClass"], uniques = pd.factorize(df_matched["Subtype_Selected"])
         print("Molecular subtype mapping:", dict(enumerate(uniques)))
     elif outcome == "PrimaryDisease":
@@ -293,6 +302,10 @@ def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None):
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
         df_matched = df_matched[df_matched["_primary_disease"].notna()]
+        counts = df_matched["_primary_disease"].value_counts()
+        valid_classes = counts[counts >= minimum_per_class].index
+        df_matched = df_matched[df_matched["_primary_disease"].isin(valid_classes)]
+        print(df_matched["_primary_disease"].value_counts())
         df_matched["PhenotypeClass"], uniques = pd.factorize(df_matched["_primary_disease"])
         print("Primary disease mapping:", dict(enumerate(uniques)))
     else:
@@ -321,7 +334,7 @@ def plot_coefficients(coefs, n_highlight):
     ax.set_xlabel("alpha")
     ax.set_ylabel("coefficient")
     plt.subplots_adjust(left=0.2)
-    plt.savefig(f"{script_dir}/coefficients.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/coefficients.jpg")
 
 def randomforest(split_idx, tr_X, tr_y, refit, n_jobs):
     # choosing parameters by cross validation
@@ -362,7 +375,7 @@ def randomforest(split_idx, tr_X, tr_y, refit, n_jobs):
     ax.axvline(gcv.best_params_["model__max_depth"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/a05_outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -410,7 +423,7 @@ def xgboost(split_idx, tr_X, tr_y, refit, n_jobs):
     ax.axvline(gcv.best_params_["model__max_depth"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/a05_outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -461,7 +474,7 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
     ax.axvline(gcv.best_params_["model__C"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/a05_outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     # best_model = gcv.best_estimator_.named_steps["model"]
@@ -525,7 +538,7 @@ def svc(split_idx, tr_X, tr_y, refit, n_jobs):
     ax.axvline(gcv.best_params_["model__C"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"analysis/a05_outcome_prediction/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     # best_model = gcv.best_estimator_.named_steps["model"]
@@ -1388,7 +1401,7 @@ if __name__ == "__main__":
     
     if opt.get('SAVE_MODEL_DIR', False):
         save_model_dir = pathlib.Path(opt['SAVE_MODEL_DIR'])
-        save_model_dir = save_model_dir / f"{opt['DATASET']}_survival_{opt['OUTCOME']['VALUE']}"
+        save_model_dir = save_model_dir / f"{opt['DATASET']}_phenotype_{opt['OUTCOME']['VALUE']}"
         save_model_dir = save_model_dir / f"{radiomics_mode}+{pathomics_mode}"
     else:
         save_model_dir = None

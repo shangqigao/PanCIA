@@ -81,7 +81,7 @@ def plot_survival_curve(data_path):
     plt.ylim(0, 1)
     plt.ylabel(r"est. probability of survival $\hat{S}(t)$")
     plt.xlabel("time $t$")
-    plt.savefig(f"{script_dir}/survival_curve.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/survival_curve.jpg")
     return
 
 def prepare_graph_properties(data_dict, prop_keys=None, subgraphs=False, omics="radiomics"):
@@ -362,7 +362,7 @@ def plot_coefficients(coefs, n_highlight):
     ax.set_xlabel("alpha")
     ax.set_ylabel("coefficient")
     plt.subplots_adjust(left=0.2)
-    plt.savefig(f"{script_dir}/coefficients.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/coefficients.jpg")
 
 def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
     # COX regreession
@@ -433,7 +433,7 @@ def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
         ax.axvline(gcv.best_params_["model__estimator__alphas"][0], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     best_model = gcv.best_estimator_.named_steps["model"]
@@ -453,7 +453,7 @@ def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
     ax.set_xlabel("coefficient")
     ax.grid(True)
     plt.subplots_adjust(left=0.3)
-    plt.savefig(f"{script_dir}/best_coefficients_fold{split_idx}.jpg") 
+    plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -519,7 +519,7 @@ def rsf(split_idx, tr_X, tr_y, scorer, n_jobs):
         ax.axvline(gcv.best_params_["model__estimator__max_depth"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -585,7 +585,7 @@ def gradientboosting(split_idx, tr_X, tr_y, scorer, n_jobs, loss="coxph"):
         ax.axvline(gcv.best_params_["model__estimator__max_depth"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -652,7 +652,7 @@ def coxph(split_idx, tr_X, tr_y, scorer, n_jobs):
         ax.axvline(gcv.best_params_["model__estimator__alpha"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     best_model = gcv.best_estimator_.named_steps["model"]
@@ -673,7 +673,7 @@ def coxph(split_idx, tr_X, tr_y, scorer, n_jobs):
     ax.set_xlabel("coefficient")
     ax.grid(True)
     plt.subplots_adjust(left=0.3)
-    plt.savefig(f"{script_dir}/best_coefficients_fold{split_idx}.jpg") 
+    plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -736,7 +736,7 @@ def ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs):
         ax.axvline(gcv.best_params_["model__estimator__alpha"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     best_model = gcv.best_estimator_.named_steps["model"]
@@ -757,7 +757,7 @@ def ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs):
     ax.set_xlabel("coefficient")
     ax.grid(True)
     plt.subplots_adjust(left=0.3)
-    plt.savefig(f"{script_dir}/best_coefficients_fold{split_idx}.jpg") 
+    plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -820,7 +820,7 @@ def fastsvm(split_idx, tr_X, tr_y, scorer, n_jobs, rank_ratio=1):
         ax.axvline(gcv.best_params_["model__estimator__alpha"], c="C1")
     ax.axhline(0.5, color="grey", linestyle="--")
     ax.grid(True)
-    plt.savefig(f"{script_dir}/cross_validation_fold{split_idx}.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
     best_model = gcv.best_estimator_.named_steps["model"]
@@ -841,7 +841,7 @@ def fastsvm(split_idx, tr_X, tr_y, scorer, n_jobs, rank_ratio=1):
     ax.set_xlabel("coefficient")
     ax.grid(True)
     plt.subplots_adjust(left=0.3)
-    plt.savefig(f"{script_dir}/best_coefficients_fold{split_idx}.jpg") 
+    plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg") 
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -1186,7 +1186,7 @@ def survival(
         ax.set_xlabel("days from enrollment")
         ax.axhline(mean_auc, linestyle="--")
         ax.grid(True)
-        plt.savefig(f"{script_dir}/AUC_fold{split_idx}.jpg") 
+        plt.savefig(f"{relative_path}/figures/plots/AUC_fold{split_idx}.jpg") 
 
         print(f"Updating regression results on fold {split_idx}")
         predict_results.update({f"Fold {split_idx}": scores_dict})
@@ -1218,7 +1218,7 @@ def survival(
     print(f"p-value: {pvalue}")
     ax.set_ylabel("Survival Probability")
     plt.subplots_adjust(left=0.2, bottom=0.2)
-    plt.savefig(f"{script_dir}/{omics}_survival_curve.png")
+    plt.savefig(f"{relative_path}/figures/plots/{omics}_survival_curve.png")
     return
 
 def generate_data_split(
