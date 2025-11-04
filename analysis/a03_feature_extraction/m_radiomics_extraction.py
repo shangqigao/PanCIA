@@ -70,6 +70,7 @@ if __name__ == "__main__":
             format=dataset_info['img_format'],
             modality=dataset_info['modality'],
             site=dataset_info['site'],
+            batch_size=opt['RADIOMICS']['BATCH_SIZE'],
             dilation_mm=opt['RADIOMICS']['DILATION_MM'],
             layer_method=opt['RADIOMICS']['LAYER_METHOD']['VALUE'],
             resolution=opt['RADIOMICS']['RESOLUTION'],

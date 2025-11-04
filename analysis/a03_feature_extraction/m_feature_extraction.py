@@ -127,6 +127,7 @@ def extract_radiomic_feature(
         modality='CT',
         site='breast',
         label=1,
+        batch_size=1,
         dilation_mm=0,
         layer_method=None,
         resolution=None, 
@@ -230,6 +231,7 @@ def extract_radiomic_feature(
             format=format,
             modality=modality,
             site=site,
+            batch_size=batch_size,
             dilation_mm=dilation_mm,
             resolution=resolution,
             units=units,
@@ -1987,7 +1989,7 @@ def extract_Bayes_BiomedParse_radiomics(
     return
 
 def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name, 
-                            label=1, format='nifti', modality='CT', site=None,
+                            label=1, format='nifti', modality='CT', site=None, batch_size=256,
                             dilation_mm=0, resolution=None, units="mm", device="cuda", skip_exist=False):
     """extracting radiomic features slice by slice in a size of (224, 224)
         if no label provided, directly use model segmentation, else use give labels
@@ -2094,27 +2096,37 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name,
             labels = labels[zmin:zmax+1, xmin:xmax+1, ymin:ymax+1]
             logging.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
 
-        radiomic_feat = {f"layer{i}": [] for i in range(5)}
         masks = []
+        batches = []
         for i, element in enumerate(images):
             assert len(element) == 3
             img, spacing, _ = element
-
             msk = labels[i, ...]
             img, msk = _preproc_func(img, msk)
-            features = model(img.unsqueeze(0).to("cuda"))
-            for i, feat in enumerate(features):
-                radiomic_feat[f"layer{i}"].append(feat.squeeze().cpu().numpy().astype(np.float16))
             masks.append(msk.numpy().astype(np.uint8))
+            batches.append(img)
+        
+        batches = torch.split(torch.stack(batches), batch_size)
+        radiomic_feat = None
+        for batch in batches:
+            features = model(batch.to("cuda"))
+            if radiomic_feat is None:
+                radiomic_feat = {}
+                for i, feat in enumerate(features): radiomic_feat[f"layer{i}"] = [feat]
+            else:
+                for i, feat in enumerate(features): radiomic_feat[f"layer{i}"] += [feat]
 
         # Get feature array with shape [X, Y, Z, C]
         masks = np.stack(masks, axis=0)
         radiomic_memory = 0
         for k, v in radiomic_feat.items():
-            radiomic_feat[k] = np.moveaxis(np.concatenate(v, axis=0), 0, slice_axis)
+            v = torch.concat(v).permute(1, 2, 3, 0)
+            v = v.cpu().numpy().astype(np.float16)
+            radiomic_feat[k] = np.moveaxis(v, 0, slice_axis)
             radiomic_memory += radiomic_feat[k].nbytes / 1024**3
         logging.info(f"Got image of shape {masks.shape}, image feature of size {radiomic_memory:.2f}GiB")
         final_mask = np.moveaxis(masks, 0, slice_axis)
+
         # mask dilation based on physical size
         if dilation_mm > 0:
             logging.info(f"Dilating mask by {int(dilation_mm)}mm")
@@ -2129,7 +2141,7 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name,
         for k, v in radiomic_feat:
             resized_mask = transform.resize(
                 final_mask, 
-                output_shape=v.shape,
+                output_shape=v.shape[:3],
                 order=0,              
                 preserve_range=True, 
                 anti_aliasing=False
