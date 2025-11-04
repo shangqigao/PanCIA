@@ -220,6 +220,22 @@ def extract_radiomic_feature(
             device=device,
             skip_exist=skip_exist
         )
+    elif feature_mode == "LVMMed":
+        _ = extract_LVMMed_radiomics(
+            img_paths=img_paths,
+            lab_paths=lab_paths,
+            save_dir=save_dir,
+            class_name=class_name,
+            label=label,
+            format=format,
+            modality=modality,
+            site=site,
+            dilation_mm=dilation_mm,
+            resolution=resolution,
+            units=units,
+            device=device,
+            skip_exist=skip_exist
+        )
     else:
         raise ValueError(f"Invalid feature mode: {feature_mode}")
     return
@@ -1961,6 +1977,182 @@ def extract_Bayes_BiomedParse_radiomics(
             logging.info(f"Saving radiomic features to {feature_path}")
             with open(feature_path, "w") as f:
                 json.dump(radiomic_feat, f, indent=4)
+
+        # save final mask
+        # save_mask_path = f"{save_dir}/{img_name}.nii.gz"
+        # print(f"Saving predicted segmentation to {save_mask_path}")
+        # nifti_img = nib.Nifti1Image(final_mask, affine)
+        # nib.save(nifti_img, save_mask_path)
+
+    return
+
+def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name, 
+                            label=1, format='nifti', modality='CT', site=None,
+                            dilation_mm=0, resolution=None, units="mm", device="cuda", skip_exist=False):
+    """extracting radiomic features slice by slice in a size of (224, 224)
+        if no label provided, directly use model segmentation, else use give labels
+    """
+    import nibabel as nib
+    from skimage import transform, morphology
+    from scipy.ndimage import binary_dilation
+    from scipy.ndimage import zoom
+    from albumentations.pytorch import ToTensorV2
+    import albumentations as A
+    import cv2
+
+    from utilities.constants import CT_SITES
+
+    from inference_utils.processing_utils import read_dicom
+    from inference_utils.processing_utils import read_nifti_inplane
+    from inference_utils.processing_utils import get_orientation
+
+    import segmentation_models_pytorch as smp
+
+    # Load model from pretrained weights
+    pretrained_pth = os.path.join(root_dir, 'checkpoints/LVMMed/lvmmed_resnet.torch')
+
+    model = smp.Unet(encoder_name="resnet50", encoder_weights=pretrained_pth, in_channels=3, classes=1)
+    model = model.encoder.eval().cuda()
+
+    ## define preprocessing function
+    mean = (0.485, 0.456, 0.406)
+    std = (0.229, 0.224, 0.225)
+    TS = A.Compose([A.Resize(224, 224, cv2.INTER_CUBIC), A.Normalize(mean, std), ToTensorV2()])
+    def _preproc_func(img, msk):
+        augmented = TS(image=img, mask=msk)
+        return augmented["image"], augmented["mask"]
+    
+    mkdir(save_dir)
+    if isinstance(format, str): format = [format] * len(img_paths)
+    if isinstance(modality, str): modality = [modality] * len(img_paths)
+    if isinstance(site, str): site = [site] * len(img_paths)
+
+    for idx, (img_path, lab_path) in enumerate(zip(img_paths, lab_paths)):
+        if format[idx] == 'dicom':
+            img_name = pathlib.Path(img_path[0]).parent.name
+            parent_name = pathlib.Path(img_path[0]).parent.name
+        elif format[idx] == 'nifti':
+            if isinstance(img_path, list):
+                img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
+                parent_name = pathlib.Path(img_path[0]).parent.name
+            else:
+                img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+                parent_name = pathlib.Path(img_path).parent.name
+
+        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+
+        # read slices from dicom or nifti
+        is_CT = modality[idx] == 'CT'
+        ct_site = CT_SITES[site[idx]]
+        if format[idx] == 'dicom':
+            dicom_dir = pathlib.Path(img_path)
+            assert pathlib.Path(img_path).is_dir()
+            dicom_paths = sorted(dicom_dir.glob('*.dcm'))
+            images = [read_dicom(p, is_CT, ct_site, keep_size=True, return_spacing=True) for p in dicom_paths]
+            slice_axis, affine = 0, np.eye(4)
+        elif format[idx] == 'nifti':
+            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, ct_site, keep_size=True, return_spacing=True, resolution=resolution)
+        else:
+            raise ValueError(f'Only support DICOM or NIFTI, but got {format[idx]}')
+
+        if format[idx] == 'nifti' and lab_path is not None:
+            assert f'{lab_path}'.endswith(('.nii', '.nii.gz'))
+            nii = nib.load(lab_path)
+            affine = nii.affine
+            _, _, voxel_spacing = get_orientation(affine)
+            labels = nii.get_fdata()
+
+            # resample to given resolution
+            if resolution is not None:
+                new_spacing = (resolution, resolution, resolution)
+                zoom_factors = tuple(os/ns for os, ns in zip(voxel_spacing, new_spacing))
+                labels = zoom(labels, zoom=zoom_factors, order=0)
+
+            # move the slice axis to the first
+            labels = np.moveaxis(labels, slice_axis, 0) 
+        else:
+            raise ValueError("label should be provided for extracting ROI")
+
+        # select slice range of interest
+        if labels is not None:
+            if np.sum(labels > 0) < 1: 
+                lab_name = pathlib.Path(lab_path).name
+                logging.info(f"Skip case {lab_name}, because no foreground found!")
+                continue
+            coords = np.array(np.where(labels))
+            zmin, xmin, ymin = coords.min(axis=1)
+            zmax, xmax, ymax = coords.max(axis=1)
+            zmin = max(zmin - int(dilation_mm), 0)
+            zmax = min(zmax + int(dilation_mm), labels.shape[0] - 1)
+            xmin = max(xmin - int(dilation_mm), 0)
+            xmax = min(xmax + int(dilation_mm), labels.shape[1] - 1)
+            ymin = max(ymin - int(dilation_mm), 0)
+            ymax = min(ymax + int(dilation_mm), labels.shape[2] - 1)
+            assert len(images) == len(labels)
+            images = images[zmin:zmax+1]
+            images = [img[xmin:xmax+1, ymin:ymax+1, ...] for img in images]
+            labels = labels[zmin:zmax+1, xmin:xmax+1, ymin:ymax+1]
+            logging.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
+
+        radiomic_feat = {f"layer{i}": [] for i in range(5)}
+        masks = []
+        for i, element in enumerate(images):
+            assert len(element) == 3
+            img, spacing, _ = element
+
+            msk = labels[i, ...]
+            img, msk = _preproc_func(img, msk)
+            features = model(img.unsqueeze(0).to("cuda"))
+            for i, feat in enumerate(features):
+                radiomic_feat[f"layer{i}"].append(feat.squeeze().cpu().numpy().astype(np.float16))
+            masks.append(msk.numpy().astype(np.uint8))
+
+        # Get feature array with shape [X, Y, Z, C]
+        masks = np.stack(masks, axis=0)
+        radiomic_memory = 0
+        for k, v in radiomic_feat.items():
+            radiomic_feat[k] = np.moveaxis(np.concatenate(v, axis=0), 0, slice_axis)
+            radiomic_memory += radiomic_feat[k].nbytes / 1024**3
+        logging.info(f"Got image of shape {masks.shape}, image feature of size {radiomic_memory:.2f}GiB")
+        final_mask = np.moveaxis(masks, 0, slice_axis)
+        # mask dilation based on physical size
+        if dilation_mm > 0:
+            logging.info(f"Dilating mask by {int(dilation_mm)}mm")
+            mean_spacing = np.mean(spacing)
+            radius_voxels = int(dilation_mm / mean_spacing)
+            kernel = morphology.ball(radius_voxels)
+            final_mask = binary_dilation(final_mask, structure=kernel).astype(np.uint8)
+
+        # obtain multi-scale masks
+        radiomic_mask = {}
+        ds_factors = {}
+        for k, v in radiomic_feat:
+            resized_mask = transform.resize(
+                final_mask, 
+                output_shape=v.shape,
+                order=0,              
+                preserve_range=True, 
+                anti_aliasing=False
+            )
+            radiomic_mask[k] = resized_mask.astype(final_mask.dtype)
+            ds_factors[k] = np.array(final_mask.shape) / np.array(resized_mask.shape)
+
+        # extract multi-scale radiomic features of tumor regions  
+        for k in radiomic_feat.keys():
+            radio_feat = radiomic_feat[k][radiomic_mask[k] > 0]
+            radiomic_memory = radio_feat.nbytes / 1024**2
+            radiomic_coord = np.argwhere(radiomic_mask[k] > 0) * np.expand_dims(ds_factors[k], axis=0)
+            logging.info(f"Extracted ROI {k} feature of shape {radio_feat.shape} ({radiomic_memory:.2f}MiB)")
+            feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_{k}_radiomics.npy")
+            if feature_path.exists() and skip_exist:
+                logging.info(f"{feature_path.name} has existed, skip!")
+                continue
+            feature_path.parent.mkdir(parents=True, exist_ok=True)
+            logging.info(f"Saving radiomic features to {feature_path}")
+            np.save(feature_path, radio_feat)
+            coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{class_name}_{k}_coordinates.npy"
+            logging.info(f"Saving feature coordinates to {coordinates_path}")
+            np.save(coordinates_path, radiomic_coord)
 
         # save final mask
         # save_mask_path = f"{save_dir}/{img_name}.nii.gz"

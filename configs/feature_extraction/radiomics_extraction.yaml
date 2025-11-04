@@ -14,7 +14,7 @@ RADIOMICS:
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
     VALUE: "BiomedParse"
-    CHOICES: ["pyradiomics", "SegVol", "BiomedParse", "BayesBP"]
+    CHOICES: ["pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
   LAYER_METHOD:
     VALUE: null
     CHOICES: [null, "shells", "peeling"]
@@ -29,4 +29,4 @@ RADIOMICS:
   RESOLUTION: 1
   UNITS: "mm"
   SKIP_EXITS: True
-  DELETE_NPY: True # if true, only constructed graphs will be saved 
+  DELETE_NPY: True # if true, only constructed graphs will be saved
