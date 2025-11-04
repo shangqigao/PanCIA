@@ -2013,8 +2013,10 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name,
     # Load model from pretrained weights
     pretrained_pth = os.path.join(root_dir, 'checkpoints/LVMMed/lvmmed_resnet.torch')
 
-    model = smp.Unet(encoder_name="resnet50", encoder_weights=pretrained_pth, in_channels=3, classes=1)
-    model = model.encoder.eval().cuda()
+    model = smp.Unet(encoder_name="resnet50", encoder_weights=None, in_channels=3, classes=1)
+    state_dict = torch.load(pretrained_pth, map_location='cpu')
+    model.encoder.load_state_dict(state_dict)
+    model = model.eval().cuda()
 
     ## define preprocessing function
     mean = (0.485, 0.456, 0.406)
@@ -2040,6 +2042,11 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name,
             else:
                 img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
                 parent_name = pathlib.Path(img_path).parent.name
+
+        feature_dir = pathlib.Path(f"{save_dir}/{parent_name}")
+        if len(list(feature_dir.glob(f"{img_name}_{class_name}_*_radiomics.npy"))) == 5 and skip_exist:
+            logging.info(f"All {img_name}_{class_name}_*_radiomics.npy have existed, skip!")
+            continue
 
         logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
@@ -2076,32 +2083,33 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name,
             raise ValueError("label should be provided for extracting ROI")
 
         # select slice range of interest
-        if labels is not None:
-            if np.sum(labels > 0) < 1: 
-                lab_name = pathlib.Path(lab_path).name
-                logging.info(f"Skip case {lab_name}, because no foreground found!")
-                continue
-            coords = np.array(np.where(labels))
-            zmin, xmin, ymin = coords.min(axis=1)
-            zmax, xmax, ymax = coords.max(axis=1)
-            zmin = max(zmin - int(dilation_mm), 0)
-            zmax = min(zmax + int(dilation_mm), labels.shape[0] - 1)
-            xmin = max(xmin - int(dilation_mm), 0)
-            xmax = min(xmax + int(dilation_mm), labels.shape[1] - 1)
-            ymin = max(ymin - int(dilation_mm), 0)
-            ymax = min(ymax + int(dilation_mm), labels.shape[2] - 1)
-            assert len(images) == len(labels)
-            images = images[zmin:zmax+1]
-            images = [img[xmin:xmax+1, ymin:ymax+1, ...] for img in images]
-            labels = labels[zmin:zmax+1, xmin:xmax+1, ymin:ymax+1]
-            logging.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
+        if np.sum(labels > 0) < 1: 
+            lab_name = pathlib.Path(lab_path).name
+            logging.info(f"Skip case {lab_name}, because no foreground found!")
+            continue
+        coords = np.array(np.where(labels))
+        zmin, xmin, ymin = coords.min(axis=1)
+        zmax, xmax, ymax = coords.max(axis=1)
+        zmin = max(zmin - int(dilation_mm), 0)
+        zmax = min(zmax + int(dilation_mm), labels.shape[0] - 1)
+        xmin = max(xmin - int(dilation_mm), 0)
+        xmax = min(xmax + int(dilation_mm), labels.shape[1] - 1)
+        ymin = max(ymin - int(dilation_mm), 0)
+        ymax = min(ymax + int(dilation_mm), labels.shape[2] - 1)
+        assert len(images) == len(labels)
+        images = images[zmin:zmax+1]
+        labels = labels[zmin:zmax+1, ...]
+        logging.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
 
         masks = []
         batches = []
+        bbox_min = [zmin, xmin, ymin]
+        resize_scales = [1, 224 / (xmax + 1 - xmin), 224 / (ymax + 1 - ymin)]
         for i, element in enumerate(images):
             assert len(element) == 3
             img, spacing, _ = element
-            msk = labels[i, ...]
+            msk = labels[i, xmin:xmax+1, ymin:ymax+1]
+            img = img[xmin:xmax+1, ymin:ymax+1, ...]
             img, msk = _preproc_func(img, msk)
             masks.append(msk.numpy().astype(np.uint8))
             batches.append(img)
@@ -2109,23 +2117,32 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name,
         batches = torch.split(torch.stack(batches), batch_size)
         radiomic_feat = None
         for batch in batches:
-            features = model(batch.to("cuda"))
+            features = model.encoder(batch.to("cuda"))
             if radiomic_feat is None:
                 radiomic_feat = {}
-                for i, feat in enumerate(features): radiomic_feat[f"layer{i}"] = [feat]
+                for i, feat in enumerate(features[1:]): radiomic_feat[f"layer{i}"] = [feat]
             else:
-                for i, feat in enumerate(features): radiomic_feat[f"layer{i}"] += [feat]
+                for i, feat in enumerate(features[1:]): radiomic_feat[f"layer{i}"] += [feat]
 
         # Get feature array with shape [X, Y, Z, C]
         masks = np.stack(masks, axis=0)
         radiomic_memory = 0
         for k, v in radiomic_feat.items():
-            v = torch.concat(v).permute(1, 2, 3, 0)
-            v = v.cpu().numpy().astype(np.float16)
+            v = torch.concat(v).permute(0, 2, 3, 1)
+            v = v.cpu().detach().numpy().astype(np.float16)
             radiomic_feat[k] = np.moveaxis(v, 0, slice_axis)
             radiomic_memory += radiomic_feat[k].nbytes / 1024**3
         logging.info(f"Got image of shape {masks.shape}, image feature of size {radiomic_memory:.2f}GiB")
         final_mask = np.moveaxis(masks, 0, slice_axis)
+
+        # reorder scales and bbox
+        orig_axes = list(range(masks.ndim))
+        new_axes = orig_axes.copy()
+        new_axes.insert(slice_axis, new_axes.pop(0))
+        resize_scales = np.array([resize_scales[k] for k in new_axes])
+        resize_scales = np.expand_dims(resize_scales, axis=0)
+        bbox_min = np.array([bbox_min[k] for k in new_axes])
+        bbox_min = np.expand_dims(bbox_min, axis=0)
 
         # mask dilation based on physical size
         if dilation_mm > 0:
@@ -2138,7 +2155,7 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name,
         # obtain multi-scale masks
         radiomic_mask = {}
         ds_factors = {}
-        for k, v in radiomic_feat:
+        for k, v in radiomic_feat.items():
             resized_mask = transform.resize(
                 final_mask, 
                 output_shape=v.shape[:3],
@@ -2154,11 +2171,9 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name,
             radio_feat = radiomic_feat[k][radiomic_mask[k] > 0]
             radiomic_memory = radio_feat.nbytes / 1024**2
             radiomic_coord = np.argwhere(radiomic_mask[k] > 0) * np.expand_dims(ds_factors[k], axis=0)
+            radiomic_coord = (radiomic_coord / resize_scales + bbox_min).astype(np.float16)
             logging.info(f"Extracted ROI {k} feature of shape {radio_feat.shape} ({radiomic_memory:.2f}MiB)")
             feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_{k}_radiomics.npy")
-            if feature_path.exists() and skip_exist:
-                logging.info(f"{feature_path.name} has existed, skip!")
-                continue
             feature_path.parent.mkdir(parents=True, exist_ok=True)
             logging.info(f"Saving radiomic features to {feature_path}")
             np.save(feature_path, radio_feat)

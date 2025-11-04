@@ -30,6 +30,7 @@ scikit-learn
 scikit-survival
 scipy
 seaborn
+segmentation_models_pytorch
 shapely
 SimpleITK
 statsmodels

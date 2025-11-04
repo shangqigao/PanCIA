@@ -125,8 +125,7 @@ def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_ex
     return 
 
 def construct_radiomic_graph(
-    img_name, 
-    img_feature_dir, 
+    feature_path, 
     save_path, 
     class_name="tumour", 
     window_size=30**3
@@ -138,8 +137,8 @@ def construct_radiomic_graph(
     from tiatoolbox import logger
     from tiatoolbox.tools.graph import SlideGraphConstructor
 
-    positions = np.load(f"{img_feature_dir}/{img_name}_{class_name}_coordinates.npy")
-    features = np.load(f"{img_feature_dir}/{img_name}_{class_name}_radiomics.npy")
+    features = np.load(feature_path)
+    positions = np.load(str(feature_path).replace("radiomics.npy", "coordinates.npy"))
     if (len(features) > 0) and (len(features) <= window_size):
         num_windows = 1
     else:
@@ -183,11 +182,12 @@ def construct_radiomic_graph(
     with save_path.open("w") as handle:
         json.dump(new_graph_dict, handle, indent=4)
 
-def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30**3, n_jobs=32, delete_npy=False, skip_exist=False):
+def construct_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumour", window_size=30**3, n_jobs=32, delete_npy=False, skip_exist=False):
     """construct graph for radiological images
     Args:
         img_paths (list): a list of image paths
         save_dir (str): directory of reading feature and saving graph
+        radiomics_suffix (list): a list of radiomic npy suffix
         delete_npy: if true, numpy array features will be deleted
     """
     def _construct_graph(idx, img_path):
@@ -195,25 +195,28 @@ def construct_img_graph(img_paths, save_dir, class_name="tumour", window_size=30
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         parent_name = pathlib.Path(img_path).parent.name
         save_feat_dir = f"{save_dir}/{parent_name}"
-        graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_graph.json")
-        if graph_path.exists() and skip_exist:
-            logger.info(f"{graph_path.name} has existed, skip!")
-            return
+        for suffix in radiomics_suffix:
+            graph_suffix = str(suffix).replace("radiomics.npy", "graph.json")
+            graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_{graph_suffix}")
+            if graph_path.exists() and skip_exist:
+                logger.info(f"{graph_path.name} has existed, skip!")
+                return
 
-        if not pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_radiomics.npy").exists(): 
-            logger.info(f"{img_name}_{class_name}_radiomics.npy doesn't exist, skip!")
-            return
-            
-        logger.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
-        construct_radiomic_graph(img_name, save_feat_dir, graph_path, class_name, window_size)
+            feature_path = f"{save_feat_dir}/{img_name}_{class_name}_{suffix}"
+            if not pathlib.Path(feature_path).exists(): 
+                logger.info(f"{img_name}_{class_name}_{suffix} doesn't exist, skip!")
+                return
+                
+            logger.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
+            construct_radiomic_graph(feature_path, graph_path, class_name, window_size)
 
-        if delete_npy:
-            radiomics_npy = f"{img_name}_{class_name}_radiomics.npy"
-            os.remove(f"{save_feat_dir}/{radiomics_npy}")
-            logger.info(f"{radiomics_npy} deleted")
-            coordinates_npy = f"{img_name}_{class_name}_coordinates.npy"
-            os.remove(f"{save_feat_dir}/{coordinates_npy}")
-            logger.info(f"{coordinates_npy} deleted")
+            if delete_npy:
+                radiomics_npy = f"{img_name}_{class_name}_{suffix}"
+                os.remove(f"{save_feat_dir}/{radiomics_npy}")
+                logger.info(f"{radiomics_npy} deleted")
+                coordinates_npy = radiomics_npy.replace("radiomics.npy", "coordinates.npy")
+                os.remove(f"{save_feat_dir}/{coordinates_npy}")
+                logger.info(f"{coordinates_npy} deleted")
         return
     
     # construct graphs in parallel
