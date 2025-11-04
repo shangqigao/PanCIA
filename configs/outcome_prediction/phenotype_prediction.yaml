@@ -20,7 +20,7 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "None"
+    VALUE: "pyradiomics"
     CHOICES: ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP"]
   KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
   # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
@@ -91,7 +91,7 @@ TEST:
 
 PREDICTION:
   USED_OMICS:
-    VALUE: "pathomics"
+    VALUE: "radiopathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:

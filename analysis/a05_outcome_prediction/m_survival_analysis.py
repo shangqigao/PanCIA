@@ -239,7 +239,7 @@ def prepare_graph_radiomics(
     idx, 
     graph_path, 
     mode="mean",
-    pooling="mean"
+    pooling="mean+std"
     ):
     feat_list = []
     for path in graph_path:
@@ -272,6 +272,9 @@ def prepare_graph_radiomics(
         feat_list = np.array(feat_list).min(axis=0).tolist()
     elif pooling == "std":
         feat_list = np.array(feat_list).std(axis=0).tolist()
+    elif pooling == "mean+std":
+        feat_list = np.array(feat_list).mean(axis=0).tolist() + \
+            np.array(feat_list).std(axis=0).tolist()
     else:
         raise ValueError(f"Unsupport patient pooling: {pooling}")
         
