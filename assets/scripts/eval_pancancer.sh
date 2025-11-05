@@ -5,17 +5,17 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-##SBATCH --time=0-02:00:00
-#SBATCH --time=0-00:10:00
+#SBATCH --time=0-10:00:00
+##SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-#SBATCH --qos=intr
+##SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
-conda activate biomedparse
+conda activate /home/sg2162/rds/hpc-work/miniconda3/PanCIA
 
 data_root="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/"
 export DETECTRON2_DATASETS=$data_root
@@ -28,7 +28,7 @@ export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 #export WANDB_KEY=YOUR_WANDB_KEY # Provide your wandb key here
 srun --mpi=pmi2 python entry.py evaluate \
-            --conf_files configs/biomed_seg_lang_v1.yaml \
+            --conf_files configs/radiology_segmentation/biomed_seg_lang_v1.yaml \
             --overrides \
             MODEL.DECODER.HIDDEN_DIM 512 \
             MODEL.ENCODER.CONVS_DIM 512 \
@@ -37,6 +37,6 @@ srun --mpi=pmi2 python entry.py evaluate \
             FP16 True \
             WEIGHT True \
             STANDARD_TEXT_FOR_EVAL True \
-            LoRA.ENABLE True \
-            RESUME_FROM checkpoints/singlephase_breastcancer_lora.pt \
+            LoRA.ENABLE False \
+            RESUME_FROM checkpoints/BiomedParse/singlephase_pancancer.pt \
             

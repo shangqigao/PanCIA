@@ -101,6 +101,7 @@ if __name__ == "__main__":
             radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
             class_name=opt['RADIOMICS']['TARGET'],
             window_size=24**3,
+            lambda_f=opt['RADIOMICS']['MODE']['FEATURE_DIS_WEIGHT'],
             n_jobs=opt['N_JOBS'],
             delete_npy=opt['RADIOMICS']['DELETE_NPY'],
             skip_exist=opt['RADIOMICS']['SKIP_EXITS']

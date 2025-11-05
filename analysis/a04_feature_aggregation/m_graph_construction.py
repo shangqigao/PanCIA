@@ -128,7 +128,8 @@ def construct_radiomic_graph(
     feature_path, 
     save_path, 
     class_name="tumour", 
-    window_size=30**3
+    window_size=30**3,
+    lambda_f=0.1
     ):
     """construct volumetric radiomic graph
     Args:
@@ -157,7 +158,7 @@ def construct_radiomic_graph(
             patch_positions, 
             patch_features, 
             lambda_d=0.2,
-            lambda_f=0.1,
+            lambda_f=lambda_f,
             lambda_h=0.8,
             connectivity_distance=16,
             neighbour_search_radius=4,
@@ -182,12 +183,14 @@ def construct_radiomic_graph(
     with save_path.open("w") as handle:
         json.dump(new_graph_dict, handle, indent=4)
 
-def construct_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumour", window_size=30**3, n_jobs=32, delete_npy=False, skip_exist=False):
+def construct_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumour", window_size=30**3, lambda_f=0.1, n_jobs=32, delete_npy=False, skip_exist=False):
     """construct graph for radiological images
     Args:
         img_paths (list): a list of image paths
         save_dir (str): directory of reading feature and saving graph
         radiomics_suffix (list): a list of radiomic npy suffix
+        lambda_f (float): weight of feature distance, depends on value range of feature
+            default 0.1 for normalized features
         delete_npy: if true, numpy array features will be deleted
     """
     def _construct_graph(idx, img_path):
@@ -208,7 +211,7 @@ def construct_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumou
                 return
                 
             logger.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
-            construct_radiomic_graph(feature_path, graph_path, class_name, window_size)
+            construct_radiomic_graph(feature_path, graph_path, class_name, window_size, lambda_f)
 
             if delete_npy:
                 radiomics_npy = f"{img_name}_{class_name}_{suffix}"

@@ -4,7 +4,7 @@ RADIOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subject
 DATA_FORMAT: "nifti"
 LABEL_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
 SAVE_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/radiomics"
-N_JOBS: 32
+N_JOBS: 1
 
 # Define parameters of radiomics
 RADIOMICS:
@@ -15,21 +15,22 @@ RADIOMICS:
   MODE:
     VALUE: "LVMMed"
     CHOICES: ["pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
-    SUFFIX:
-      - "radiomics.npy"
     # SUFFIX:
-    #   - "layer0_radiomics.npy"
-    #   - "layer1_radiomics.npy"
-    #   - "layer2_radiomics.npy"
-    #   - "layer3_radiomics.npy"
-    #   - "layer4_radiomics.npy"
+    #   - "radiomics.npy"
+    SUFFIX:
+      - "layer0_radiomics.npy"
+      - "layer1_radiomics.npy"
+      - "layer2_radiomics.npy"
+      - "layer3_radiomics.npy"
+      - "layer4_radiomics.npy"
+    FEATURE_DIS_WEIGHT: 0.001 # 0.01 for LVMMed else 0.1
   LAYER_METHOD:
     VALUE: null
     CHOICES: [null, "shells", "peeling"]
   TASKS:
-    EXTRACTION: True
+    EXTRACTION: False
     CLUSTERING: False
-    GRAPH_CONSTRUCTION: False
+    GRAPH_CONSTRUCTION: True
     MEASURE_GRAPH_PROPERTIES: False
     VISUALIZE_RADIOMICS: False
     VISUALIZE_GRAPH: False
@@ -37,5 +38,5 @@ RADIOMICS:
   DILATION_MM: 10
   RESOLUTION: 1
   UNITS: "mm"
-  SKIP_EXITS: True
-  DELETE_NPY: True # if true, only constructed graphs will be saved
+  SKIP_EXITS: False
+  DELETE_NPY: False # if true, only constructed graphs will be saved
