@@ -87,17 +87,30 @@ def prepare_TCGA_omics_info(
     for k, v in included_subjects.items(): 
         radiology_paths = v['radiology']
         project_id = str(radiology_paths[0]).split('/')[-3]
-        parent_names = [pathlib.Path(r).parent.name for r in radiology_paths]
-        radiomics_names = [pathlib.Path(r).name.replace('.nii.gz', radiomics_suffix) for r in radiology_paths]
-        radiomics_paths = [f"{save_radiomics_dir}/{p}/{r}" for p, r in zip(parent_names, radiomics_names)]
-        radiomics_existed_paths = [r for r in radiomics_paths if pathlib.Path(r).exists()]
-        radiology_existed_paths = [r for r, o in zip(radiology_paths, radiomics_paths) if pathlib.Path(o).exists()]
+        radiology_existed_paths = []
+        radiomics_existed_paths = []
+        for r in radiology_paths:
+            radiology_name = pathlib.Path(r).name
+            parent_name = pathlib.Path(r).parent.name
+            radiomics_names = [radiology_name.replace('.nii.gz', suffix) for suffix in radiomics_suffix]
+            radiomics_children = [f"{save_radiomics_dir}/{parent_name}/{r}" for r in radiomics_names]
+            radiomics_existed_children = [r for r in radiomics_children if pathlib.Path(r).exists()]
+            radiomics_existed_children = {f"child{i}": r for i, r in enumerate(radiomics_existed_children)}
+            if len(radiomics_existed_children) > 0:
+                radiology_existed_paths.append(r)
+                radiomics_existed_paths.append(radiomics_existed_children)
 
         pathology_paths = v['pathology']
-        pathomics_names = [pathlib.Path(p).name.replace('.svs', pathomics_suffix) for p in pathology_paths]
-        pathomics_paths = [f"{save_pathomics_dir}/{p}" for p in pathomics_names]
-        pathomics_existed_paths = [p for p in pathomics_paths if pathlib.Path(p).exists()]
-        pathology_existed_paths = [p for p, o in zip(pathology_paths, pathomics_paths) if pathlib.Path(o).exists()]
+        pathology_existed_paths = []
+        pathomics_existed_paths = []
+        for p in pathology_paths:
+            pathomics_names = [pathlib.Path(p).name.replace('.svs', suffix) for suffix in pathomics_suffix]
+            pathomics_children = [f"{save_pathomics_dir}/{p}" for p in pathomics_names]
+            pathomics_existed_children = [p for p in pathomics_children if pathlib.Path(p).exists()]
+            pathomics_existed_children = {f"child{i}": r for i, r in enumerate(pathomics_existed_children)}
+            if len(pathomics_existed_children) > 0:
+                pathology_existed_paths.append(p)
+                pathomics_existed_paths.append(pathomics_existed_children)
 
         if len(radiomics_existed_paths) > 0 and pathomics_mode == "None":
             data_paths.update({k: {"radiology": radiology_existed_paths, "pathology": None}})

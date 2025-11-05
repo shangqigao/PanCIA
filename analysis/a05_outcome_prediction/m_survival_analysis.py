@@ -130,24 +130,28 @@ def prepare_graph_properties(data_dict, prop_keys=None, subgraphs=False, omics="
 
 def load_radiomic_properties(idx, radiomic_paths, prop_keys=None, pooling="mean"):
     properties_list = []
-    for radiomic_path in radiomic_paths:
-        suffix = pathlib.Path(radiomic_path).suffix
-        if suffix == ".json":
-            if prop_keys is None: 
-                prop_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
-            data_dict = load_json(radiomic_path)
-            properties = {}
-            for key, value in data_dict.items():
-                selected = [((k in key) and ("diagnostics" not in key)) for k in prop_keys]
-                if any(selected): properties[key] = value
-        elif suffix == ".npy":
-            feature = np.load(radiomic_path)
-            feat_list = np.array(feature).squeeze().tolist()
-            properties = {}
-            for i, feat in enumerate(feat_list):
-                k = f"radiomics.feature{i}"
-                properties[k] = feat
-        properties_list.append(properties)
+    for path_dict in radiomic_paths:
+        properties_dict = {}
+        for radiomic_key, radiomic_path in path_dict.items():
+            suffix = pathlib.Path(radiomic_path).suffix
+            if suffix == ".json":
+                if prop_keys is None: 
+                    prop_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
+                data_dict = load_json(radiomic_path)
+                properties = {}
+                for key, value in data_dict.items():
+                    selected = [((k in key) and ("diagnostics" not in key)) for k in prop_keys]
+                    if any(selected): properties[f"{radiomic_key}.{key}"] = value
+                if len(properties) > 0: properties_dict.update(properties)
+            elif suffix == ".npy":
+                feature = np.load(radiomic_path)
+                feat_list = np.array(feature).squeeze().tolist()
+                properties = {}
+                for i, feat in enumerate(feat_list):
+                    k = f"radiomics.{radiomic_key}.feature{i}"
+                    properties[k] = feat
+                if len(properties) > 0: properties_dict.update(properties)
+        properties_list.append(properties_dict)
 
     # patient-level pooling
     df = pd.DataFrame(properties_list)
@@ -187,35 +191,38 @@ def prepare_graph_pathomics(
         }
         subgraph_ids = [subgraph_dict[k] for k in subgraphs]
     feat_list = []
-    for graph_path in graph_paths:
-        graph_dict = load_json(graph_path)
-        feature = np.array(graph_dict["x"])
-        assert feature.ndim == 2
-        if subgraph_ids is not None:
-            label_path = f"{graph_path}".replace(".json", ".label.npy")
-            label = np.load(label_path)
-            if label.ndim == 2: label = np.argmax(label, axis=1)
-            subset = label < 0
-            for ids in subgraph_ids:
-                ids_subset = np.logical_and(label >= ids[0], label <= ids[1])
-                subset = np.logical_or(subset, ids_subset)
-            if subset.sum() < 1:
-                feature = np.zeros_like(feature)
-            else:
-                feature = feature[subset]
-        if mode == "mean":
-            feature = np.mean(feature, axis=0)
-        elif mode == "max":
-            feature = np.max(feature, axis=0)
-        elif mode == "min":
-            feature = np.min(feature, axis=0)
-        elif mode == "std":
-            feature = np.std(feature, axis=0)
-        elif mode == "kmeans":
-            kmeans = KMeans(n_clusters=4)
-            feature = kmeans.fit(feature).cluster_centers_
-            feature = feature.flatten().tolist()
-        feat_list.append(feature)
+    for path_dict in graph_paths:
+        feat_stack = []
+        for path in path_dict.values():
+            graph_dict = load_json(path)
+            feature = np.array(graph_dict["x"])
+            assert feature.ndim == 2
+            if subgraph_ids is not None:
+                label_path = f"{path}".replace(".json", ".label.npy")
+                label = np.load(label_path)
+                if label.ndim == 2: label = np.argmax(label, axis=1)
+                subset = label < 0
+                for ids in subgraph_ids:
+                    ids_subset = np.logical_and(label >= ids[0], label <= ids[1])
+                    subset = np.logical_or(subset, ids_subset)
+                if subset.sum() < 1:
+                    feature = np.zeros_like(feature)
+                else:
+                    feature = feature[subset]
+            if mode == "mean":
+                feature = np.mean(feature, axis=0)
+            elif mode == "max":
+                feature = np.max(feature, axis=0)
+            elif mode == "min":
+                feature = np.min(feature, axis=0)
+            elif mode == "std":
+                feature = np.std(feature, axis=0)
+            elif mode == "kmeans":
+                kmeans = KMeans(n_clusters=4)
+                feature = kmeans.fit(feature).cluster_centers_
+                feature = feature.flatten().tolist()
+            feat_stack.append(feature)
+        feat_list.append(np.hstack(feat_stack))
         
     # patient-level pooling
     if pooling == "mean":
@@ -237,31 +244,34 @@ def prepare_graph_pathomics(
 
 def prepare_graph_radiomics(
     idx, 
-    graph_path, 
+    graph_paths, 
     mode="mean",
     pooling="mean"
     ):
     feat_list = []
-    for path in graph_path:
-        graph_dict = load_json(path)
-        feature = np.array(graph_dict["x"])
-        assert feature.ndim == 2
+    for path_dict in graph_paths:
+        feat_stack = []
+        for path in path_dict.values():
+            graph_dict = load_json(path)
+            feature = np.array(graph_dict["x"])
+            assert feature.ndim == 2
 
-        if mode == "mean":
-            feat = np.mean(feature, axis=0)
-        elif mode == "max":
-            feat = np.max(feature, axis=0)
-        elif mode == "min":
-            feat = np.min(feature, axis=0)
-        elif mode == "std":
-            feat = np.std(feature, axis=0)
-        elif mode == "kmeans":
-            kmeans = KMeans(n_clusters=4)
-            feat = kmeans.fit(feature).cluster_centers_
-            feat = feat.flatten()
-        else:
-            raise ValueError(f"Unsupport aggregation mode: {mode}")
-        feat_list.append(feat)
+            if mode == "mean":
+                feature = np.mean(feature, axis=0)
+            elif mode == "max":
+                feature = np.max(feature, axis=0)
+            elif mode == "min":
+                feature = np.min(feature, axis=0)
+            elif mode == "std":
+                feature = np.std(feature, axis=0)
+            elif mode == "kmeans":
+                kmeans = KMeans(n_clusters=4)
+                feature = kmeans.fit(feature).cluster_centers_
+                feature = feature.flatten()
+            else:
+                raise ValueError(f"Unsupport aggregation mode: {mode}")
+            feat_stack.append(feature)
+        feat_list.append(np.hstack(feat_stack))
     
     # patient-level pooling
     if pooling == "mean":
@@ -281,11 +291,14 @@ def prepare_graph_radiomics(
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
-def load_wsi_level_features(idx, wsi_feature_path, pooling="mean"):
+def load_wsi_level_features(idx, wsi_feature_paths, pooling="mean"):
     feat_list = []
-    for path in wsi_feature_path:
-        feat = np.array(np.load(path)).squeeze()
-        feat_list.append(feat)
+    for path_dict in wsi_feature_paths:
+        feat_stack = []
+        for path in path_dict.values():
+            feat = np.array(np.load(path)).squeeze()
+            feat_stack.append(feat)
+        feat_list.append(np.hstack(feat_stack))
 
     # patient-level pooling
     if pooling == "mean":
@@ -862,10 +875,16 @@ def load_radiomics(
     if radiomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
         radiomics_paths = []
         for p in data:
-            path = pathlib.Path(p[0][1]["radiomics"])
-            dir = path.parents[1] / radiomics_aggregated_mode / f"0{split_idx}"
-            name = path.name.replace(".json", ".npy")
-            radiomics_paths.append(dir / path.parent.name / name)
+            path_list = pathlib.Path(p[0][1]["radiomics"])
+            new_path_list = []
+            for path_dict in path_list:
+                new_path_dict = {}
+                for k, path in path_dict.items():
+                    dir = path.parents[1] / radiomics_aggregated_mode / f"0{split_idx}"
+                    name = path.name.replace(".json", ".npy")
+                    new_path_dict[k] = dir / path.parent.name / name
+                new_path_list.append(new_path_dict)
+            radiomics_paths.append(new_path_list)
     else:
         radiomics_paths = [p[0][1]["radiomics"] for p in data]
 
@@ -906,10 +925,16 @@ def load_pathomics(
     if pathomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
         pathomics_paths = []
         for p in data:
-            path = pathlib.Path(p[0][1]["pathomics"])
-            dir = path.parents[0] / pathomics_aggregated_mode / f"0{split_idx}"
-            name = path.name.replace(".json", ".npy")
-            pathomics_paths.append(dir / name)
+            path_list = pathlib.Path(p[0][1]["pathomics"])
+            new_path_list = []
+            for path_dict in path_list:
+                new_path_dict = {}
+                for k, path in path_dict.items():
+                    dir = path.parents[1] / pathomics_aggregated_mode / f"0{split_idx}"
+                    name = path.name.replace(".json", ".npy")
+                    new_path_dict[k] = dir / path.parent.name / name
+                new_path_list.append(new_path_dict)
+            pathomics_paths.append(new_path_list)
     else:
         pathomics_paths = [p[0][1]["pathomics"] for p in data]
 
@@ -1690,7 +1715,7 @@ if __name__ == "__main__":
             save_omics_dir=opt['OMICS_DIR'],
             segmentator=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
             radiomics_mode=radiomics_mode,
-            radiomics_suffix=opt['RADIOMICS']['SUFFIX'],
+            radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
         )
     elif opt['DATASET'] == "TCGA":
         from analysis.a05_outcome_prediction.m_prepare_omics_info import prepare_TCGA_omics_info
@@ -1699,9 +1724,9 @@ if __name__ == "__main__":
             save_omics_dir=opt['OMICS_DIR'],
             radiomics_mode=radiomics_mode,
             segmentator=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
-            radiomics_suffix=opt['RADIOMICS']['SUFFIX'],
+            radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
             pathomics_mode=pathomics_mode,
-            pathomics_suffix=opt['PATHOMICS']['SUFFIX']
+            pathomics_suffix=opt['PATHOMICS']['MODE']['SUFFIX']
         )
     else:
         raise NotImplementedError
