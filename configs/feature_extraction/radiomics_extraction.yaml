@@ -4,7 +4,7 @@ RADIOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subject
 DATA_FORMAT: "nifti"
 LABEL_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
 SAVE_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/radiomics"
-N_JOBS: 1
+N_JOBS: 32
 
 # Define parameters of radiomics
 RADIOMICS:
@@ -23,7 +23,7 @@ RADIOMICS:
       - "layer2_radiomics.npy"
       - "layer3_radiomics.npy"
       - "layer4_radiomics.npy"
-    FEATURE_DIS_WEIGHT: 0.001 # 0.01 for LVMMed else 0.1
+    FEATURE_DIS_WEIGHT: 0.01 # 0.01 for LVMMed else 0.1, for clustering in graph construction
   LAYER_METHOD:
     VALUE: null
     CHOICES: [null, "shells", "peeling"]
@@ -39,4 +39,4 @@ RADIOMICS:
   RESOLUTION: 1
   UNITS: "mm"
   SKIP_EXITS: False
-  DELETE_NPY: False # if true, only constructed graphs will be saved
+  DELETE_NPY: True # if true, only constructed graphs will be saved
