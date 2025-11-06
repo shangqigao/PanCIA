@@ -43,35 +43,43 @@ biomedparse_lora = {
 }
 
 categories = list(biomedparse.keys())
+models = [biomedparse, biomedparse_finetuned, biomedparse_lora]
+maximum = [max([m[c] for m in models]) for c in categories]
+biomedparse_v = [v / m for v, m in zip(list(biomedparse.values()), maximum)]
+biomedparse_finetuned_v = [v / m for v, m in zip(list(biomedparse_finetuned.values()), maximum)]
+biomedparse_lora_v = [v / m for v, m in zip(list(biomedparse_lora.values()), maximum)]
 
 fig = go.Figure()
 
 fig.add_trace(go.Scatterpolar(
-      r=list(biomedparse.values()),
+      r=biomedparse_v,
       theta=categories,
       fill='toself',
-      name='Product A'
+      fillcolor='rgba(0,0,0,0)',
+      name='Official BiomedParse'
 ))
 fig.add_trace(go.Scatterpolar(
-      r=list(biomedparse_finetuned.values()),
+      r=biomedparse_finetuned_v,
       theta=categories,
       fill='toself',
-      name='Product B'
+      fillcolor='rgba(0,0,0,0)',
+      name='Finetuned w/o LoRA'
 ))
 fig.add_trace(go.Scatterpolar(
-      r=list(biomedparse_lora.values()),
+      r=biomedparse_lora_v,
       theta=categories,
       fill='toself',
-      name='Product B'
+      fillcolor='rgba(0,0,0,0)',
+      name='Finetuned w/ LoRA'
 ))
 
 fig.update_layout(
   polar=dict(
     radialaxis=dict(
       visible=True,
-      range=[0, 5]
+      range=[0, 1]
     )),
-  showlegend=False
+  showlegend=True
 )
 
 fig.show()
