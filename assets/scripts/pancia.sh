@@ -25,6 +25,8 @@ export PYTHONUNBUFFERED=1   # if running Python
 export SLURM_EXPORT_ENV=ALL
 stdbuf -oL -eL echo "Starting job at $(date)"
 
+# python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
+
 #---------------MAMA-MIA----------------
 # fit Beta distributions on training data
 # img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
@@ -117,8 +119,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # extract radiomic features
-radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
         
 # extract pathomic features
 # pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
@@ -138,8 +140,8 @@ python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files 
 
 
 # survival analysis
-# survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
-# python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
+survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
+python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
 
 # phenotype prediction
 # phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"

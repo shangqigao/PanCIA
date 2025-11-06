@@ -167,7 +167,7 @@ class XDecoderPipeline:
                     total_compute_time += time.perf_counter() - start_compute_time
                     start_eval_time = time.perf_counter()
 
-                    self.evaluator.process(batch, outputs)
+                    self.evaluator.process(batch, outputs, self._opt['SAVE_PROB_MAP'], self._opt['SAVE_FOLDER'])
                     total_eval_time += time.perf_counter() - start_eval_time
 
                     iters_after_start = idx + 1 - num_warmup * int(idx >= num_warmup)

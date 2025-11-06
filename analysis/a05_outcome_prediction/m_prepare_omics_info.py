@@ -7,19 +7,20 @@ from utilities.constants import PANCIA_PROJECT_SITE
 
 radiomics_dims = {
     "None": None,
-    "pyradiomics": 851,
-    "SegVol": 768,
-    "BiomedParse": 512,
-    "BayesBP": 64,
+    "pyradiomics": {'child0': 851},
+    "SegVol": {'child0': 768},
+    "BiomedParse": {'child0': 512},
+    "BayesBP": {'child0': 64},
+    "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 1024, 'child5': 2048}
 }
 
 pathomics_dims = {
     "None": None,
-    "CNN": 2048,
-    "HIPT": 384,
-    "UNI": 1024,
-    "CONCH": 35,
-    "CHIEF": 768
+    "CNN": {'child0': 2048},
+    "HIPT": {'child0': 384},
+    "UNI": {'child0': 1024},
+    "CONCH": {'child0': 35},
+    "CHIEF": {'child0': 768}
 }
 
 def prepare_MAMAMIA_omics_info(

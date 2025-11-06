@@ -38,5 +38,7 @@ srun --mpi=pmi2 python entry.py evaluate \
             WEIGHT True \
             STANDARD_TEXT_FOR_EVAL True \
             LoRA.ENABLE False \
+            SAVE_PROB_MAP True \
+            SAVE_FOLDER test_BiomedParse_wo_LoRA \
             RESUME_FROM checkpoints/BiomedParse/singlephase_pancancer.pt \
             

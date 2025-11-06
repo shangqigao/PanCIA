@@ -86,16 +86,17 @@ class GroundingEvaluator(DatasetEvaluator):
 
         return filtered_input
 
-    def process(self, inputs, outputs):
+    def process(self, inputs, outputs, save_prob_map=False, save_folder='test_pred'):
         for input, output in zip(inputs, outputs):
             pred = output['grounding_mask'].sigmoid() > 0.5
-            # # save pixel probability
-            # prob = output['grounding_mask'].sigmoid().cpu().numpy()[0] * 255
-            # pred_file = input['file_name'].split('.')[0].replace('test/', 'test_pred/') + '_' + input['groundings']['texts'][0].replace(' ', '+') + '.png'
-            # if not os.path.exists('/'.join(pred_file.split('/')[:-1])):
-            #     os.makedirs('/'.join(pred_file.split('/')[:-1]), exist_ok=True)
-            # plt.imsave(pred_file, 
-            #            prob.astype(np.uint8), cmap='gray')
+            # save pixel probability
+            if save_prob_map:
+                prob = output['grounding_mask'].sigmoid().cpu().numpy()[0] * 255
+                pred_file = input['file_name'].split('.')[0].replace('test/', f"{save_folder}/") + '_' + input['groundings']['texts'][0].replace(' ', '+') + '.png'
+                if not os.path.exists('/'.join(pred_file.split('/')[:-1])):
+                    os.makedirs('/'.join(pred_file.split('/')[:-1]), exist_ok=True)
+                plt.imsave(pred_file, 
+                        prob.astype(np.uint8), cmap='gray')
 
             gt = input['groundings']['masks'].bool()
             bsi = len(pred)
