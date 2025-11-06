@@ -2,7 +2,7 @@ import pandas as pd
 import json
 import pathlib
 
-json_path = "1st-contrast.json"
+json_path = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/PanCIA/figures/results/TCGA_survival.json"
 
 # Load JSON
 with open(json_path) as f:
@@ -44,6 +44,6 @@ metrics = df.columns.difference(["index", "fold", "method", "extractor"])
 df_mean = df.groupby(["extractor", "fold"], as_index=False)[metrics].mean()
 
 # Save to Excel
-name = pathlib.Path(json_path).stem
-df_mean.to_excel(f"{name}.xlsx")
+save_path = json_path.replace('.json', '.xlsx')
+df_mean.to_excel(save_path)
 print(df)
