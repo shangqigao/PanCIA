@@ -7,7 +7,7 @@ from create_annotations import *
 
 
 # provide the path to the dataset. There should be train, train_mask, test, test_mask under this folder
-targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/Uterus_Tumor'
+targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/Uterus_Tumor+Background'
 if 'MP_Breast' in targetpath:
     clinical_info_path = 'clinical_and_imaging_info.xlsx'
     df_clinic = pd.read_excel(clinical_info_path, sheet_name='dataset_info')
@@ -290,7 +290,8 @@ if __name__ == "__main__":
     # Get the standard COCO JSON format
     coco_format = get_coco_json_format()
 
-    for keyword in ['train', 'test']:
+    # for keyword in ['train', 'test']:
+    for keyword in ['test']:
         mask_path = os.path.join(targetpath, "{}_mask/".format(keyword))
         
         # Create category section

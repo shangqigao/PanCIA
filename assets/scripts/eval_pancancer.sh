@@ -5,7 +5,7 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-10:00:00
+#SBATCH --time=0-36:00:00
 ##SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
@@ -39,6 +39,6 @@ srun --mpi=pmi2 python entry.py evaluate \
             STANDARD_TEXT_FOR_EVAL True \
             LoRA.ENABLE False \
             SAVE_PROB_MAP True \
-            SAVE_FOLDER test_BiomedParse_wo_LoRA \
-            RESUME_FROM checkpoints/BiomedParse/singlephase_pancancer.pt \
+            SAVE_FOLDER test_BiomedParse \
+            RESUME_FROM checkpoints/BiomedParse/biomedparse_v1.pt \
             
