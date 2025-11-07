@@ -186,7 +186,30 @@ def convert_nifti_to_png(img_path, lab_path, output_img_dir, output_msk_dir, pre
     else:
         raise ValueError("Unsupported or unknown scanning phase")
 
-    return img_slices
+    # Separate tumor and background slices
+    tumor_slices = [x for x in img_slices if x['class'] == 'tumor']
+    background_slices = [x for x in img_slices if x['class'] == 'background']
+
+    # Count how many we have
+    num_tumor = len(tumor_slices)
+    num_background = len(background_slices)
+
+    # Determine how many background slices to keep
+    if num_tumor > 0:
+        num_to_sample = min(num_tumor, num_background)
+    else:
+        num_to_sample = min(20, num_background)
+
+    # Randomly sample background slices
+    selected_background = random.sample(background_slices, num_to_sample)
+
+    # Combine the two sets
+    balanced_slices = tumor_slices + selected_background
+
+    print(f"Tumor slices: {num_tumor}, Background slices (sampled): {num_to_sample}")
+    print(f"Total balanced slices: {len(balanced_slices)}")
+
+    return balanced_slices
 
 def split_list(data, train_ratio=0.8, seed=42):
     random.seed(seed)
@@ -309,7 +332,17 @@ if __name__ == "__main__":
         all_slices = []
         for o in outputs: all_slices += o
         df = pd.DataFrame(all_slices)
+        df = df.sort_values(by='slice_name', ascending=True).reset_index(drop=True)
+
         df.to_csv(f'{output_dir}/{output_dataset}/test_slices.csv')
+
+        src = pathlib.Path(f'{output_dir}/{output_dataset}/test_slices.csv')
+        dst_folder = pathlib.Path(f'/home/sg2162/rds/hpc-work/Experiments/TTA/{output_dataset}')
+        dst_folder.mkdir(parents=True, exist_ok=True)
+        dst = dst_folder / src.name
+        shutil.copy2(src, dst)
+
+        print(f"File copied to: {dst}")
 
 
 
