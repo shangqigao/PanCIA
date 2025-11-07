@@ -6,11 +6,11 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=8
-##SBATCH --time=0-12:00:00
-#SBATCH --time=0-00:10:00
+#SBATCH --time=0-12:00:00
+##SBATCH --time=0-00:10:00
 #SBATCH --partition=pvc9
 #SBATCH --gres=gpu:1
-#SBATCH --qos=intr
+##SBATCH --qos=intr
 
 ## load dawn
 module purge
@@ -30,6 +30,8 @@ export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 export PYTHONUNBUFFERED=1   # if running Python
 export SLURM_EXPORT_ENV=ALL
 stdbuf -oL -eL echo "Starting job at $(date)"
+
+# python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
 
 # fit Beta distributions on training data
 # img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
@@ -61,13 +63,17 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --meta_info $meta_info
 
 # extract radiomic features
-img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
-lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"
-save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
-meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
+# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
+# lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+# meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
 
-srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
-            --img_dir $img_dir \
-            --lab_dir $lab_dir \
-            --save_dir $save_dir \
-            --meta_info $meta_info          
+# srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
+#             --img_dir $img_dir \
+#             --lab_dir $lab_dir \
+#             --save_dir $save_dir \
+#             --meta_info $meta_info  
+
+# phenotype prediction
+phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
+python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config

@@ -8,6 +8,7 @@ import nibabel as nib
 import numpy as np
 from PIL import Image
 from skimage import transform
+import pandas as pd
 
 CT_WINDOWS = {
     'abdomen': [-150, 250],
@@ -154,6 +155,7 @@ def convert_nifti_to_png(img_path, lab_path, output_img_dir, output_msk_dir, pre
     lab = nii_lab.get_fdata()
     lab = np.array(lab, np.float32)
     assert img.shape == lab.shape
+    img_slices = []
     if phase in ['axial', 'sagittal', 'coronal']:
         for i in range(img.shape[slice_axis]):
             if slice_axis == 0:
@@ -169,16 +171,22 @@ def convert_nifti_to_png(img_path, lab_path, output_img_dir, output_msk_dir, pre
                 raise ValueError(f"Slice axis is {slice_axis}, maximum shoud be 2")
             # save slice
             save_img_path = f'{output_img_dir}/{img_name}_{phase}_slice_{i:03d}_{modality}_{site}.png'
-            save_slice(slice_img, save_img_path, modality == 'CT', CT_sites[site])
+            # save_slice(slice_img, save_img_path, modality == 'CT', CT_sites[site])
             # save mask
             mask = slice_lab == int(tumor_label)
-            if np.sum(mask) > 0:     
-                save_msk_path = f'{output_msk_dir}/{img_name}_{phase}_slice_{i:03d}_{modality}_{site}_{target}.png'
+            if np.sum(mask) > 0:
+                slice_name = f'{img_name}_{phase}_slice_{i:03d}_{modality}_{site}'     
+                save_msk_path = f'{output_msk_dir}/{slice_name}_{target}.png'
+                img_slices.append({'img_name': img_name, 'slice_name': slice_name, 'class': 'tumor'})
             else:
-                save_msk_path = f'{output_msk_dir}/{img_name}_{phase}_slice_{i:03d}_{modality}_{site}_background.png'
-            save_mask(mask, save_msk_path)
+                slice_name = f'{img_name}_{phase}_slice_{i:03d}_{modality}_{site}'
+                save_msk_path = f'{output_msk_dir}/{slice_name}_background.png'
+                img_slices.append({'img_name': img_name, 'slice_name': slice_name, 'class': 'background'})
+            # save_mask(mask, save_msk_path)
     else:
         raise ValueError("Unsupported or unknown scanning phase")
+
+    return img_slices
 
 def split_list(data, train_ratio=0.8, seed=42):
     random.seed(seed)
@@ -285,17 +293,24 @@ if __name__ == "__main__":
             prefix_dict['img_name'] = pathlib.Path(img_name).name.replace(".nii.gz", "")
             img_path = f'{dataset_dir}/{img_name}'
             lab_path = f'{dataset_dir}/{lab_name}'
-            convert_nifti_to_png(
+            img_slices = convert_nifti_to_png(
                 img_path=img_path,
                 lab_path=lab_path,
                 output_img_dir=test_img_dir,
                 output_msk_dir=test_msk_dir,
                 prefix_dict=prefix_dict
             )
-        joblib.Parallel(n_jobs=32)(
+            return img_slices
+
+        outputs = joblib.Parallel(n_jobs=32)(
             joblib.delayed(_extract_test_slices)(img_name, lab_name)
             for img_name, lab_name in zip(test_img_names, test_lab_names)
         )
+        all_slices = []
+        for o in outputs: all_slices += o
+        df = pd.DataFrame(all_slices)
+        df.to_csv(f'{output_dir}/{output_dataset}/test_slices.csv')
+
 
 
 
