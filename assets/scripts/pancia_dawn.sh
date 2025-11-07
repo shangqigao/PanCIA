@@ -31,7 +31,7 @@ export PYTHONUNBUFFERED=1   # if running Python
 export SLURM_EXPORT_ENV=ALL
 stdbuf -oL -eL echo "Starting job at $(date)"
 
-# python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
+python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
 
 # fit Beta distributions on training data
 # img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
@@ -75,5 +75,5 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --meta_info $meta_info  
 
 # phenotype prediction
-phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
-python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
+# phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
+# python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
