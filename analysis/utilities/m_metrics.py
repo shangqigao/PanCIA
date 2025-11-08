@@ -195,6 +195,11 @@ def evaluate_segmentation_metrics(predictions, labels, from_logits=False, thresh
     # print(float((label_flat==0).sum()))
     best_t, soft_dice, scores = find_best_dice_threshold(probs, labels)
 
+    if np.sum(pred_flat) > 0:
+        positive = 1
+    else:
+        positive = 0
+
     return {
         "accuracy": accuracy,
         "f1_score": f1,
@@ -202,7 +207,11 @@ def evaluate_segmentation_metrics(predictions, labels, from_logits=False, thresh
         "specificity": specificity,
         "dice": dice,
         "soft_dice": soft_dice,
-        "ca": (TP/float((label_flat==1).sum()) + TN/float((label_flat==0).sum())) / 2
+        "ca": (
+            (TP / float((label_flat == 1).sum()) if (label_flat == 1).sum() > 0 else 0) +
+            (TN / float((label_flat == 0).sum()) if (label_flat == 0).sum() > 0 else 0)
+        ) / 2,
+        "positive": positive
     }
 
 # Example usage

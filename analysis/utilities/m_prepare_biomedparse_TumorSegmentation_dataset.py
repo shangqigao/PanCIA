@@ -196,17 +196,19 @@ def convert_nifti_to_png(img_path, lab_path, output_img_dir, output_msk_dir, pre
 
     # Determine how many background slices to keep
     if num_tumor > 0:
-        num_to_sample = min(num_tumor, num_background)
+        num_to_sample = min(num_tumor, num_background, 20)
+        selected_tumor = random.sample(tumor_slices, num_to_sample)
     else:
         num_to_sample = min(20, num_background)
+        selected_tumor = []
 
     # Randomly sample background slices
     selected_background = random.sample(background_slices, num_to_sample)
 
     # Combine the two sets
-    balanced_slices = tumor_slices + selected_background
+    balanced_slices = selected_tumor + selected_background
 
-    print(f"Tumor slices: {num_tumor}, Background slices (sampled): {num_to_sample}")
+    print(f"Tumor slices: {len(selected_tumor)}, Background slices (sampled): {num_to_sample}")
     print(f"Total balanced slices: {len(balanced_slices)}")
 
     return balanced_slices
@@ -310,6 +312,11 @@ if __name__ == "__main__":
         os.makedirs(test_msk_dir, exist_ok=True)
         test_img_names = [d['image'] for d in data_info['test']]
         test_lab_names = [d['label'] for d in data_info['test']]
+        test_pairs = list(zip(test_img_names, test_lab_names))
+        sampled_pairs = random.sample(test_pairs, min(50, len(test_pairs)))
+        sampled_imgs, sampled_labels = zip(*sampled_pairs)
+        test_img_names = list(sampled_imgs)
+        test_lab_names = list(sampled_labels)
         def _extract_test_slices(img_name, lab_name):
             # if 'FLARE23_1336' not in name: continue
             print(f'Extracting slices from {img_name} in {dataset}...')

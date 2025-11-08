@@ -31,7 +31,8 @@ export PYTHONUNBUFFERED=1   # if running Python
 export SLURM_EXPORT_ENV=ALL
 stdbuf -oL -eL echo "Starting job at $(date)"
 
-python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
+# python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
+python analysis/utilities/m_calculate_pancancer_segmentation_metrics.py
 
 # fit Beta distributions on training data
 # img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
