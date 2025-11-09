@@ -5,7 +5,7 @@ OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "ImmuneSubtype"
+  VALUE: "PrimaryDisease"
   CHOICES: ["ImmuneSubtype", "MolecularSubtype", "PrimaryDisease"]
 TASKS:
   TRAIN: False
@@ -20,16 +20,16 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "LVMMed"
+    VALUE: "pyradiomics"
     CHOICES: ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
-    # SUFFIX:
-    #   - "_tumor_graph.json"
     SUFFIX:
-      - "_tumor_layer0_graph.json"
-      - "_tumor_layer1_graph.json"
-      - "_tumor_layer2_graph.json"
-      - "_tumor_layer3_graph.json"
-      - "_tumor_layer4_graph.json"
+      - "_tumor_radiomics.json"
+    # SUFFIX:
+    #   - "_tumor_layer0_graph.json"
+    #   - "_tumor_layer1_graph.json"
+    #   - "_tumor_layer2_graph.json"
+    #   - "_tumor_layer3_graph.json"
+    #   - "_tumor_layer4_graph.json"
   # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
   # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
   AGGREGATION: True
@@ -42,7 +42,7 @@ RADIOMICS:
 # Define parameters of pathomics
 PATHOMICS:
   MODE:
-    VALUE: "UNI"
+    VALUE: "None"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
     SUFFIX:
       - "_graph.json"
@@ -99,7 +99,7 @@ TEST:
 
 PREDICTION:
   USED_OMICS:
-    VALUE: "radiopathomics"
+    VALUE: "radiomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:

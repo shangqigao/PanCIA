@@ -32,7 +32,7 @@ datasets = ['AMOS22CT_Abdomen', 'AMOS22MR_Abdomen', 'MMs_Heart']
 #     shutil.copy2(src, dst)
 #     print(f"File copied to: {dst}")
 
-prediction = ['test_BiomedParse', 'test_BiomedParse_wo_LoRA', 'test_BiomedParse_with_LoRA'][0]
+prediction = ['test_BiomedParse', 'test_BiomedParse_wo_LoRA', 'test_BiomedParse_with_LoRA'][2]
 
 for dataset in datasets:
     print(f"Calculating metrics on dataset {dataset}...")
