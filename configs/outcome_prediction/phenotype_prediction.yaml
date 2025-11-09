@@ -20,10 +20,10 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "pyradiomics"
+    VALUE: "BiomedParse"
     CHOICES: ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
     SUFFIX:
-      - "_tumor_radiomics.json"
+      - "_tumor_graph.json"
     # SUFFIX:
     #   - "_tumor_layer0_graph.json"
     #   - "_tumor_layer1_graph.json"
@@ -42,7 +42,7 @@ RADIOMICS:
 # Define parameters of pathomics
 PATHOMICS:
   MODE:
-    VALUE: "None"
+    VALUE: "UNI"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
     SUFFIX:
       - "_graph.json"
@@ -99,7 +99,7 @@ TEST:
 
 PREDICTION:
   USED_OMICS:
-    VALUE: "radiomics"
+    VALUE: "radiopathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:

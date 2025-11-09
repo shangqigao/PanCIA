@@ -315,10 +315,12 @@ def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, minimum_per_
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
         df_matched = df_matched[df_matched["_primary_disease"].notna()]
+        df_matched = df_matched.drop_duplicates(subset=["SubjectID"], keep="first")
         counts = df_matched["_primary_disease"].value_counts()
+        print("Before filtering:", counts)
         valid_classes = counts[counts >= minimum_per_class].index
         df_matched = df_matched[df_matched["_primary_disease"].isin(valid_classes)]
-        print(df_matched["_primary_disease"].value_counts())
+        print("After filtering:", df_matched["_primary_disease"].value_counts())
         df_matched["PhenotypeClass"], uniques = pd.factorize(df_matched["_primary_disease"])
         print("Primary disease mapping:", dict(enumerate(uniques)))
     else:
