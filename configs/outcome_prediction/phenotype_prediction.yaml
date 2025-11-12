@@ -44,7 +44,7 @@ RADIOMICS:
 # Define parameters of pathomics
 PATHOMICS:
   MODE:
-    VALUE: "None"
+    VALUE: "UNI"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
     SUFFIX:
       - "_graph.json"
@@ -101,7 +101,7 @@ TEST:
 
 PREDICTION:
   USED_OMICS:
-    VALUE: "radiomics"
+    VALUE: "radiopathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:
