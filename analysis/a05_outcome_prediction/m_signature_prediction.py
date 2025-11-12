@@ -29,20 +29,18 @@ from torch_geometric.loader import DataLoader
 from tiatoolbox import logger
 from tiatoolbox.utils.misc import save_as_json
 
-from sklearn.model_selection import GridSearchCV, KFold
-from sklearn.feature_selection import SelectKBest, f_classif, VarianceThreshold
+from sklearn.model_selection import GridSearchCV, KFold, cross_val_score
+from sklearn.feature_selection import SelectKBest, f_regression, VarianceThreshold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import StratifiedShuffleSplit
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from sklearn.metrics import average_precision_score as auprc_scorer
-from sklearn.metrics import roc_auc_score as auroc_scorer
-from sklearn.metrics import balanced_accuracy_score as acc_scorer
-from sklearn.metrics import f1_score as f1_scorer
-from xgboost import XGBClassifier
+from sklearn.linear_model import Ridge, Lasso, ElasticNet
+from sklearn.svm import SVR
+from sklearn.metrics import r2_score
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error
 
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
@@ -283,46 +281,47 @@ def load_wsi_level_features(idx, wsi_feature_paths, pooling="mean"):
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
-def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, minimum_per_class=20):
-    if outcome == "ImmuneSubtype":
-        outcome_file = f"{outcome_dir}/phenotypes/immune_subtype/immune_subtype.csv"
+def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, signature_ids=None):
+    if outcome == "GeneProgrames":
+        outcome_file = f"{outcome_dir}/signatures/gene_programs/gene_programs.csv"
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
-        df_matched = df_matched[df_matched["Subtype_Immune_Model_Based"].notna()]
-        counts = df_matched["Subtype_Immune_Model_Based"].value_counts()
-        print("Before filtering:", counts)
-        valid_classes = counts[counts >= minimum_per_class].index
-        df_matched = df_matched[df_matched["Subtype_Immune_Model_Based"].isin(valid_classes)]
-        print("After filtering:", df_matched["Subtype_Immune_Model_Based"].value_counts())
-        df_matched["PhenotypeClass"], uniques = pd.factorize(df_matched["Subtype_Immune_Model_Based"])
-        print("Immune subtype mapping:", dict(enumerate(uniques)))
-    elif outcome == "MolecularSubtype":
-        outcome_file = f"{outcome_dir}/phenotypes/molecular_subtype/molecular_subtype.csv"
+        if signature_ids is not None:
+            assert isinstance(signature_ids, list), "signature ids should be list"
+            df_matched = df_matched[signature_ids]
+    elif outcome == "HRDscore":
+        outcome_file = f"{outcome_dir}/signatures/HRD_score/HRD_score.csv"
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
-        df_matched = df_matched[df_matched["Subtype_Selected"].notna()]
-        counts = df_matched["Subtype_Selected"].value_counts()
-        valid_classes = counts[counts >= minimum_per_class].index
-        df_matched = df_matched[df_matched["Subtype_Selected"].isin(valid_classes)]
-        print(df_matched["Subtype_Selected"].value_counts())
-        df_matched["PhenotypeClass"], uniques = pd.factorize(df_matched["Subtype_Selected"])
-        print("Molecular subtype mapping:", dict(enumerate(uniques)))
-    elif outcome == "PrimaryDisease":
-        outcome_file = f"{outcome_dir}/phenotypes/sample_type_and_primary_disease/sample_type_primary_disease.csv"
+        if signature_ids is not None:
+            assert isinstance(signature_ids, list), "signature ids should be list"
+            df_matched = df_matched[signature_ids]
+    elif outcome == "ImmuneSignatureScore":
+        outcome_file = f"{outcome_dir}/signatures/immune_signature_score/immune_signature_score.csv"
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
-        df_matched = df_matched[df_matched["_primary_disease"].notna()]
-        df_matched = df_matched.drop_duplicates(subset=["SubjectID"], keep="first")
-        counts = df_matched["_primary_disease"].value_counts()
-        print("Before filtering:", counts)
-        valid_classes = counts[counts >= minimum_per_class].index
-        df_matched = df_matched[df_matched["_primary_disease"].isin(valid_classes)]
-        print("After filtering:", df_matched["_primary_disease"].value_counts())
-        df_matched["PhenotypeClass"], uniques = pd.factorize(df_matched["_primary_disease"])
-        print("Primary disease mapping:", dict(enumerate(uniques)))
+        if signature_ids is not None:
+            assert isinstance(signature_ids, list), "signature ids should be list"
+            df_matched = df_matched[signature_ids]
+    elif outcome == "StemnessScoreDNA":
+        outcome_file = f"{outcome_dir}/signatures/stemness_score_DNA/stemness_scores_DNAmeth.csv"
+        df = pd.read_csv(outcome_file)
+        df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
+        df_matched = df[df["SubjectID"].isin(subject_ids)]
+        if signature_ids is not None:
+            assert isinstance(signature_ids, list), "signature ids should be list"
+            df_matched = df_matched[signature_ids]
+    elif outcome == "StemScoreRNA":
+        outcome_file = f"{outcome_dir}/signatures/stemness_score_RNA/stemness_scores_RNAexp.csv"
+        df = pd.read_csv(outcome_file)
+        df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
+        df_matched = df[df["SubjectID"].isin(subject_ids)]
+        if signature_ids is not None:
+            assert isinstance(signature_ids, list), "signature ids should be list"
+            df_matched = df_matched[signature_ids]
     else:
         raise NotImplementedError
 
@@ -351,22 +350,31 @@ def plot_coefficients(coefs, n_highlight):
     plt.subplots_adjust(left=0.2)
     plt.savefig(f"{relative_path}/figures/plots/coefficients.jpg")
 
-def randomforest(split_idx, tr_X, tr_y, refit, n_jobs):
+def randomforest_regression(split_idx, tr_X, tr_y, refit, n_jobs):
     # choosing parameters by cross validation
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    model = RandomForestClassifier(max_depth=2, class_weight="balanced", random_state=42)
-    param_grid={"model__max_depth": list(range(1, 6))}
+    model = RandomForestRegressor(max_depth=2, random_state=42)
+
+    # Grid search parameters
+    param_grid = {"model__max_depth": list(range(1, 6))}
+
+    # Scoring metrics for regression
     scoring = {
-        "accuracy": "accuracy",
-        "f1": "f1_macro"
+        "r2": "r2",
+        "neg_mse": "neg_mean_squared_error",
     }
+
     assert scoring.get(refit, False), f"{refit} is unsupported"
+
+    # Pipeline: scaling + model
     pipe = Pipeline(
         [
             ("scale", StandardScaler()),
             ("model", model),
         ]
     )
+
+    # Grid search with cross validation
     gcv = GridSearchCV(
         pipe,
         param_grid=param_grid,
@@ -376,45 +384,70 @@ def randomforest(split_idx, tr_X, tr_y, refit, n_jobs):
         n_jobs=n_jobs,
     ).fit(tr_X, tr_y)
 
-    # plot cross validation results
+    # Plot cross-validation results
     cv_results = pd.DataFrame(gcv.cv_results_)
-    depths = cv_results['param_model__max_depth']
-    mean = cv_results[f'mean_test_{refit}']
-    std = cv_results[f'std_test_{refit}']
+    depths = cv_results["param_model__max_depth"]
+    mean = cv_results[f"mean_test_{refit}"]
+    std = cv_results[f"std_test_{refit}"]
+
     fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(depths, mean)
+    ax.plot(depths, mean, marker="o")
     ax.fill_between(depths, mean - std, mean + std, alpha=0.15)
     ax.set_xscale("linear")
     ax.set_ylabel(refit)
     ax.set_xlabel("max depth")
-    ax.axvline(gcv.best_params_["model__max_depth"], c="C1")
-    ax.axhline(0.5, color="grey", linestyle="--")
+    ax.axvline(gcv.best_params_["model__max_depth"], color="C1", linestyle="--", label="Best depth")
     ax.grid(True)
+    ax.legend()
+    plt.tight_layout()
     plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
+    plt.close(fig)
 
-    # perform prediction using the best params
+    # Fit final model with best params
     pipe.set_params(**gcv.best_params_)
     pipe.fit(tr_X, tr_y)
 
     return pipe
 
-def xgboost(split_idx, tr_X, tr_y, refit, n_jobs):
-    # choosing parameters by cross validation
+def linearregression(split_idx, tr_X, tr_y, refit, n_jobs, model_type="ridge"):
+    """
+    Cross-validated linear regression with support for Ridge, Lasso, or ElasticNet,
+    including coefficient visualization for the best model.
+    """
+    # Validate model_type
+    assert model_type in ["ridge", "lasso", "elasticnet"], "model_type must be one of ['ridge', 'lasso', 'elasticnet']"
+
+    # 5-fold CV setup
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    neg, pos = np.bincount(tr_y.to_numpy(dtype=int))
-    model = XGBClassifier(max_depth=2, scale_pos_weight=neg / pos, random_state=42)
-    param_grid={"model__max_depth": list(range(1, 6))}
+
+    # Model selection
+    if model_type == "ridge":
+        model = Ridge(random_state=42)
+        param_grid = {"model__alpha": np.logspace(-3, 3, 7)}
+    elif model_type == "lasso":
+        model = Lasso(random_state=42, max_iter=5000)
+        param_grid = {"model__alpha": np.logspace(-3, 3, 7)}
+    else:  # ElasticNet
+        model = ElasticNet(random_state=42, max_iter=5000)
+        param_grid = {
+            "model__alpha": np.logspace(-3, 3, 7),
+            "model__l1_ratio": [0.2, 0.5, 0.8]
+        }
+
+    # Pipeline
+    pipe = Pipeline([
+        ("scale", StandardScaler()),
+        ("model", model)
+    ])
+
+    # Scoring metrics
     scoring = {
-        "accuracy": "accuracy",
-        "f1": "f1_macro"
+        "r2": "r2",
+        "neg_mse": "neg_mean_squared_error"
     }
-    assert scoring.get(refit, False), f"{refit} is unsupported"
-    pipe = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            ("model", model),
-        ]
-    )
+    assert refit in scoring, f"{refit} is unsupported"
+
+    # Grid search
     gcv = GridSearchCV(
         pipe,
         param_grid=param_grid,
@@ -424,48 +457,87 @@ def xgboost(split_idx, tr_X, tr_y, refit, n_jobs):
         n_jobs=n_jobs,
     ).fit(tr_X, tr_y)
 
-    # plot cross validation results
+    # --- Plot CV results ---
     cv_results = pd.DataFrame(gcv.cv_results_)
-    depths = cv_results['param_model__max_depth']
-    mean = cv_results[f'mean_test_{refit}']
-    std = cv_results[f'std_test_{refit}']
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(depths, mean)
-    ax.fill_between(depths, mean - std, mean + std, alpha=0.15)
-    ax.set_xscale("linear")
-    ax.set_ylabel(refit)
-    ax.set_xlabel("max depth")
-    ax.axvline(gcv.best_params_["model__max_depth"], c="C1")
-    ax.axhline(0.5, color="grey", linestyle="--")
-    ax.grid(True)
-    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
+    mean = cv_results[f"mean_test_{refit}"]
+    std = cv_results[f"std_test_{refit}"]
 
-    # perform prediction using the best params
+    fig, ax = plt.subplots(figsize=(9, 6))
+    if model_type == "elasticnet":
+        for ratio in sorted(cv_results["param_model__l1_ratio"].unique()):
+            subset = cv_results[cv_results["param_model__l1_ratio"] == ratio]
+            ax.plot(subset["param_model__alpha"], subset[f"mean_test_{refit}"], label=f"l1_ratio={ratio}")
+            ax.fill_between(subset["param_model__alpha"],
+                            subset[f"mean_test_{refit}"] - subset[f"std_test_{refit}"],
+                            subset[f"mean_test_{refit}"] + subset[f"std_test_{refit}"], alpha=0.1)
+    else:
+        ax.plot(cv_results["param_model__alpha"], mean, marker="o")
+        ax.fill_between(cv_results["param_model__alpha"], mean - std, mean + std, alpha=0.15)
+
+    ax.set_xscale("log")
+    ax.set_xlabel("alpha (regularization strength)")
+    ax.set_ylabel(refit)
+    ax.axvline(gcv.best_params_["model__alpha"], color="C1", linestyle="--", label="Best alpha")
+    ax.legend()
+    ax.grid(True)
+    ax.set_title(f"{model_type.capitalize()} Regression CV ({refit})")
+
+    plt.tight_layout()
+    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
+    plt.close(fig)
+
+    # --- Fit final model with best parameters ---
     pipe.set_params(**gcv.best_params_)
     pipe.fit(tr_X, tr_y)
 
+    # --- Visualize coefficients of best model ---
+    best_model = pipe.named_steps["model"]
+    best_coefs = pd.DataFrame(best_model.coef_, index=tr_X.columns, columns=["coefficient"])
+
+    non_zero = np.sum(best_coefs["coefficient"] != 0)
+    print(f"[Fold {split_idx}] {model_type}: Number of non-zero coefficients = {non_zero}")
+
+    non_zero_coefs = best_coefs.query("coefficient != 0")
+    if not non_zero_coefs.empty:
+        coef_order = non_zero_coefs.abs().sort_values("coefficient", ascending=True).index
+        fig, ax = plt.subplots(figsize=(8, 6))
+        non_zero_coefs.loc[coef_order].plot.barh(ax=ax, legend=False, color="C0")
+        ax.set_xlabel("Coefficient value")
+        ax.set_title(f"{model_type.capitalize()} Coefficients (Fold {split_idx})")
+        ax.grid(True, linestyle="--", alpha=0.6)
+        plt.subplots_adjust(left=0.3)
+        plt.tight_layout()
+        plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg")
+        plt.close(fig)
+
     return pipe
 
-def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
-    # choosing parameters by cross validation
+def svr(split_idx, tr_X, tr_y, refit, n_jobs):
+    """
+    Cross-validated Support Vector Regression (SVR) with RBF kernel.
+    Performs parameter tuning over C and visualizes CV performance.
+    """
+    # --- Cross-validation setup ---
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    model = LogisticRegression(
-        penalty='elasticnet', solver='saga', l1_ratio=0.5, 
-        C=1.0, max_iter=1000, class_weight="balanced", random_state=42
-    )
-    param_grid={"model__C": np.logspace(-3, 3, 7)}
-    pipe = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            ("model", model),
-        ]
-    )
-    scoring = {
-        "accuracy": "accuracy",
-        "f1": "f1_macro"
-    }
-    assert scoring.get(refit, False), f"{refit} is unsupported"
 
+    # --- Define model and parameter grid ---
+    model = SVR(C=1.0, kernel='rbf')
+    param_grid = {"model__C": np.logspace(-3, 3, 7)}
+
+    # --- Build pipeline ---
+    pipe = Pipeline([
+        ("scale", StandardScaler()),
+        ("model", model),
+    ])
+
+    # --- Define scoring metrics ---
+    scoring = {
+        "r2": "r2",
+        "neg_mse": "neg_mean_squared_error"
+    }
+    assert refit in scoring, f"{refit} is unsupported (choose from {list(scoring.keys())})"
+
+    # --- Grid search cross-validation ---
     gcv = GridSearchCV(
         pipe,
         param_grid=param_grid,
@@ -475,107 +547,34 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
         n_jobs=n_jobs,
     ).fit(tr_X, tr_y)
 
-    # plot cross validation results
+    # --- Plot cross-validation results ---
     cv_results = pd.DataFrame(gcv.cv_results_)
     Cs = cv_results['param_model__C']
     mean = cv_results[f'mean_test_{refit}']
     std = cv_results[f'std_test_{refit}']
+
     fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(Cs, mean)
+    ax.plot(Cs, mean, marker="o")
     ax.fill_between(Cs, mean - std, mean + std, alpha=0.15)
     ax.set_xscale("log")
     ax.set_ylabel(refit)
-    ax.set_xlabel("C")
-    ax.axvline(gcv.best_params_["model__C"], c="C1")
-    ax.axhline(0.5, color="grey", linestyle="--")
-    ax.grid(True)
+    ax.set_xlabel("C (Regularization Strength)")
+    ax.axvline(gcv.best_params_["model__C"], c="C1", linestyle="--", label="Best C")
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend()
+    ax.set_title(f"SVR Cross-Validation ({refit})")
+
+    plt.tight_layout()
     plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
+    plt.close(fig)
 
-    # Visualize coefficients of the best estimator
-    # best_model = gcv.best_estimator_.named_steps["model"]
-    # best_coefs = pd.DataFrame(best_model.coef_.ravel(), index=tr_X.columns, columns=["coefficient"])
-    # non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
-    # print(f"Number of non-zero coefficients: {non_zero}")
-
-    # non_zero_coefs = best_coefs.query("coefficient != 0")
-    # coef_order = non_zero_coefs.abs().sort_values("coefficient").index
-    # top10 = coef_order[:10]
-
-    # _, ax = plt.subplots(figsize=(8, 6))
-    # non_zero_coefs.loc[top10].plot.barh(ax=ax, legend=False)
-    # ax.set_xlabel("coefficient")
-    # ax.grid(True)
-    # plt.subplots_adjust(left=0.3)
-    # plt.savefig(f"analysis/a05_outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
-
-    # perform prediction using the best params
+    # --- Fit final model using best parameters ---
     pipe.set_params(**gcv.best_params_)
     pipe.fit(tr_X, tr_y)
+    print(f"[Fold {split_idx}] Best SVR params: {gcv.best_params_}")
+
     return pipe
 
-def svc(split_idx, tr_X, tr_y, refit, n_jobs):
-    # choosing parameters by cross validation
-    cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    model = SVC(C=1, kernel='rbf', class_weight="balanced", probability=True, random_state=42)
-    param_grid={"model__C": np.logspace(-3, 3, 7)}
-    pipe = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            ("model", model),
-        ]
-    )
-    scoring = {
-        "accuracy": "accuracy",
-        "f1": "f1_macro"
-    }
-    assert scoring.get(refit, False), f"{refit} is unsupported"
-
-    gcv = GridSearchCV(
-        pipe,
-        param_grid=param_grid,
-        cv=cv,
-        scoring=scoring,
-        refit=refit,
-        n_jobs=n_jobs,
-    ).fit(tr_X, tr_y)
-
-    # plot cross validation results
-    cv_results = pd.DataFrame(gcv.cv_results_)
-    Cs = cv_results['param_model__C']
-    mean = cv_results[f'mean_test_{refit}']
-    std = cv_results[f'std_test_{refit}']
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(Cs, mean)
-    ax.fill_between(Cs, mean - std, mean + std, alpha=0.15)
-    ax.set_xscale("log")
-    ax.set_ylabel(refit)
-    ax.set_xlabel("C")
-    ax.axvline(gcv.best_params_["model__C"], c="C1")
-    ax.axhline(0.5, color="grey", linestyle="--")
-    ax.grid(True)
-    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
-
-    # Visualize coefficients of the best estimator
-    # best_model = gcv.best_estimator_.named_steps["model"]
-    # best_coefs = pd.DataFrame(best_model.coef_.ravel(), index=tr_X.columns, columns=["coefficient"])
-    # non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
-    # print(f"Number of non-zero coefficients: {non_zero}")
-
-    # non_zero_coefs = best_coefs.query("coefficient != 0")
-    # coef_order = non_zero_coefs.abs().sort_values("coefficient").index
-    # top10 = coef_order[:10]
-
-    # _, ax = plt.subplots(figsize=(8, 6))
-    # non_zero_coefs.loc[top10].plot.barh(ax=ax, legend=False)
-    # ax.set_xlabel("coefficient")
-    # ax.grid(True)
-    # plt.subplots_adjust(left=0.3)
-    # plt.savefig(f"analysis/a05_outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
-
-    # perform prediction using the best params
-    pipe.set_params(**gcv.best_params_)
-    pipe.fit(tr_X, tr_y)
-    return pipe
 
 def load_radiomics(
         split_idx,
@@ -677,7 +676,7 @@ def load_pathomics(
         pathomics_X = pd.concat([pathomics_X, prop_X], axis=1)
     return pathomics_X
 
-def phenotype_classification(
+def signature_regression(
     split_path,
     radiomics_keys=None,
     pathomics_keys=None,
@@ -687,11 +686,14 @@ def phenotype_classification(
     radiomics_aggregated_mode=None,
     pathomics_aggregation=False,
     pathomics_aggregated_mode=None,
-    model="LR",
+    model="ElasticNet",
     refit="roc_auc",
     feature_selection=True,
     feature_var_threshold=1e-4,
     n_selected_features=64,
+    target_selection=True,
+    target_selection_cv=5,
+    r2_threshold=0.05,
     use_graph_properties=False
     ):
     splits = joblib.load(split_path)
@@ -820,6 +822,19 @@ def phenotype_classification(
         print("Selected testing omics:", te_X.shape)
         print(te_X.head())
 
+        # target selection
+        if target_selection:
+            predictable_targets = []
+            for col in tr_y.columns:
+                model = Ridge(random_state=42)
+                r2 = cross_val_score(model, tr_X, tr_y[col], cv=5, scoring='r2').mean()
+                if r2 >= r2_threshold:
+                    predictable_targets.append(col)
+                else:
+                    print(f"Target '{col}' removed (R²={r2:.3f} < threshold={r2_threshold})")
+
+            tr_y_selected = tr_y[predictable_targets].copy()
+
         # feature selection
         if feature_selection:
             print("Selecting features...")
@@ -832,7 +847,7 @@ def phenotype_classification(
             te_X = te_X[selected_names]
             if n_selected_features is not None:
                 print("Selecting univariate feature...")
-                selector = SelectKBest(score_func=f_classif, k=n_selected_features)
+                selector = SelectKBest(score_func=f_regression, k=n_selected_features)
                 _ = selector.fit_transform(tr_X, tr_y["label"])
                 selected_mask = selector.get_support()
                 selected_names = tr_X.columns[selected_mask]
@@ -841,41 +856,54 @@ def phenotype_classification(
             print(f"Selected features: {len(tr_X.columns)}")
 
         # model selection
-        print("Selecting classifier...")
+        print("Selecting regressor...")
         if model == "RF":
-            predictor = randomforest(split_idx, tr_X, tr_y['label'], refit, n_jobs)
-        elif model == "XG":
-            predictor = xgboost(split_idx, tr_X, tr_y['label'], refit, n_jobs)
-        elif model == "LR":
-            predictor = logisticregression(split_idx, tr_X, tr_y['label'], refit, n_jobs)
-        elif model == "SVC":
-            predictor = svc(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+            predictor = randomforest_regression(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+        elif model == "Ridge":
+            predictor = linearregression(split_idx, tr_X, tr_y['label'], refit, n_jobs, model_type='ridge')
+        elif model == "LASSO":
+            predictor = linearregression(split_idx, tr_X, tr_y['label'], refit, n_jobs, model_type='lasso')
+        elif model == "ElasticNet":
+            predictor = linearregression(split_idx, tr_X, tr_y['label'], refit, n_jobs, model_type='elasticnet')
+        elif model == "SVR":
+            predictor, _ = svr(split_idx, tr_X, tr_y['label'], refit, n_jobs)
 
+        # Perform prediction
         pred = predictor.predict(te_X)
-        prob = predictor.predict_proba(te_X)
-        num_class = prob.shape[1]
+        label = te_y.to_numpy(dtype=float)  # te_y can be multi-target (n_samples, n_targets)
 
-        label = te_y["label"].to_numpy(dtype=int)
-        acc = acc_scorer(label, pred)
-        f1 = f1_scorer(label, pred, average="macro")
+        # Ensure 2D arrays
+        if pred.ndim == 1:
+            pred = pred.reshape(-1, 1)
+        if label.ndim == 1:
+            label = label.reshape(-1, 1)
 
-        prob = prob[:, 1] if prob.shape[1] == 2 else prob
-        auroc = auroc_scorer(label, prob, multi_class="ovr")
+        num_targets = pred.shape[1]
 
-        if num_class == 2:
-            auprc = auprc_scorer(label, prob)
-        else:
-            onehot = np.eye(num_class)[label]
-            auprc = auprc_scorer(onehot, prob)
-        
+        # Compute metrics per target
+        r2_list = []
+        rmse_list = []
+        mae_list = []
+        var_explained_list = []
+
+        for i in range(num_targets):
+            r2 = r2_score(label[:, i], pred[:, i])
+            rmse = np.sqrt(mean_squared_error(label[:, i], pred[:, i]))
+            mae = mean_absolute_error(label[:, i], pred[:, i])
+            var_explained = 1 - np.var(label[:, i] - pred[:, i]) / np.var(label[:, i])
+
+            r2_list.append(r2)
+            rmse_list.append(rmse)
+            mae_list.append(mae)
+            var_explained_list.append(var_explained)
+
+        # Optionally, average across targets
         scores_dict = {
-            "acc": acc,
-            "f1": f1,
-            "auroc": auroc,
-            "auprc": auprc
+            "r2": np.array(r2_list),
+            "rmse": np.array(rmse_list),
+            "mae": np.array(mae_list),
+            "var_explained": np.array(var_explained_list),
         }
-
-        print(f"Updating predicted results on fold {split_idx}")
         predict_results.update({f"Fold {split_idx}": scores_dict})
     print(predict_results)
     for k in scores_dict.keys():
@@ -890,7 +918,7 @@ def generate_data_split(
         valid: float,
         test: float,
         num_folds: int,
-        seed: int = 5,
+        seed: int = 5
 ):
     """Helper to generate splits
     Args:
@@ -904,65 +932,38 @@ def generate_data_split(
     Returns:
         splits (list): a list of folds, each fold consists of train, valid, and test splits
     """
-    assert train + valid + test - 1.0 < 1.0e-10, "Ratios must sum to 1.0"
+    assert train + valid <= 1.0, "train + valid ratio must be <= 1.0"
 
-    outer_splitter = StratifiedShuffleSplit(
-        n_splits=num_folds,
-        train_size=train + valid,
-        random_state=seed,
-    )
-    inner_splitter = StratifiedShuffleSplit(
-        n_splits=1,
-        train_size=train / (train + valid),
-        random_state=seed,
-    )
+    x = np.array(x)
+    y = np.array(y)
 
-    l = np.array(y)
-
+    outer_splitter = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
     splits = []
-    for train_valid_idx, test_idx in outer_splitter.split(x, l):
-        test_x = [x[idx] for idx in test_idx]
-        test_y = [y[idx] for idx in test_idx]
-        x_ = [x[idx] for idx in train_valid_idx]
-        y_ = [y[idx] for idx in train_valid_idx]
-        l_ = [l[idx] for idx in train_valid_idx]
 
-        if valid > 0:
-            train_idx, valid_idx = next(iter(inner_splitter.split(x_, l_)))
-            valid_x = [x_[idx] for idx in valid_idx]
-            valid_y = [y_[idx] for idx in valid_idx]
-            train_x = [x_[idx] for idx in train_idx]
-            train_y = [y_[idx] for idx in train_idx]
-        else:
-            train_x, train_y = x_, y_
+    for train_valid_idx, test_idx in outer_splitter.split(x):
+        # Split test set
+        test_x, test_y = x[test_idx], y[test_idx]
+        train_valid_x, train_valid_y = x[train_valid_idx], y[train_valid_idx]
 
-        train_x_subjects = []
-        for i in train_x: train_x_subjects.append(i[0])
-        test_x_subjects = []
-        for i in test_x: test_x_subjects.append(i[0])
+        # Optional validation split
         if valid > 0:
-            valid_x_subjects = []
-            for i in valid_x: valid_x_subjects.append(i[0])
-            assert len(set(train_x_subjects).intersection(set(valid_x_subjects))) == 0
-            assert len(set(valid_x_subjects).intersection(set(test_x_subjects))) == 0
+            n_train_valid = len(train_valid_x)
+            n_valid = int(n_train_valid * valid / (train + valid))
+            valid_x, valid_y = train_valid_x[:n_valid], train_valid_y[:n_valid]
+            train_x, train_y = train_valid_x[n_valid:], train_valid_y[n_valid:]
         else:
-            assert len(set(train_x_subjects).intersection(set(test_x_subjects))) == 0
+            train_x, train_y = train_valid_x, train_valid_y
+            valid_x, valid_y = None, None
 
+        split_dict = {
+            "train": list(zip(train_x, train_y)),
+            "test": list(zip(test_x, test_y))
+        }
         if valid > 0:
-            splits.append(
-                {
-                    "train": list(zip(train_x, train_y)),
-                    "valid": list(zip(valid_x, valid_y)),
-                    "test": list(zip(test_x, test_y)),
-                }
-            )
-        else:
-            splits.append(
-                {
-                    "train": list(zip(train_x, train_y)),
-                    "test": list(zip(test_x, test_y)),
-                }
-            )
+            split_dict["valid"] = list(zip(valid_x, valid_y))
+
+        splits.append(split_dict)
+
     return splits
 
 def run_once(
@@ -1056,58 +1057,43 @@ def run_once(
                     logging_dict[f"train-EMA-{val_name}"] = val
             elif "infer" in loader_name and any(v in loader_name for v in ["train", "valid"]):
                 output = list(zip(*step_output))
-                logit, label = output
-                logit = np.array(logit).squeeze()
+                preds, label = output
+                preds = np.array(preds).squeeze()
                 label = np.array(label).squeeze()
-                assert logit.ndim == 2
 
-                if not arch_kwargs['binary_cls']:
-                    prob = softmax(logit, axis=1)
-                    num_class = prob.shape[1]
-                    pred = np.argmax(prob, axis=1)
+                # Ensure 2D
+                if preds.ndim == 1:
+                    preds = preds.reshape(-1, 1)
+                if label.ndim == 1:
+                    label = label.reshape(-1, 1)
 
-                    val = acc_scorer(label, pred)
-                    logging_dict[f"{loader_name}-acc"] = val
+                num_targets = preds.shape[1]
 
-                    val = f1_scorer(label, pred)
-                    logging_dict[f"{loader_name}-f1"] = val
+                r2_list = []
+                rmse_list = []
+                mae_list = []
 
-                    prob = prob[:, 1] if num_class == 2 else prob
-                    val = auroc_scorer(label, prob, multi_class="ovr")
-                    logging_dict[f"{loader_name}-auroc"] = val
+                for i in range(num_targets):
+                    r2 = r2_score(label[:, i], preds[:, i])
+                    rmse = np.sqrt(mean_squared_error(label[:, i], preds[:, i]))
+                    mae = mean_absolute_error(label[:, i], preds[:, i])
 
-                    if num_class == 2:
-                        val = auprc_scorer(label, prob)
-                    else:
-                        onehot = np.eye(num_class)[label]
-                        val = auprc_scorer(onehot, prob)
-                    logging_dict[f"{loader_name}-auprc"] = val
-                else:
-                    prob = 1 / (1 + np.exp(-logit))
-                    num_class = prob.shape[1]
-                    pred = (prob > 0.5).astype(np.int8)
+                    r2_list.append(r2)
+                    rmse_list.append(rmse)
+                    mae_list.append(mae)
 
-                    acc_list = []
-                    for i in range(num_class):
-                        acc_list.append(acc_scorer(label[:, i], pred[:, i]))
-                    logging_dict[f"{loader_name}-acc"] = sum(acc_list) / num_class
+                # Average over multiple targets if necessary
+                logging_dict[f"{loader_name}-r2"] = np.mean(r2_list)
+                logging_dict[f"{loader_name}-rmse"] = np.mean(rmse_list)
+                logging_dict[f"{loader_name}-mae"] = np.mean(mae_list)
 
-                    f1_list = []
-                    for i in range(num_class):
-                        f1_list.append(f1_scorer(label[:, i], pred[:, i]))
-                    logging_dict[f"{loader_name}-f1"] = sum(f1_list) / num_class
+                # Optional: Pearson correlation
+                if num_targets == 1:
+                    corr = np.corrcoef(label[:, 0], preds[:, 0])[0, 1]
+                    logging_dict[f"{loader_name}-corr"] = corr
 
-                    auroc_list = []
-                    for i in range(num_class):
-                        auroc_list.append(auroc_scorer(label[:, i], pred[:, i]))
-                    logging_dict[f"{loader_name}-auroc"] = sum(auroc_list) / num_class
 
-                    auprc_list = []
-                    for i in range(num_class):
-                        auprc_list.append(auprc_scorer(label[:, i], pred[:, i]))
-                    logging_dict[f"{loader_name}-auprc"] = sum(auroc_list) / num_class
-
-                logging_dict[f"{loader_name}-raw-logit"] = logit
+                logging_dict[f"{loader_name}-raw-pred"] = preds
                 logging_dict[f"{loader_name}-raw-label"] = label
             for val_name, val in logging_dict.items():
                 if "raw" not in val_name:
@@ -1175,8 +1161,7 @@ def training(
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
         "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION'],
-        'binary_cls': arch_opt['BINARY_CLS']
+        "aggregation": arch_opt['AGGREGATION']
     }
     omics_name = "_".join(arch_opt['OMICS'])
     if arch_opt['BayesGNN']:
@@ -1246,8 +1231,7 @@ def inference(
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
         "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION'],
-        'binary_cls': arch_opt['BINARY_CLS']
+        "aggregation": arch_opt['AGGREGATION']
     }
     omics_name = "_".join(arch_opt['OMICS'])
 
@@ -1294,33 +1278,41 @@ def inference(
                 save_path = f"{save_dir}/{save_name}"
                 np.save(save_path, features[i])
     
-        # * Calculate split statistics
-        logits = np.array(logits).squeeze()
-        prob = softmax(logits, axis=1)
-        num_class = prob.shape[1]
-        label = np.array([v[1] for v in split["test"]])
-        if num_class <= 2:
-            label = (label > 0).astype(np.int32)
-            onehot = label
-        else:
-            onehot = np.eye(num_class)[label]  
-        
-        ## compute per-class accuracy
-        pred = np.argmax(prob, axis=1)
-        uids = np.unique(label)
-        acc_scores = []
-        for i in range(len(uids)):
-            indices = label == uids[i]
-            score = acc_scorer(label[indices], pred[indices])
-            acc_scores.append(score)
+        # Convert logits to predictions
+        preds = np.array(logits).squeeze()
+        labels = np.array([v[1] for v in split["test"]]).squeeze()
 
+        # Ensure 2D arrays for multi-output regression
+        if preds.ndim == 1:
+            preds = preds.reshape(-1, 1)
+        if labels.ndim == 1:
+            labels = labels.reshape(-1, 1)
+
+        num_targets = preds.shape[1]
+
+        # Compute per-target metrics
+        r2_scores = []
+        rmse_scores = []
+        mae_scores = []
+
+        for i in range(num_targets):
+            r2 = r2_score(labels[:, i], preds[:, i])
+            rmse = np.sqrt(mean_squared_error(labels[:, i], preds[:, i]))
+            mae = mean_absolute_error(labels[:, i], preds[:, i])
+
+            r2_scores.append(r2)
+            rmse_scores.append(rmse)
+            mae_scores.append(mae)
+
+        # Save cumulative stats
         cum_stats.append(
             {
-                "acc": np.array(acc_scores),
-                "auroc": auroc_scorer(label, prob, average=None, multi_class="ovr"), 
-                "auprc": auprc_scorer(onehot, prob, average=None),
+                "r2": np.array(r2_scores),       # per-target R²
+                "rmse": np.array(rmse_scores),   # per-target RMSE
+                "mae": np.array(mae_scores),     # per-target MAE
             }
         )
+
         print(f"Fold-{split_idx}:", cum_stats[-1])
     acc_list = [stat["acc"] for stat in cum_stats]
     auroc_list = [stat["auroc"] for stat in cum_stats]
@@ -1366,8 +1358,7 @@ def test(
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
         "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION'],
-        'binary_cls': arch_opt['BINARY_CLS']
+        "aggregation": arch_opt['AGGREGATION']
     }
 
     # BayesGNN = True
@@ -1444,7 +1435,7 @@ if __name__ == "__main__":
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
     
-    y = df_outcome['PhenotypeClass'].to_numpy(dtype=np.float32).tolist()
+    y = df_outcome.to_numpy(dtype=np.float32).tolist()
 
     # split data set
     splits = generate_data_split(
@@ -1530,7 +1521,7 @@ if __name__ == "__main__":
             pathomics_keys = opt['PATHOMICS']['KEYS']
         else:
             pathomics_keys = None
-        phenotype_classification(
+        signature_regression(
             split_path=split_path,
             omics=opt['PREDICTION']['USED_OMICS']['VALUE'],
             n_jobs=opt['PREDICTION']['N_JOBS'],
