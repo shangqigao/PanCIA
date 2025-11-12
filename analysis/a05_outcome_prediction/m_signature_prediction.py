@@ -827,13 +827,12 @@ def signature_regression(
             predictable_targets = []
             for col in tr_y.columns:
                 model = Ridge(random_state=42)
-                r2 = cross_val_score(model, tr_X, tr_y[col], cv=5, scoring='r2').mean()
+                r2 = cross_val_score(model, tr_X, tr_y[col], cv=target_selection_cv, scoring='r2').mean()
                 if r2 >= r2_threshold:
                     predictable_targets.append(col)
                 else:
                     print(f"Target '{col}' removed (R²={r2:.3f} < threshold={r2_threshold})")
-
-            tr_y_selected = tr_y[predictable_targets].copy()
+            tr_y = tr_y[predictable_targets].copy()
 
         # feature selection
         if feature_selection:
