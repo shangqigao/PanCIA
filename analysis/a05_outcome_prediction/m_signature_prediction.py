@@ -24,14 +24,14 @@ import torch
 import torchbnn as bnn
 
 from scipy.special import softmax
-from scipy.stats import zscore
+from scipy.stats import zscore, ttest_ind
 from torch_geometric.loader import DataLoader
 from tiatoolbox import logger
 from tiatoolbox.utils.misc import save_as_json
 
-from sklearn.model_selection import GridSearchCV, KFold, cross_val_score
+from sklearn.model_selection import GridSearchCV, KFold, cross_val_score, cross_val_predict
 from sklearn.feature_selection import SelectKBest, f_regression, VarianceThreshold
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestRegressor
@@ -41,6 +41,7 @@ from sklearn.svm import SVR
 from sklearn.metrics import r2_score
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
+from sklearn.decomposition import PCA
 
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
@@ -281,7 +282,7 @@ def load_wsi_level_features(idx, wsi_feature_paths, pooling="mean"):
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
-def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, signature_ids=None):
+def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, signature_ids=None, pooling='mean'):
     if outcome == "GeneProgrames":
         outcome_file = f"{outcome_dir}/signatures/gene_programs/gene_programs.csv"
         df = pd.read_csv(outcome_file)
@@ -325,6 +326,14 @@ def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, signature_id
     else:
         raise NotImplementedError
 
+    if pooling == 'mean':
+        df_matched = df_matched.groupby("SubjectID", as_index=False).mean(numeric_only=True)
+    elif pooling == 'max':
+        df_matched = df_matched.groupby("SubjectID", as_index=False).max(numeric_only=True)
+    elif pooling == 'min':
+        df_matched = df_matched.groupby("SubjectID", as_index=False).min(numeric_only=True)
+    else:
+        raise NotImplementedError
     logging.info(f"Phenotype data strcuture: {df_matched.shape}")
 
     return df_matched
@@ -693,20 +702,22 @@ def signature_regression(
     n_selected_features=64,
     target_selection=True,
     target_selection_cv=5,
-    r2_threshold=0.05,
+    pvalue_threshold=0.05,
     use_graph_properties=False
     ):
     splits = joblib.load(split_path)
     predict_results = {}
+    target_has_selected = False
+    predictable_targets = []
     for split_idx, split in enumerate(splits):
         print(f"Performing cross-validation on fold {split_idx}...")
         data_tr, data_va, data_te = split["train"], split["valid"], split["test"]
         data_tr = data_tr + data_va
 
-        tr_y = np.array([p[1] for p in data_tr])
-        tr_y = pd.DataFrame({'label': tr_y})
-        te_y = np.array([p[1] for p in data_te])
-        te_y = pd.DataFrame({'label': te_y})
+        tr_y = [p[1] for p in data_tr]
+        tr_y = pd.DataFrame(tr_y)
+        te_y = [p[1] for p in data_te]
+        te_y = pd.DataFrame(te_y)
 
         # Concatenate multi-omics if required
         if omics == "radiopathomics":
@@ -822,16 +833,30 @@ def signature_regression(
         print("Selected testing omics:", te_X.shape)
         print(te_X.head())
 
+        # Normalization
+        scaler = StandardScaler()
+        tr_X = pd.DataFrame(scaler.fit_transform(tr_X), columns=tr_X.columns,index=tr_X.index)
+        te_X = pd.DataFrame(scaler.transform(te_X), columns=te_X.columns, index=te_X.index)
+
         # target selection
         if target_selection:
-            predictable_targets = []
-            for col in tr_y.columns:
-                model = Ridge(random_state=42)
-                r2 = cross_val_score(model, tr_X, tr_y[col], cv=target_selection_cv, scoring='r2').mean()
-                if r2 >= r2_threshold:
-                    predictable_targets.append(col)
-                else:
-                    print(f"Target '{col}' removed (R²={r2:.3f} < threshold={r2_threshold})")
+            if not target_has_selected:
+                print("Selecting targets...")
+                for col in tr_y.columns:
+                    y_true = tr_y[col].values
+                    model = make_pipeline(PCA(n_components=64), Ridge(random_state=42))
+                    y_pred = cross_val_predict(model, tr_X, y_true, cv=target_selection_cv)
+                    group_high = y_true[y_pred >= np.mean(y_pred)]
+                    group_low = y_true[y_pred < np.mean(y_pred)]
+                    stat, pval = ttest_ind(group_high, group_low, equal_var=False)
+                    if pval < pvalue_threshold:
+                        predictable_targets.append(col)
+                    else:
+                        print(f"Target '{col}' removed (p={pval:.3f})")
+
+                target_has_selected = True
+
+            print(f'Selected targets: {len(predictable_targets)}')
             tr_y = tr_y[predictable_targets].copy()
 
         # feature selection
@@ -847,7 +872,7 @@ def signature_regression(
             if n_selected_features is not None:
                 print("Selecting univariate feature...")
                 selector = SelectKBest(score_func=f_regression, k=n_selected_features)
-                _ = selector.fit_transform(tr_X, tr_y["label"])
+                _ = selector.fit_transform(tr_X, tr_y)
                 selected_mask = selector.get_support()
                 selected_names = tr_X.columns[selected_mask]
                 tr_X = tr_X[selected_names]
@@ -857,15 +882,15 @@ def signature_regression(
         # model selection
         print("Selecting regressor...")
         if model == "RF":
-            predictor = randomforest_regression(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+            predictor = randomforest_regression(split_idx, tr_X, tr_y, refit, n_jobs)
         elif model == "Ridge":
-            predictor = linearregression(split_idx, tr_X, tr_y['label'], refit, n_jobs, model_type='ridge')
+            predictor = linearregression(split_idx, tr_X, tr_y, refit, n_jobs, model_type='ridge')
         elif model == "LASSO":
-            predictor = linearregression(split_idx, tr_X, tr_y['label'], refit, n_jobs, model_type='lasso')
+            predictor = linearregression(split_idx, tr_X, tr_y, refit, n_jobs, model_type='lasso')
         elif model == "ElasticNet":
-            predictor = linearregression(split_idx, tr_X, tr_y['label'], refit, n_jobs, model_type='elasticnet')
+            predictor = linearregression(split_idx, tr_X, tr_y, refit, n_jobs, model_type='elasticnet')
         elif model == "SVR":
-            predictor, _ = svr(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+            predictor, _ = svr(split_idx, tr_X, tr_y, refit, n_jobs)
 
         # Perform prediction
         pred = predictor.predict(te_X)
@@ -1427,14 +1452,16 @@ if __name__ == "__main__":
     df_outcome = prepare_patient_outcome(
         outcome_dir=opt['SAVE_OUTCOME_dir'],
         subject_ids=list(omics_info['omics_paths'].keys()),
-        outcome=opt['OUTCOME']['VALUE']
+        outcome=opt['OUTCOME']['VALUE'],
+        signature_ids=opt['OUTCOME']['SIGNATURE_IDS'],
+        pooling=opt['OUTCOME']['POOLING']
     )
     subject_ids = df_outcome['SubjectID'].to_list()
     logger.info(f"Found {len(subject_ids)} subjects with phenotypes")
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
     
-    y = df_outcome.to_numpy(dtype=np.float32).tolist()
+    y = df_outcome.drop(columns=['SubjectID']).to_dict(orient='records')
 
     # split data set
     splits = generate_data_split(

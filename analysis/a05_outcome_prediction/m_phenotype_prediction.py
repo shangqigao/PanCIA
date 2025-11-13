@@ -820,6 +820,11 @@ def phenotype_classification(
         print("Selected testing omics:", te_X.shape)
         print(te_X.head())
 
+        # Normalization
+        scaler = StandardScaler()
+        tr_X = pd.DataFrame(scaler.fit_transform(tr_X), columns=tr_X.columns,index=tr_X.index)
+        te_X = pd.DataFrame(scaler.transform(te_X), columns=te_X.columns, index=te_X.index)
+        
         # feature selection
         if feature_selection:
             print("Selecting features...")

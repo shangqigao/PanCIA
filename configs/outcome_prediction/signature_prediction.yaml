@@ -5,7 +5,7 @@ OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "SignatureScore"
+  VALUE: "ImmuneSignatureScore"
   CHOICES:
     [
       "GeneProgrames",
@@ -15,6 +15,7 @@ OUTCOME:
       "StemScoreRNA",
     ]
   SIGNATURE_IDS: null
+  POOLING: 'mean'
 TASKS:
   TRAIN: False
   INFERENCE: False
@@ -53,7 +54,7 @@ RADIOMICS:
 # Define parameters of pathomics
 PATHOMICS:
   MODE:
-    VALUE: "UNI"
+    VALUE: "None"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
     SUFFIX:
       - "_graph.json"
@@ -110,7 +111,7 @@ TEST:
 
 PREDICTION:
   USED_OMICS:
-    VALUE: "radiopathomics"
+    VALUE: "radiomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:
