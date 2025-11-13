@@ -1562,6 +1562,9 @@ if __name__ == "__main__":
             feature_selection=opt['PREDICTION']['FEATURE_SELECTION']['VALUE'],
             feature_var_threshold=opt['PREDICTION']['FEATURE_SELECTION']['VAR_THRESHOLD'],
             n_selected_features=opt['PREDICTION']['FEATURE_SELECTION']['NUM_FEATURES'],
+            target_selection=opt['PREDICTION']['TARGET_SELECTION']['VALUE'],
+            target_selection_cv=opt['PREDICTION']['TARGET_SELECTION']['CROSS_VALID'],
+            pvalue_threshold=opt['PREDICTION']['TARGET_SELECTION']['PVALUE_THRESHOLD'],
             use_graph_properties=opt['PREDICTION']['USE_GRAPH_PROPERTIES']
         )
 
