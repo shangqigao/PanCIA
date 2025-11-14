@@ -41,7 +41,13 @@ from sklearn.svm import SVR
 from sklearn.metrics import r2_score
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import average_precision_score as auprc_scorer
+from sklearn.metrics import roc_auc_score as auroc_scorer
+from sklearn.metrics import balanced_accuracy_score as acc_scorer
+from sklearn.metrics import f1_score as f1_scorer
 from sklearn.decomposition import PCA
+from lifelines.statistics import logrank_test
+from lifelines import KaplanMeierFitter
 
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
@@ -288,43 +294,32 @@ def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, signature_id
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
-        if signature_ids is not None:
-            assert isinstance(signature_ids, list), "signature ids should be list"
-            df_matched = df_matched[signature_ids]
     elif outcome == "HRDscore":
         outcome_file = f"{outcome_dir}/signatures/HRD_score/HRD_score.csv"
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
-        if signature_ids is not None:
-            assert isinstance(signature_ids, list), "signature ids should be list"
-            df_matched = df_matched[signature_ids]
     elif outcome == "ImmuneSignatureScore":
         outcome_file = f"{outcome_dir}/signatures/immune_signature_score/immune_signature_score.csv"
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
-        if signature_ids is not None:
-            assert isinstance(signature_ids, list), "signature ids should be list"
-            df_matched = df_matched[signature_ids]
     elif outcome == "StemnessScoreDNA":
         outcome_file = f"{outcome_dir}/signatures/stemness_score_DNA/stemness_scores_DNAmeth.csv"
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
-        if signature_ids is not None:
-            assert isinstance(signature_ids, list), "signature ids should be list"
-            df_matched = df_matched[signature_ids]
     elif outcome == "StemScoreRNA":
         outcome_file = f"{outcome_dir}/signatures/stemness_score_RNA/stemness_scores_RNAexp.csv"
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
-        if signature_ids is not None:
-            assert isinstance(signature_ids, list), "signature ids should be list"
-            df_matched = df_matched[signature_ids]
     else:
         raise NotImplementedError
+    
+    if signature_ids is not None:
+        assert isinstance(signature_ids, list), "signature ids should be list"
+        df_matched = df_matched[["SubjectID"] + signature_ids]
 
     if pooling == 'mean':
         df_matched = df_matched.groupby("SubjectID", as_index=False).mean(numeric_only=True)
@@ -336,7 +331,14 @@ def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, signature_id
         raise NotImplementedError
     logging.info(f"Phenotype data strcuture: {df_matched.shape}")
 
-    return df_matched
+    clinical_file = f"{outcome_dir}/phenotypes/clinical_data/survival_data.csv"
+    df = pd.read_csv(clinical_file)
+    df_clinical = df[df["_PATIENT"].isin(df_matched["SubjectID"])]
+    df_clinical = df_clinical.drop_duplicates(subset="_PATIENT", keep="first")
+    df_clinical = df_clinical.set_index("_PATIENT").loc[df_matched["SubjectID"]].reset_index()
+    logging.info(f"Clinical data strcuture: {df_clinical.shape}")
+
+    return df_matched, df_clinical
 
 def plot_coefficients(coefs, n_highlight):
     _, ax = plt.subplots(figsize=(9, 6))
@@ -501,23 +503,49 @@ def linearregression(split_idx, tr_X, tr_y, refit, n_jobs, model_type="ridge"):
 
     # --- Visualize coefficients of best model ---
     best_model = pipe.named_steps["model"]
-    best_coefs = pd.DataFrame(best_model.coef_, index=tr_X.columns, columns=["coefficient"])
 
-    non_zero = np.sum(best_coefs["coefficient"] != 0)
-    print(f"[Fold {split_idx}] {model_type}: Number of non-zero coefficients = {non_zero}")
+    if best_model.coef_.ndim == 1:
+        best_coefs = pd.DataFrame(best_model.coef_, index=tr_X.columns, columns=["target"])
+    else:
+        target_names = tr_y.columns if hasattr(tr_y, "columns") else [f"target_{i}" for i in range(best_model.coef_.shape[0])]
+        best_coefs = pd.DataFrame(best_model.coef_.T, index=tr_X.columns, columns=target_names)
 
-    non_zero_coefs = best_coefs.query("coefficient != 0")
-    if not non_zero_coefs.empty:
-        coef_order = non_zero_coefs.abs().sort_values("coefficient", ascending=True).index
-        fig, ax = plt.subplots(figsize=(8, 6))
-        non_zero_coefs.loc[coef_order].plot.barh(ax=ax, legend=False, color="C0")
-        ax.set_xlabel("Coefficient value")
-        ax.set_title(f"{model_type.capitalize()} Coefficients (Fold {split_idx})")
-        ax.grid(True, linestyle="--", alpha=0.6)
-        plt.subplots_adjust(left=0.3)
-        plt.tight_layout()
-        plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg")
-        plt.close(fig)
+    # Select only features with any non-zero coefficient
+    non_zero_mask = (best_coefs != 0).any(axis=1)
+    non_zero_coefs = best_coefs[non_zero_mask]
+
+    # Sort features by max absolute coefficient across targets and take top 10
+    coef_order = non_zero_coefs.abs().max(axis=1).sort_values(ascending=False).head(10).index
+    top10_coefs = non_zero_coefs.loc[coef_order]
+
+    # Plot setup
+    y = np.arange(len(top10_coefs))[::-1]
+    num_targets = len(top10_coefs.columns)
+    bar_width = 0.8 / num_targets
+
+    fig, ax = plt.subplots(figsize=(10, max(6, len(top10_coefs) * 0.5)))
+
+    # Use a diverging colormap
+    cmap = plt.get_cmap("seismic")
+
+    for i, target in enumerate(top10_coefs.columns):
+        coef_values = top10_coefs[target]
+
+        # Map target index to colormap: i=0 -> 0.2, i=max -> 0.8
+        norm_i = 0.2 + 0.6 * i / max(1, num_targets-1)  # avoid 0/0 if one target
+        colors = [cmap(norm_i) for _ in coef_values]
+        ax.barh(y + i*bar_width, coef_values, height=bar_width, color=colors, edgecolor="k", label=target)
+
+    ax.set_yticks(y + bar_width*(num_targets-1)/2)
+    ax.set_yticklabels(top10_coefs.index)
+    ax.set_xlabel("Coefficient value")
+    ax.set_title(f"{model_type.capitalize()} Top10 Coefficients (Fold {split_idx})")
+    ax.legend()
+    ax.grid(True, linestyle="--", alpha=0.6)
+
+    plt.tight_layout()
+    plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg")
+    plt.close(fig)
 
     return pipe
 
@@ -685,6 +713,31 @@ def load_pathomics(
         pathomics_X = pd.concat([pathomics_X, prop_X], axis=1)
     return pathomics_X
 
+def multioutput_f_regression(X, Y):
+    """
+    Computes F-scores for each feature by averaging F-scores across all outputs.
+    Y can be (n_samples,) or (n_samples, n_outputs).
+    """
+    if Y.ndim == 1:
+        # Single target → standard f_regression
+        return f_regression(X, Y)
+
+    # Multi-output case
+    n_outputs = Y.shape[1]
+    f_scores = []
+    p_values = []
+
+    for i in range(n_outputs):
+        f_i, p_i = f_regression(X, Y[:, i])
+        f_scores.append(f_i)
+        p_values.append(p_i)
+
+    # Aggregate scores across outputs
+    f_scores = np.mean(f_scores, axis=0)     # or np.max(...)
+    p_values = np.mean(p_values, axis=0)
+
+    return f_scores, p_values
+
 def signature_regression(
     split_path,
     radiomics_keys=None,
@@ -696,7 +749,7 @@ def signature_regression(
     pathomics_aggregation=False,
     pathomics_aggregated_mode=None,
     model="ElasticNet",
-    refit="roc_auc",
+    refit="r2",
     feature_selection=True,
     feature_var_threshold=1e-4,
     n_selected_features=64,
@@ -709,15 +762,20 @@ def signature_regression(
     predict_results = {}
     target_has_selected = False
     predictable_targets = []
+    risk_results = {"risk": [], "event": [], "duration": []}
     for split_idx, split in enumerate(splits):
         print(f"Performing cross-validation on fold {split_idx}...")
         data_tr, data_va, data_te = split["train"], split["valid"], split["test"]
         data_tr = data_tr + data_va
 
-        tr_y = [p[1] for p in data_tr]
+        tr_y = [p[1]['signature'] for p in data_tr]
         tr_y = pd.DataFrame(tr_y)
-        te_y = [p[1] for p in data_te]
+        tr_y_clinical = [p[1]['clinical'] for p in data_tr]
+        tr_y_clinical = pd.DataFrame(tr_y_clinical)
+        te_y = [p[1]['signature'] for p in data_te]
         te_y = pd.DataFrame(te_y)
+        te_y_clinical = [p[1]['clinical'] for p in data_te]
+        te_y_clinical = pd.DataFrame(te_y_clinical)
 
         # Concatenate multi-omics if required
         if omics == "radiopathomics":
@@ -843,21 +901,35 @@ def signature_regression(
             if not target_has_selected:
                 print("Selecting targets...")
                 for col in tr_y.columns:
+                    np.random.seed(42)
                     y_true = tr_y[col].values
-                    model = make_pipeline(PCA(n_components=64), Ridge(random_state=42))
-                    y_pred = cross_val_predict(model, tr_X, y_true, cv=target_selection_cv)
-                    group_high = y_true[y_pred >= np.mean(y_pred)]
-                    group_low = y_true[y_pred < np.mean(y_pred)]
-                    stat, pval = ttest_ind(group_high, group_low, equal_var=False)
+                    model_pred = make_pipeline(PCA(n_components=64), Ridge(random_state=42))
+                    cv_splitter = KFold(n_splits=target_selection_cv, shuffle=False)
+                    y_pred = cross_val_predict(model_pred, tr_X, y_true, cv=cv_splitter)
+                    r2 = np.corrcoef(y_true, y_pred)[0, 1] ** 2
+                    # logrank test
+                    pd_risk = pd.DataFrame({'risk': y_pred.tolist()})
+                    pd_risk['event'] = tr_y_clinical['OS']
+                    pd_risk['duration'] = tr_y_clinical['OS.time']
+                    mean_risk = pd_risk["risk"].mean()
+                    dem = pd_risk["risk"] > mean_risk
+                    test_results = logrank_test(
+                        pd_risk["duration"][dem], pd_risk["duration"][~dem], 
+                        pd_risk["event"][dem], pd_risk["event"][~dem], 
+                        alpha=.99
+                    )
+                    pval = test_results.p_value
                     if pval < pvalue_threshold:
                         predictable_targets.append(col)
+                        print(f"Target '{col}' selected (R²={r2:.3f}, p={pval:.3f})")
                     else:
-                        print(f"Target '{col}' removed (p={pval:.3f})")
-
+                        print(f"Target '{col}' removed (R²={r2:.3f}, p={pval:.3f})")
                 target_has_selected = True
 
             print(f'Selected targets: {len(predictable_targets)}')
+            print(predictable_targets)
             tr_y = tr_y[predictable_targets].copy()
+            te_y = te_y[predictable_targets].copy()
 
         # feature selection
         if feature_selection:
@@ -871,8 +943,8 @@ def signature_regression(
             te_X = te_X[selected_names]
             if n_selected_features is not None:
                 print("Selecting univariate feature...")
-                selector = SelectKBest(score_func=f_regression, k=n_selected_features)
-                _ = selector.fit_transform(tr_X, tr_y)
+                selector = SelectKBest(score_func=multioutput_f_regression, k=n_selected_features)
+                selector.fit(tr_X, tr_y)
                 selected_mask = selector.get_support()
                 selected_names = tr_X.columns[selected_mask]
                 tr_X = tr_X[selected_names]
@@ -890,7 +962,9 @@ def signature_regression(
         elif model == "ElasticNet":
             predictor = linearregression(split_idx, tr_X, tr_y, refit, n_jobs, model_type='elasticnet')
         elif model == "SVR":
-            predictor, _ = svr(split_idx, tr_X, tr_y, refit, n_jobs)
+            predictor = svr(split_idx, tr_X, tr_y, refit, n_jobs)
+        else:
+            raise NotImplementedError
 
         # Perform prediction
         pred = predictor.predict(te_X)
@@ -904,11 +978,19 @@ def signature_regression(
 
         num_targets = pred.shape[1]
 
+        risk_results["risk"] += pred.tolist()
+        risk_results["event"] += te_y_clinical['OS'].astype(int).tolist()
+        risk_results["duration"] += te_y_clinical['OS.time'].tolist()
+
         # Compute metrics per target
         r2_list = []
         rmse_list = []
         mae_list = []
         var_explained_list = []
+
+        # Containers for classification metrics
+        acc_list = []
+        f1_list = []
 
         for i in range(num_targets):
             r2 = r2_score(label[:, i], pred[:, i])
@@ -921,18 +1003,79 @@ def signature_regression(
             mae_list.append(mae)
             var_explained_list.append(var_explained)
 
+            # Convert to binary classes based on each target’s own mean
+            label_bin = (label[:, i] > np.mean(label[:, i])).astype(int)
+            pred_bin = (pred[:, i] > np.mean(pred[:, i])).astype(int)
+            acc = acc_scorer(label_bin, pred_bin)
+            f1 = f1_scorer(label_bin, pred_bin)
+
+            acc_list.append(acc)
+            f1_list.append(f1)
+
         # Optionally, average across targets
         scores_dict = {
-            "r2": np.array(r2_list),
-            "rmse": np.array(rmse_list),
-            "mae": np.array(mae_list),
-            "var_explained": np.array(var_explained_list),
+            "r2": r2_list,
+            "rmse": rmse_list,
+            "mae": mae_list,
+            "var_explained": var_explained_list,
+            "acc": acc_list,
+            "f1": f1_list
         }
         predict_results.update({f"Fold {split_idx}": scores_dict})
+    
+    # print avervae results across folds
     print(predict_results)
     for k in scores_dict.keys():
         arr = np.array([v[k] for v in predict_results.values()])
-        print(f"CV {k} mean+std", arr.mean(), arr.std())
+        print(f"CV {k} mean+std", arr.mean(axis=0), arr.std(axis=0))
+
+    # select the most predictable signature
+    pvalues = []
+    for i, column in enumerate(te_y.columns):
+        risk_results['score'] = [v[i] for v in risk_results['risk']]
+        pd_risk = pd.DataFrame(risk_results)
+        mean_risk = pd_risk["score"].mean()
+        dem = pd_risk["score"] > mean_risk
+        test_results = logrank_test(
+            pd_risk["duration"][dem], pd_risk["duration"][~dem], 
+            pd_risk["event"][dem], pd_risk["event"][~dem], 
+            alpha=.99
+        )
+        pvalue = test_results.p_value
+        pvalues.append(pvalue)
+    min_index = np.argmin(np.array(pvalues))
+    signature_name = te_y.columns[min_index]
+    risk_results['risk'] = [v[min_index] for v in risk_results['risk']]
+    pvalues = {k : v for k, v in zip(te_y.columns, pvalues)}
+    print("Signature p-values:", pvalues)
+
+    # plot survival curves
+    pd_risk = pd.DataFrame(risk_results)
+    mean_risk = pd_risk["risk"].mean()
+    dem = pd_risk["risk"] > mean_risk
+    plt.rcParams.update({'font.size': 16})
+    fig, ax = plt.subplots()
+    kmf = KaplanMeierFitter()
+    kmf.fit(pd_risk["duration"][dem], event_observed=pd_risk["event"][dem], label="High score")
+    kmf.plot_survival_function(ax=ax)
+
+    kmf.fit(pd_risk["duration"][~dem], event_observed=pd_risk["event"][~dem], label="Low score")
+    kmf.plot_survival_function(ax=ax)
+
+    # logrank test
+    test_results = logrank_test(
+        pd_risk["duration"][dem], pd_risk["duration"][~dem], 
+        pd_risk["event"][dem], pd_risk["event"][~dem], 
+        alpha=.99
+    )
+    test_results.print_summary()
+    pvalue = test_results.p_value
+    print(f"p-value: {pvalue}")
+    ax.set_ylabel("Survival Probability")
+    ax.set_title(f"Signature: {signature_name}")
+    plt.subplots_adjust(left=0.2, bottom=0.2)
+    plt.savefig(f"{relative_path}/figures/plots/{omics}_survival_curve.png")
+
     return
 
 def generate_data_split(
@@ -958,16 +1101,16 @@ def generate_data_split(
     """
     assert train + valid <= 1.0, "train + valid ratio must be <= 1.0"
 
-    x = np.array(x)
-    y = np.array(y)
-
     outer_splitter = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
     splits = []
 
     for train_valid_idx, test_idx in outer_splitter.split(x):
         # Split test set
-        test_x, test_y = x[test_idx], y[test_idx]
-        train_valid_x, train_valid_y = x[train_valid_idx], y[train_valid_idx]
+        test_x = [x[i] for i in test_idx]
+        test_y = [y[i] for i in test_idx]
+
+        train_valid_x = [x[i] for i in train_valid_idx]
+        train_valid_y = [y[i] for i in train_valid_idx]
 
         # Optional validation split
         if valid > 0:
@@ -1449,19 +1592,26 @@ if __name__ == "__main__":
         save_model_dir = None
 
     # load patient outcomes
-    df_outcome = prepare_patient_outcome(
+    from analysis.a05_outcome_prediction.m_prepare_omics_info import signatures_predictable
+    if opt['PREDICTION']['TARGET_SELECTION']['VALUE']:
+        signature_ids = None
+    else:
+        signature_ids = signatures_predictable[opt['OUTCOME']['VALUE']]
+    df_outcome, df_clinical = prepare_patient_outcome(
         outcome_dir=opt['SAVE_OUTCOME_dir'],
         subject_ids=list(omics_info['omics_paths'].keys()),
         outcome=opt['OUTCOME']['VALUE'],
-        signature_ids=opt['OUTCOME']['SIGNATURE_IDS'],
+        signature_ids=signature_ids,
         pooling=opt['OUTCOME']['POOLING']
     )
     subject_ids = df_outcome['SubjectID'].to_list()
-    logger.info(f"Found {len(subject_ids)} subjects with phenotypes")
+    logger.info(f"Found {len(subject_ids)} subjects with signature scores")
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
     
-    y = df_outcome.drop(columns=['SubjectID']).to_dict(orient='records')
+    signature_data = df_outcome.drop(columns=['SubjectID']).to_dict(orient='records')
+    clinical_data = df_clinical.to_dict(orient='records')
+    y = [{'signature': s, 'clinical': c} for s, c in zip(signature_data, clinical_data)]
 
     # split data set
     splits = generate_data_split(

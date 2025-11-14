@@ -23,6 +23,14 @@ pathomics_dims = {
     "CHIEF": {'child0': 768}
 }
 
+signatures_predictable = {
+    "GeneProgrames": [],
+    "HRDscore": [],
+    "ImmuneSignatureScore": [],
+    "StemnessScoreDNA": [],
+    "StemScoreRNA": []
+}
+
 def prepare_MAMAMIA_omics_info(
         img_dir, 
         save_omics_dir, 

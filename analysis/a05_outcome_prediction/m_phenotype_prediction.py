@@ -855,6 +855,8 @@ def phenotype_classification(
             predictor = logisticregression(split_idx, tr_X, tr_y['label'], refit, n_jobs)
         elif model == "SVC":
             predictor = svc(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+        else:
+            raise NotImplementedError
 
         pred = predictor.predict(te_X)
         prob = predictor.predict_proba(te_X)
