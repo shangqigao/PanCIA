@@ -124,6 +124,49 @@ def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_ex
     )
     return 
 
+def aggregate_wsi_graph(wsi_paths, save_dir, mode='mean', n_jobs=8, skip_exist=False):
+    """aggregate graph for wsi
+    Args:
+        wsi_paths (list): a list of wsi paths
+        save_dir (str): directory of reading feature and saving graph
+    """
+    def _aggregate_graph(idx, wsi_path):
+        from tiatoolbox import logger
+        wsi_name = pathlib.Path(wsi_path).stem
+        graph_path = pathlib.Path(f"{save_dir}/{wsi_name}_graph.json")
+        if not graph_path.exists():
+            logger.info(f"{graph_path.name} does not exist, skip!")
+            return
+        aggregate_path = pathlib.Path(f"{save_dir}/{wsi_name}_graph_aggr_{mode}.npy")
+        if aggregate_path.exists() and skip_exist: 
+            logger.info(f"{wsi_name}_graph_aggr_{mode}.npy has existed, skip!")
+            return
+
+        logger.info("aggregating graph: {}/{}...".format(idx + 1, len(wsi_paths)))
+        graph_dict = load_json(graph_path)
+        feature = np.array(graph_dict["x"])
+        assert feature.ndim == 2
+        if mode == "mean":
+            feature = np.mean(feature, axis=0)
+        elif mode == "max":
+            feature = np.max(feature, axis=0)
+        elif mode == "min":
+            feature = np.min(feature, axis=0)
+        elif mode == "std":
+            feature = np.std(feature, axis=0)
+        else:
+            raise NotImplementedError
+        np.save(aggregate_path, feature)
+
+        return
+    
+    # construct graphs in parallel
+    joblib.Parallel(n_jobs=n_jobs)(
+        joblib.delayed(_aggregate_graph)(idx, wsi_path)
+        for idx, wsi_path in enumerate(wsi_paths)
+    )
+    return 
+
 def construct_radiomic_graph(
     feature_path, 
     save_path, 
@@ -225,6 +268,53 @@ def construct_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumou
     # construct graphs in parallel
     joblib.Parallel(n_jobs=n_jobs)(
         joblib.delayed(_construct_graph)(idx, img_path)
+        for idx, img_path in enumerate(img_paths)
+    )
+    return 
+
+def aggregate_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumour", mode='mean', n_jobs=32, skip_exist=False):
+    """aggreate graphs
+    Args:
+        img_paths (list): a list of image paths
+        save_dir (str): directory of reading feature and saving graph
+        omics_suffix (list): a list of radiomic npy suffix
+    """
+    def _aggregate_graph(idx, img_path):
+        from tiatoolbox import logger
+        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        parent_name = pathlib.Path(img_path).parent.name
+        save_feat_dir = f"{save_dir}/{parent_name}"
+        for suffix in radiomics_suffix:
+            graph_suffix = str(suffix).replace("radiomics.npy", "graph.json")
+            graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_{graph_suffix}")
+            if not graph_path.exists():
+                logger.info(f"{graph_path.name} does not exist, skip!")
+                return
+            aggregate_suffix = str(suffix).replace("radiomics.npy", f"graph_aggr_{mode}.npy")
+            aggregate_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_{aggregate_suffix}")
+            if aggregate_path.exists() and skip_exist:
+                logger.info(f"{aggregate_path.name} has existed, skip!")
+                return
+            logger.info("aggregating graph: {}/{}...".format(idx + 1, len(img_paths)))
+            graph_dict = load_json(graph_path)
+            feature = np.array(graph_dict["x"])
+            assert feature.ndim == 2
+            if mode == "mean":
+                feature = np.mean(feature, axis=0)
+            elif mode == "max":
+                feature = np.max(feature, axis=0)
+            elif mode == "min":
+                feature = np.min(feature, axis=0)
+            elif mode == "std":
+                feature = np.std(feature, axis=0)
+            else:
+                raise ValueError(f"Unsupport aggregation mode: {mode}")
+            np.save(aggregate_path, feature)
+        return
+    
+    # construct graphs in parallel
+    joblib.Parallel(n_jobs=n_jobs)(
+        joblib.delayed(_aggregate_graph)(idx, img_path)
         for idx, img_path in enumerate(img_paths)
     )
     return 

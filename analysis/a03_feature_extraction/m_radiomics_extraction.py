@@ -107,6 +107,19 @@ if __name__ == "__main__":
             skip_exist=opt['RADIOMICS']['SKIP_EXITS']
         )
 
+    # aggregate image graph
+    if opt['RADIOMICS']['TASKS']['GRAPH_AGGREGATION']['VALUE']:
+        from analysis.a04_feature_aggregation.m_graph_construction import aggregate_img_graph
+        aggregate_img_graph(
+            img_paths=dataset_info['img_paths'],
+            save_dir=save_feature_dir,
+            radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
+            class_name=opt['RADIOMICS']['TARGET'],
+            mode=opt['RADIOMICS']['TASKS']['GRAPH_AGGREGATION']['MODE'],
+            n_jobs=opt['N_JOBS'],
+            skip_exist=opt['RADIOMICS']['SKIP_EXITS']
+        )
+
     # measure graph properties
     if opt['RADIOMICS']['TASKS']['MEASURE_GRAPH_PROPERTIES']:
         from analysis.a04_feature_aggregation.m_graph_construction import measure_graph_properties

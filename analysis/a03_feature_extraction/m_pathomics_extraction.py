@@ -88,6 +88,17 @@ if __name__ == "__main__":
             skip_exist=opt['PATHOMICS']['SKIP_EXITS']
         )
 
+    # aggregate wsi graph
+    if opt['PATHOMICS']['TASKS']['GRAPH_AGGREGATION']['VALUE']:
+        from analysis.a04_feature_aggregation.m_graph_construction import aggregate_wsi_graph
+        aggregate_wsi_graph(
+            wsi_paths=wsi_paths,
+            save_dir=save_feature_dir,
+            mode=opt['PATHOMICS']['TASKS']['GRAPH_AGGREGATION']['MODE'],
+            n_jobs=opt['N_JOBS'],
+            skip_exist=opt['PATHOMICS']['SKIP_EXITS']
+        )
+
     # measure graph properties
     if opt['PATHOMICS']['TASKS']['MEASURE_GRAPH_PROPERTIES']:
         from analysis.a04_feature_aggregation.m_graph_construction import measure_graph_properties
