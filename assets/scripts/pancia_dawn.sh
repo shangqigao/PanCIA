@@ -64,16 +64,13 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --meta_info $meta_info
 
 # extract radiomic features
-# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
-# lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"
-# save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
-# meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
+# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+        
+# extract pathomic features
+# pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_pathomics_extraction.py --config_files $pathomics_config
 
-# srun --mpi=pmi2 python analysis/feature_extraction/m_radiomics_extraction.py \
-#             --img_dir $img_dir \
-#             --lab_dir $lab_dir \
-#             --save_dir $save_dir \
-#             --meta_info $meta_info  
 
 # survival analysis
 # survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"

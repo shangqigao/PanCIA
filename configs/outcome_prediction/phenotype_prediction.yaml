@@ -22,16 +22,16 @@ RADIOMICS:
   MODE:
     VALUE: "pyradiomics"
     CHOICES: ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
+    # SUFFIX:
+    #   - "_tumor_radiomics.json"
     SUFFIX:
-      - "_tumor_radiomics.json"
+      - "_tumor_graph_aggr_mean.npy"
     # SUFFIX:
-    #   - "_tumor_graph.json"
-    # SUFFIX:
-    #   - "_tumor_layer0_graph.json"
-    #   - "_tumor_layer1_graph.json"
-    #   - "_tumor_layer2_graph.json"
-    #   - "_tumor_layer3_graph.json"
-    #   - "_tumor_layer4_graph.json"
+    #   - "_tumor_layer0_graph_aggr_mean.npy"
+    #   - "_tumor_layer1_graph_aggr_mean.npy"
+    #   - "_tumor_layer2_graph_aggr_mean.npy"
+    #   - "_tumor_layer3_graph_aggr_mean.npy"
+    #   - "_tumor_layer4_graph_aggr_mean.npy"
   # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
   # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
   AGGREGATION: False

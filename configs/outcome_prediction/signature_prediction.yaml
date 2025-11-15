@@ -34,13 +34,13 @@ RADIOMICS:
     # SUFFIX:
     #   - "_tumor_radiomics.json"
     SUFFIX:
-      - "_tumor_graph.json"
+      - "_tumor_graph_aggr_mean.npy"
     # SUFFIX:
-    #   - "_tumor_layer0_graph.json"
-    #   - "_tumor_layer1_graph.json"
-    #   - "_tumor_layer2_graph.json"
-    #   - "_tumor_layer3_graph.json"
-    #   - "_tumor_layer4_graph.json"
+    #   - "_tumor_layer0_graph_aggr_mean.npy"
+    #   - "_tumor_layer1_graph_aggr_mean.npy"
+    #   - "_tumor_layer2_graph_aggr_mean.npy"
+    #   - "_tumor_layer3_graph_aggr_mean.npy"
+    #   - "_tumor_layer4_graph_aggr_mean.npy"
   # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
   # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
   AGGREGATION: False
@@ -53,12 +53,12 @@ RADIOMICS:
 # Define parameters of pathomics
 PATHOMICS:
   MODE:
-    VALUE: "None"
+    VALUE: "UNI"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
     SUFFIX:
-      - "_graph.json"
+      - "_graph_aggr_mean.npy"
   # KEYS: ["TUM", "NORM", "DEB"]
-  AGGREGATION: True
+  AGGREGATION: False
   AGGREGATED_MODE:
     VALUE: "None"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
@@ -120,7 +120,7 @@ PREDICTION:
     VALUE: "r2"
     CHOICES: ["r2", "neg_mse"]
   TARGET_SELECTION:
-    VALUE: True
+    VALUE: False
     CROSS_VALID: 5
     PVALUE_THRESHOLD: 0.005
   FEATURE_SELECTION:
