@@ -5,7 +5,7 @@ OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "PrimaryDisease"
+  VALUE: "ImmuneSubtype"
   CHOICES: ["ImmuneSubtype", "MolecularSubtype", "PrimaryDisease"]
 TASKS:
   TRAIN: False
@@ -20,18 +20,18 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "pyradiomics"
+    VALUE: "LVMMed"
     CHOICES: ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
     # SUFFIX:
     #   - "_tumor_radiomics.json"
-    SUFFIX:
-      - "_tumor_graph_aggr_mean.npy"
     # SUFFIX:
-    #   - "_tumor_layer0_graph_aggr_mean.npy"
-    #   - "_tumor_layer1_graph_aggr_mean.npy"
-    #   - "_tumor_layer2_graph_aggr_mean.npy"
-    #   - "_tumor_layer3_graph_aggr_mean.npy"
-    #   - "_tumor_layer4_graph_aggr_mean.npy"
+    #   - "_tumor_graph_aggr_mean.npy"
+    SUFFIX:
+      - "_tumor_layer0_graph_aggr_mean.npy"
+      - "_tumor_layer1_graph_aggr_mean.npy"
+      - "_tumor_layer2_graph_aggr_mean.npy"
+      - "_tumor_layer3_graph_aggr_mean.npy"
+      - "_tumor_layer4_graph_aggr_mean.npy"
   # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
   # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
   AGGREGATION: False
@@ -44,12 +44,12 @@ RADIOMICS:
 # Define parameters of pathomics
 PATHOMICS:
   MODE:
-    VALUE: "None"
+    VALUE: "UNI"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
     SUFFIX:
-      - "_graph.json"
+      - "_graph_aggr_mean.npy"
   # KEYS: ["TUM", "NORM", "DEB"]
-  AGGREGATION: True
+  AGGREGATION: False
   AGGREGATED_MODE:
     VALUE: "None"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
@@ -101,11 +101,11 @@ TEST:
 
 PREDICTION:
   USED_OMICS:
-    VALUE: "radiomics"
+    VALUE: "radiopathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:
-    VALUE: "SVC"
+    VALUE: "LR"
     CHOICES: ["RF", "XG", "LR", "SVC"]
   REFIT:
     VALUE: "f1"
@@ -113,5 +113,5 @@ PREDICTION:
   FEATURE_SELECTION:
     VALUE: True
     VAR_THRESHOLD: 0.0001
-    NUM_FEATURES: 64
+    NUM_FEATURES: 256
   USE_GRAPH_PROPERTIES: False

@@ -5,7 +5,7 @@ OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "ImmuneSignatureScore"
+  VALUE: "GeneProgrames"
   CHOICES:
     [
       "GeneProgrames",
@@ -28,19 +28,19 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "BiomedParse"
+    VALUE: "LVMMed"
     CHOICES:
       ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
     # SUFFIX:
     #   - "_tumor_radiomics.json"
-    SUFFIX:
-      - "_tumor_graph_aggr_mean.npy"
     # SUFFIX:
-    #   - "_tumor_layer0_graph_aggr_mean.npy"
-    #   - "_tumor_layer1_graph_aggr_mean.npy"
-    #   - "_tumor_layer2_graph_aggr_mean.npy"
-    #   - "_tumor_layer3_graph_aggr_mean.npy"
-    #   - "_tumor_layer4_graph_aggr_mean.npy"
+    #   - "_tumor_graph_aggr_mean.npy"
+    SUFFIX:
+      - "_tumor_layer0_graph_aggr_mean.npy"
+      - "_tumor_layer1_graph_aggr_mean.npy"
+      - "_tumor_layer2_graph_aggr_mean.npy"
+      - "_tumor_layer3_graph_aggr_mean.npy"
+      - "_tumor_layer4_graph_aggr_mean.npy"
   # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
   # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
   AGGREGATION: False
@@ -110,7 +110,7 @@ TEST:
 
 PREDICTION:
   USED_OMICS:
-    VALUE: "radiomics"
+    VALUE: "radiopathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:
@@ -124,7 +124,7 @@ PREDICTION:
     CROSS_VALID: 5
     PVALUE_THRESHOLD: 0.005
   FEATURE_SELECTION:
-    VALUE: False
+    VALUE: True
     VAR_THRESHOLD: 0.0001
-    NUM_FEATURES: 64
+    NUM_FEATURES: 256
   USE_GRAPH_PROPERTIES: False

@@ -30,14 +30,14 @@ from tiatoolbox import logger
 from tiatoolbox.utils.misc import save_as_json
 
 from sklearn.model_selection import GridSearchCV, KFold
-from sklearn.feature_selection import SelectKBest, f_classif, VarianceThreshold
+from sklearn.feature_selection import SelectKBest, f_classif, VarianceThreshold, SelectFromModel
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import average_precision_score as auprc_scorer
 from sklearn.metrics import roc_auc_score as auroc_scorer
 from sklearn.metrics import balanced_accuracy_score as acc_scorer
@@ -492,21 +492,55 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
     plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
 
     # Visualize coefficients of the best estimator
-    # best_model = gcv.best_estimator_.named_steps["model"]
-    # best_coefs = pd.DataFrame(best_model.coef_.ravel(), index=tr_X.columns, columns=["coefficient"])
-    # non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
-    # print(f"Number of non-zero coefficients: {non_zero}")
+    best_model = gcv.best_estimator_.named_steps["model"]
 
-    # non_zero_coefs = best_coefs.query("coefficient != 0")
-    # coef_order = non_zero_coefs.abs().sort_values("coefficient").index
-    # top10 = coef_order[:10]
+    # coef_ shape: (n_classes, n_features)
+    best_coefs = pd.DataFrame(
+        best_model.coef_.T,  # shape: (n_features, n_classes)
+        index=tr_X.columns,
+        columns=[f"class_{cls}" for cls in best_model.classes_]
+    )
 
-    # _, ax = plt.subplots(figsize=(8, 6))
-    # non_zero_coefs.loc[top10].plot.barh(ax=ax, legend=False)
-    # ax.set_xlabel("coefficient")
-    # ax.grid(True)
-    # plt.subplots_adjust(left=0.3)
-    # plt.savefig(f"analysis/a05_outcome_prediction/best_coefficients_fold{split_idx}.jpg") 
+    # Select only features with any non-zero coefficient
+    non_zero_mask = (best_coefs != 0).any(axis=1)
+    non_zero_coefs = best_coefs[non_zero_mask]
+
+    # Compute max absolute coefficient across targets for each feature
+    max_abs_coefs = non_zero_coefs.abs().max(axis=1)
+
+    # Select top 10 features overall (not per target)
+    top10_features = max_abs_coefs.sort_values(ascending=False).head(10).index
+    top10_coefs = non_zero_coefs.loc[top10_features]
+
+    # Plot setup
+    y = np.arange(len(top10_coefs))[::-1]  # for horizontal bars
+    num_targets = len(top10_coefs.columns)
+    bar_width = 0.8 / num_targets
+
+    fig, ax = plt.subplots(figsize=(10, max(6, len(top10_coefs) * 0.5)))
+
+    # Use a diverging colormap
+    cmap = plt.get_cmap("seismic")
+
+    for i, target in enumerate(top10_coefs.columns):
+        coef_values = top10_coefs[target]
+
+        # Map target index to colormap: i=0 -> 0.2, i=max -> 0.8
+        norm_i = 0.2 + 0.6 * i / max(1, num_targets-1)  # avoid 0/0 if one target
+        colors = [cmap(norm_i) for _ in coef_values]
+
+        ax.barh(y + i*bar_width, coef_values, height=bar_width, color=colors, edgecolor="k", label=target)
+
+    ax.set_yticks(y + bar_width*(num_targets-1)/2)
+    ax.set_yticklabels(top10_features)
+    ax.set_xlabel("Coefficient value")
+    ax.set_title(f"Top10 Coefficients (Fold {split_idx})")
+    ax.legend()
+    ax.grid(True, linestyle="--", alpha=0.6)
+
+    plt.tight_layout()
+    plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg")
+    plt.close(fig)
 
     # perform prediction using the best params
     pipe.set_params(**gcv.best_params_)
@@ -827,22 +861,28 @@ def phenotype_classification(
         
         # feature selection
         if feature_selection:
-            print("Selecting features...")
-            selector = VarianceThreshold(threshold=feature_var_threshold)
-            selector.fit(tr_X)
-            selected_names = selector.get_feature_names_out().tolist()
-            num_removed = len(tr_X.columns) - len(selected_names)
-            print(f"Removing {num_removed} low-variance features...")
-            tr_X = tr_X[selected_names]
+            print("Selecting features using LinearSVC + L1...")
+                
+            # Initialize LinearSVC with L1 penalty
+            svc = LinearSVC(
+                penalty='l1',
+                dual=False,       # required for L1
+                C=1.0,            # can tune C for sparsity
+                class_weight='balanced',
+                max_iter=5000,
+                random_state=42
+            )
+            
+            # Fit to training data
+            svc.fit(tr_X, tr_y["label"])
+            
+            # Select features with non-zero coefficients
+            selector = SelectFromModel(svc, prefit=True, max_features=n_selected_features)
+            selected_mask = selector.get_support()
+            selected_names = tr_X.columns[selected_mask]
+            
+            tr_X = tr_X[selected_names] 
             te_X = te_X[selected_names]
-            if n_selected_features is not None:
-                print("Selecting univariate feature...")
-                selector = SelectKBest(score_func=f_classif, k=n_selected_features)
-                _ = selector.fit_transform(tr_X, tr_y["label"])
-                selected_mask = selector.get_support()
-                selected_names = tr_X.columns[selected_mask]
-                tr_X = tr_X[selected_names]
-                te_X = te_X[selected_names]
             print(f"Selected features: {len(tr_X.columns)}")
 
         # model selection
@@ -858,36 +898,44 @@ def phenotype_classification(
         else:
             raise NotImplementedError
 
+        # Predictions
         pred = predictor.predict(te_X)
         prob = predictor.predict_proba(te_X)
         num_class = prob.shape[1]
 
+        # True labels
         label = te_y["label"].to_numpy(dtype=int)
-        acc = acc_scorer(label, pred)
-        f1 = f1_scorer(label, pred, average="macro")
 
-        prob = prob[:, 1] if prob.shape[1] == 2 else prob
-        auroc = auroc_scorer(label, prob, multi_class="ovr")
+        # Initialize lists to store metrics per class
+        acc_list, f1_list, auroc_list, auprc_list = [], [], [], []
 
-        if num_class == 2:
-            auprc = auprc_scorer(label, prob)
-        else:
-            onehot = np.eye(num_class)[label]
-            auprc = auprc_scorer(onehot, prob)
-        
+        for cls in range(num_class):
+            # Binary one-vs-rest labels for this class
+            y_true_cls = (label == cls).astype(int)
+            y_pred_cls = (pred == cls).astype(int)
+            y_prob_cls = prob[:, cls]
+
+            # Compute metrics using existing scorer functions
+            acc_list.append(acc_scorer(y_true_cls, y_pred_cls))
+            f1_list.append(f1_scorer(y_true_cls, y_pred_cls))
+            auroc_list.append(auroc_scorer(y_true_cls, y_prob_cls))
+            auprc_list.append(auprc_scorer(y_true_cls, y_prob_cls))
+
+        # Optional: organize as dictionary
         scores_dict = {
-            "acc": acc,
-            "f1": f1,
-            "auroc": auroc,
-            "auprc": auprc
+            "acc": acc_list,
+            "f1": f1_list,
+            "auroc": auroc_list,
+            "auprc": auprc_list
         }
 
-        print(f"Updating predicted results on fold {split_idx}")
         predict_results.update({f"Fold {split_idx}": scores_dict})
+
+    # print average results across folds per class
     print(predict_results)
     for k in scores_dict.keys():
         arr = np.array([v[k] for v in predict_results.values()])
-        print(f"CV {k} mean+std", arr.mean(), arr.std())
+        print(f"CV {k} mean+std", arr.mean(axis=0), arr.std(axis=0))
     return
 
 def generate_data_split(

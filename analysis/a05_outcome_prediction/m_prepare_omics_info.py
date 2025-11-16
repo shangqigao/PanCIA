@@ -24,24 +24,11 @@ pathomics_dims = {
 }
 
 signatures_predictable = {
-    "GeneProgrames": [],
-    "HRDscore": [],
+    "GeneProgrames": None,
+    "HRDscore": None,
     "ImmuneSignatureScore": None,
-    # "ImmuneSignatureScore": [
-    #     'IgG_19272155', 'MCD3_CD8_21214954', 'CD103pos_CD103neg_ratio_25446897', 
-    #     'GP11_Immune_IFN', 'CSR_Activated_15701700', 'Buck14_score', 
-    #     'Immune_cell_Cluster_21214954', 'HER2_Immune_PCA_18006808', 
-    #     'GRANS_PCA_16704732', 'Bcell_receptors_score', 'NHI_5gene_score', 
-    #     'IL13_score_21050467', 'DAP12_data', 'CSF1_response', 'Tcell_21978456', 
-    #     'Module11_Prolif_score', 'B_cell_PCA_16704732', 'STAT1_score', 'IL8_21978456', 
-    #     'GP2_ImmuneTcellBcell_score', 'TAMsurr_TcClassII_ratio', 'MDACC.FNA.1_20805453', 
-    #     'TREM1_data', 'CHANG_CORE_SERUM_RESPONSE_UP', 'Bcell_mg_IGJ', 'T_cell_PCA_16704732', 
-    #     'IR7_score', 'CD8A', 'LIexpression_score', 'IGG_Cluster_21214954', 'CD8_PCA_16704732', 
-    #     'IL4_score_21050467', 'MHC.II_19272155', 'Module4_TcellBcell_score', 'Rotterdam_ERneg_PCA_15721472', 
-    #     'CD8_CD68_ratio', 'MHC2_21978456', 'Tcell_receptors_score', 'CD103pos_mean_25446897', 'LCK_19272155'
-    #     ],
-    "StemnessScoreDNA": [],
-    "StemScoreRNA": []
+    "StemnessScoreDNA": None,
+    "StemScoreRNA": None
 }
 
 def prepare_MAMAMIA_omics_info(

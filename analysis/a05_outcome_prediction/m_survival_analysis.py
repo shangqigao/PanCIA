@@ -30,6 +30,7 @@ from tiatoolbox.utils.misc import save_as_json
 
 from lifelines import CoxPHFitter, KaplanMeierFitter
 from lifelines.statistics import logrank_test
+from lifelines.plotting import add_at_risk_counts
 from sksurv.nonparametric import kaplan_meier_estimator
 from sksurv.linear_model import CoxPHSurvivalAnalysis, CoxnetSurvivalAnalysis, IPCRidge
 from sksurv.ensemble import RandomSurvivalForest, GradientBoostingSurvivalAnalysis
@@ -318,7 +319,7 @@ def load_wsi_level_features(idx, wsi_feature_paths, pooling="mean"):
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
-def prepare_patient_outcome(outcome_file, dataset="MAMA-MIA", outcome=None):
+def prepare_patient_outcome(outcome_file, subject_ids, dataset="MAMA-MIA", outcome=None):
     if dataset == "MAMA-MIA":
         df = pd.read_excel(outcome_file, sheet_name='dataset_info')
         # Prepare survival data
@@ -334,24 +335,35 @@ def prepare_patient_outcome(outcome_file, dataset="MAMA-MIA", outcome=None):
             df.loc[df['days_to_recurrence'] == 0, 'duration'] = df['days_to_follow_up']
         else:
             raise ValueError(f'Unsuppored outcome type: {outcome}')
+        df['SubjectID'] = df['patient_id']
+        df = df[df["SubjectID"].isin(subject_ids)]
     elif dataset == "TCGA":
         df = pd.read_csv(outcome_file)
         # Prepare the survival data
         if outcome == 'OS':
-            df['event'] = df['vital_status'].apply(lambda x: True if x == 'Dead' else False)
-            df['duration'] = df['days_to_death'].fillna(df['days_to_last_follow_up'])
-            df = df[df['duration'].notna()]
-        elif outcome == "DFS":
-            df.fillna(float('inf'), inplace=True)
-            df['event'] = df.apply(lambda row: True if row['days_to_recurrence'] < float('inf') or 
-                                row['days_to_death'] < float('inf') else False, axis=1)
-            df['duration'] = df[['days_to_recurrence', 'days_to_death', 'days_to_last_follow_up']].min(axis=1)
-            df = df[df['duration'].notna()]
+            df = df[df['OS'].notna() & df['OS.time'].notna()]
+            df['event'] = df['OS'].apply(lambda x: True if x == 1 else False)
+            df['duration'] = df['OS.time']
+        elif outcome == 'DSS':
+            df = df[df['DSS'].notna() & df['DSS.time'].notna()]
+            df['event'] = df['DSS'].apply(lambda x: True if x == 1 else False)
+            df['duration'] = df['DSS.time']
+        elif outcome == 'DFI':
+            df = df[df['DFI'].notna() & df['DFI.time'].notna()]
+            df['event'] = df['DFI'].apply(lambda x: True if x == 1 else False)
+            df['duration'] = df['DFI.time']
+        elif outcome == 'PFI':
+            df = df[df['PFI'].notna() & df['PFI.time'].notna()]
+            df['event'] = df['PFI'].apply(lambda x: True if x == 1 else False)
+            df['duration'] = df['PFI.time']
         else:
             raise ValueError(f'Unsuppored outcome type: {outcome}')
+        df['SubjectID'] = df["_PATIENT"]
+        df = df[df["SubjectID"].isin(subject_ids)]
     else:
         raise NotImplementedError
     
+    df = df.drop_duplicates(subset="SubjectID", keep="first")
     logging.info(f"Clinical data strcuture: {df.shape}")
 
     return df
@@ -1197,9 +1209,12 @@ def survival(
         times = np.arange(lower, upper + 1, 7)
         auc, mean_auc = cumulative_dynamic_auc(tr_y, te_y, risk_scores, times)
         if hasattr(predictor, "predict_survival_function"):
-            survs = predictor.predict_survival_function(te_X)
-            preds = np.asarray([[fn(t) for t in times] for fn in survs])
-            IBS = integrated_brier_score(tr_y, te_y, preds, times)
+            try:
+                survs = predictor.predict_survival_function(te_X)
+                preds = np.asarray([[fn(t) for t in times] for fn in survs])
+                IBS = integrated_brier_score(tr_y, te_y, preds, times)
+            except Exception as e:
+                IBS = 0
         else:
             IBS = 0
         scores_dict = {
@@ -1222,20 +1237,24 @@ def survival(
         predict_results.update({f"Fold {split_idx}": scores_dict})
     print(predict_results)
     for k in scores_dict.keys():
-        arr = np.array([v[k] for v in predict_results.values()])
+        arr = np.array([v[k] for v in predict_results.values() if v[k] != 0])
         print(f"CV {k} mean+std", arr.mean(), arr.std())
     # plot survival curve
     pd_risk = pd.DataFrame(risk_results)
     mean_risk = pd_risk["risk"].mean()
     dem = pd_risk["risk"] > mean_risk
-    plt.rcParams.update({'font.size': 16})
-    fig, ax = plt.subplots()
-    kmf = KaplanMeierFitter()
-    kmf.fit(pd_risk["duration"][dem], event_observed=pd_risk["event"][dem], label="High risk")
-    kmf.plot_survival_function(ax=ax)
 
-    kmf.fit(pd_risk["duration"][~dem], event_observed=pd_risk["event"][~dem], label="Low risk")
-    kmf.plot_survival_function(ax=ax)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    plt.rcParams.update({'font.size': 12})
+    kmf1 = KaplanMeierFitter()
+    kmf1.fit(pd_risk["duration"][dem], event_observed=pd_risk["event"][dem], label="High risk")
+    kmf1.plot_survival_function(ax=ax)
+
+    kmf2 = KaplanMeierFitter()
+    kmf2.fit(pd_risk["duration"][~dem], event_observed=pd_risk["event"][~dem], label="Low risk")
+    kmf2.plot_survival_function(ax=ax)
+    add_at_risk_counts(kmf1, kmf2, ax=ax)
+    plt.tight_layout()
 
     # logrank test
     test_results = logrank_test(
@@ -1247,7 +1266,7 @@ def survival(
     pvalue = test_results.p_value
     print(f"p-value: {pvalue}")
     ax.set_ylabel("Survival Probability")
-    plt.subplots_adjust(left=0.2, bottom=0.2)
+    # plt.subplots_adjust(left=0.2, bottom=0.2)
     plt.savefig(f"{relative_path}/figures/plots/{omics}_survival_curve.png")
     return
 
@@ -1758,10 +1777,11 @@ if __name__ == "__main__":
     # load patient outcomes
     df_outcome = prepare_patient_outcome(
         outcome_file=opt['SAVE_OUTCOME_FILE'],
+        subject_ids=list(omics_info['omics_paths'].keys()),
         dataset=opt['DATASET'],
         outcome=opt['OUTCOME']['VALUE']
     )
-    subject_ids = df_outcome['submitter_id'].to_list()
+    subject_ids = df_outcome['SubjectID'].to_list()
     logger.info(f"Found {len(subject_ids)} subjects with survival outcomes")
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]

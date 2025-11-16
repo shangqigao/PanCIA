@@ -30,7 +30,7 @@ from tiatoolbox import logger
 from tiatoolbox.utils.misc import save_as_json
 
 from sklearn.model_selection import GridSearchCV, KFold, cross_val_score, cross_val_predict
-from sklearn.feature_selection import SelectKBest, f_regression, VarianceThreshold
+from sklearn.feature_selection import SelectKBest, f_regression, VarianceThreshold, SelectFromModel
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
@@ -48,6 +48,7 @@ from sklearn.metrics import f1_score as f1_scorer
 from sklearn.decomposition import PCA
 from lifelines.statistics import logrank_test
 from lifelines import KaplanMeierFitter
+from lifelines.plotting import add_at_risk_counts
 
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
@@ -933,22 +934,28 @@ def signature_regression(
 
         # feature selection
         if feature_selection:
-            print("Selecting features...")
-            selector = VarianceThreshold(threshold=feature_var_threshold)
-            selector.fit(tr_X)
-            selected_names = selector.get_feature_names_out().tolist()
-            num_removed = len(tr_X.columns) - len(selected_names)
-            print(f"Removing {num_removed} low-variance features...")
+            print("Selecting features using Lasso (L1)...")
+
+            # Stronger alpha → more sparsity
+            lasso = Lasso(
+                alpha=0.001,         # tune this
+                max_iter=5000,
+                random_state=42
+            )
+
+            lasso.fit(tr_X, tr_y)
+
+            selector = SelectFromModel(
+                lasso,
+                prefit=True,
+                max_features=n_selected_features
+            )
+
+            selected_mask = selector.get_support()
+            selected_names = tr_X.columns[selected_mask]
+
             tr_X = tr_X[selected_names]
             te_X = te_X[selected_names]
-            if n_selected_features is not None:
-                print("Selecting univariate feature...")
-                selector = SelectKBest(score_func=multioutput_f_regression, k=n_selected_features)
-                selector.fit(tr_X, tr_y)
-                selected_mask = selector.get_support()
-                selected_names = tr_X.columns[selected_mask]
-                tr_X = tr_X[selected_names]
-                te_X = te_X[selected_names]
             print(f"Selected features: {len(tr_X.columns)}")
 
         # model selection
@@ -1023,7 +1030,7 @@ def signature_regression(
         }
         predict_results.update({f"Fold {split_idx}": scores_dict})
     
-    # print avervae results across folds
+    # print average results across folds per class
     print(predict_results)
     for k in scores_dict.keys():
         arr = np.array([v[k] for v in predict_results.values()])
@@ -1053,14 +1060,18 @@ def signature_regression(
     pd_risk = pd.DataFrame(risk_results)
     mean_risk = pd_risk["risk"].mean()
     dem = pd_risk["risk"] > mean_risk
-    plt.rcParams.update({'font.size': 16})
-    fig, ax = plt.subplots()
-    kmf = KaplanMeierFitter()
-    kmf.fit(pd_risk["duration"][dem], event_observed=pd_risk["event"][dem], label="High score")
-    kmf.plot_survival_function(ax=ax)
 
-    kmf.fit(pd_risk["duration"][~dem], event_observed=pd_risk["event"][~dem], label="Low score")
-    kmf.plot_survival_function(ax=ax)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    plt.rcParams.update({'font.size': 12})
+    kmf1 = KaplanMeierFitter()
+    kmf1.fit(pd_risk["duration"][dem], event_observed=pd_risk["event"][dem], label="High score")
+    kmf1.plot_survival_function(ax=ax)
+
+    kmf2 = KaplanMeierFitter()
+    kmf2.fit(pd_risk["duration"][~dem], event_observed=pd_risk["event"][~dem], label="Low score")
+    kmf2.plot_survival_function(ax=ax)
+    add_at_risk_counts(kmf1, kmf2, ax=ax)
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
 
     # logrank test
     test_results = logrank_test(
@@ -1073,7 +1084,7 @@ def signature_regression(
     print(f"p-value: {pvalue}")
     ax.set_ylabel("Survival Probability")
     ax.set_title(f"Signature: {signature_name}")
-    plt.subplots_adjust(left=0.2, bottom=0.2)
+    # plt.subplots_adjust(left=0.2, bottom=0.2)
     plt.savefig(f"{relative_path}/figures/plots/{omics}_survival_curve.png")
 
     return
