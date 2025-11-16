@@ -300,6 +300,9 @@ def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, signature_id
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
+        df_matched = df_matched.applymap(
+            lambda x: x / 100.0 if isinstance(x, (int, float)) else x
+        )
     elif outcome == "ImmuneSignatureScore":
         outcome_file = f"{outcome_dir}/signatures/immune_signature_score/immune_signature_score.csv"
         df = pd.read_csv(outcome_file)
@@ -1041,6 +1044,7 @@ def signature_regression(
     for i, column in enumerate(te_y.columns):
         risk_results['score'] = [v[i] for v in risk_results['risk']]
         pd_risk = pd.DataFrame(risk_results)
+        pd_risk = pd_risk[pd_risk["duration"].notna() & pd_risk["event"].notna()]
         mean_risk = pd_risk["score"].mean()
         dem = pd_risk["score"] > mean_risk
         test_results = logrank_test(
@@ -1058,6 +1062,7 @@ def signature_regression(
 
     # plot survival curves
     pd_risk = pd.DataFrame(risk_results)
+    pd_risk = pd_risk[pd_risk["duration"].notna() & pd_risk["event"].notna()]
     mean_risk = pd_risk["risk"].mean()
     dem = pd_risk["risk"] > mean_risk
 

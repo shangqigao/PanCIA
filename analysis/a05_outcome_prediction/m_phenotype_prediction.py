@@ -304,6 +304,7 @@ def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, minimum_per_
         df_matched = df[df["SubjectID"].isin(subject_ids)]
         df_matched = df_matched[df_matched["Subtype_Selected"].notna()]
         counts = df_matched["Subtype_Selected"].value_counts()
+        print("Before filtering:", counts)
         valid_classes = counts[counts >= minimum_per_class].index
         df_matched = df_matched[df_matched["Subtype_Selected"].isin(valid_classes)]
         print(df_matched["Subtype_Selected"].value_counts())
@@ -325,6 +326,8 @@ def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, minimum_per_
         print("Primary disease mapping:", dict(enumerate(uniques)))
     else:
         raise NotImplementedError
+
+    df_matched = df_matched.drop_duplicates(subset=["SubjectID"], keep="first")
 
     logging.info(f"Phenotype data strcuture: {df_matched.shape}")
 
