@@ -1,6 +1,7 @@
 import pandas as pd
 import json
 import pathlib
+import numpy as np
 
 json_path = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/PanCIA/figures/results/TCGA_survival.json"
 
@@ -41,7 +42,12 @@ df["extractor"] = df["index"].str.replace(r"\.(RF|XG|LR|SVC|RSF|CoxPH|Coxnet|Fas
 metrics = df.columns.difference(["index", "fold", "method", "extractor"])
 
 # Group by extractor and fold, then take mean of all metric columns
-df_mean = df.groupby(["extractor", "fold"], as_index=False)[metrics].mean()
+df_mean = (
+    df.groupby(["extractor", "fold"])
+      [metrics]
+      .apply(lambda x: (x.where(x != 0)).mean())
+      .reset_index()
+)
 
 # Save to Excel
 save_path = json_path.replace('.json', '.xlsx')

@@ -1,0 +1,66 @@
+{
+    "GeneProgrames": {
+        "BiomedParse": {
+            "Pyradiomics": {
+                "None": {
+                    "ElasticNet": {
+                        "RNAss": 0.6529606001901047,
+                        "EREG.EXPss": 0.0002482683585670732
+                    }
+                }
+            },
+            "BiomedParse": {
+                "Mean": {
+                    "ElasticNet": {
+                        "RNAss": 3.1703698508543537e-06,
+                        "EREG.EXPss": 0.8438306359284669
+                    }
+                }
+            },
+            "LVMMed": {
+                "Mean": {
+                    "ElasticNet": {
+                        "RNAss": 0.00043852605396047965,
+                        "EREG.EXPss": 0.6203013103070193
+                    }
+                }
+            }
+        },
+        "None": {
+            "UNI": {
+                "Mean": {
+                    "ElasticNet": {
+                        "RNAss": 1.2992112952007866e-05,
+                        "EREG.EXPss": 0.9419840845268134
+                    }
+                }
+            }
+        },
+        "BiomedParse+None": {
+            "Pyradiomics+UNI": {
+                "None+Mean": {
+                    "ElasticNet": {
+                        "RNAss": 8.016517422446168e-07,
+                        "EREG.EXPss": 0.9053314925143244
+                    }
+                }
+            },
+            "BiomedParse+UNI": {
+                "Mean+Mean": {
+                    "ElasticNet": {
+                        "RNAss": 2.993809662209283e-06,
+                        "EREG.EXPss": 0.7716121657328342
+                    }
+                }
+            },
+            "LVMMed+UNI": {
+                "Mean+Mean": {
+                    "ElasticNet": {
+                        "RNAss": 2.4951544973297567e-05,
+                        "EREG.EXPss": 0.04711961210436021
+                    }
+                }
+            }
+        }
+    }
+}

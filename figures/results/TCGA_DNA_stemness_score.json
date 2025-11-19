@@ -1,0 +1,80 @@
+{
+    "GeneProgrames": {
+        "BiomedParse": {
+            "Pyradiomics": {
+                "None": {
+                    "ElasticNet": {
+                        "DNAss": 0.0011720180542894793,
+                        "EREG-METHss": 0.0007992782150292259,
+                        "DMPss": 0.004034549191797774,
+                        "ENHss": 1.978805405021282e-09
+                    }
+                }
+            },
+            "BiomedParse": {
+                "Mean": {
+                    "ElasticNet": {
+                        "DNAss": 5.684647511815965e-10,
+                        "EREG-METHss": 1.067358053328318e-11,
+                        "DMPss": 3.6791968258234914e-08,
+                        "ENHss": 1.6683806233531328e-08
+                    }
+                }
+            },
+            "LVMMed": {
+                "Mean": {
+                    "ElasticNet": {
+                        "DNAss": 0.00011114043705630161,
+                        "EREG-METHss": 0.0011533146811245956,
+                        "DMPss": 3.3264875460151214e-06,
+                        "ENHss": 0.00020141423894655565
+                    }
+                }
+            }
+        },
+        "None": {
+            "UNI": {
+                "Mean": {
+                    "ElasticNet": {
+                        "DNAss": 1.4634242289218124e-10,
+                        "EREG-METHss": 3.891252256327346e-08,
+                        "DMPss": 3.384284699364867e-09,
+                        "ENHss": 1.8800957969239913e-08
+                    }
+                }
+            }
+        },
+        "BiomedParse+None": {
+            "Pyradiomics+UNI": {
+                "None+Mean": {
+                    "ElasticNet": {
+                        "DNAss": 4.474058638861935e-10,
+                        "EREG-METHss": 2.6962648127226107e-07,
+                        "DMPss": 1.0119076363014738e-09,
+                        "ENHss": 2.828509417148921e-09
+                    }
+                }
+            },
+            "BiomedParse+UNI": {
+                "Mean+Mean": {
+                    "ElasticNet": {
+                        "DNAss": 7.705047550922329e-10,
+                        "EREG-METHss": 3.919011909424173e-10,
+                        "DMPss": 1.267345564412188e-07,
+                        "ENHss": 3.9413667335099867e-10
+                    }
+                }
+            },
+            "LVMMed+UNI": {
+                "Mean+Mean": {
+                    "ElasticNet": {
+                        "DNAss": 1.433492189592325e-08,
+                        "EREG-METHss": 2.6345267214593875e-07,
+                        "DMPss": 1.2777379683911261e-05,
+                        "ENHss": 7.620575084962127e-05
+                    }
+                }
+            }
+        }
+    }
+}
