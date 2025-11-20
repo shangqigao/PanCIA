@@ -27,12 +27,18 @@ RADIOMICS:
     #   - "_tumor_radiomics.json"
     # SUFFIX:
     #   - "_tumor_graph_aggr_mean.npy"
+    # SUFFIX:
+    #   - "_tumor_layer0_graph_aggr_mean.npy"
+    #   - "_tumor_layer1_graph_aggr_mean.npy"
+    #   - "_tumor_layer2_graph_aggr_mean.npy"
+    #   - "_tumor_layer3_graph_aggr_mean.npy"
+    #   - "_tumor_layer4_graph_aggr_mean.npy"
     SUFFIX:
-      - "_tumor_layer0_graph_aggr_mean.npy"
-      - "_tumor_layer1_graph_aggr_mean.npy"
-      - "_tumor_layer2_graph_aggr_mean.npy"
-      - "_tumor_layer3_graph_aggr_mean.npy"
-      - "_tumor_layer4_graph_aggr_mean.npy"
+      - "_tumor_layer0_graph.json"
+      - "_tumor_layer1_graph.json"
+      - "_tumor_layer2_graph.json"
+      - "_tumor_layer3_graph.json"
+      - "_tumor_layer4_graph.json"
   # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
   # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
   AGGREGATION: False
@@ -47,8 +53,10 @@ PATHOMICS:
   MODE:
     VALUE: "UNI"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
+    # SUFFIX:
+    #   - "_graph_aggr_mean.npy"
     SUFFIX:
-      - "_graph_aggr_mean.npy"
+      - "_graph.json"
   # KEYS: ["TUM", "NORM", "DEB"]
   AGGREGATION: False
   AGGREGATED_MODE:
@@ -87,6 +95,9 @@ TRAIN:
   WIEGHT_DECAY:
     ABMIL: 1.0e-5
     SPARRA: 0.0
+  L1_PENALTY:
+    ABMIL: 0.0
+    SPARRA: 1.0e-4
 
 INFERENCE:
   PRE_TRAINED: ""

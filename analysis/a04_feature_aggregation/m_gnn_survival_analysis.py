@@ -67,8 +67,8 @@ class SurvivalGraphDataset(Dataset):
         )
 
         # 4. if too large, downsample uniformly
-        if subset.numel() > num_sampled:
-            subset = subset[torch.randperm(subset.numel())[:num_sampled]]
+        # if subset.numel() > num_sampled:
+        #     subset = subset[torch.randperm(subset.numel())[:num_sampled]]
 
         # 5. final subgraph
         new_edge_index, _ = pyg_utils.subgraph(subset, edge_index, relabel_nodes=True)
@@ -88,43 +88,56 @@ class SurvivalGraphDataset(Dataset):
             subject_info = self.info_list[idx]
 
         subject_paths = subject_info[1]
-
         hetero = HeteroData()
 
         for key in self.data_types:
-            child_dict = subject_paths.get(key)
-            if child_dict is None:
+            parents = subject_paths.get(key)
+            if parents is None:
                 continue
 
-            for child_name, json_path in child_dict.items():
+            # temporary storage per child
+            child_nodes = {}
 
-                # --------------------- Load graph -------------------------
-                with open(json_path) as fp:
-                    g = json.load(fp)
+            for i, parent in enumerate(parents):
+                for child_name, json_path in parent.items():
 
-                g = {k: np.array(v) for k, v in g.items() if k != "cluster_points"}
+                    # --------------------- Load graph -------------------------
+                    with open(json_path) as fp:
+                        g = json.load(fp)
 
-                # Radiomics edge format fix
-                if key == "radiomics":
+                    g = {k: np.array(v) for k, v in g.items() if k != "cluster_points"}
+
                     g["edge_index"] = g["edge_index"].T
 
-                # --------------------- Preprocess -------------------------
-                if self.preproc:
-                    g["x"] = self.preproc[key](g["x"])
+                    # --------------------- Preprocess -------------------------
+                    if self.preproc:
+                        g["x"] = self.preproc[f"{key}_{child_name}"](g["x"])
 
-                # --------------------- Convert -----------------------------
-                x = torch.tensor(g["x"], dtype=torch.float32)
-                edge_index = torch.tensor(g["edge_index"], dtype=torch.int64)
+                    # --------------------- Convert -----------------------------
+                    x = torch.tensor(g["x"], dtype=torch.float32)
+                    edge_index = torch.tensor(g["edge_index"], dtype=torch.int64)
 
-                # ---------------- Sampling (radiomics only) ----------------
-                if key == "radiomics":
-                    x, edge_index = self.sample_subgraph(x, edge_index)
+                    # ---------------- Sampling (radiomics only) ----------------
+                    if key == "radiomics":
+                        x, edge_index = self.sample_subgraph(x, edge_index)
 
-                # --------------------- Assign node type --------------------
-                node_type = f"{key}.{child_name}"
+                    # --------------------- Concatenate nodes --------------------
+                    if child_name not in child_nodes:
+                        child_nodes[child_name] = {"x": [], "edge_index": [], "offset": 0}
 
-                hetero[node_type].x = x
-                hetero[(node_type, "to", node_type)].edge_index = edge_index
+                    offset = child_nodes[child_name]["offset"]
+                    child_nodes[child_name]["x"].append(x)
+                    child_nodes[child_name]["edge_index"].append(edge_index + offset)
+                    child_nodes[child_name]["offset"] += x.size(0)
+
+            # --------------------- Merge children and assign to HeteroData ----------------
+            for child_name, data_dict in child_nodes.items():
+                x_concat = torch.cat(data_dict["x"], dim=0)
+                edge_index_concat = torch.cat(data_dict["edge_index"], dim=1)
+
+                node_type = f"{key}_{child_name}"
+                hetero[node_type].x = x_concat
+                hetero[(node_type, "to", node_type)].edge_index = edge_index_concat
 
                 if any(v in self.mode for v in ["train", "valid"]):
                     hetero[node_type].y = label
@@ -452,15 +465,19 @@ class SurvivalGraphArch(nn.Module):
     ):
         super().__init__()
         self.dropout = dropout
-        self.pool_ratio = pool_ratio
         self.embedding_dims = layers
         self.aggregation = aggregation
         self.mu0 = mu0
         self.lambda0 = lambda0
         self.alpha0 = alpha0
         self.beta0 = beta0
-        self.graph_dict = {f"{mod}.{child}": val
+
+        self.dim_dict = {f"{mod}_{child}": val
             for mod, children in dim_features.items()
+            for child, val in children.items()
+        }
+        self.pool_dict = {f"{mod}_{child}": val
+            for mod, children in pool_ratio.items()
             for child, val in children.items()
         }
 
@@ -484,13 +501,13 @@ class SurvivalGraphArch(nn.Module):
         self.enc_branches = nn.ModuleDict(
             {
                 k: create_block(v, out_emb_dim) 
-                for k, v in self.graph_dict.items()
+                for k, v in self.dim_dict.items()
             }
         )
         self.dec_branches = nn.ModuleDict(
             {
                 k: Linear(out_emb_dim, v) 
-                for k, v in self.graph_dict.items()
+                for k, v in self.dim_dict.items()
             }
         )
         input_emb_dim = out_emb_dim
@@ -499,7 +516,7 @@ class SurvivalGraphArch(nn.Module):
             self.gate_nn_dict = nn.ModuleDict(
                 {
                     k: Attn_Net_Gated(L=input_emb_dim, D=256, dropout=0.25, n_classes=1)
-                    for k in self.graph_dict.keys()
+                    for k in self.dim_dict.keys()
                 }
             )
             self.Aggregation = SumAggregation()
@@ -511,10 +528,10 @@ class SurvivalGraphArch(nn.Module):
                         dim_features=input_emb_dim,
                         dim_hidden=hid_emb_dim,
                         dropout=0.0,
-                        pool_ratio=self.pool_ratio[k],
+                        pool_ratio=self.pool_dict[k],
                         conv=self.conv_name
                     )
-                    for k in self.graph_dict.keys()
+                    for k in self.dim_dict.keys()
                 }
             )
             out_emb_dim = hid_emb_dim
@@ -523,9 +540,8 @@ class SurvivalGraphArch(nn.Module):
                 L=input_emb_dim, 
                 D=256, 
                 dropout=0.25, 
-                n_classes=2
+                n_classes=2 * input_emb_dim
             )
-            input_emb_dim = 1
             hid_emb_dim = self.embedding_dims[0]
             self.inverse_score_nn = ImportanceScoreArch(
                 dim_features=input_emb_dim,
@@ -538,7 +554,7 @@ class SurvivalGraphArch(nn.Module):
             self.Aggregation = SumAggregation()
         else:
             raise NotImplementedError
-        self.classifier = Linear(len(self.graph_dict)*out_emb_dim, dim_target)
+        self.classifier = Linear(len(self.dim_dict)*out_emb_dim, dim_target)
 
     def save(self, path):
         state_dict = self.state_dict()
@@ -560,22 +576,22 @@ class SurvivalGraphArch(nn.Module):
         return alpha, beta
 
     def forward(self, data):
-        feature_dict = {k : self.enc_branches[k](data.x_dict[k]) for k in self.graph_dict.keys()}
+        feature_dict = {k : self.enc_branches[k](data.x_dict[k]) for k in self.dim_dict.keys()}
 
         if self.aggregation == "ABMIL":
             gate_dict = {}
-            for k in self.graph_dict.keys():
+            for k in self.dim_dict.keys():
                 gate = self.gate_nn_dict[k](feature_dict[k])
                 gate = softmax(gate, index=data.batch_dict[k], dim=-2)
                 gate_dict.update({k: gate})
             VIparas = None
             KAparas = None
-            atte_dict = gate_dict
+            perm_dict = None
         elif self.aggregation == "SPARRA":
             # encoder
             feature_list, edge_index_list, batch_list = [], [], []
             perm_dict, score_list = {}, []
-            for k in self.graph_dict.keys():
+            for k in self.dim_dict.keys():
                 feature, edge_index, batch, perm_list, score = self.downsample_nn_dict[k](
                     feature = feature_dict[k], 
                     edge_index = data.edge_index_dict[k, "to", k], 
@@ -592,14 +608,14 @@ class SurvivalGraphArch(nn.Module):
             edge_index = [e.clone() for e in edge_index_list]
             ins = [0]
             index_shift = 0
-            for i in range(1, len(self.graph_dict)): 
+            for i in range(1, len(self.dim_dict)): 
                 index_shift += len(feature_list[i - 1])
                 edge_index[i] += index_shift
                 ins.append(index_shift)
             ins.append(len(feature))
             edge_index = torch.concat(edge_index, dim=1)
             batch = torch.concat(batch_list, dim=0)
-            batch_dict = {k: b for k, b in zip(self.graph_dict.keys(), batch_list)}
+            batch_dict = {k: b for k, b in zip(self.dim_dict.keys(), batch_list)}
             score = torch.concat(score_list, dim=0)
             KAparas = None
 
@@ -617,94 +633,100 @@ class SurvivalGraphArch(nn.Module):
             precision_list = [alpha / beta, self.lambda0, self.mu0]
             VIparas.append(precision_list)
             
-            feature_dict = {k: feature[ins[i]:ins[i+1]] for i, k in enumerate(self.graph_dict.keys())}
-            gate_dict = {k: gate[ins[i]:ins[i+1]] for i, k in enumerate(self.graph_dict.keys())}
+            feature_dict = {k: feature[ins[i]:ins[i+1]] for i, k in enumerate(self.dim_dict.keys())}
+            gate_dict = {k: gate[ins[i]:ins[i+1]] for i, k in enumerate(self.dim_dict.keys())}
+
             # decoder
             decode = self.inverse_score_nn(sample, edge_index)
 
-            dec_list = [self.dec_branches[k](decode[ins[i]:ins[i+1], ...]) for i, k in enumerate(self.graph_dict.keys())]
+            dec_list = [
+                self.dec_branches[k](decode[ins[i]:ins[i+1], ...]) 
+                for i, k in enumerate(self.dim_dict.keys())
+            ]
 
             # get references of downsampled graphs
             ds_enc_list = []
-            atte_dict = {}
-            for k in self.graph_dict.keys():
+            for k in self.dim_dict.keys():
                 enc = data.x_dict[k]
-                msk_list = []
-                msk = torch.zeros(enc.shape[0], 1).to(enc.device)
-                msk_list.append(msk)
                 perm_list = perm_dict[k]
                 for p in perm_list: 
                     enc = enc[p]
-                    msk = torch.zeros(enc.shape[0], 1).to(enc.device)
-                    msk_list.append(msk)
                 ds_enc_list.append(enc)
-                for n, msk in enumerate(msk_list[::-1]):
-                    if n == 0:
-                        atte = gate_dict[k]
-                    else:
-                        perm = perm_list[-n]
-                        msk[perm] = atte
-                        atte = msk
-                atte_dict.update({k: atte})
             VIparas.append(ds_enc_list)
             VIparas.append(dec_list)
+        
+        # aggreggate spatial features
         feature_list = []
-        for k in self.graph_dict.keys():
+        for k in self.dim_dict.keys():
             feature_list.append(
                 self.Aggregation(feature_dict[k] * gate_dict[k], index=batch_dict[k])
             )
         feature = torch.concat(feature_list, dim=-1)
         output = self.classifier(feature)
-        return output, VIparas, KAparas, feature, atte_dict
+        return output, VIparas, KAparas, feature, perm_dict, gate_dict
     
     @staticmethod
-    def train_batch(model, batch_data, on_gpu, loss, optimizer, kl=None):
+    def train_batch(model, batch_data, on_gpu, loss, optimizer, kl=None, l1_penalty=0.0):
         device = "cuda" if on_gpu else "cpu"
-        wsi_graphs = batch_data.to(device)
+        batch_data = batch_data.to(device)
 
         model.train()
         optimizer.zero_grad()
-        wsi_outputs, VIparas, KAparas, _, _ = model(wsi_graphs)
-        wsi_outputs = wsi_outputs.squeeze()
-        if hasattr(wsi_graphs, "y_dict"):
-            wsi_labels = wsi_graphs.y_dict[model.keys[0]].squeeze()
-        elif hasattr(wsi_graphs, "y"):
-            wsi_labels = wsi_graphs.y.squeeze()
-        else:
-            raise AttributeError
-        loss = loss(wsi_outputs, wsi_labels[:, 0], wsi_labels[:, 1], VIparas, KAparas)
+        outputs, VIparas, KAparas, _, _, _ = model(batch_data)
+        outputs = outputs.squeeze()
+        labels = next(iter(batch_data.y_dict.values())).squeeze()
+        loss = loss(outputs, labels[:, 0], labels[:, 1], VIparas, KAparas)
+        loss += l1_penalty * model.classifier.weight.abs().sum()
         loss.backward()
         optimizer.step()
 
         loss = loss.detach().cpu().numpy()
         assert not np.isnan(loss)
-        wsi_labels = wsi_labels.cpu().numpy()
-        return [loss, wsi_outputs, wsi_labels]
+        labels = labels.cpu().numpy()
+        return [loss, outputs, labels]
     
     @staticmethod
     def infer_batch(model, batch_data, on_gpu):
         device = "cuda" if on_gpu else "cpu"
-        wsi_graphs = batch_data.to(device)
+        batch_data = batch_data.to(device)
 
         model.eval()
         with torch.inference_mode():
-            wsi_outputs, _, _, features, attention = model(wsi_graphs)
-        wsi_outputs = wsi_outputs.cpu().numpy()
+            outputs, _, _, features, perm_dict, gate_dict = model(batch_data)
+        outputs = outputs.cpu().numpy()
         features = features.cpu().numpy()
-        attention = attention.cpu().numpy()
-        wsi_labels = None
+        labels = None
         try:
-            wsi_labels = wsi_graphs.y_dict[model.keys[0]].cpu().numpy()
+            labels = next(iter(batch_data.y_dict.values())).cpu().numpy()
         except:
-            print("no y dict!")
-        if hasattr(wsi_graphs, "y"):
-            if wsi_graphs.y is not None:
-                wsi_labels = wsi_graphs.y.cpu().numpy()
-        if wsi_labels is not None:
-            return [wsi_outputs, wsi_labels]
+            pass
+        if labels is not None:
+            return [outputs, labels]
         else:
-            # return [wsi_outputs, features]
-            return [wsi_outputs, features, attention]
+            if perm_dict is not None:
+                atte_dict = {}
+                for k in model.dim_dict.keys():
+                    enc = batch_data.x_dict[k]
+                    msk_list = []
+                    msk = torch.zeros(enc.shape[0], gate_dict[k].shape[-1]).to(enc.device)
+                    msk_list.append(msk)
+                    perm_list = perm_dict[k]
+                    for p in perm_list: 
+                        enc = enc[p]
+                        msk = torch.zeros(enc.shape[0], gate_dict[k].shape[-1]).to(enc.device)
+                        msk_list.append(msk)
+                    for n, msk in enumerate(msk_list[::-1]):
+                        if n == 0:
+                            atte = gate_dict[k]
+                        else:
+                            perm = perm_list[-n]
+                            msk[perm] = atte
+                            atte = msk
+                    atte_dict.update({k: atte.cpu().numpy()})
+            else:
+                atte_dict = {k: v.cpu().numpy() for k, v in gate_dict}
+
+            return [outputs, features, atte_dict]
 
 class SurvivalBayesGraphArch(nn.Module):
     """define Graph architecture for survival analysis
@@ -886,8 +908,8 @@ class VILoss(nn.Module):
             # subset = torch.randperm(len(enc))[:len(dec)]
             # enc = enc[subset]
             loss_ae += F.mse_loss(enc, dec)
-        print(loss_ae.item(), loss_kl.item(), precision.min().item(), precision.max().item())
-        return self.tau_ae * loss_ae + loss_kl
+        # print(loss_ae.item(), loss_kl.item(), precision.min().item(), precision.max().item())
+        return self.tau_ae * loss_ae / len(dec_list) + loss_kl
     
 def calc_mmd(f1, f2, sigmas, normalized=False):
     if len(f1.shape) != 2:

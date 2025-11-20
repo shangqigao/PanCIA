@@ -11,7 +11,7 @@ radiomics_dims = {
     "SegVol": {'child0': 768},
     "BiomedParse": {'child0': 512},
     "BayesBP": {'child0': 64},
-    "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 1024, 'child5': 2048}
+    "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 1024, 'child4': 2048}
 }
 
 pathomics_dims = {
@@ -29,7 +29,7 @@ radiomics_pool_ratio = {
     "SegVol": {'child0': 0.7},
     "BiomedParse": {'child0': 0.7},
     "BayesBP": {'child0': 0.7},
-    "LVMMed": {'child0': 0.7, 'child1': 1, 'child2': 1, 'child3': 1, 'child5': 1}
+    "LVMMed": {'child0': 0.7, 'child1': 1, 'child2': 1, 'child3': 1, 'child4': 1}
 }
 
 pathomics_pool_ratio = {

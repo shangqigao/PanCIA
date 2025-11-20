@@ -1389,7 +1389,8 @@ def run_once(
     else:
         model = model.to("cpu")
     loss = CoxSurvLoss()
-    optimizer = torch.optim.Adam(model.parameters(), **optim_kwargs)
+    optimizer_kwargs = {k: v for k, v in optim_kwargs.items() if k in ["lr", "weight_decay"]}
+    optimizer = torch.optim.Adam(model.parameters(), **optimizer_kwargs)
     # optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, nesterov=True, **optim_kwargs)
     # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 80], gamma=0.1)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
@@ -1423,7 +1424,7 @@ def run_once(
             pbar = create_pbar(loader_name, len(loader))
             for step, batch_data in enumerate(loader):
                 if loader_name == "train":
-                    output = model.train_batch(model, batch_data, on_gpu, loss, optimizer, kl)
+                    output = model.train_batch(model, batch_data, on_gpu, loss, optimizer, kl, optim_kwargs['l1_penalty'])
                     ema({"loss": output[0]})
                     pbar.postfix[1]["step"] = step
                     pbar.postfix[1]["EMA"] = ema.tracking_dict["loss"]
@@ -1492,6 +1493,7 @@ def training(
         split_path,
         scaler_path,
         model_dir,
+        omics_modes,
         omics_dims,
         omics_pool_ratio,
         arch_opt,
@@ -1506,8 +1508,8 @@ def training(
         model_dir (str): directory of saving models
     """
     splits = joblib.load(split_path)
-    node_scalers = [joblib.load(scaler_path[k]) for k in arch_opt['OMICS']] 
-    transform_dict = {k: s.transform for k, s in zip(arch_opt['OMICS'], node_scalers)}
+    node_scalers = [joblib.load(scaler_path[k]) for k in omics_modes.keys()] 
+    transform_dict = {k: s.transform for k, s in zip(omics_modes.keys(), node_scalers)}
     
     loader_kwargs = {
         "num_workers": train_opt['N_WORKS'], 
@@ -1520,19 +1522,23 @@ def training(
         "dropout": arch_opt['DROPOUT'],
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
-        "aggregation": arch_opt['AGGREGATION']
+        "aggregation": arch_opt['AGGREGATION']['VALUE']
     }
     omics_name = "_".join(arch_opt['OMICS'])
     if arch_opt['BayesGNN']:
-        model_dir = model_dir / f"{omics_name}_Bayes_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']}"
+        model_dir = model_dir / f"{omics_name}_Bayes_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
     else:
-        model_dir = model_dir / f"{omics_name}_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']}"
+        model_dir = model_dir / f"{omics_name}_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
     optim_kwargs = {
         "lr": 3e-4,
         "weight_decay": {
             "ABMIL": train_opt['WIEGHT_DECAY']['ABMIL'], 
-            "SISIR": train_opt['WIEGHT_DECAY']['SPARRA']
-        }[arch_opt['AGGREGATION']],
+            "SPARRA": train_opt['WIEGHT_DECAY']['SPARRA']
+        }[arch_opt['AGGREGATION']['VALUE']],
+        "l1_penalty": {
+            "ABMIL": train_opt['L1_PENALTY']['ABMIL'], 
+            "SPARRA": train_opt['L1_PENALTY']['SPARRA']
+        }[arch_opt['AGGREGATION']['VALUE']]
     }
     for split_idx, split in enumerate(splits):
         # if split_idx < 3: continue
@@ -1562,6 +1568,7 @@ def training(
 def inference(
         split_path,
         scaler_path,
+        omics_modes,
         omics_dims,
         omics_pool_ratio,
         arch_opt,
@@ -1570,8 +1577,8 @@ def inference(
     """survival prediction
     """
     splits = joblib.load(split_path)
-    node_scalers = [joblib.load(scaler_path[k]) for k in arch_opt['OMICS']] 
-    transform_dict = {k: s.transform for k, s in zip(arch_opt['OMICS'], node_scalers)}
+    node_scalers = [joblib.load(scaler_path[k]) for k in omics_modes.keys()] 
+    transform_dict = {k: s.transform for k, s in zip(omics_modes.keys(), node_scalers)}
     
     loader_kwargs = {
         "num_workers": infer_opt['N_WORKS'], 
@@ -1814,32 +1821,39 @@ if __name__ == "__main__":
         loader = SurvivalGraphDataset(train_graph_paths, mode="infer", data_types=omics_keys)
         loader = DataLoader(
             loader,
-            num_workers=8,
-            batch_size=1,
+            num_workers=32,
+            batch_size=8,
             shuffle=False,
             drop_last=False,
         )
-        if len(omics_keys) > 1:
-            omic_features = [{k: v.x_dict[k].numpy() for k in omics_keys} for v in loader]
-        else:
-            omic_features = [{k: v.x.numpy() for k in omics_keys} for v in loader]
-        omics_modes = {"radiomics": radiomics_mode, "pathomics": pathomics_mode}
-        omics_modes = {k: omics_modes[k] for k in omics_keys}
-        for k, v in omics_modes.items():
-            node_features = [d[k] for d in omic_features]
-            node_features = np.concatenate(node_features, axis=0)
-            node_scaler = StandardScaler(copy=False)
-            node_scaler.fit(node_features)
+        # Initialize one scaler per child type
+        omics_modes = {
+            k: radiomics_mode if 'radiomics' in k else pathomics_mode
+            for k in loader.dataset[0].x_dict.keys()
+        }
+
+        scalers = {k: StandardScaler(copy=False) for k in omics_modes.keys()}
+
+        # Iterate over loader directly
+        for batch in loader:  # batch can be batch_size=1 if WSIs are big
+            for k in omics_modes.keys():
+                x = batch.x_dict[k].cpu().numpy()  # [num_nodes, feature_dim]
+                scalers[k].partial_fit(x)
+
+        # Save scalers
+        for k, scaler in scalers.items():
+            v = omics_modes[k]
             scaler_path = f"{save_model_dir}/survival_{k}_{v}_scaler.dat"
-            joblib.dump(node_scaler, scaler_path)
+            joblib.dump(scaler, scaler_path)
 
         # training
-        split_path = f"{save_model_dir}/survival_radiopathomics_{radiomics_mode}_{pathomics_mode}_splits.dat"
+        split_path = f"{save_model_dir}/survival_{radiomics_mode}_{pathomics_mode}_splits.dat"
         scaler_paths = {k: f"{save_model_dir}/survival_{k}_{v}_scaler.dat" for k, v in omics_modes.items()}
         training(
             split_path=split_path,
             scaler_path=scaler_paths,
             model_dir=save_model_dir,
+            omics_modes=omics_modes,
             omics_dims=omics_dims,
             omics_pool_ratio=omics_pool_ratio,
             arch_opt=opt['ARCH'],
@@ -1851,6 +1865,7 @@ if __name__ == "__main__":
         inference(
             split_path=split_path,
             scaler_path=scaler_paths,
+            omics_modes=omics_modes,
             omics_dims=omics_dims,
             omics_pool_ratio=omics_pool_ratio,
             arch_opt=opt['ARCH'],
