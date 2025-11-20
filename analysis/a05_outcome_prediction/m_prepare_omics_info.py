@@ -23,6 +23,24 @@ pathomics_dims = {
     "CHIEF": {'child0': 768}
 }
 
+radiomics_pool_ratio = {
+    "None": None,
+    "pyradiomics": {'child0': 1},
+    "SegVol": {'child0': 0.7},
+    "BiomedParse": {'child0': 0.7},
+    "BayesBP": {'child0': 0.7},
+    "LVMMed": {'child0': 0.7, 'child1': 1, 'child2': 1, 'child3': 1, 'child5': 1}
+}
+
+pathomics_pool_ratio = {
+    "None": None,
+    "CNN": {'child0': 0.2},
+    "HIPT": {'child0': 0.2},
+    "UNI": {'child0': 0.2},
+    "CONCH": {'child0': 0.2},
+    "CHIEF": {'child0': 0.2}
+}
+
 signatures_predictable = {
     "GeneProgrames": None,
     "HRDscore": None,

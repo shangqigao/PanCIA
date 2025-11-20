@@ -1493,6 +1493,7 @@ def training(
         scaler_path,
         model_dir,
         omics_dims,
+        omics_pool_ratio,
         arch_opt,
         train_opt
 ):
@@ -1504,12 +1505,6 @@ def training(
         num_node_features (int): the dimension of node feature
         model_dir (str): directory of saving models
     """
-    omics_pool_ratio = {
-        "radiomics": arch_opt['POOL_RATIO']['RAIOMICS'], 
-        "pathomics": arch_opt['POOL_RATIO']['PATHOMICS']
-    }
-    omics_pool_ratio = {k: omics_pool_ratio[k] for k in arch_opt['OMICS']}
-
     splits = joblib.load(split_path)
     node_scalers = [joblib.load(scaler_path[k]) for k in arch_opt['OMICS']] 
     transform_dict = {k: s.transform for k, s in zip(arch_opt['OMICS'], node_scalers)}
@@ -1525,7 +1520,6 @@ def training(
         "dropout": arch_opt['DROPOUT'],
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
-        "keys": arch_opt['OMICS'],
         "aggregation": arch_opt['AGGREGATION']
     }
     omics_name = "_".join(arch_opt['OMICS'])
@@ -1569,17 +1563,12 @@ def inference(
         split_path,
         scaler_path,
         omics_dims,
+        omics_pool_ratio,
         arch_opt,
         infer_opt
 ):
     """survival prediction
     """
-    omics_pool_ratio = {
-        "radiomics": arch_opt['POOL_RATIO']['RAIOMICS'], 
-        "pathomics": arch_opt['POOL_RATIO']['PATHOMICS']
-    }
-    omics_pool_ratio = {k: omics_pool_ratio[k] for k in arch_opt['OMICS']}
-
     splits = joblib.load(split_path)
     node_scalers = [joblib.load(scaler_path[k]) for k in arch_opt['OMICS']] 
     transform_dict = {k: s.transform for k, s in zip(arch_opt['OMICS'], node_scalers)}
@@ -1810,9 +1799,13 @@ if __name__ == "__main__":
 
     from analysis.a05_outcome_prediction.m_prepare_omics_info import radiomics_dims
     from analysis.a05_outcome_prediction.m_prepare_omics_info import pathomics_dims
+    from analysis.a05_outcome_prediction.m_prepare_omics_info import radiomics_pool_ratio
+    from analysis.a05_outcome_prediction.m_prepare_omics_info import pathomics_pool_ratio
     omics_dims = {"radiomics": radiomics_dims[radiomics_mode], "pathomics": pathomics_dims[pathomics_mode]}
+    omics_pool_ratio = {"radiomics": radiomics_pool_ratio[radiomics_mode], "pathomics": pathomics_pool_ratio[pathomics_mode]}
     omics_keys = opt['ARCH']['OMICS']
     omics_dims = {k: omics_dims[k] for k in omics_keys}
+    omics_pool_ratio = {k: omics_pool_ratio[k] for k in omics_keys}
 
     if opt['TASKS']['TRAIN']:
         # compute mean and std on training data for normalization 
@@ -1848,6 +1841,7 @@ if __name__ == "__main__":
             scaler_path=scaler_paths,
             model_dir=save_model_dir,
             omics_dims=omics_dims,
+            omics_pool_ratio=omics_pool_ratio,
             arch_opt=opt['ARCH'],
             train_opt=opt['TRAIN']
         )
@@ -1858,6 +1852,7 @@ if __name__ == "__main__":
             split_path=split_path,
             scaler_path=scaler_paths,
             omics_dims=omics_dims,
+            omics_pool_ratio=omics_pool_ratio,
             arch_opt=opt['ARCH'],
             infer_opt=opt['INFERENCE']
         )
