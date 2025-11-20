@@ -124,6 +124,39 @@ def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_ex
     )
     return 
 
+def convert_wsi_graph_to_npz(wsi_paths, save_dir, n_jobs=8, skip_exist=False):
+    """convert wsi graph for speeding up deep learning
+    Args:
+        wsi_paths (list): a list of wsi paths
+        save_dir (str): directory of reading feature and saving graph
+    """
+    def _aggregate_graph(idx, wsi_path):
+        from tiatoolbox import logger
+        wsi_name = pathlib.Path(wsi_path).stem
+        graph_path = pathlib.Path(f"{save_dir}/{wsi_name}_graph.json")
+        if not graph_path.exists():
+            logger.info(f"{graph_path.name} does not exist, skip!")
+            return
+        npz_path = pathlib.Path(f"{save_dir}/{wsi_name}_graph.npz")
+        if npz_path.exists() and skip_exist: 
+            logger.info(f"{wsi_name}_graph.npz has existed, skip!")
+            return
+
+        logger.info("converting graph: {}/{}...".format(idx + 1, len(wsi_paths)))
+        graph_dict = load_json(graph_path)
+        graph_dict = {k: np.array(v) for k, v in graph_dict.items() if k != "cluster_points"}
+        graph_dict["edge_index"] = graph_dict["edge_index"].T
+        np.savez_compressed(npz_path, **graph_dict)
+        
+        return
+    
+    # construct graphs in parallel
+    joblib.Parallel(n_jobs=n_jobs)(
+        joblib.delayed(_aggregate_graph)(idx, wsi_path)
+        for idx, wsi_path in enumerate(wsi_paths)
+    )
+    return 
+
 def aggregate_wsi_graph(wsi_paths, save_dir, mode='mean', n_jobs=8, skip_exist=False):
     """aggregate graph for wsi
     Args:
@@ -315,6 +348,43 @@ def aggregate_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumou
     # construct graphs in parallel
     joblib.Parallel(n_jobs=n_jobs)(
         joblib.delayed(_aggregate_graph)(idx, img_path)
+        for idx, img_path in enumerate(img_paths)
+    )
+    return 
+
+def convert_img_graph_to_npz(img_paths, save_dir, radiomics_suffix, class_name="tumour", n_jobs=32, skip_exist=False):
+    """convert json to npz for speeding up deep learning
+    Args:
+        img_paths (list): a list of image paths
+        save_dir (str): directory of reading feature and saving graph
+        omics_suffix (list): a list of radiomic npy suffix
+    """
+    def _convert_graph(idx, img_path):
+        from tiatoolbox import logger
+        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        parent_name = pathlib.Path(img_path).parent.name
+        save_feat_dir = f"{save_dir}/{parent_name}"
+        for suffix in radiomics_suffix:
+            graph_suffix = str(suffix).replace("radiomics.npy", "graph.json")
+            graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_{graph_suffix}")
+            if not graph_path.exists():
+                logger.info(f"{graph_path.name} does not exist, skip!")
+                return
+            npz_suffix = str(suffix).replace("radiomics.npy", f"graph.npz")
+            npz_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_{npz_suffix}")
+            if npz_path.exists() and skip_exist:
+                logger.info(f"{npz_path.name} has existed, skip!")
+                return
+            logger.info("converting graph: {}/{}...".format(idx + 1, len(img_paths)))
+            graph_dict = load_json(graph_path)
+            graph_dict = {k: np.array(v) for k, v in graph_dict.items() if k != "cluster_points"}
+            graph_dict["edge_index"] = graph_dict["edge_index"].T
+            np.savez_compressed(npz_path, **graph_dict)
+        return
+    
+    # convert graphs in parallel
+    joblib.Parallel(n_jobs=n_jobs)(
+        joblib.delayed(_convert_graph)(idx, img_path)
         for idx, img_path in enumerate(img_paths)
     )
     return 

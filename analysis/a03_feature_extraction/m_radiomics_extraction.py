@@ -120,6 +120,18 @@ if __name__ == "__main__":
             skip_exist=opt['RADIOMICS']['SKIP_EXITS']
         )
 
+    # convert graph to npz
+    if opt['RADIOMICS']['TASKS']['CONVERT_JSON2NPZ']:
+        from analysis.a04_feature_aggregation.m_graph_construction import convert_img_graph_to_npz
+        convert_img_graph_to_npz(
+            img_paths=dataset_info['img_paths'],
+            save_dir=save_feature_dir,
+            radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
+            class_name=opt['RADIOMICS']['TARGET'],
+            n_jobs=opt['N_JOBS'],
+            skip_exist=opt['RADIOMICS']['SKIP_EXITS']
+        )
+
     # measure graph properties
     if opt['RADIOMICS']['TASKS']['MEASURE_GRAPH_PROPERTIES']:
         from analysis.a04_feature_aggregation.m_graph_construction import measure_graph_properties
