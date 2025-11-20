@@ -5,13 +5,13 @@ OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 SAVE_OUTCOME_FILE: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/clinical_data/survival_data.csv"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "PFI"
+  VALUE: "OS"
   CHOICES: ["OS", "DSS", "DFI", "PFI"]
 TASKS:
-  TRAIN: False
+  TRAIN: True
   INFERENCE: False
   TEST: False
-  PREDICTION: True
+  PREDICTION: False
 
 # Define parameters of radiomics
 RADIOMICS:
