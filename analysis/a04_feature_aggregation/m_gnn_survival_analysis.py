@@ -12,10 +12,14 @@ import torchbnn as bnn
 from torch.nn import BatchNorm1d, Linear, ReLU, Dropout
 from torch_geometric.data import Data, Dataset, HeteroData
 from torch_geometric.utils import subgraph, softmax, scatter
+import torch_geometric.utils as pyg_utils
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 from torch_geometric.nn import EdgeConv, GINConv, GCNConv, GATv2Conv
 from torch_geometric.nn import global_mean_pool, TopKPooling
 from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, AttentionalAggregation
+
+from functools import lru_cache
+from sparsemax import Sparsemax
     
 class SurvivalGraphDataset(Dataset):
     """loading graph data for survival analysis
@@ -27,8 +31,9 @@ class SurvivalGraphDataset(Dataset):
         preproc=None,
         data_types=["radiomics", "pathomics"],
         sampling_rate=1.0,
-        max_num_nodes=1e4,
-        sampling_k=2      # <-- new parameter: BFS k-hop neighborhood
+        max_num_nodes=1e3,
+        sampling_k=2,      # <-- new parameter: BFS k-hop neighborhood
+        cache_size=2048,              # bounded LRU cache
     ):
         super().__init__()
         self.info_list = info_list
@@ -39,107 +44,98 @@ class SurvivalGraphDataset(Dataset):
         self.max_num_nodes = max_num_nodes
         self.sampling_k = sampling_k
 
+        # Create a cached loader with bounded memory
+        self.load_npz_cached = lru_cache(maxsize=cache_size)(self._load_npz_internal)
+
     # ----------------------------------------------------------------------
-    # Structure-preserving sampling: BFS K-Hop sampling
+    # Cached NPZ loader (fast)
+    # ----------------------------------------------------------------------
+    def _load_npz_internal(self, npz_path):
+        data = np.load(npz_path, mmap_mode="r")  # memory-mapped read
+        x = torch.from_numpy(data["x"]).float()
+        edge_index = torch.from_numpy(data["edge_index"]).long()
+        return x, edge_index
+
+    # ----------------------------------------------------------------------
+    # Optional k-hop sampling
     # ----------------------------------------------------------------------
     def sample_subgraph(self, x, edge_index):
         num_nodes = x.size(0)
 
-        # If no sampling needed → return original
         if self.sampling_rate >= 1 or num_nodes <= self.max_num_nodes:
             return x, edge_index
 
-        import torch_geometric.utils as pyg_utils
-
-        # 1. target number of nodes
         num_sampled = int(num_nodes * self.sampling_rate)
+        seed_count = max(1, num_sampled // 10)
 
-        # 2. pick seed nodes (10% of target)
-        seed_count = max(1, max(1, num_sampled // 10))
         seeds = torch.randperm(num_nodes)[:seed_count]
 
-        # 3. BFS / K-hop expansion
-        subset, _, _, _ = pyg_utils.k_hop_subgraph(
+        subset, new_edge_index, _, _ = pyg_utils.k_hop_subgraph(
             seeds,
-            k=self.sampling_k,
-            edge_index=edge_index,
-            relabel_nodes=False
+            self.sampling_k,
+            edge_index,
+            relabel_nodes=True
         )
 
-        # 4. if too large, downsample uniformly
-        # if subset.numel() > num_sampled:
-        #     subset = subset[torch.randperm(subset.numel())[:num_sampled]]
-
-        # 5. final subgraph
-        new_edge_index, _ = pyg_utils.subgraph(subset, edge_index, relabel_nodes=True)
-
-        # 6. slice features
-        x = x[subset]
-
-        return x, new_edge_index
+        return x[subset], new_edge_index
 
     # ----------------------------------------------------------------------
+    # Main loading
+    # ----------------------------------------------------------------------
     def get(self, idx):
-        # subject info
-        if any(v in self.mode for v in ["train", "valid"]):
+        # ---------------- Label handling ----------------
+        if "train" in self.mode or "valid" in self.mode:
             subject_info, label = self.info_list[idx]
             label = torch.tensor(label).unsqueeze(0)
         else:
             subject_info = self.info_list[idx]
 
-        subject_paths = subject_info[1]
         hetero = HeteroData()
+        subject_paths = subject_info[1]
 
+        # ---------------- Iterate through data types ----------------
         for key in self.data_types:
             parents = subject_paths.get(key)
             if parents is None:
                 continue
 
-            # temporary storage per child
             child_nodes = {}
 
-            for i, parent in enumerate(parents):
-                for child_name, json_path in parent.items():
+            for parent in parents:
+                for child_name, npz_path in parent.items():
+                    # ---- Load from NPZ (fast, cached) ----
+                    x, edge_index = self.load_npz_cached(npz_path)
 
-                    # --------------------- Load graph -------------------------
-                    with open(json_path) as fp:
-                        g = json.load(fp)
-
-                    g = {k: np.array(v) for k, v in g.items() if k != "cluster_points"}
-
-                    g["edge_index"] = g["edge_index"].T
-
-                    # --------------------- Preprocess -------------------------
+                    # ---- Preprocessing (applied once per epoch load) ----
                     if self.preproc:
-                        g["x"] = self.preproc[f"{key}_{child_name}"](g["x"])
+                        proc = self.preproc.get(f"{key}_{child_name}")
+                        if proc:
+                            x = proc(x)
+                            x = torch.as_tensor(x, dtype=torch.float32)
 
-                    # --------------------- Convert -----------------------------
-                    x = torch.tensor(g["x"], dtype=torch.float32)
-                    edge_index = torch.tensor(g["edge_index"], dtype=torch.int64)
+                    # ---- Optional sampling ----
+                    x, edge_index = self.sample_subgraph(x, edge_index)
 
-                    # ---------------- Sampling (radiomics only) ----------------
-                    if key == "radiomics":
-                        x, edge_index = self.sample_subgraph(x, edge_index)
+                    # ---- Group by child_name ----
+                    entry = child_nodes.setdefault(
+                        child_name, {"xs": [], "edges": [], "offset": 0}
+                    )
 
-                    # --------------------- Concatenate nodes --------------------
-                    if child_name not in child_nodes:
-                        child_nodes[child_name] = {"x": [], "edge_index": [], "offset": 0}
+                    offset = entry["offset"]
+                    entry["xs"].append(x)
+                    entry["edges"].append(edge_index + offset)
+                    entry["offset"] += x.size(0)
 
-                    offset = child_nodes[child_name]["offset"]
-                    child_nodes[child_name]["x"].append(x)
-                    child_nodes[child_name]["edge_index"].append(edge_index + offset)
-                    child_nodes[child_name]["offset"] += x.size(0)
-
-            # --------------------- Merge children and assign to HeteroData ----------------
-            for child_name, data_dict in child_nodes.items():
-                x_concat = torch.cat(data_dict["x"], dim=0)
-                edge_index_concat = torch.cat(data_dict["edge_index"], dim=1)
+            # ---------------- Merge children into HeteroData ----------------
+            for child_name, entry in child_nodes.items():
+                x_cat = torch.cat(entry["xs"], dim=0)
+                edge_cat = torch.cat(entry["edges"], dim=1)
 
                 node_type = f"{key}_{child_name}"
-                hetero[node_type].x = x_concat
-                hetero[(node_type, "to", node_type)].edge_index = edge_index_concat
+                hetero[node_type].x = x_cat
+                hetero[(node_type, "to", node_type)].edge_index = edge_cat
 
-                if any(v in self.mode for v in ["train", "valid"]):
+                if "train" in self.mode or "valid" in self.mode:
                     hetero[node_type].y = label
 
         return hetero
@@ -460,7 +456,7 @@ class SurvivalGraphArch(nn.Module):
             mu0=0, 
             lambda0=1, 
             alpha0=2, 
-            beta0=1e-2,
+            beta0=1e-4,
             **kwargs,
     ):
         super().__init__()
@@ -487,6 +483,8 @@ class SurvivalGraphArch(nn.Module):
         self.dec_convs = nn.ModuleList()
         self.dec_linears = nn.ModuleList()
         self.conv_name = conv
+
+        self.sparsemax = Sparsemax(dim=0)
         
         def create_block(in_dims, out_dims):
             return nn.Sequential(
@@ -575,6 +573,13 @@ class SurvivalGraphArch(nn.Module):
         beta = 2*self.beta0 + self.lambda0*(loc - self.mu0)**2 + self.lambda0*torch.exp(logvar)
         return alpha, beta
 
+    def group_sparsemax(self, x, index):
+        out = torch.zeros_like(x)
+        for i in index.unique():
+            mask = (index == i)
+            out[mask] = self.sparsemax(x[mask])
+        return out
+
     def forward(self, data):
         feature_dict = {k : self.enc_branches[k](data.x_dict[k]) for k in self.dim_dict.keys()}
 
@@ -625,13 +630,18 @@ class SurvivalGraphArch(nn.Module):
 
             # caculate normalized inverse precision
             alpha, beta = self.precision(loc, logvar)
-            inv_precision = beta / alpha
-            N = maybe_num_nodes(batch)
-            inv_precision_sum = scatter(inv_precision, index=batch, dim=-2, dim_size=N, reduce='sum')
-            inv_precision_sum = inv_precision_sum.index_select(-2, batch)
-            gate = inv_precision / inv_precision_sum
+            # inv_precision = beta / alpha
+            # N = maybe_num_nodes(batch)
+            # inv_precision_sum = scatter(inv_precision, index=batch, dim=-2, dim_size=N, reduce='sum')
+            # inv_precision_sum = inv_precision_sum.index_select(-2, batch)
+            # gate = inv_precision / inv_precision_sum
+            if self.training:
+                gate = self.group_sparsemax(sample, index=batch)
+            else:
+                gate = self.group_sparsemax(loc, index=batch)
             precision_list = [alpha / beta, self.lambda0, self.mu0]
             VIparas.append(precision_list)
+
             
             feature_dict = {k: feature[ins[i]:ins[i+1]] for i, k in enumerate(self.dim_dict.keys())}
             gate_dict = {k: gate[ins[i]:ins[i+1]] for i, k in enumerate(self.dim_dict.keys())}
@@ -895,7 +905,7 @@ class ScalarMovingAverage:
 class VILoss(nn.Module):
     """ variational inference loss
     """
-    def __init__(self, tau_ae=1e-3):
+    def __init__(self, tau_ae=1e-2):
         super(VILoss, self).__init__()
         self.tau_ae = tau_ae
 
@@ -908,8 +918,9 @@ class VILoss(nn.Module):
             # subset = torch.randperm(len(enc))[:len(dec)]
             # enc = enc[subset]
             loss_ae += F.mse_loss(enc, dec)
-        # print(loss_ae.item(), loss_kl.item(), precision.min().item(), precision.max().item())
-        return self.tau_ae * loss_ae / len(dec_list) + loss_kl
+        loss_ae = loss_ae / len(dec_list)
+        print(loss_ae.item(), loss_kl.item(), precision.min().item(), precision.max().item())
+        return self.tau_ae * loss_ae + loss_kl
     
 def calc_mmd(f1, f2, sigmas, normalized=False):
     if len(f1.shape) != 2:

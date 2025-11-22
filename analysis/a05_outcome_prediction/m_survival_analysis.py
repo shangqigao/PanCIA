@@ -1399,8 +1399,8 @@ def run_once(
     for subset_name, subset in dataset_dict.items():
         _loader_kwargs = copy.deepcopy(loader_kwargs)
         if not "train" in subset_name: 
-            if _loader_kwargs["batch_size"] > 8:
-                _loader_kwargs["batch_size"] = 8
+            if _loader_kwargs["batch_size"] > 4:
+                _loader_kwargs["batch_size"] = 4
             sampling_rate = 1.0
         ds = SurvivalGraphDataset(
             subset, 

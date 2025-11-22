@@ -33,6 +33,7 @@ seaborn
 segmentation_models_pytorch
 shapely
 SimpleITK
+sparsemax
 statsmodels
 tcia_utils
 tensorboard

@@ -64,8 +64,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --meta_info $meta_info
 
 # extract radiomic features
-# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
         
 # extract pathomic features
 # pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
@@ -77,8 +77,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
 
 # phenotype prediction
-phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
-python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
+# phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
+# python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
 
 # signature prediction
 # signature_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"

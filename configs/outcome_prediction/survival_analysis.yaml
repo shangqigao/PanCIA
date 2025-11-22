@@ -34,11 +34,11 @@ RADIOMICS:
     #   - "_tumor_layer3_graph_aggr_mean.npy"
     #   - "_tumor_layer4_graph_aggr_mean.npy"
     SUFFIX:
-      - "_tumor_layer0_graph.json"
-      - "_tumor_layer1_graph.json"
-      - "_tumor_layer2_graph.json"
-      - "_tumor_layer3_graph.json"
-      - "_tumor_layer4_graph.json"
+      - "_tumor_layer0_graph.npz"
+      - "_tumor_layer1_graph.npz"
+      - "_tumor_layer2_graph.npz"
+      - "_tumor_layer3_graph.npz"
+      - "_tumor_layer4_graph.npz"
   # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
   # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
   AGGREGATION: False
@@ -56,7 +56,7 @@ PATHOMICS:
     # SUFFIX:
     #   - "_graph_aggr_mean.npy"
     SUFFIX:
-      - "_graph.json"
+      - "_graph.npz"
   # KEYS: ["TUM", "NORM", "DEB"]
   AGGREGATION: False
   AGGREGATED_MODE:
@@ -80,24 +80,24 @@ ARCH:
   DROPOUT: 0.5
   POOL_RATIO:
     RAIOMICS: 0.7
-    PATHOMICS: 0.2
+    PATHOMICS: 0.7
   OMICS: ["radiomics", "pathomics"]
   AGGREGATION:
     VALUE: "SPARRA"
     CHOICES: ["ABMIL", "SPARRA"]
 
 TRAIN:
-  EPOCHS: 20
+  EPOCHS: 40
   N_WORKS: 32
   BATCH_SIZE: 32
-  SAMPLING_RATE: 1.0
+  SAMPLING_RATE: 0.1
   LR: 3e-4
   WIEGHT_DECAY:
     ABMIL: 1.0e-5
     SPARRA: 0.0
   L1_PENALTY:
     ABMIL: 0.0
-    SPARRA: 1.0e-4
+    SPARRA: 1.0e-3
 
 INFERENCE:
   PRE_TRAINED: ""

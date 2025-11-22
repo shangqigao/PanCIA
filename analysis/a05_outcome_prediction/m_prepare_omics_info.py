@@ -29,16 +29,16 @@ radiomics_pool_ratio = {
     "SegVol": {'child0': 0.7},
     "BiomedParse": {'child0': 0.7},
     "BayesBP": {'child0': 0.7},
-    "LVMMed": {'child0': 0.7, 'child1': 1, 'child2': 1, 'child3': 1, 'child4': 1}
+    "LVMMed": {'child0': 0.7, 'child1': 0.9, 'child2': 0.9, 'child3': 0.9, 'child4': 0.9}
 }
 
 pathomics_pool_ratio = {
     "None": None,
-    "CNN": {'child0': 0.2},
-    "HIPT": {'child0': 0.2},
-    "UNI": {'child0': 0.2},
-    "CONCH": {'child0': 0.2},
-    "CHIEF": {'child0': 0.2}
+    "CNN": {'child0': 0.7},
+    "HIPT": {'child0': 0.7},
+    "UNI": {'child0': 0.7},
+    "CONCH": {'child0': 0.7},
+    "CHIEF": {'child0': 0.7}
 }
 
 signatures_predictable = {
