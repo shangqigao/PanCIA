@@ -8,14 +8,12 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 relative_path = os.path.join(script_dir, '../../')
 sys.path.append(relative_path)
 
-import requests
 import argparse
 import pathlib
 import logging
 import warnings
 import joblib
 import copy
-import json
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -23,7 +21,6 @@ import numpy as np
 import torch
 import torchbnn as bnn
 
-from scipy.stats import zscore
 from torch_geometric.loader import DataLoader
 from tiatoolbox import logger
 from tiatoolbox.utils.misc import save_as_json
@@ -31,11 +28,6 @@ from tiatoolbox.utils.misc import save_as_json
 from lifelines import CoxPHFitter, KaplanMeierFitter
 from lifelines.statistics import logrank_test
 from lifelines.plotting import add_at_risk_counts
-from sksurv.nonparametric import kaplan_meier_estimator
-from sksurv.linear_model import CoxPHSurvivalAnalysis, CoxnetSurvivalAnalysis, IPCRidge
-from sksurv.ensemble import RandomSurvivalForest, GradientBoostingSurvivalAnalysis
-from sksurv.svm import FastSurvivalSVM, FastKernelSurvivalSVM
-from sksurv.preprocessing import OneHotEncoder
 from sksurv.metrics import (
     concordance_index_censored, 
     concordance_index_ipcw,
@@ -45,23 +37,19 @@ from sksurv.metrics import (
     as_cumulative_dynamic_auc_scorer,
     as_integrated_brier_score_scorer
 )
-from sklearn import set_config
 from sklearn.exceptions import FitFailedWarning
 from sklearn.model_selection import GridSearchCV, KFold
-from sklearn.feature_selection import SelectKBest, SequentialFeatureSelector, VarianceThreshold
+from sklearn.feature_selection import VarianceThreshold
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans, FeatureAgglomeration
+from sklearn.cluster import KMeans
 from sklearn.model_selection import StratifiedShuffleSplit
-from sklearn.linear_model import LogisticRegression as PlattScaling
 from sklearn.utils import resample
-from statsmodels.stats.multitest import multipletests
 
-from utilities.m_utils import mkdir, select_wsi, load_json, create_pbar, rm_n_mkdir, reset_logging, recur_find_ext, select_checkpoints
+from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
 from analysis.a04_feature_aggregation.m_gnn_survival_analysis import SurvivalGraphDataset, SurvivalGraphArch, SurvivalBayesGraphArch
 from analysis.a04_feature_aggregation.m_gnn_survival_analysis import ScalarMovingAverage, CoxSurvLoss
-from analysis.a04_feature_aggregation.m_graph_construction import visualize_radiomic_graph, visualize_pathomic_graph
 
 def plot_survival_curve(data_path):
     df = pd.read_csv(data_path)
@@ -74,6 +62,7 @@ def plot_survival_curve(data_path):
     print("Data strcuture:", df.shape)
 
     # Fit the Kaplan-Meier estimator
+    from sksurv.nonparametric import kaplan_meier_estimator
     time, survival_prob, conf_int = kaplan_meier_estimator(
         df["event"], df["duration"], conf_type="log-log"
         )
@@ -390,6 +379,7 @@ def plot_coefficients(coefs, n_highlight):
     plt.savefig(f"{relative_path}/figures/plots/coefficients.jpg")
 
 def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
+    from sksurv.linear_model import CoxnetSurvivalAnalysis
     # COX regreession
     print("Selecting the best regularization parameter...")
     cox_elastic_net = CoxnetSurvivalAnalysis(l1_ratio=l1_ratio, alpha_min_ratio=min_ratio)
@@ -487,6 +477,7 @@ def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
     return pipe
 
 def rsf(split_idx, tr_X, tr_y, scorer, n_jobs):
+    from sksurv.ensemble import RandomSurvivalForest
     # choosing parameters by cross validation
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
     lower, upper = np.percentile(tr_y["duration"], [20, 80])
@@ -553,6 +544,7 @@ def rsf(split_idx, tr_X, tr_y, scorer, n_jobs):
     return pipe
 
 def gradientboosting(split_idx, tr_X, tr_y, scorer, n_jobs, loss="coxph"):
+    from sksurv.ensemble import GradientBoostingSurvivalAnalysis
     # choosing parameters by cross validation
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
     model = GradientBoostingSurvivalAnalysis(loss=loss, max_depth=2, random_state=1)
@@ -620,6 +612,7 @@ def gradientboosting(split_idx, tr_X, tr_y, scorer, n_jobs, loss="coxph"):
 
 
 def coxph(split_idx, tr_X, tr_y, scorer, n_jobs):
+    from sksurv.linear_model import CoxPHSurvivalAnalysis
     # choosing parameters by cross validation
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
     lower, upper = np.percentile(tr_y["duration"], [20, 80])
@@ -707,6 +700,7 @@ def coxph(split_idx, tr_X, tr_y, scorer, n_jobs):
     return pipe
 
 def ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs):
+    from sksurv.linear_model import IPCRidge
     # choosing parameters by cross validation
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
     model = IPCRidge(alpha=1, random_state=1)
@@ -791,6 +785,7 @@ def ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs):
     return pipe
 
 def fastsvm(split_idx, tr_X, tr_y, scorer, n_jobs, rank_ratio=1):
+    from sksurv.svm import FastSurvivalSVM
     # choosing parameters by cross validation
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
     model = FastSurvivalSVM(alpha=1, rank_ratio=rank_ratio)
@@ -1900,6 +1895,7 @@ if __name__ == "__main__":
         )
 
     # visualize radiomics
+    # from analysis.a04_feature_aggregation.m_graph_construction import visualize_radiomic_graph, visualize_pathomic_graph
     # splits = joblib.load(split_path)
     # graph_path = splits[0]["test"][8][0]
     # radiomics_graph_name = pathlib.Path(graph_path["radiomics"]).stem
