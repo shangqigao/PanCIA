@@ -82,8 +82,10 @@ ARCH:
     RAIOMICS: 0.7
     PATHOMICS: 0.7
   OMICS: ["radiomics", "pathomics"]
+  # OMICS: ["radiomics"]
+  # OMICS: ["pathomics"]
   AGGREGATION:
-    VALUE: "SPARRA"
+    VALUE: "ABMIL"
     CHOICES: ["ABMIL", "SPARRA"]
 
 TRAIN:
@@ -97,7 +99,7 @@ TRAIN:
     SPARRA: 0.0
   L1_PENALTY:
     ABMIL: 0.0
-    SPARRA: 1.0e-3
+    SPARRA: 0.0
 
 INFERENCE:
   PRE_TRAINED: ""

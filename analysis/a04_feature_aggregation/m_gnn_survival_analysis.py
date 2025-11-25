@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 import torchbnn as bnn
 
-from torch.nn import BatchNorm1d, Linear, ReLU, Dropout
+from torch.nn import BatchNorm1d, Linear, ReLU, Dropout, LayerNorm
 from torch_geometric.data import Data, Dataset, HeteroData
 from torch_geometric.utils import subgraph, softmax, scatter
 import torch_geometric.utils as pyg_utils
@@ -60,6 +60,7 @@ class SurvivalGraphDataset(Dataset):
     # Optional k-hop sampling
     # ----------------------------------------------------------------------
     def sample_subgraph(self, x, edge_index):
+        assert x.size(0) > edge_index.max(), "Edge index contains invalid node indices"
         num_nodes = x.size(0)
 
         if self.sampling_rate >= 1 or num_nodes <= self.max_num_nodes:
@@ -74,6 +75,7 @@ class SurvivalGraphDataset(Dataset):
             seeds,
             self.sampling_k,
             edge_index,
+            num_nodes=num_nodes,
             relabel_nodes=True
         )
 
@@ -255,7 +257,7 @@ class ImportanceScoreArch(nn.Module):
         def create_block(in_dims, out_dims):
             return nn.Sequential(
                 Linear(in_dims, out_dims),
-                # BatchNorm1d(out_dims),
+                LayerNorm(out_dims),
                 ReLU(),
                 Dropout(self.dropout)
             )
@@ -326,7 +328,7 @@ class DownsampleArch(nn.Module):
         def create_block(in_dims, out_dims):
             return nn.Sequential(
                 Linear(in_dims, out_dims),
-                BatchNorm1d(out_dims),
+                LayerNorm(out_dims),
                 ReLU(),
                 Dropout(self.dropout)
             )
@@ -390,7 +392,7 @@ class OmicsIntegrationArch(nn.Module):
             if normalize:
                 return nn.Sequential(
                     Linear(in_dims, out_dims),
-                    BatchNorm1d(out_dims),
+                    LayerNorm(out_dims),
                     ReLU(),
                     Dropout(self.dropout)
                 )
@@ -456,7 +458,7 @@ class SurvivalGraphArch(nn.Module):
             mu0=0, 
             lambda0=1, 
             alpha0=2, 
-            beta0=1e-4,
+            beta0=1e-3,
             **kwargs,
     ):
         super().__init__()
@@ -489,7 +491,7 @@ class SurvivalGraphArch(nn.Module):
         def create_block(in_dims, out_dims):
             return nn.Sequential(
                 Linear(in_dims, out_dims),
-                # BatchNorm1d(out_dims),
+                LayerNorm(out_dims),
                 ReLU(),
                 Dropout(self.dropout)
             )
@@ -538,11 +540,11 @@ class SurvivalGraphArch(nn.Module):
                 L=input_emb_dim, 
                 D=256, 
                 dropout=0.25, 
-                n_classes=2 * input_emb_dim
+                n_classes=2
             )
             hid_emb_dim = self.embedding_dims[0]
             self.inverse_score_nn = ImportanceScoreArch(
-                dim_features=input_emb_dim,
+                dim_features=1,
                 dim_target=hid_emb_dim,
                 layers=self.embedding_dims[1:],
                 dropout=0.0,
@@ -552,6 +554,7 @@ class SurvivalGraphArch(nn.Module):
             self.Aggregation = SumAggregation()
         else:
             raise NotImplementedError
+        self.final_norm = LayerNorm(len(self.dim_dict)*out_emb_dim)
         self.classifier = Linear(len(self.dim_dict)*out_emb_dim, dim_target)
 
     def save(self, path):
@@ -585,9 +588,10 @@ class SurvivalGraphArch(nn.Module):
 
         if self.aggregation == "ABMIL":
             gate_dict = {}
+            batch_dict = {k: data.batch_dict[k] for k in self.dim_dict.keys()}
             for k in self.dim_dict.keys():
                 gate = self.gate_nn_dict[k](feature_dict[k])
-                gate = softmax(gate, index=data.batch_dict[k], dim=-2)
+                gate = softmax(gate, index=batch_dict[k], dim=-2)
                 gate_dict.update({k: gate})
             VIparas = None
             KAparas = None
@@ -630,15 +634,16 @@ class SurvivalGraphArch(nn.Module):
 
             # caculate normalized inverse precision
             alpha, beta = self.precision(loc, logvar)
-            # inv_precision = beta / alpha
+            inv_precision = beta / alpha
+            gate = self.group_sparsemax(inv_precision, index=batch)
             # N = maybe_num_nodes(batch)
             # inv_precision_sum = scatter(inv_precision, index=batch, dim=-2, dim_size=N, reduce='sum')
             # inv_precision_sum = inv_precision_sum.index_select(-2, batch)
             # gate = inv_precision / inv_precision_sum
-            if self.training:
-                gate = self.group_sparsemax(sample, index=batch)
-            else:
-                gate = self.group_sparsemax(loc, index=batch)
+            # if self.training:
+            #     gate = self.group_sparsemax(sample, index=batch)
+            # else:
+            #     gate = self.group_sparsemax(loc, index=batch)
             precision_list = [alpha / beta, self.lambda0, self.mu0]
             VIparas.append(precision_list)
 
@@ -672,6 +677,7 @@ class SurvivalGraphArch(nn.Module):
                 self.Aggregation(feature_dict[k] * gate_dict[k], index=batch_dict[k])
             )
         feature = torch.concat(feature_list, dim=-1)
+        feature = self.final_norm(feature)
         output = self.classifier(feature)
         return output, VIparas, KAparas, feature, perm_dict, gate_dict
     
@@ -905,7 +911,7 @@ class ScalarMovingAverage:
 class VILoss(nn.Module):
     """ variational inference loss
     """
-    def __init__(self, tau_ae=1e-2):
+    def __init__(self, tau_ae=10):
         super(VILoss, self).__init__()
         self.tau_ae = tau_ae
 
@@ -992,7 +998,7 @@ class CFLoss(nn.Module):
         return mmd_loss + self.beta*mse_loss
     
 class CoxSurvLoss(nn.Module):
-    def __init__(self, tau_vi=1e-1, tau_ka=1e-2):
+    def __init__(self, tau_vi=1.0, tau_ka=1e-2):
         super(CoxSurvLoss, self).__init__()
         self.tau_vi = tau_vi
         self.tau_ka = tau_ka

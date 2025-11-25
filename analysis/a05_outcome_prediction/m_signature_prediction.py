@@ -1602,7 +1602,7 @@ if __name__ == "__main__":
     
     if opt.get('SAVE_MODEL_DIR', False):
         save_model_dir = pathlib.Path(opt['SAVE_MODEL_DIR'])
-        save_model_dir = save_model_dir / f"{opt['DATASET']}_phenotype_{opt['OUTCOME']['VALUE']}"
+        save_model_dir = save_model_dir / f"{opt['DATASET']}_signature_{opt['OUTCOME']['VALUE']}"
         save_model_dir = save_model_dir / f"{radiomics_mode}+{pathomics_mode}"
     else:
         save_model_dir = None

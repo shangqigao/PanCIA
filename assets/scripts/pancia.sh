@@ -15,7 +15,7 @@
 
 ## activate environment
 source ~/.bashrc
-conda activate /home/sg2162/rds/hpc-work/miniconda3/PanCIA
+conda activate PanCIA
 
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1

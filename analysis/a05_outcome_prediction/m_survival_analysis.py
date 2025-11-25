@@ -1441,11 +1441,10 @@ def run_once(
                 output = list(zip(*step_output))
                 logit, true = output
                 logit = np.array(logit).squeeze()
-                hazard = np.exp(logit)
                 true = np.array(true).squeeze()
                 event_status = true[:, 1] > 0
                 event_time = true[:, 0]
-                cindex = concordance_index_censored(event_status, event_time, hazard)[0]
+                cindex = concordance_index_censored(event_status, event_time, logit)[0]
                 logging_dict[f"{loader_name}-Cindex"] = cindex
 
                 if "valid-A" in loader_name and cindex > best_score: 

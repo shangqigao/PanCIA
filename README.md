@@ -3,8 +3,11 @@
 # Dependencies
 
 - conda create -n PanCIA python=3.9.19
+- conda activate PanCIA
 - conda install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.1 -c pytorch -c nvidia
 - conda install -c conda-forge openslide
+- conda install -c conda-forge gcc_linux-64 gxx_linux-64 (optional)
+- pip install --no-build-isolation git+https://github.com/MaureenZOU/detectron2-xyz.git
 - pip install -r requirements.txt
 
 If GCC is too old (need GCC 9 or later):

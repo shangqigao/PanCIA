@@ -31,6 +31,8 @@ export PYTHONUNBUFFERED=1   # if running Python
 export SLURM_EXPORT_ENV=ALL
 stdbuf -oL -eL echo "Starting job at $(date)"
 
+rsync -av /home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/ /home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/
+
 # python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
 # python analysis/utilities/m_calculate_pancancer_segmentation_metrics.py
 
@@ -64,8 +66,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --meta_info $meta_info
 
 # extract radiomic features
-radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
         
 # extract pathomic features
 # pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
