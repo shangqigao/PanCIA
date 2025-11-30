@@ -110,6 +110,22 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --dataset TCGA \
 #             --save_dir $save_dir
 
+# pre-diagnosis subject exclusion and inclusion
+included_nifti="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_nifti.json"
+included_wsi="/home/sg2162/rds/hpc-work/Experiments/pathomics/TCGA_included_wsi.json"
+meta_data="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_pathology_has_radiology.csv"
+clinical_data="/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/clinical_data/survival_data.csv"
+save_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
+
+python analysis/a01_data_preprocessiong/m_sortout_subjects.py \
+            --included_nifti $included_nifti \
+            --included_wsi $included_wsi \
+            --meta_data $meta_data \
+            --clinical_data $clinical_data \
+            --dataset TCGA \
+            --save_dir $save_dir \
+            --pre_diagnosis
+
 # pan-cancer segmentation
 # radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
 # save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
@@ -140,8 +156,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 
 
 # survival analysis
-survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
-python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
+# survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
+# python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
 
 # phenotype prediction
 # phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
