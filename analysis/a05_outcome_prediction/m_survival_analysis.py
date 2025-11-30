@@ -1272,7 +1272,7 @@ def generate_data_split(
         valid: float,
         test: float,
         num_folds: int,
-        seed: int = 5,
+        seed: int = 42
 ):
     """Helper to generate splits
     Args:
@@ -1286,66 +1286,90 @@ def generate_data_split(
     Returns:
         splits (list): a list of folds, each fold consists of train, valid, and test splits
     """
-    assert train + valid + test - 1.0 < 1.0e-10, "Ratios must sum to 1.0"
+    from sklearn.model_selection import train_test_split
+    assert train + valid <= 1.0, "train + valid ratio must be <= 1.0"
 
-    outer_splitter = StratifiedShuffleSplit(
-        n_splits=num_folds,
-        train_size=train + valid,
-        random_state=seed,
-    )
-    inner_splitter = StratifiedShuffleSplit(
-        n_splits=1,
-        train_size=train / (train + valid),
-        random_state=seed,
-    )
-
-    l = np.array([status for _, status in y])
-
+    outer_splitter = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
     splits = []
-    for train_valid_idx, test_idx in outer_splitter.split(x, l):
-        test_x = [x[idx] for idx in test_idx]
-        test_y = [y[idx] for idx in test_idx]
-        x_ = [x[idx] for idx in train_valid_idx]
-        y_ = [y[idx] for idx in train_valid_idx]
-        l_ = [l[idx] for idx in train_valid_idx]
 
-        if valid > 0:
-            train_idx, valid_idx = next(iter(inner_splitter.split(x_, l_)))
-            valid_x = [x_[idx] for idx in valid_idx]
-            valid_y = [y_[idx] for idx in valid_idx]
-            train_x = [x_[idx] for idx in train_idx]
-            train_y = [y_[idx] for idx in train_idx]
-        else:
-            train_x, train_y = x_, y_
+    for train_valid_idx, test_idx in outer_splitter.split(x):
+        # Split test set
+        test_x = [x[i] for i in test_idx]
+        test_y = [y[i] for i in test_idx]
 
-        train_x_subjects = []
-        for i in train_x: train_x_subjects.append(i[0])
-        test_x_subjects = []
-        for i in test_x: test_x_subjects.append(i[0])
-        if valid > 0:
-            valid_x_subjects = []
-            for i in valid_x: valid_x_subjects.append(i[0])
-            assert len(set(train_x_subjects).intersection(set(valid_x_subjects))) == 0
-            assert len(set(valid_x_subjects).intersection(set(test_x_subjects))) == 0
-        else:
-            assert len(set(train_x_subjects).intersection(set(test_x_subjects))) == 0
+        train_valid_x = [x[i] for i in train_valid_idx]
+        train_valid_y = [y[i] for i in train_valid_idx]
 
+        # Optional validation split
         if valid > 0:
-            splits.append(
-                {
-                    "train": list(zip(train_x, train_y)),
-                    "valid": list(zip(valid_x, valid_y)),
-                    "test": list(zip(test_x, test_y)),
-                }
+            ratio = valid / (train + valid)
+            train_x, valid_x, train_y, valid_y = train_test_split(
+                train_valid_x, train_valid_y, test_size=ratio, random_state=seed, shuffle=True
             )
         else:
-            splits.append(
-                {
-                    "train": list(zip(train_x, train_y)),
-                    "test": list(zip(test_x, test_y)),
-                }
-            )
+            train_x, train_y = train_valid_x, train_valid_y
+            valid_x, valid_y = None, None
+
+        split_dict = {
+            "train": list(zip(train_x, train_y)),
+            "test": list(zip(test_x, test_y))
+        }
+        if valid > 0:
+            split_dict["valid"] = list(zip(valid_x, valid_y))
+
+        splits.append(split_dict)
+
     return splits
+
+def split_batch_output(output):
+    """
+    output can be:
+      [outputs, features, atte_dict]
+      [outputs, labels]
+      [outputs, features]
+      [outputs]
+      or any list containing arrays and optional dicts.
+
+    Returns a list of length batch_size with sample-wise outputs.
+    """
+
+    # output is a list: [arr_or_dict, arr_or_dict, ...]
+    # find batch size from the first array
+    # (dicts do not have .shape)
+    for v in output:
+        if hasattr(v, "shape"):
+            batch_size = v.shape[0]
+            break
+    else:
+        raise ValueError("No array found to infer batch size.")
+
+    # split each element
+    split_items = []
+    for v in output:
+        if hasattr(v, "shape"):
+            # numpy array → split
+            split_items.append(np.split(v, batch_size, axis=0))
+        elif isinstance(v, dict):
+            # dict → split each value
+            split_items.append({
+                k: np.split(val, batch_size, axis=0)
+                for k, val in v.items()
+            })
+        else:
+            raise TypeError(f"Unsupported output type: {type(v)}")
+
+    # Now build sample-wise outputs
+    step_output = []
+    for i in range(batch_size):
+        sample_items = []
+        for item in split_items:
+            if isinstance(item, list):
+                sample_items.append(item[i])
+            elif isinstance(item, dict):
+                sample_items.append({k: item[k][i] for k in item})
+        step_output.append(tuple(sample_items))
+
+    return step_output
 
 def run_once(
         dataset_dict,
@@ -1425,11 +1449,7 @@ def run_once(
                     pbar.postfix[1]["EMA"] = ema.tracking_dict["loss"]
                 else:
                     output = model.infer_batch(model, batch_data, on_gpu)
-                    batch_size = loader_kwargs["batch_size"]
-                    batch_size = output[0].shape[0]
-                    output = [np.split(v, batch_size, axis=0) for v in output]
-                    output = list(zip(*output))
-                    step_output += output
+                    step_output += split_batch_output(output)
                 pbar.update()
             pbar.close()
 
@@ -1516,7 +1536,8 @@ def training(
         "dropout": arch_opt['DROPOUT'],
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
-        "aggregation": arch_opt['AGGREGATION']['VALUE']
+        "aggregation": arch_opt['AGGREGATION']['VALUE'],
+        "num_groups": arch_opt['AGGREGATION']['NUM_GROUPS']
     }
     omics_name = "_".join(arch_opt['OMICS'])
     if arch_opt['BayesGNN']:
@@ -1585,13 +1606,13 @@ def inference(
         "dropout": arch_opt['DROPOUT'],
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
-        "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION']
+        "aggregation": arch_opt['AGGREGATION']['VALUE'],
+        "num_groups": arch_opt['AGGREGATION']['NUM_GROUPS']
     }
     omics_name = "_".join(arch_opt['OMICS'])
 
-    cum_stats = []
-    if "radiomics_pathomics" == omics_name: aggregation = f"radiopathomics_{aggregation}"
+    predict_results = {}
+    if "radiomics_pathomics" == omics_name: aggregation = f"radiopathomics_{arch_opt['AGGREGATION']['VALUE']}"
     for split_idx, split in enumerate(splits):
         if infer_opt['SAVE_OMICS']:
             all_samples = splits[split_idx]["train"] + splits[split_idx]["valid"] + splits[split_idx]["test"]
@@ -1599,7 +1620,7 @@ def inference(
             all_samples = split["test"]
 
         new_split = {"infer": [v[0] for v in all_samples]}
-        chkpts = pathlib.Path(infer_opt['PRE_TRAINED']) / f"0{split_idx}/epoch=019.weights.pth"
+        chkpts = pathlib.Path(infer_opt['PRE_TRAINED']) / f"0{split_idx}/best_model.weights.pth"
         print(str(chkpts))
         # Perform ensembling by averaging probabilities
         # across checkpoint predictions
@@ -1616,7 +1637,11 @@ def inference(
             BayesGNN=arch_opt['BayesGNN'],
             data_types=arch_opt['OMICS'],
         )
-        logits, features = list(zip(*outputs))
+        outputs = list(zip(*outputs))
+        if len(outputs) == 3:
+            logits, features, _ = outputs
+        elif len(outputs) == 2:
+            logits, features = outputs
         # saving average features
         if infer_opt['SAVE_OMICS']:
             if "radiomics" == omics_name:
@@ -1635,28 +1660,24 @@ def inference(
     
         # * Calculate split statistics
         logits = np.array(logits).squeeze()
-        hazard = np.exp(logits)
         pred_true = np.array([v[1] for v in all_samples])
 
         pred_true = np.array(pred_true).squeeze()
         event_status = pred_true[:, 1] > 0
         event_time = pred_true[:, 0]
-        cindex = concordance_index_censored(event_status, event_time, hazard)[0]
+        cindex = concordance_index_censored(event_status, event_time, logits)[0]
 
-        cum_stats.append(
-            {
-                "C-Index": np.array(cindex)
-            }
-        )
-        # print(f"Fold-{split_idx}:", cum_stats[-1])
-    cindex_list = [stat["C-Index"] for stat in cum_stats]
-    avg_stat = {
-        "C-Index mean": np.stack(cindex_list, axis=0).mean(axis=0),
-        "C-Index std": np.stack(cindex_list, axis=0).std(axis=0),
-    }
-    print(f"Avg:", avg_stat)
+        scores_dict = {
+            "C-Index": cindex
+        }
+        
+        predict_results.update({f"Fold {split_idx}": scores_dict})
+    print(predict_results)
+    for k in scores_dict.keys():
+        arr = np.array([v[k] for v in predict_results.values() if v[k] != 0])
+        print(f"CV {k} mean+std", arr.mean(), arr.std())
 
-    return avg_stat
+    return
 
 def test(
     graph_path,
@@ -1764,10 +1785,21 @@ if __name__ == "__main__":
     else:
         save_model_dir = None
 
+    # split data set based on subject ids
+    subject_ids=list(omics_info['omics_paths'].keys())
+    splits = generate_data_split(
+        x=subject_ids,
+        y=[None]*len(subject_ids),
+        train=opt['SPLIT']['TRAIN_RATIO'],
+        valid=opt['SPLIT']['VALID_RATIO'],
+        test=opt['SPLIT']['TEST_RATIO'],
+        num_folds=opt['SPLIT']['FOLDS']
+    )
+
     # load patient outcomes
     df_outcome = prepare_patient_outcome(
         outcome_file=opt['SAVE_OUTCOME_FILE'],
-        subject_ids=list(omics_info['omics_paths'].keys()),
+        subject_ids=subject_ids,
         dataset=opt['DATASET'],
         outcome=opt['OUTCOME']['VALUE']
     )
@@ -1775,21 +1807,23 @@ if __name__ == "__main__":
     logger.info(f"Found {len(subject_ids)} subjects with survival outcomes")
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
-    
-    y = df_outcome[['duration', 'event']].to_numpy(dtype=np.float32).tolist()
+    outcomes = df_outcome[['duration', 'event']].to_numpy(dtype=np.float32).tolist()
 
-    # split data set
-    splits = generate_data_split(
-        x=omics_paths,
-        y=y,
-        train=opt['SPLIT']['TRAIN_RATIO'],
-        valid=opt['SPLIT']['VALID_RATIO'],
-        test=opt['SPLIT']['TEST_RATIO'],
-        num_folds=opt['SPLIT']['FOLDS']
-    )
+    # Build mapping: subject_id → (omics_path_info, outcome)
+    matched_samples = {x[0]: (x, y) for x, y in zip(omics_paths, outcomes)}
+
+    # Filter splits based on available subject_ids
+    new_splits = []
+    for split in splits:
+        new_split = {
+            key: [matched_samples[k] for (k, _) in subjects if k in subject_ids]
+            for key, subjects in split.items()
+        }
+        new_splits.append(new_split)
+    
     mkdir(save_model_dir)
     split_path = f"{save_model_dir}/survival_{radiomics_mode}_{pathomics_mode}_splits.dat"
-    joblib.dump(splits, split_path)
+    joblib.dump(new_splits, split_path)
     splits = joblib.load(split_path)
     num_train = len(splits[0]["train"])
     logging.info(f"Number of training samples: {num_train}.")
@@ -1808,7 +1842,7 @@ if __name__ == "__main__":
     omics_dims = {k: omics_dims[k] for k in omics_keys}
     omics_pool_ratio = {k: omics_pool_ratio[k] for k in omics_keys}
 
-    if opt['TASKS']['TRAIN']:
+    if not opt['TASKS']['PREDICTION']:
         # compute mean and std on training data for normalization 
         splits = joblib.load(split_path)
         train_graph_paths = [path for path, _ in splits[0]["train"]]
@@ -1826,23 +1860,27 @@ if __name__ == "__main__":
             for k in loader.dataset[0].x_dict.keys()
         }
 
-        scalers = {k: StandardScaler(copy=False) for k in omics_modes.keys()}
+        if not all([
+            pathlib.Path(f"{save_model_dir}/survival_{k}_{v}_scaler.dat").exists() 
+            for k, v in omics_modes.items()
+            ]):
+            scalers = {k: StandardScaler(copy=False) for k in omics_modes.keys()}
 
-        # Iterate over loader directly
-        for batch in loader:  # batch can be batch_size=1 if WSIs are big
-            for k in omics_modes.keys():
-                x = batch.x_dict[k].cpu().numpy()  # [num_nodes, feature_dim]
-                scalers[k].partial_fit(x)
+            # Iterate over loader directly
+            for batch in loader:  # batch can be batch_size=1 if WSIs are big
+                for k in omics_modes.keys():
+                    x = batch.x_dict[k].cpu().numpy()  # [num_nodes, feature_dim]
+                    scalers[k].partial_fit(x)
 
-        # Save scalers
-        for k, scaler in scalers.items():
-            v = omics_modes[k]
-            scaler_path = f"{save_model_dir}/survival_{k}_{v}_scaler.dat"
-            joblib.dump(scaler, scaler_path)
-
-        # training
-        split_path = f"{save_model_dir}/survival_{radiomics_mode}_{pathomics_mode}_splits.dat"
+            # Save scalers
+            for k, scaler in scalers.items():
+                v = omics_modes[k]
+                scaler_path = f"{save_model_dir}/survival_{k}_{v}_scaler.dat"
+                joblib.dump(scaler, scaler_path)
         scaler_paths = {k: f"{save_model_dir}/survival_{k}_{v}_scaler.dat" for k, v in omics_modes.items()}
+
+    if opt['TASKS']['TRAIN']:
+        # training
         training(
             split_path=split_path,
             scaler_path=scaler_paths,

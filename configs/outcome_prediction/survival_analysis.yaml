@@ -5,7 +5,7 @@ OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 SAVE_OUTCOME_FILE: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/clinical_data/survival_data.csv"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "OS"
+  VALUE: "DFI"
   CHOICES: ["OS", "DSS", "DFI", "PFI"]
 TASKS:
   TRAIN: True
@@ -73,7 +73,7 @@ SPLIT:
   TRAIN_RATIO: 0.7
 
 ARCH:
-  GNN: "GCNConv"
+  GNN: "GINConv"
   BayesGNN: False
   DIM_TARGET: 1
   LAYERS: [256, 128, 256]
@@ -81,12 +81,13 @@ ARCH:
   POOL_RATIO:
     RAIOMICS: 0.7
     PATHOMICS: 0.7
-  OMICS: ["radiomics", "pathomics"]
+  # OMICS: ["radiomics", "pathomics"]
   # OMICS: ["radiomics"]
-  # OMICS: ["pathomics"]
+  OMICS: ["pathomics"]
   AGGREGATION:
-    VALUE: "ABMIL"
+    VALUE: "SPARRA"
     CHOICES: ["ABMIL", "SPARRA"]
+    NUM_GROUPS: 2
 
 TRAIN:
   EPOCHS: 40
@@ -99,13 +100,13 @@ TRAIN:
     SPARRA: 0.0
   L1_PENALTY:
     ABMIL: 0.0
-    SPARRA: 0.0
+    SPARRA: 1.0e-4
 
 INFERENCE:
-  PRE_TRAINED: ""
+  PRE_TRAINED: "/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_survival_OS/LVMMed+UNI/radiomics_pathomics_Survival_Prediction_GCNConv_ABMIL"
   N_WORKS: 32
-  BATCH_SIZE: 8
-  SAVE_OMICS: True
+  BATCH_SIZE: 4
+  SAVE_OMICS: False
 
 TEST:
   PRE_TRAINED: ""

@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 import torchbnn as bnn
 
-from torch.nn import BatchNorm1d, Linear, ReLU, Dropout, LayerNorm
+from torch.nn import BatchNorm1d, Linear, ReLU, Dropout, LayerNorm, GroupNorm, GELU
 from torch_geometric.data import Data, Dataset, HeteroData
 from torch_geometric.utils import subgraph, softmax, scatter
 import torch_geometric.utils as pyg_utils
@@ -257,14 +257,16 @@ class ImportanceScoreArch(nn.Module):
         def create_block(in_dims, out_dims):
             return nn.Sequential(
                 Linear(in_dims, out_dims),
-                LayerNorm(out_dims),
                 ReLU(),
-                Dropout(self.dropout)
+                LayerNorm(out_dims),
+                Dropout(self.dropout),
+                Linear(out_dims, out_dims)
             )
         
         input_emb_dim = dim_features
         out_emb_dim = self.embedding_dims[0]
         self.head = create_block(input_emb_dim, out_emb_dim)
+        self.final_norm = LayerNorm(self.embedding_dims[-1])
         self.tail = Linear(self.embedding_dims[-1], dim_target)  
 
         input_emb_dim = out_emb_dim
@@ -294,6 +296,7 @@ class ImportanceScoreArch(nn.Module):
             else:
                 feature = self.convs[layer - 1](feature, edge_index)
             feature = self.linears[layer - 1](feature)
+        feature = self.final_norm(feature)
         output = self.tail(feature)
         return output
     
@@ -328,9 +331,10 @@ class DownsampleArch(nn.Module):
         def create_block(in_dims, out_dims):
             return nn.Sequential(
                 Linear(in_dims, out_dims),
-                LayerNorm(out_dims),
                 ReLU(),
-                Dropout(self.dropout)
+                LayerNorm(out_dims),
+                Dropout(self.dropout),
+                Linear(out_dims, out_dims)
             )
         
         input_emb_dim = dim_features
@@ -352,12 +356,12 @@ class DownsampleArch(nn.Module):
     def forward(self, feature, edge_index, batch):
         perm_list = []
         for l in range(2):
+            feature, edge_index, _, batch, perm, score = self.pools[l](feature, edge_index, batch=batch)
+            perm_list.append(perm)
             if self.conv_name in ["MLP"]:
                 feature = self.convs[l](feature)
             else:
                 feature = self.convs[l](feature, edge_index)
-            feature, edge_index, _, batch, perm, score = self.pools[l](feature, edge_index, batch=batch)
-            perm_list.append(perm)
         return feature, edge_index, batch, perm_list, score
     
 class OmicsIntegrationArch(nn.Module):
@@ -455,10 +459,11 @@ class SurvivalGraphArch(nn.Module):
             dropout=0.0,
             conv="GINConv",
             aggregation="SPARRA",
+            num_groups=1,
             mu0=0, 
             lambda0=1, 
             alpha0=2, 
-            beta0=1e-3,
+            beta0=1e-2,
             **kwargs,
     ):
         super().__init__()
@@ -487,15 +492,23 @@ class SurvivalGraphArch(nn.Module):
         self.conv_name = conv
 
         self.sparsemax = Sparsemax(dim=0)
-        
-        def create_block(in_dims, out_dims):
-            return nn.Sequential(
-                Linear(in_dims, out_dims),
-                LayerNorm(out_dims),
-                ReLU(),
-                Dropout(self.dropout)
-            )
-        
+
+        def create_block(in_dims, out_dims, normalize=True):
+            if normalize:
+                return nn.Sequential(
+                    Linear(in_dims, out_dims),
+                    ReLU(),
+                    LayerNorm(out_dims),
+                    Dropout(self.dropout),
+                    Linear(out_dims, out_dims)
+                )
+            else:
+                return nn.Sequential(
+                    Linear(in_dims, out_dims),
+                    ReLU(),
+                    Dropout(self.dropout),
+                    Linear(out_dims, out_dims)
+                )
        
         out_emb_dim = self.embedding_dims[0]
         self.enc_branches = nn.ModuleDict(
@@ -520,13 +533,16 @@ class SurvivalGraphArch(nn.Module):
                 }
             )
             self.Aggregation = SumAggregation()
+            # self.final_norm = LayerNorm(num_groups*len(self.dim_dict)*out_emb_dim)
+            self.final_norm = GroupNorm(num_groups, num_groups*len(self.dim_dict)*out_emb_dim)
         elif aggregation == "SPARRA":
             hid_emb_dim = self.embedding_dims[1]
+            self.mean_nn_branch = create_block(input_emb_dim, hid_emb_dim)
             self.downsample_nn_dict = nn.ModuleDict(
                 {
                     k: DownsampleArch(
                         dim_features=input_emb_dim,
-                        dim_hidden=hid_emb_dim,
+                        dim_hidden=2 * hid_emb_dim,
                         dropout=0.0,
                         pool_ratio=self.pool_dict[k],
                         conv=self.conv_name
@@ -536,26 +552,27 @@ class SurvivalGraphArch(nn.Module):
             )
             out_emb_dim = hid_emb_dim
             input_emb_dim = hid_emb_dim
-            self.gate_nn = Attn_Net_Gated(
-                L=input_emb_dim, 
-                D=256, 
-                dropout=0.25, 
-                n_classes=2
-            )
+            # self.gate_nn = Attn_Net_Gated(
+            #     L=input_emb_dim, 
+            #     D=256, 
+            #     dropout=0.25, 
+            #     n_classes=1
+            # )
             hid_emb_dim = self.embedding_dims[0]
             self.inverse_score_nn = ImportanceScoreArch(
-                dim_features=1,
+                dim_features=input_emb_dim,
                 dim_target=hid_emb_dim,
                 layers=self.embedding_dims[1:],
                 dropout=0.0,
                 conv=self.conv_name
             )
-            # self.Aggregation = MeanAggregation()
-            self.Aggregation = SumAggregation()
+            self.Aggregation = MeanAggregation()
+            # self.Aggregation = SumAggregation()
+            self.final_norm = GroupNorm(num_groups, num_groups*len(self.dim_dict)*out_emb_dim)
         else:
             raise NotImplementedError
-        self.final_norm = LayerNorm(len(self.dim_dict)*out_emb_dim)
-        self.classifier = Linear(len(self.dim_dict)*out_emb_dim, dim_target)
+
+        self.classifier = Linear(num_groups*len(self.dim_dict)*out_emb_dim, dim_target)
 
     def save(self, path):
         state_dict = self.state_dict()
@@ -572,8 +589,8 @@ class SurvivalGraphArch(nn.Module):
         return gauss.sample(), loc, logvar
 
     def precision(self, loc, logvar):
-        alpha = 2*self.alpha0 + 1
-        beta = 2*self.beta0 + self.lambda0*(loc - self.mu0)**2 + self.lambda0*torch.exp(logvar)
+        alpha = self.alpha0 + 0.5
+        beta = self.beta0 + 0.5*(self.lambda0*(loc - self.mu0)**2 + self.lambda0*torch.exp(logvar))
         return alpha, beta
 
     def group_sparsemax(self, x, index):
@@ -585,18 +602,30 @@ class SurvivalGraphArch(nn.Module):
 
     def forward(self, data):
         feature_dict = {k : self.enc_branches[k](data.x_dict[k]) for k in self.dim_dict.keys()}
+        batch_dict = {k: data.batch_dict[k] for k in self.dim_dict.keys()}
 
         if self.aggregation == "ABMIL":
             gate_dict = {}
-            batch_dict = {k: data.batch_dict[k] for k in self.dim_dict.keys()}
             for k in self.dim_dict.keys():
                 gate = self.gate_nn_dict[k](feature_dict[k])
                 gate = softmax(gate, index=batch_dict[k], dim=-2)
                 gate_dict.update({k: gate})
+            
+            # feature aggregation
+            feature_list = [
+                self.Aggregation(feature_dict[k] * gate_dict[k], index=batch_dict[k])
+                for k in self.dim_dict.keys()
+            ]
             VIparas = None
             KAparas = None
             perm_dict = None
+            feature = torch.concat(feature_list, dim=-1)
         elif self.aggregation == "SPARRA":
+            # get homogeneous features
+            homo_feature_list = [
+                self.Aggregation(self.mean_nn_branch(feature_dict[k]), index=batch_dict[k])
+                for k in self.dim_dict.keys()
+            ]
             # encoder
             feature_list, edge_index_list, batch_list = [], [], []
             perm_dict, score_list = {}, []
@@ -604,7 +633,7 @@ class SurvivalGraphArch(nn.Module):
                 feature, edge_index, batch, perm_list, score = self.downsample_nn_dict[k](
                     feature = feature_dict[k], 
                     edge_index = data.edge_index_dict[k, "to", k], 
-                    batch = data.batch_dict[k]
+                    batch = batch_dict[k]
                 )
                 feature_list.append(feature)
                 edge_index_list.append(edge_index)
@@ -629,13 +658,20 @@ class SurvivalGraphArch(nn.Module):
             KAparas = None
 
             # reparameterization
-            sample, loc, logvar = self.sampling(self.gate_nn(feature))
+            sample, loc, logvar = self.sampling(feature)
             VIparas = [loc, logvar]
 
             # caculate normalized inverse precision
             alpha, beta = self.precision(loc, logvar)
-            inv_precision = beta / alpha
-            gate = self.group_sparsemax(inv_precision, index=batch)
+            inv_precision = beta / (alpha - 1)  # mean of inverse precision/gamma
+            gate = inv_precision
+
+            # caculate raw moments
+            feature = loc  # the first raw moment
+            # feature = torch.concat([feature, loc**2 + inv_precision], dim=-1)  # the second raw moment
+            # feature = torch.concat([feature, loc**3 + 3*loc*inv_precision], dim=-1)  # the third raw moment
+            # feature = torch.concat([feature, loc**4 + 6*loc**2*inv_precision + 3*inv_precision*beta/(alpha-2)], dim=-1)  # the fourth raw moment
+            # gate = self.group_sparsemax(self.gate_nn(feature), index=batch)
             # N = maybe_num_nodes(batch)
             # inv_precision_sum = scatter(inv_precision, index=batch, dim=-2, dim_size=N, reduce='sum')
             # inv_precision_sum = inv_precision_sum.index_select(-2, batch)
@@ -669,16 +705,18 @@ class SurvivalGraphArch(nn.Module):
                 ds_enc_list.append(enc)
             VIparas.append(ds_enc_list)
             VIparas.append(dec_list)
+            
+            # get heterogeneous features
+            hetero_feature_list = [
+                self.Aggregation(feature_dict[k], index=batch_dict[k])
+                for k in self.dim_dict.keys()
+            ]
+            feature = torch.concat(homo_feature_list + hetero_feature_list, dim=-1)
         
-        # aggreggate spatial features
-        feature_list = []
-        for k in self.dim_dict.keys():
-            feature_list.append(
-                self.Aggregation(feature_dict[k] * gate_dict[k], index=batch_dict[k])
-            )
-        feature = torch.concat(feature_list, dim=-1)
+        # outcome prediction
         feature = self.final_norm(feature)
         output = self.classifier(feature)
+
         return output, VIparas, KAparas, feature, perm_dict, gate_dict
     
     @staticmethod
@@ -740,9 +778,12 @@ class SurvivalGraphArch(nn.Module):
                             atte = msk
                     atte_dict.update({k: atte.cpu().numpy()})
             else:
-                atte_dict = {k: v.cpu().numpy() for k, v in gate_dict}
+                atte_dict = {k: v.cpu().numpy() for k, v in gate_dict.items()}
 
-            return [outputs, features, atte_dict]
+            if outputs.shape[0] == 1:
+                return [outputs, features, atte_dict]
+            else:
+                return [outputs, features]
 
 class SurvivalBayesGraphArch(nn.Module):
     """define Graph architecture for survival analysis
@@ -923,7 +964,7 @@ class VILoss(nn.Module):
         for enc, dec in zip(enc_list, dec_list):
             # subset = torch.randperm(len(enc))[:len(dec)]
             # enc = enc[subset]
-            loss_ae += F.mse_loss(enc, dec)
+            loss_ae += F.mse_loss(enc - torch.mean(enc, dim=0, keepdim=True), dec)
         loss_ae = loss_ae / len(dec_list)
         print(loss_ae.item(), loss_kl.item(), precision.min().item(), precision.max().item())
         return self.tau_ae * loss_ae + loss_kl
@@ -998,7 +1039,7 @@ class CFLoss(nn.Module):
         return mmd_loss + self.beta*mse_loss
     
 class CoxSurvLoss(nn.Module):
-    def __init__(self, tau_vi=1.0, tau_ka=1e-2):
+    def __init__(self, tau_vi=0.1, tau_ka=1e-2):
         super(CoxSurvLoss, self).__init__()
         self.tau_vi = tau_vi
         self.tau_ka = tau_ka

@@ -21,7 +21,7 @@ module av intel-oneapi-mpi
 
 ## activate environment
 source ~/.bashrc
-conda activate /home/sg2162/rds/hpc-work/miniconda3/PanCIA
+conda activate PanCIA
 
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
@@ -31,7 +31,7 @@ export PYTHONUNBUFFERED=1   # if running Python
 export SLURM_EXPORT_ENV=ALL
 stdbuf -oL -eL echo "Starting job at $(date)"
 
-rsync -av /home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/ /home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/
+# rsync -av /home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/ /home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/
 
 # python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
 # python analysis/utilities/m_calculate_pancancer_segmentation_metrics.py
@@ -75,8 +75,8 @@ rsync -av /home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSe
 
 
 # survival analysis
-# survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
-# python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
+survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
+python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
 
 # phenotype prediction
 # phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
