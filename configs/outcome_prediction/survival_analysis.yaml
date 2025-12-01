@@ -44,7 +44,7 @@ RADIOMICS:
   AGGREGATION: False
   AGGREGATED_MODE:
     VALUE: "None"
-    CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
+    CHOICES: ["None", "ABMIL", "SPARRA"]
   RESOLUTION: 1
   UNITS: "mm"
 
@@ -71,6 +71,7 @@ SPLIT:
   TEST_RATIO: 0.2
   VALID_RATIO: 0.1
   TRAIN_RATIO: 0.7
+  FILTER_SUBJECTS: True # discard subjects without outcomes
 
 ARCH:
   GNN: "GINConv"
@@ -103,7 +104,6 @@ TRAIN:
     SPARRA: 1.0e-4
 
 INFERENCE:
-  PRE_TRAINED: "/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_survival_OS/LVMMed+UNI/radiomics_pathomics_Survival_Prediction_GINConv_ABMIL"
   N_WORKS: 32
   BATCH_SIZE: 4
   SAVE_OMICS: False
