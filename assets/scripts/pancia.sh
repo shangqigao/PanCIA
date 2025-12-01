@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-36:00:00
-##SBATCH --time=0-00:10:00
+##SBATCH --time=0-36:00:00
+#SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-##SBATCH --qos=intr
+#SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -111,20 +111,20 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # pre-diagnosis subject exclusion and inclusion
-included_nifti="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_nifti.json"
-included_wsi="/home/sg2162/rds/hpc-work/Experiments/pathomics/TCGA_included_wsi.json"
-meta_data="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_pathology_has_radiology.csv"
-clinical_data="/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/clinical_data/survival_data.csv"
-save_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
+# included_nifti="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_nifti.json"
+# included_wsi="/home/sg2162/rds/hpc-work/Experiments/pathomics/TCGA_included_wsi.json"
+# meta_data="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_pathology_has_radiology.csv"
+# clinical_data="/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/clinical_data/survival_data.csv"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
 
-python analysis/a01_data_preprocessiong/m_sortout_subjects.py \
-            --included_nifti $included_nifti \
-            --included_wsi $included_wsi \
-            --meta_data $meta_data \
-            --clinical_data $clinical_data \
-            --dataset TCGA \
-            --save_dir $save_dir \
-            --pre_diagnosis
+# python analysis/a01_data_preprocessiong/m_sortout_subjects.py \
+#             --included_nifti $included_nifti \
+#             --included_wsi $included_wsi \
+#             --meta_data $meta_data \
+#             --clinical_data $clinical_data \
+#             --dataset TCGA \
+#             --save_dir $save_dir \
+#             --pre_diagnosis
 
 # pan-cancer segmentation
 # radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
@@ -156,8 +156,8 @@ python analysis/a01_data_preprocessiong/m_sortout_subjects.py \
 
 
 # survival analysis
-# survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
-# python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
+survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
+python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
 
 # phenotype prediction
 # phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"

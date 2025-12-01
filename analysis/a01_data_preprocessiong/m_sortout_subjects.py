@@ -56,8 +56,15 @@ if __name__ == "__main__":
 
         # filter out studies after diagnosis year
         if args.pre_diagnosis:
-            dx_year = df_clinical.loc[df_clinical['_PATIENT'] == subject_id, 'initial_pathologic_dx_year'].values[0]
+            dx_year_series = df_clinical.loc[df_clinical['_PATIENT'] == subject_id, 'initial_pathologic_dx_year']
+            if dx_year_series.empty or pd.isna(dx_year_series.values[0]):
+                logger.info(f"Excluding subject {subject_id} because diagnosis year is missing")
+                return ("excluded", subject_id, {'radiology': [], 'pathology': []})
+            dx_year = int(dx_year_series.values[0])
             df_subject = df_subject[df_subject['Study Date'].dt.year < dx_year].copy()
+            if df_subject.empty:
+                logger.info(f"Excluding subject {subject_id} because no pre-diagnosis scans remain")
+                return ("excluded", subject_id, {'radiology': [], 'pathology': []})
             
         df_subject = df_subject.sort_values(by='Study Date')
 
@@ -83,8 +90,15 @@ if __name__ == "__main__":
     excluded_subjects = {s : d for t, s, d in results if t == "excluded"}
     logger.info(f"Totally {len(included_subjects)} subjects included")
     logger.info(f"Totally {len(excluded_subjects)} subjects excluded")
+    included_radiology, included_pathology = [], []
+    for d in included_subjects.values():
+        included_radiology += d['radiology']
+        included_pathology += d['pathology']
+    logger.info(f"Totally {len(included_radiology)} radiology included")
+    logger.info(f"Totally {len(included_pathology)} pathology included")
+
     if args.pre_diagnosis:
-        save_path = f"{args.save_dir}/{args.dataset}_included__prediagnosis_subjects.json"
+        save_path = f"{args.save_dir}/{args.dataset}_included_prediagnosis_subjects.json"
     else:
         save_path = f"{args.save_dir}/{args.dataset}_included_subjects.json"
     data_dict = {"included subjects": included_subjects, "excluded subjects": excluded_subjects}
