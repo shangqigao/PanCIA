@@ -30,7 +30,6 @@ radiomics_pool_ratio = {
     "BiomedParse": {'child0': 0.7},
     "BayesBP": {'child0': 0.7},
     "LVMMed": {'child0': 0.7, 'child1': 0.9, 'child2': 0.9, 'child3': 0.9, 'child4': 0.9}
-    # "LVMMed": {'child0': 0.2, 'child1': 0.2, 'child2': 0.2, 'child3': 0.2, 'child4': 0.2}
 }
 
 pathomics_pool_ratio = {
@@ -38,7 +37,6 @@ pathomics_pool_ratio = {
     "CNN": {'child0': 0.7},
     "HIPT": {'child0': 0.7},
     "UNI": {'child0': 0.7},
-    #  "UNI": {'child0': 0.2},
     "CONCH": {'child0': 0.7},
     "CHIEF": {'child0': 0.7}
 }

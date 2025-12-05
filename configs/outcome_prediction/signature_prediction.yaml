@@ -110,7 +110,7 @@ TEST:
 
 PREDICTION:
   USED_OMICS:
-    VALUE: "radiopathomics"
+    VALUE: "pathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:

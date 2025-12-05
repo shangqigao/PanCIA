@@ -1,6 +1,51 @@
 {
     "GeneProgrames": {
         "BiomedParse": {
+            "GT": {
+                "None": {
+                    "None": {
+                        "GP1_Proliferation/DNA_repair": 9.469726251972728e-06,
+                        "GP2_Immune-Tcell/Bcell": 0.006950284285461731,
+                        "GP3_Tumor_suppressing_miRNA_targets": 0.06313574809236805,
+                        "GP4_MES/ECM": 0.2439516479478511,
+                        "GP5_MYC_targets/TERT": 0.035623760527925284,
+                        "GP6_Squamous_differentiation/development": 0.18857125853584936,
+                        "GP7_Estrogen_signaling": 9.327380774320858e-10,
+                        "GP8_FOXO/stemness": 0.0116283490726818,
+                        "GP9_Cell-cell_adhesion": 0.714752050877658,
+                        "GP10_Fatty_acid_oxidation": 0.28692264124382605,
+                        "GP11_Immune-IFN_GP12_Hypoxia/glycolosis": 0.8112796539546063,
+                        "GP13_Neural_signailng": 0.16671358988806012,
+                        "GP14_Plasma_membrane_cell-cell_signaling": 0.000275507050563131,
+                        "GP15_EGF_signailng": 0.5868477516144275,
+                        "GP16_Protein_kinase_signailng_(MAPKs)": 0.7399746433395792,
+                        "GP17_Basal_signaling": 0.06662403806609267,
+                        "GP18_Vesicle/EPR_membrane_coat": 1.7019874615596245e-08,
+                        "GP19_1Q_amplicon": 0.018421965833067572,
+                        "GP20_TAL1-Leukemia/erythropoiesis": 0.3232982141285658,
+                        "GP21_Anti-apoptosis/DNA_stability": 0.31837467133686653,
+                        "GP22_16Q22-24_amplicon": 0.0439269573466274,
+                        "AKT_PATHWAY": 0.008338568726714022,
+                        "ALK_PATHWAY": 6.361177700739707e-11,
+                        "BRCA_ATR_PATHWAY": 0.32687092250979843,
+                        "CASPASE_CASCADE_(APOPTOSIS)": 0.011456891050329076,
+                        "CTLA4_PATHWAY": 0.60609619929539,
+                        "HDAC_TARGETS_DN": 0.005825171142409212,
+                        "HER2_AMPLIFIED": 0.13375586901126182,
+                        "IGF1R_PATHWAY": 0.7883005783476855,
+                        "MTOR_PATHWAY": 1.502902666781651e-08,
+                        "MYC_amplified": 0.04637047183135664,
+                        "PD1_SIGNALING": 0.00011794316582994382,
+                        "PI3K_CASCADE": 0.007820386634854095,
+                        "PTEN_PATHWAY": 0.0003306287727302572,
+                        "RAS_PATHWAY": 1.7418733191657638e-08,
+                        "RB_PATHWAY": 0.0010715515268685774,
+                        "RESPONSE_TO_ANDROGEN": 1.7706897051271395e-06,
+                        "RETINOL_METABOLISM": 6.282442692201105e-06,
+                        "VEGF_PATHWAY": 0.4014013114502374
+                    }
+                }
+            },
             "Pyradiomics": {
                 "None": {
                     "ElasticNet": {

@@ -988,7 +988,8 @@ def signature_regression(
 
         num_targets = pred.shape[1]
 
-        risk_results["risk"] += pred.tolist()
+        # risk_results["risk"] += pred.tolist()
+        risk_results["risk"] += label.tolist()
         risk_results["event"] += te_y_clinical['OS'].astype(int).tolist()
         risk_results["duration"] += te_y_clinical['OS.time'].tolist()
 

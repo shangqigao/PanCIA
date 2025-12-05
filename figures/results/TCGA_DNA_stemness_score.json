@@ -1,6 +1,16 @@
 {
     "GeneProgrames": {
         "BiomedParse": {
+            "GT": {
+                "None": {
+                    "None": {
+                        "DNAss": 2.500706204658265e-08,
+                        "EREG-METHss": 2.14665388838522e-07,
+                        "DMPss": 6.72911069229828e-09,
+                        "ENHss": 2.840459978353323e-06
+                    }
+                }
+            },
             "Pyradiomics": {
                 "None": {
                     "ElasticNet": {

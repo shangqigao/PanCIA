@@ -59,21 +59,27 @@ if __name__ == "__main__":
             dx_year_series = df_clinical.loc[df_clinical['_PATIENT'] == subject_id, 'initial_pathologic_dx_year']
             if dx_year_series.empty or pd.isna(dx_year_series.values[0]):
                 logger.info(f"Excluding subject {subject_id} because diagnosis year is missing")
-                return ("excluded", subject_id, {'radiology': [], 'pathology': []})
+                return ("excluded", subject_id, {'radiology': [], 'pathology': [], 'year_gaps': [], 'project': project_id})
             dx_year = int(dx_year_series.values[0])
             df_subject = df_subject[df_subject['Study Date'].dt.year < dx_year].copy()
             if df_subject.empty:
                 logger.info(f"Excluding subject {subject_id} because no pre-diagnosis scans remain")
-                return ("excluded", subject_id, {'radiology': [], 'pathology': []})
+                return ("excluded", subject_id, {'radiology': [], 'pathology': [], 'year_gaps': [], 'project': project_id})
             
         df_subject = df_subject.sort_values(by='Study Date')
 
         pathology = df_wsi[df_wsi['Subject ID'] == subject_id]
         common = df_subject['Series ID'][df_subject['Series ID'].isin(df_nifti['Series ID'])]
         radiology = df_nifti[df_nifti['Series ID'].isin(common)].set_index('Series ID').loc[common].reset_index()
+
+        df_subject_common = df_subject[df_subject['Series ID'].isin(common)]
+        year_gaps = (df_subject_common['Study Date'].dt.year - dx_year).tolist()
         subject_dict = {
-                'radiology': radiology['Series Path'].tolist(),
-                'pathology': pathology['WSI Path'].tolist()
+            'radiology': radiology['Series Path'].tolist(),
+            'pathology': pathology['WSI Path'].tolist(),
+            'year_diagnosis': dx_year,
+            'year_gaps': year_gaps,
+            'project': project_id
         }
         if in_projects and not pathology.empty and not radiology.empty: 
             return ("included", subject_id, subject_dict)

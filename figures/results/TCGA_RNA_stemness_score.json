@@ -1,6 +1,14 @@
 {
     "GeneProgrames": {
         "BiomedParse": {
+            "GT": {
+                "None": {
+                    "None": {
+                        "RNAss": 9.726527144118744e-07,
+                        "EREG.EXPss": 0.22721694035046397
+                    }
+                }
+            },
             "Pyradiomics": {
                 "None": {
                     "ElasticNet": {

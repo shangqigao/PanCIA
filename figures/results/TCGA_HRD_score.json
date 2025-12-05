@@ -1,6 +1,16 @@
 {
     "GeneProgrames": {
         "BiomedParse": {
+            "GT": {
+                "None": {
+                    "None": {
+                        "ai1": 5.301923290226929e-09,
+                        "lst1": 4.6520313363057796e-07,
+                        "hrd-loh": 7.475514752528689e-06,
+                        "HRD": 8.222466125504156e-09
+                    }
+                }
+            },
             "Pyradiomics": {
                 "None": {
                     "ElasticNet": {
