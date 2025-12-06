@@ -21,1369 +21,217 @@ import pandas as pd
 import numpy as np
 import torch
 import torchbnn as bnn
+from functools import reduce
+from collections import OrderedDict
 
 from torch_geometric.loader import DataLoader
 from tiatoolbox import logger
 from tiatoolbox.utils.misc import save_as_json
 
-from lifelines import CoxPHFitter, KaplanMeierFitter
-from lifelines.statistics import logrank_test
-from lifelines.plotting import add_at_risk_counts
-from sksurv.metrics import (
-    concordance_index_censored, 
-    concordance_index_ipcw,
-    integrated_brier_score, 
-    cumulative_dynamic_auc,
-    as_concordance_index_ipcw_scorer,
-    as_cumulative_dynamic_auc_scorer,
-    as_integrated_brier_score_scorer
-)
-from sklearn.exceptions import FitFailedWarning
-from sklearn.model_selection import GridSearchCV, KFold
-from sklearn.feature_selection import VarianceThreshold
-from sklearn.pipeline import make_pipeline, Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.cluster import KMeans
-from sklearn.model_selection import StratifiedShuffleSplit
-from sklearn.utils import resample
-
+from sklearn.metrics import f1_score, r2_score
+from lifelines.utils import concordance_index
+from sklearn.model_selection import KFold
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
-from analysis.a04_feature_aggregation.m_gnn_survival_analysis import SurvivalGraphDataset, SurvivalGraphArch, SurvivalBayesGraphArch
-from analysis.a04_feature_aggregation.m_gnn_survival_analysis import ScalarMovingAverage, CoxSurvLoss
+from analysis.a04_feature_aggregation.m_gnn_multitask_learning import MultiTaskGraphDataset, MultiTaskGraphArch, MultiTaskBayesGraphArch
+from analysis.a04_feature_aggregation.m_gnn_multitask_learning import ScalarMovingAverage, MultiTaskLoss
 
-def plot_survival_curve(data_path):
-    df = pd.read_csv(data_path)
+def prepare_multitask_outcomes(
+    outcome_dir,
+    subject_ids,
+    outcomes,
+    signature_ids=None,
+    pooling="mean",
+    minimum_per_class=20,
+):
+    """
+    Multi-task outcome loader producing a unified table by SubjectID.
+    Supports survival, phenotype, and signature outcomes (multi-column).
+    """
 
-    # Prepare the survival data
-    df['event'] = df['vital_status'].apply(lambda x: True if x == 'Dead' else False)
-    df['duration'] = df['days_to_death'].fillna(df['days_to_last_follow_up'])
-    df = df[df['duration'].notna()]
-    df = df[df['ajcc_pathologic_stage'].isin(["Stage I", "Stage II"])]
-    print("Data strcuture:", df.shape)
+    # --------------------- helpers ---------------------
+    def add_subject_id(df):
+        df["SubjectID"] = df["SampleID"].str.extract(r"^(TCGA-\w\w-\w{4})")
+        return df[df["SubjectID"].isin(subject_ids)]
 
-    # Fit the Kaplan-Meier estimator
-    from sksurv.nonparametric import kaplan_meier_estimator
-    time, survival_prob, conf_int = kaplan_meier_estimator(
-        df["event"], df["duration"], conf_type="log-log"
-        )
-    plt.step(time, survival_prob, where="post")
-    plt.fill_between(time, conf_int[0], conf_int[1], alpha=0.25, step="post")
-    plt.ylim(0, 1)
-    plt.ylabel(r"est. probability of survival $\hat{S}(t)$")
-    plt.xlabel("time $t$")
-    plt.savefig(f"{relative_path}/figures/plots/survival_curve.jpg")
-    return
-
-def prepare_graph_properties(data_dict, prop_keys=None, subgraphs=False, omics="radiomics"):
-    if prop_keys == None: 
-        prop_keys = [
-            "num_nodes", 
-            "num_edges", 
-            "num_components", 
-            "degree", 
-            "closeness", 
-            "graph_diameter",
-            "graph_assortativity",
-            "mean_neighbor_degree"
-        ]
-    properties = {}
-    if subgraphs:
-        for subgraph, prop_dict in data_dict.items():
-            if subgraph == "MUC": continue
-            for k in prop_keys:
-                key = f"{omics}.{subgraph}.{k}"
-                if prop_dict is None or len(prop_dict[k]) == 0:
-                    properties[key] = -1 if k == "graph_assortativity" else 0
-                else:
-                    if len(prop_dict[k]) == 1:
-                        if np.isnan(prop_dict[k][0]):
-                            properties[key] = -1 if k == "graph_assortativity" else 0
-                        else:
-                            properties[key] = prop_dict[k][0]
-                    else:
-                        properties[key] = np.std(prop_dict[k])
-    else:
-        prop_dict = data_dict
-        for k in prop_keys:
-            key = f"{omics}.{k}"
-            if prop_dict is None or len(prop_dict[k]) == 0:
-                properties[key] = -1 if k == "graph_assortativity" else 0
-            else:
-                if len(prop_dict[k]) == 1:
-                    if np.isnan(prop_dict[k][0]):
-                        properties[key] = -1 if k == "graph_assortativity" else 0
-                    else:
-                        properties[key] = prop_dict[k][0]
-                else:
-                    properties[key] = np.std(prop_dict[k])
-    return properties
-
-def load_radiomic_properties(idx, radiomic_paths, prop_keys=None, pooling="mean"):
-    properties_list = []
-    for path_dict in radiomic_paths:
-        properties_dict = {}
-        for radiomic_key, radiomic_path in path_dict.items():
-            suffix = pathlib.Path(radiomic_path).suffix
-            if suffix == ".json":
-                if prop_keys is None: 
-                    prop_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
-                data_dict = load_json(radiomic_path)
-                properties = {}
-                for key, value in data_dict.items():
-                    selected = [((k in key) and ("diagnostics" not in key)) for k in prop_keys]
-                    if any(selected): properties[f"{radiomic_key}.{key}"] = value
-                if len(properties) > 0: properties_dict.update(properties)
-            elif suffix == ".npy":
-                feature = np.load(radiomic_path)
-                feat_list = np.array(feature).squeeze().tolist()
-                properties = {}
-                for i, feat in enumerate(feat_list):
-                    k = f"radiomics.{radiomic_key}.feature{i}"
-                    properties[k] = feat
-                if len(properties) > 0: properties_dict.update(properties)
-        properties_list.append(properties_dict)
-
-    # patient-level pooling
-    df = pd.DataFrame(properties_list)
-    if pooling == "mean":
-        properties = df.mean(numeric_only=True).to_dict()
-    elif pooling == "max":
-        properties = df.max(numeric_only=True).to_dict()
-    elif pooling == "min":
-        properties = df.min(numeric_only=True).to_dict()
-    elif pooling == "std":
-        properties = df.std(numeric_only=True).to_dict()
-    else:
-        raise ValueError(f"Unsupport patient pooling: {pooling}")
-
-    return {f"{idx}": properties}
-
-def prepare_graph_pathomics(
-    idx, 
-    graph_paths, 
-    subgraphs=["TUM", "NORM", "DEB"], 
-    mode="mean",
-    pooling="mean"
-    ):
-    if subgraphs is None:
-        subgraph_ids = None
-    else:
-        subgraph_dict = {
-            "ADI": [0, 4],
-            "BACK": [5, 8],
-            "DEB": [9, 11],
-            "LYM": [12, 16],
-            "MUC": [17, 20],
-            "MUS": [21, 25],
-            "NORM": [26, 26],
-            "STR": [27, 31],
-            "TUM": [32, 34]
-        }
-        subgraph_ids = [subgraph_dict[k] for k in subgraphs]
-    feat_list = []
-    for path_dict in graph_paths:
-        feat_stack = []
-        for path in path_dict.values():
-            graph_dict = load_json(path)
-            feature = np.array(graph_dict["x"])
-            assert feature.ndim == 2
-            if subgraph_ids is not None:
-                label_path = f"{path}".replace(".json", ".label.npy")
-                label = np.load(label_path)
-                if label.ndim == 2: label = np.argmax(label, axis=1)
-                subset = label < 0
-                for ids in subgraph_ids:
-                    ids_subset = np.logical_and(label >= ids[0], label <= ids[1])
-                    subset = np.logical_or(subset, ids_subset)
-                if subset.sum() < 1:
-                    feature = np.zeros_like(feature)
-                else:
-                    feature = feature[subset]
-            if mode == "mean":
-                feature = np.mean(feature, axis=0)
-            elif mode == "max":
-                feature = np.max(feature, axis=0)
-            elif mode == "min":
-                feature = np.min(feature, axis=0)
-            elif mode == "std":
-                feature = np.std(feature, axis=0)
-            elif mode == "kmeans":
-                kmeans = KMeans(n_clusters=4)
-                feature = kmeans.fit(feature).cluster_centers_
-                feature = feature.flatten().tolist()
-            feat_stack.append(feature)
-        feat_list.append(np.hstack(feat_stack))
-        
-    # patient-level pooling
-    if pooling == "mean":
-        feat_list = np.array(feat_list).mean(axis=0).tolist()
-    elif pooling == "max":
-        feat_list = np.array(feat_list).max(axis=0).tolist()
-    elif pooling == "min":
-        feat_list = np.array(feat_list).min(axis=0).tolist()
-    elif pooling == "std":
-        feat_list = np.array(feat_list).std(axis=0).tolist()
-    else:
-        raise ValueError(f"Unsupport patient pooling: {pooling}")
-    
-    feat_dict = {}
-    for i, feat in enumerate(feat_list):
-        k = f"pathomics.feature{i}"
-        feat_dict[k] = feat
-    return {f"{idx}": feat_dict}
-
-def prepare_graph_radiomics(
-    idx, 
-    graph_paths, 
-    mode="mean",
-    pooling="mean"
-    ):
-    feat_list = []
-    for path_dict in graph_paths:
-        feat_stack = []
-        for path in path_dict.values():
-            graph_dict = load_json(path)
-            feature = np.array(graph_dict["x"])
-            assert feature.ndim == 2
-
-            if mode == "mean":
-                feature = np.mean(feature, axis=0)
-            elif mode == "max":
-                feature = np.max(feature, axis=0)
-            elif mode == "min":
-                feature = np.min(feature, axis=0)
-            elif mode == "std":
-                feature = np.std(feature, axis=0)
-            elif mode == "kmeans":
-                kmeans = KMeans(n_clusters=4)
-                feature = kmeans.fit(feature).cluster_centers_
-                feature = feature.flatten()
-            else:
-                raise ValueError(f"Unsupport aggregation mode: {mode}")
-            feat_stack.append(feature)
-        feat_list.append(np.hstack(feat_stack))
-    
-    # patient-level pooling
-    if pooling == "mean":
-        feat_list = np.array(feat_list).mean(axis=0).tolist()
-    elif pooling == "max":
-        feat_list = np.array(feat_list).max(axis=0).tolist()
-    elif pooling == "min":
-        feat_list = np.array(feat_list).min(axis=0).tolist()
-    elif pooling == "std":
-        feat_list = np.array(feat_list).std(axis=0).tolist()
-    else:
-        raise ValueError(f"Unsupport patient pooling: {pooling}")
-        
-    feat_dict = {}
-    for i, feat in enumerate(feat_list):
-        k = f"radiomics.feature{i}"
-        feat_dict[k] = feat
-    return {f"{idx}": feat_dict}
-
-def load_wsi_level_features(idx, wsi_feature_paths, pooling="mean"):
-    feat_list = []
-    for path_dict in wsi_feature_paths:
-        feat_stack = []
-        for path in path_dict.values():
-            feat = np.array(np.load(path)).squeeze()
-            feat_stack.append(feat)
-        feat_list.append(np.hstack(feat_stack))
-
-    # patient-level pooling
-    if pooling == "mean":
-        feat_list = np.array(feat_list).mean(axis=0).tolist()
-    elif pooling == "max":
-        feat_list = np.array(feat_list).max(axis=0).tolist()
-    elif pooling == "min":
-        feat_list = np.array(feat_list).min(axis=0).tolist()
-    elif pooling == "std":
-        feat_list = np.array(feat_list).std(axis=0).tolist()
-    else:
-        raise ValueError(f"Unsupport patient pooling: {pooling}")
-    
-    feat_dict = {}
-    for i, feat in enumerate(feat_list):
-        k = f"pathomics.feature{i}"
-        feat_dict[k] = feat
-    return {f"{idx}": feat_dict}
-
-def load_subject_level_features(idx, subject_feature_path):
-    feat_list = np.load(subject_feature_path).squeeze().tolist() 
-    if np.isscalar(feat_list):
-        feat_list = [feat_list]
-    feat_dict = {}
-    for i, feat in enumerate(feat_list):
-        k = f"subject.feature{i}"
-        feat_dict[k] = feat
-    return {f"{idx}": feat_dict}
-
-def prepare_patient_outcome(outcome_file, subject_ids, dataset="MAMA-MIA", outcome=None):
-    if dataset == "MAMA-MIA":
-        df = pd.read_excel(outcome_file, sheet_name='dataset_info')
-        # Prepare survival data
-        if outcome == 'OS':
-            df = df[df['days_to_death'].notna()]
-            df['event'] = df['days_to_death'].apply(lambda x: True if x > 0 else False)
-            df['duration'] = df['days_to_death']
-            df.loc[df['days_to_death'] == 0, 'duration'] = df['days_to_follow_up']
-        elif outcome == 'Recurrence':
-            df = df[df['days_to_recurrence'].notna()]
-            df['event'] = df['days_to_recurrence'].apply(lambda x: True if x > 0 else False)
-            df['duration'] = df['days_to_recurrence']
-            df.loc[df['days_to_recurrence'] == 0, 'duration'] = df['days_to_follow_up']
+    def pool(df):
+        if pooling == "mean":
+            return df.groupby("SubjectID", as_index=False).mean(numeric_only=True)
+        elif pooling == "max":
+            return df.groupby("SubjectID", as_index=False).max(numeric_only=True)
+        elif pooling == "min":
+            return df.groupby("SubjectID", as_index=False).min(numeric_only=True)
         else:
-            raise ValueError(f'Unsuppored outcome type: {outcome}')
-        df['SubjectID'] = df['patient_id']
-        df = df[df["SubjectID"].isin(subject_ids)]
-    elif dataset == "TCGA":
-        df = pd.read_csv(outcome_file)
-        # Prepare the survival data
-        if outcome == 'OS':
-            df = df[df['OS'].notna() & df['OS.time'].notna()]
-            df['event'] = df['OS'].apply(lambda x: True if x == 1 else False)
-            df['duration'] = df['OS.time']
-        elif outcome == 'DSS':
-            df = df[df['DSS'].notna() & df['DSS.time'].notna()]
-            df['event'] = df['DSS'].apply(lambda x: True if x == 1 else False)
-            df['duration'] = df['DSS.time']
-        elif outcome == 'DFI':
-            df = df[df['DFI'].notna() & df['DFI.time'].notna()]
-            df['event'] = df['DFI'].apply(lambda x: True if x == 1 else False)
-            df['duration'] = df['DFI.time']
-        elif outcome == 'PFI':
-            df = df[df['PFI'].notna() & df['PFI.time'].notna()]
-            df['event'] = df['PFI'].apply(lambda x: True if x == 1 else False)
-            df['duration'] = df['PFI.time']
-        else:
-            raise ValueError(f'Unsuppored outcome type: {outcome}')
-        df['SubjectID'] = df["_PATIENT"]
-        df = df[df["SubjectID"].isin(subject_ids)]
-    else:
-        raise NotImplementedError
-    
-    df = df.drop_duplicates(subset="SubjectID", keep="first")
-    logging.info(f"Clinical data strcuture: {df.shape}")
+            raise ValueError("Invalid pooling mode")
 
-    return df
+    def prefix_columns(df, prefix):
+        cols = [c for c in df.columns if c != "SubjectID"]
+        df = df.rename(columns={c: f"{prefix}_{c}" for c in cols})
+        return df
 
-def plot_coefficients(coefs, n_highlight):
-    _, ax = plt.subplots(figsize=(9, 6))
-    n_features = coefs.shape[0]
-    alphas = coefs.columns
-    for row in coefs.itertuples():
-        ax.semilogx(alphas, row[1:], ".-", label=row.Index)
+    # --------------------- collector ---------------------
+    tables = {}
 
-    alpha_min = alphas.min()
-    top_coefs = coefs.loc[:, alpha_min].map(abs).sort_values().tail(n_highlight)
-    for name in top_coefs.index:
-        coef = coefs.loc[name, alpha_min]
-        plt.text(alpha_min, coef, name + "   ", horizontalalignment="right", verticalalignment="center")
-
-    ax.yaxis.set_label_position("right")
-    ax.yaxis.tick_right()
-    ax.grid(True)
-    ax.set_xlabel("alpha")
-    ax.set_ylabel("coefficient")
-    plt.subplots_adjust(left=0.2)
-    plt.savefig(f"{relative_path}/figures/plots/coefficients.jpg")
-
-def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
-    from sksurv.linear_model import CoxnetSurvivalAnalysis
-    # COX regreession
-    print("Selecting the best regularization parameter...")
-    cox_elastic_net = CoxnetSurvivalAnalysis(l1_ratio=l1_ratio, alpha_min_ratio=min_ratio)
-    cox_elastic_net.fit(tr_X, tr_y)
-    coefficients = pd.DataFrame(cox_elastic_net.coef_, index=tr_X.columns, columns=np.round(cox_elastic_net.alphas_, 5))
-    
-    plot_coefficients(coefficients, n_highlight=5)
-
-    # choosing penalty strength by cross validation
-    cox = CoxnetSurvivalAnalysis(l1_ratio=l1_ratio, alpha_min_ratio=min_ratio, max_iter=10000)
-    coxnet_pipe = make_pipeline(StandardScaler(), cox)
-    warnings.simplefilter("ignore", UserWarning)
-    warnings.simplefilter("ignore", FitFailedWarning)
-    coxnet_pipe.fit(tr_X, tr_y)
-    estimated_alphas = coxnet_pipe.named_steps["coxnetsurvivalanalysis"].alphas_
-    cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    lower, upper = np.percentile(tr_y["duration"], [20, 80])
-    tr_times = np.arange(lower, upper + 1)
-    model = CoxnetSurvivalAnalysis(l1_ratio=l1_ratio, max_iter=10000, fit_baseline_model=True)
-    if scorer == "cindex":
-        score_name = "C-Index"
-        param_grid={"model__alphas": [[v] for v in estimated_alphas]}
-    elif scorer == "cindex-ipcw":
-        score_name = "C-Index-IPCW"
-        model = as_concordance_index_ipcw_scorer(model, tau=upper)
-        param_grid={"model__estimator__alphas": [[v] for v in estimated_alphas]}
-    elif scorer == "auc":
-        score_name = "AUC"
-        model = as_cumulative_dynamic_auc_scorer(model, times=tr_times)
-        param_grid={"model__estimator__alphas": [[v] for v in estimated_alphas]}
-    elif scorer == "ibs":
-        score_name = "IBS"
-        model = as_integrated_brier_score_scorer(model, times=tr_times)
-        param_grid={"model__estimator__alphas": [[v] for v in estimated_alphas]}
-    pipe = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            ("model", model),
-        ]
-    )
-    gcv = GridSearchCV(
-        pipe,
-        param_grid=param_grid,
-        cv=cv,
-        error_score=0.5,
-        n_jobs=n_jobs,
-    ).fit(tr_X, tr_y)
-
-    # plot cross validation results
-    cv_results = pd.DataFrame(gcv.cv_results_)
-    if scorer == "cindex":
-        alphas = cv_results.param_model__alphas.map(lambda x: x[0])
-    else:
-        alphas = cv_results.param_model__estimator__alphas.map(lambda x: x[0])
-    mean = cv_results.mean_test_score
-    std = cv_results.std_test_score
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(alphas, mean)
-    ax.fill_between(alphas, mean - std, mean + std, alpha=0.15)
-    ax.set_xscale("log")
-    ax.set_ylabel(score_name)
-    ax.set_xlabel("alpha")
-    if scorer == "cindex":
-        ax.axvline(gcv.best_params_["model__alphas"][0], c="C1")
-    else:
-        ax.axvline(gcv.best_params_["model__estimator__alphas"][0], c="C1")
-    ax.axhline(0.5, color="grey", linestyle="--")
-    ax.grid(True)
-    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
-
-    # Visualize coefficients of the best estimator
-    best_model = gcv.best_estimator_.named_steps["model"]
-    if scorer == "cindex":
-        best_coefs = pd.DataFrame(best_model.coef_, index=tr_X.columns, columns=["coefficient"])
-    else:
-        best_coefs = pd.DataFrame(best_model.estimator_.coef_, index=tr_X.columns, columns=["coefficient"])
-
-    non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
-    print(f"Number of non-zero coefficients: {non_zero}")
-
-    non_zero_coefs = best_coefs.query("coefficient != 0")
-    coef_order = non_zero_coefs.abs().sort_values("coefficient").index
-
-    _, ax = plt.subplots(figsize=(8, 6))
-    non_zero_coefs.loc[coef_order].plot.barh(ax=ax, legend=False)
-    ax.set_xlabel("coefficient")
-    ax.grid(True)
-    plt.subplots_adjust(left=0.3)
-    plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg") 
-
-    # perform prediction using the best params
-    pipe.set_params(**gcv.best_params_)
-    pipe.fit(tr_X, tr_y)
-
-    return pipe
-
-def rsf(split_idx, tr_X, tr_y, scorer, n_jobs):
-    from sksurv.ensemble import RandomSurvivalForest
-    # choosing parameters by cross validation
-    cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    lower, upper = np.percentile(tr_y["duration"], [20, 80])
-    tr_times = np.arange(lower, upper + 1)
-    model = RandomSurvivalForest(max_depth=2, random_state=1)
-    if scorer == "cindex":
-        score_name = "C-Index"
-        param_grid={"model__max_depth": np.arange(1, 20, dtype=int)}
-    elif scorer == "cindex-ipcw":
-        score_name = "C-Index-IPCW"
-        model = as_concordance_index_ipcw_scorer(model, tau=upper)
-        param_grid={"model__estimator__max_depth": np.arange(1, 20, dtype=int)}
-    elif scorer == "auc":
-        score_name = "AUC"
-        model = as_cumulative_dynamic_auc_scorer(model, times=tr_times)
-        param_grid={"model__estimator__max_depth": np.arange(1, 20, dtype=int)}
-    elif scorer == "ibs":
-        score_name = "IBS"
-        model = as_integrated_brier_score_scorer(model, times=tr_times)
-        param_grid={"model__estimator__max_depth": np.arange(1, 20, dtype=int)}
-    else:
-        raise NotImplementedError
-
-    pipe = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            ("model", model),
-        ]
-    )
-    gcv = GridSearchCV(
-        pipe,
-        param_grid=param_grid,
-        cv=cv,
-        error_score=0.5,
-        n_jobs=n_jobs,
-    ).fit(tr_X, tr_y)
-
-    # plot cross validation results
-    cv_results = pd.DataFrame(gcv.cv_results_)
-    if scorer == "cindex":
-        depths = cv_results.param_model__max_depth
-    else:
-        depths = cv_results.param_model__estimator__max_depth
-    mean = cv_results.mean_test_score
-    std = cv_results.std_test_score
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(depths, mean)
-    ax.fill_between(depths, mean - std, mean + std, alpha=0.15)
-    ax.set_xscale("linear")
-    ax.set_ylabel(score_name)
-    ax.set_xlabel("max depth")
-    if scorer == "cindex":
-        ax.axvline(gcv.best_params_["model__max_depth"], c="C1")
-    else:
-        ax.axvline(gcv.best_params_["model__estimator__max_depth"], c="C1")
-    ax.axhline(0.5, color="grey", linestyle="--")
-    ax.grid(True)
-    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
-
-    # perform prediction using the best params
-    pipe.set_params(**gcv.best_params_)
-    pipe.fit(tr_X, tr_y)
-
-    return pipe
-
-def gradientboosting(split_idx, tr_X, tr_y, scorer, n_jobs, loss="coxph"):
-    from sksurv.ensemble import GradientBoostingSurvivalAnalysis
-    # choosing parameters by cross validation
-    cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    model = GradientBoostingSurvivalAnalysis(loss=loss, max_depth=2, random_state=1)
-    lower, upper = np.percentile(tr_y["duration"], [20, 80])
-    tr_times = np.arange(lower, upper + 1)
-    if scorer == "cindex":
-        score_name = "C-Index"
-        param_grid={"model__max_depth": np.arange(1, 20, dtype=int)}
-    elif scorer == "cindex-ipcw":
-        score_name = "C-Index-IPCW"
-        model = as_concordance_index_ipcw_scorer(model, tau=upper)
-        param_grid={"model__estimator__max_depth": np.arange(1, 20, dtype=int)}
-    elif scorer == "auc":
-        score_name = "AUC"
-        model = as_cumulative_dynamic_auc_scorer(model, times=tr_times)
-        param_grid={"model__estimator__max_depth": np.arange(1, 20, dtype=int)}
-    elif scorer == "ibs":
-        score_name = "IBS"
-        model = as_integrated_brier_score_scorer(model, times=tr_times)
-        param_grid={"model__estimator__max_depth": np.arange(1, 20, dtype=int)}
-    else:
-        raise NotImplementedError
-
-    pipe = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            ("model", model),
-        ]
-    )
-    gcv = GridSearchCV(
-        pipe,
-        param_grid=param_grid,
-        cv=cv,
-        error_score=0.5,
-        n_jobs=n_jobs,
-    ).fit(tr_X, tr_y)
-
-    # plot cross validation results
-    cv_results = pd.DataFrame(gcv.cv_results_)
-    if scorer == "cindex":
-        depths = cv_results.param_model__max_depth
-    else:
-        depths = cv_results.param_model__estimator__max_depth
-    mean = cv_results.mean_test_score
-    std = cv_results.std_test_score
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(depths, mean)
-    ax.fill_between(depths, mean - std, mean + std, alpha=0.15)
-    ax.set_xscale("linear")
-    ax.set_ylabel(score_name)
-    ax.set_xlabel("max depth")
-    if scorer == "cindex":
-        ax.axvline(gcv.best_params_["model__max_depth"], c="C1")
-    else:
-        ax.axvline(gcv.best_params_["model__estimator__max_depth"], c="C1")
-    ax.axhline(0.5, color="grey", linestyle="--")
-    ax.grid(True)
-    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
-
-    # perform prediction using the best params
-    pipe.set_params(**gcv.best_params_)
-    pipe.fit(tr_X, tr_y)
-
-    return pipe
-
-
-def coxph(split_idx, tr_X, tr_y, scorer, n_jobs):
-    from sksurv.linear_model import CoxPHSurvivalAnalysis
-    # choosing parameters by cross validation
-    cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    lower, upper = np.percentile(tr_y["duration"], [20, 80])
-    tr_times = np.arange(lower, upper + 1)
-    model = CoxPHSurvivalAnalysis(alpha=1e-2)
-    if scorer == "cindex":
-        score_name = "C-Index"
-        param_grid={"model__alpha": 10.0 ** np.arange(-2, 5)}
-    elif scorer == "cindex-ipcw":
-        score_name = "C-Index-IPCW"
-        model = as_concordance_index_ipcw_scorer(model, tau=upper)
-        param_grid={"model__estimator__alpha": 10.0 ** np.arange(-2, 5)}
-    elif scorer == "auc":
-        score_name = "AUC"
-        model = as_cumulative_dynamic_auc_scorer(model, times=tr_times)
-        param_grid={"model__estimator__alpha": 10.0 ** np.arange(-2, 5)}
-    elif scorer == "ibs":
-        score_name = "IBS"
-        model = as_integrated_brier_score_scorer(model, times=tr_times)
-        param_grid={"model__estimator__alpha": 10.0 ** np.arange(-2, 5)}
-    else:
-        raise NotImplementedError
-
-    pipe = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            ("model", model),
-        ]
-    )
-    gcv = GridSearchCV(
-        pipe,
-        param_grid=param_grid,
-        cv=cv,
-        error_score=0.5,
-        n_jobs=n_jobs,
-    ).fit(tr_X, tr_y)
-
-    # plot cross validation results
-    cv_results = pd.DataFrame(gcv.cv_results_)
-    if scorer == "cindex":
-        alphas = cv_results.param_model__alpha
-    else:
-        alphas = cv_results.param_model__estimator__alpha
-    mean = cv_results.mean_test_score
-    std = cv_results.std_test_score
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(alphas, mean)
-    ax.fill_between(alphas, mean - std, mean + std, alpha=0.15)
-    ax.set_xscale("log")
-    ax.set_ylabel(score_name)
-    ax.set_xlabel("alpha")
-    if scorer == "cindex":
-        ax.axvline(gcv.best_params_["model__alpha"], c="C1")
-    else:
-        ax.axvline(gcv.best_params_["model__estimator__alpha"], c="C1")
-    ax.axhline(0.5, color="grey", linestyle="--")
-    ax.grid(True)
-    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
-
-    # Visualize coefficients of the best estimator
-    best_model = gcv.best_estimator_.named_steps["model"]
-    if scorer == "cindex":
-        best_coefs = pd.DataFrame(best_model.coef_, index=tr_X.columns, columns=["coefficient"])
-    else:
-        best_coefs = pd.DataFrame(best_model.estimator_.coef_, index=tr_X.columns, columns=["coefficient"])
-
-    non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
-    print(f"Number of non-zero coefficients: {non_zero}")
-
-    non_zero_coefs = best_coefs.query("coefficient != 0")
-    coef_order = non_zero_coefs.abs().sort_values("coefficient").index
-    top10 = coef_order[:10]
-
-    _, ax = plt.subplots(figsize=(8, 6))
-    non_zero_coefs.loc[top10].plot.barh(ax=ax, legend=False)
-    ax.set_xlabel("coefficient")
-    ax.grid(True)
-    plt.subplots_adjust(left=0.3)
-    plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg") 
-
-    # perform prediction using the best params
-    pipe.set_params(**gcv.best_params_)
-    pipe.fit(tr_X, tr_y)
-
-    return pipe
-
-def ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs):
-    from sksurv.linear_model import IPCRidge
-    # choosing parameters by cross validation
-    cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    model = IPCRidge(alpha=1, random_state=1)
-    lower, upper = np.percentile(tr_y["duration"], [20, 80])
-    tr_times = np.arange(lower, upper + 1)
-    if scorer == "cindex":
-        score_name = "C-Index"
-        param_grid={"model__alpha": 2.0 ** np.arange(0, 26, 2)}
-    if scorer == "cindex-ipcw":
-        score_name = "C-Index-IPCW"
-        model = as_concordance_index_ipcw_scorer(model, tau=upper)
-        param_grid={"model__estimator__alpha": 2.0 ** np.arange(0, 26, 2)}
-    elif scorer == "auc":
-        score_name = "AUC"
-        model = as_cumulative_dynamic_auc_scorer(model, times=tr_times)
-        param_grid={"model__estimator__alpha": 2.0 ** np.arange(0, 26, 2)}
-    elif scorer == "ibs":
-        score_name = "IBS"
-        model = as_integrated_brier_score_scorer(model, times=tr_times)
-        param_grid={"model__estimator__alpha": 2.0 ** np.arange(0, 26, 2)}
-    pipe = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            ("model", model),
-        ]
-    )
-    gcv = GridSearchCV(
-        pipe,
-        param_grid=param_grid,
-        cv=cv,
-        error_score=0.5,
-        n_jobs=n_jobs,
-    ).fit(tr_X, tr_y)
-
-    # plot cross validation results
-    cv_results = pd.DataFrame(gcv.cv_results_)
-    if scorer == "cindex":
-        alphas = cv_results.param_model__alpha
-    else:
-        alphas = cv_results.param_model__estimator__alpha
-    mean = cv_results.mean_test_score
-    std = cv_results.std_test_score
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(alphas, mean)
-    ax.fill_between(alphas, mean - std, mean + std, alpha=0.15)
-    ax.set_xscale("log")
-    ax.set_ylabel(score_name)
-    ax.set_xlabel("alpha")
-    if scorer == "cindex":
-        ax.axvline(gcv.best_params_["model__alpha"], c="C1")
-    else:
-        ax.axvline(gcv.best_params_["model__estimator__alpha"], c="C1")
-    ax.axhline(0.5, color="grey", linestyle="--")
-    ax.grid(True)
-    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
-
-    # Visualize coefficients of the best estimator
-    best_model = gcv.best_estimator_.named_steps["model"]
-    if scorer == "cindex":
-        best_coefs = pd.DataFrame(best_model.coef_, index=tr_X.columns, columns=["coefficient"])
-    else:
-        best_coefs = pd.DataFrame(best_model.estimator_.coef_, index=tr_X.columns, columns=["coefficient"])
-
-    non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
-    print(f"Number of non-zero coefficients: {non_zero}")
-
-    non_zero_coefs = best_coefs.query("coefficient != 0")
-    coef_order = non_zero_coefs.abs().sort_values("coefficient").index
-    top10 = coef_order[:10]
-
-    _, ax = plt.subplots(figsize=(8, 6))
-    non_zero_coefs.loc[top10].plot.barh(ax=ax, legend=False)
-    ax.set_xlabel("coefficient")
-    ax.grid(True)
-    plt.subplots_adjust(left=0.3)
-    plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg") 
-
-    # perform prediction using the best params
-    pipe.set_params(**gcv.best_params_)
-    pipe.fit(tr_X, tr_y)
-
-    return pipe
-
-def fastsvm(split_idx, tr_X, tr_y, scorer, n_jobs, rank_ratio=1):
-    from sksurv.svm import FastSurvivalSVM
-    # choosing parameters by cross validation
-    cv = KFold(n_splits=5, shuffle=True, random_state=0)
-    model = FastSurvivalSVM(alpha=1, rank_ratio=rank_ratio)
-    lower, upper = np.percentile(tr_y["duration"], [20, 80])
-    tr_times = np.arange(lower, upper + 1)
-    if scorer == "cindex":
-        score_name = "C-Index"
-        param_grid={"model__alpha": 2.0 ** np.arange(-26, 0, 2)}
-    if scorer == "cindex-ipcw":
-        score_name = "C-Index-IPCW"
-        model = as_concordance_index_ipcw_scorer(model, tau=upper)
-        param_grid={"model__estimator__alpha": 2.0 ** np.arange(-26, 0, 2)}
-    elif scorer == "auc":
-        score_name = "AUC"
-        model = as_cumulative_dynamic_auc_scorer(model, times=tr_times)
-        param_grid={"model__estimator__alpha": 2.0 ** np.arange(-26, 0, 2)}
-    elif scorer == "ibs":
-        score_name = "IBS"
-        model = as_integrated_brier_score_scorer(model, times=tr_times)
-        param_grid={"model__estimator__alpha": 2.0 ** np.arange(-26, 0, 2)}
-    pipe = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            ("model", model),
-        ]
-    )
-    gcv = GridSearchCV(
-        pipe,
-        param_grid=param_grid,
-        cv=cv,
-        error_score=0.5,
-        n_jobs=n_jobs,
-    ).fit(tr_X, tr_y)
-
-    # plot cross validation results
-    cv_results = pd.DataFrame(gcv.cv_results_)
-    if scorer == "cindex":
-        alphas = cv_results.param_model__alpha
-    else:
-        alphas = cv_results.param_model__estimator__alpha
-    mean = cv_results.mean_test_score
-    std = cv_results.std_test_score
-    fig, ax = plt.subplots(figsize=(9, 6))
-    ax.plot(alphas, mean)
-    ax.fill_between(alphas, mean - std, mean + std, alpha=0.15)
-    ax.set_xscale("log")
-    ax.set_ylabel(score_name)
-    ax.set_xlabel("alpha")
-    if scorer == "cindex":
-        ax.axvline(gcv.best_params_["model__alpha"], c="C1")
-    else:
-        ax.axvline(gcv.best_params_["model__estimator__alpha"], c="C1")
-    ax.axhline(0.5, color="grey", linestyle="--")
-    ax.grid(True)
-    plt.savefig(f"{relative_path}/figures/plots/cross_validation_fold{split_idx}.jpg")
-
-    # Visualize coefficients of the best estimator
-    best_model = gcv.best_estimator_.named_steps["model"]
-    if scorer == "cindex":
-        best_coefs = pd.DataFrame(best_model.coef_, index=tr_X.columns, columns=["coefficient"])
-    else:
-        best_coefs = pd.DataFrame(best_model.estimator_.coef_, index=tr_X.columns, columns=["coefficient"])
-
-    non_zero = np.sum(best_coefs.iloc[:, 0] != 0)
-    print(f"Number of non-zero coefficients: {non_zero}")
-
-    non_zero_coefs = best_coefs.query("coefficient != 0")
-    coef_order = non_zero_coefs.abs().sort_values("coefficient").index
-    top10 = coef_order[:10]
-
-    _, ax = plt.subplots(figsize=(8, 6))
-    non_zero_coefs.loc[top10].plot.barh(ax=ax, legend=False)
-    ax.set_xlabel("coefficient")
-    ax.grid(True)
-    plt.subplots_adjust(left=0.3)
-    plt.savefig(f"{relative_path}/figures/plots/best_coefficients_fold{split_idx}.jpg") 
-
-    # perform prediction using the best params
-    pipe.set_params(**gcv.best_params_)
-    pipe.fit(tr_X, tr_y)
-
-    return pipe
-
-def load_radiomics(
-        data,
-        radiomics_aggregation,
-        radiomics_aggregated_mode,
-        radiomics_keys,
-        use_graph_properties,
-        n_jobs,
-        save_radiomics_dir=None
-    ):
-
-    if radiomics_aggregated_mode in ["ABMIL", "SPARRA"]:
-        parent_path = save_radiomics_dir.parent
-        folder_name = save_radiomics_dir.name
-        save_radiomics_dir = pathlib.Path(parent_path) / f"radiomics_{folder_name}_{radiomics_aggregated_mode}"
-        print(f"{save_radiomics_dir}")
-        radiomics_paths = []
-        for p in data:
-            subject_id = p[0][0]
-            path = pathlib.Path(save_radiomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
-            radiomics_paths.append(path)
-        dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path)
-            for idx, graph_path in enumerate(radiomics_paths)
-        )
-    else:
-        radiomics_paths = [p[0][1]["radiomics"] for p in data]
-        if radiomics_aggregation:
-            dict_list = joblib.Parallel(n_jobs=n_jobs)(
-                joblib.delayed(prepare_graph_radiomics)(idx, graph_path)
-                for idx, graph_path in enumerate(radiomics_paths)
-            )
-        else:
-            dict_list = joblib.Parallel(n_jobs=n_jobs)(
-                joblib.delayed(load_radiomic_properties)(idx, graph_path, radiomics_keys)
-                for idx, graph_path in enumerate(radiomics_paths)
-            )
-
-    radiomics_dict = {}
-    for d in dict_list: radiomics_dict.update(d)
-    radiomics_X = [radiomics_dict[f"{i}"] for i in range(len(radiomics_paths))]
-    radiomics_X = pd.DataFrame(radiomics_X)
-
-    if use_graph_properties:
-        prop_paths = [p[0]["radiomics"] for p in data]
-        prop_paths = [f"{p}".replace(".json", "_graph_properties.json") for p in prop_paths]
-        prop_dict_list = [load_json(p) for p in prop_paths]
-        prop_X = [prepare_graph_properties(d, omics="radiomics") for d in prop_dict_list]
-        prop_X = pd.DataFrame(prop_X)
-        radiomics_X = pd.concat([radiomics_X, prop_X], axis=1)
-    return radiomics_X
-
-def load_pathomics(
-        data,
-        pathomics_aggregation,
-        pathomics_aggregated_mode,
-        pathomics_keys,
-        use_graph_properties,
-        n_jobs,
-        save_pathomics_dir
-    ):
-
-    if pathomics_aggregated_mode in ["ABMIL", "SPARRA"]:
-        parent_path = save_pathomics_dir.parent
-        folder_name = save_pathomics_dir.name
-        save_pathomics_dir = pathlib.Path(parent_path) / f"pathomics_{folder_name}_{pathomics_aggregated_mode}"
-        print(f"{save_pathomics_dir}")
-        pathomics_paths = []
-        for p in data:
-            subject_id = p[0][0]
-            path = pathlib.Path(save_pathomics_dir) / pathomics_aggregated_mode / f"{subject_id}.npy"
-            pathomics_paths.append(path)
-        dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path)
-            for idx, graph_path in enumerate(pathomics_paths)
-        )
-    else:
-        pathomics_paths = [p[0][1]["pathomics"] for p in data]
-        if pathomics_aggregation:
-            dict_list = joblib.Parallel(n_jobs=n_jobs)(
-                joblib.delayed(prepare_graph_pathomics)(idx, graph_path, pathomics_keys)
-                for idx, graph_path in enumerate(pathomics_paths)
-            )
-        else:
-            dict_list = joblib.Parallel(n_jobs=n_jobs)(
-                joblib.delayed(load_wsi_level_features)(idx, graph_path)
-                for idx, graph_path in enumerate(pathomics_paths)
-            )
-    pathomics_dict = {}
-    for d in dict_list: pathomics_dict.update(d)
-    pathomics_X = [pathomics_dict[f"{i}"] for i in range(len(pathomics_paths))]
-    pathomics_X = pd.DataFrame(pathomics_X)
-
-    if use_graph_properties:
-        prop_paths = [p[0]["pathomics"] for p in data]
-        prop_paths = [f"{p}".replace(".json", "_graph_properties.json") for p in prop_paths]
-        prop_dict_list = [load_json(p) for p in prop_paths]
-        prop_X = [prepare_graph_properties(d, omics="pathomics") for d in prop_dict_list]
-        prop_X = pd.DataFrame(prop_X)
-        pathomics_X = pd.concat([pathomics_X, prop_X], axis=1)
-    return pathomics_X
-
-def load_radiopathomics(
-        data,
-        radiomics_aggregation,
-        radiomics_aggregated_mode,
-        radiomics_keys,
-        pathomics_aggregation,
-        pathomics_aggregated_mode,
-        pathomics_keys,
-        use_graph_properties,
-        n_jobs,
-        save_radiopathomics_dir
-    ):
-    if radiomics_aggregated_mode in ["ABMIL", "SPARRA"] and radiomics_aggregated_mode == pathomics_aggregated_mode:
-        parent_path = save_radiopathomics_dir.parent
-        folder_name = save_radiopathomics_dir.name
-        save_radiopathomics_dir = pathlib.Path(parent_path) / f"radiomics_pathomics_{folder_name}_{radiomics_aggregated_mode}"
-        radiopathomics_paths = []
-        for p in data:
-            subject_id = p[0][0]
-            path = save_radiopathomics_dir / radiomics_aggregated_mode / f"{subject_id}.npy"
-            radiopathomics_paths.append(path)
-        dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path)
-            for idx, graph_path in enumerate(radiopathomics_paths)
-        )
-
-        radiopathomics_dict = {}
-        for d in dict_list: radiopathomics_dict.update(d)
-        radiopathomics_X = [radiopathomics_dict[f"{i}"] for i in range(len(radiopathomics_paths))]
-        radiopathomics_X = pd.DataFrame(radiopathomics_X)
-
-        if use_graph_properties:
-            prop_paths = [p[0][1]["radiomics"] for p in data]
-            prop_paths = [f"{p}".replace(".json", "_graph_properties.json") for p in prop_paths]
-            prop_dict_list = [load_json(p) for p in prop_paths]
-            prop_X = [prepare_graph_properties(d, omics="radiomics") for d in prop_dict_list]
-            prop_X = pd.DataFrame(prop_X)
-            radiopathomics_X = pd.concat([radiopathomics_X, prop_X], axis=1)
-            prop_paths = [p[0][1]["pathomics"] for p in data]
-            prop_paths = [f"{p}".replace(".json", "_graph_properties.json") for p in prop_paths]
-            prop_dict_list = [load_json(p) for p in prop_paths]
-            prop_X = [prepare_graph_properties(d, omics="pathomics") for d in prop_dict_list]
-            prop_X = pd.DataFrame(prop_X)
-            radiopathomics_X = pd.concat([radiopathomics_X, prop_X], axis=1)
-    else:
-        radiomics_X = load_radiomics(
-            data=data,
-            radiomics_aggregation=radiomics_aggregation,
-            radiomics_aggregated_mode=radiomics_aggregated_mode,
-            radiomics_keys=radiomics_keys,
-            use_graph_properties=use_graph_properties,
-            n_jobs=n_jobs
-        )
-        
-        pathomics_X = load_pathomics(
-            data=data,
-            pathomics_aggregation=pathomics_aggregation,
-            pathomics_aggregated_mode=pathomics_aggregated_mode,
-            pathomics_keys=pathomics_keys,
-            use_graph_properties=use_graph_properties,
-            n_jobs=n_jobs
-        ) 
-
-        radiopathomics_X = pd.concat([radiomics_X, pathomics_X], axis=1)
-
-    return radiopathomics_X
-
-def survival(
-        split_path,
-        radiomics_keys=None,
-        pathomics_keys=None,
-        omics="radiopathomics", 
-        save_omics_dir=None,
-        n_jobs=32,
-        radiomics_aggregation=False,
-        radiomics_aggregated_mode=None,
-        pathomics_aggregation=False,
-        pathomics_aggregated_mode=None,
-        model="CoxPH",
-        scorer="cindex",
-        feature_selection=True,
-        n_bootstraps=100,
-        use_graph_properties=False,
-        save_results_dir=None
-        ):
-    splits = joblib.load(split_path)
-    predict_results = {}
-    risk_results = {
-        "raw_subject": [], "raw_risk": [], 
-        "subject": [], "risk": [], 
-        "event": [], "duration": []
+    # =====================================================
+    # 1. SURVIVAL TASKS
+    # =====================================================
+    survival_specs = {
+        "OS": ("OS", "OS.time"),
+        "DSS": ("DSS", "DSS.time"),
+        "DFI": ("DFI", "DFI.time"),
+        "PFI": ("PFI", "PFI.time"),
     }
-    for split_idx, split in enumerate(splits):
-        print(f"Performing cross-validation on fold {split_idx}...")
-        raw_data_tr, raw_data_va, raw_data_te = split["train"], split["valid"], split["test"]
-        raw_data_tr = raw_data_tr + raw_data_va
 
-        data_tr = [p for p in raw_data_tr if p[1] is not None]
-        data_te = [p for p in raw_data_te if p[1] is not None]
+    surv_df = pd.read_csv(f"{outcome_dir}/phenotypes/clinical_data/survival_data.csv")
+    surv_df = surv_df.drop_duplicates(subset="_PATIENT", keep="first")
 
-        tr_y = np.array([p[1] for p in data_tr])
-        tr_y = pd.DataFrame({'event': tr_y[:, 1].astype(bool), 'duration': np.maximum(tr_y[:, 0], 1e-6)})
-        tr_y = tr_y.to_records(index=False)
-        te_y = np.array([p[1] for p in data_te])
-        te_y = pd.DataFrame({'event': te_y[:, 1].astype(bool), 'duration': np.maximum(te_y[:, 0], 1e-6)})
-        te_y = te_y.to_records(index=False)
+    for task in outcomes:
+        if task in survival_specs:
+            event_col, time_col = survival_specs[task]
+            df = surv_df.copy()
 
-        # Concatenate multi-omics if required
-        if omics == "radiopathomics":
-            tr_X = load_radiopathomics(
-                data=data_tr,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir
-            )
-            print("Selected training radiopathomics:", tr_X.shape)
-            print(tr_X.head())
+            df = df[df[event_col].notna() & df[time_col].notna()]
+            df["SubjectID"] = df["_PATIENT"]
 
-            te_X = load_radiopathomics(
-                data=data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir
-            )
-            print("Selected testing radiopathomics:", te_X.shape)
-            print(te_X.head())
+            df[f"{task}_duration"] = df[time_col]
+            df[f"{task}_event"] = (df[event_col].astype(int) == 1).astype(int)
 
-            raw_te_X = load_radiopathomics(
-                data=raw_data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir
-            )
-            print("Selected raw testing radiopathomics:", raw_te_X.shape)
-            print(raw_te_X.head())
-        elif omics == "pathomics":
-            pathomics_tr_X = load_pathomics(
-                data=data_tr,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir
-            )
-            print("Selected training pathomics:", pathomics_tr_X.shape)
-            print(pathomics_tr_X.head())
+            df = df[df["SubjectID"].isin(subject_ids)]
 
-            pathomics_te_X = load_pathomics(
-                data=data_te,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir
-            )
-            print("Selected testing pathomics:", pathomics_te_X.shape)
-            print(pathomics_te_X.head())
+            tables[task] = df[["SubjectID", f"{task}_duration", f"{task}_event"]]
 
-            tr_X, te_X = pathomics_tr_X, pathomics_te_X
+    # =====================================================
+    # 2. PHENOTYPE (CLASSIFICATION) TASKS
+    # =====================================================
+    if "ImmuneSubtype" in outcomes:
+        df = pd.read_csv(f"{outcome_dir}/phenotypes/immune_subtype/immune_subtype.csv")
+        df = add_subject_id(df)
+        df = df[df["Subtype_Immune_Model_Based"].notna()]
 
-            raw_te_X = load_pathomics(
-                data=raw_data_te,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir
-            )
-            print("Selected raw testing pathomics:", raw_te_X.shape)
-            print(raw_te_X.head())
-        elif omics == "radiomics":
-            radiomics_tr_X = load_radiomics(
-                data=data_tr,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir
-            )
-            print("Selected training radiomics:", radiomics_tr_X.shape)
-            print(radiomics_tr_X.head())
+        counts = df["Subtype_Immune_Model_Based"].value_counts()
+        valid = counts[counts >= minimum_per_class].index
+        df = df[df["Subtype_Immune_Model_Based"].isin(valid)]
 
-            radiomics_te_X = load_radiomics(
-                data=data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir
-            )
-            print("Selected testing radiomics:", radiomics_te_X.shape)
-            print(radiomics_te_X.head())
+        df["ImmuneSubtype_class"], _ = pd.factorize(df["Subtype_Immune_Model_Based"])
+        tables["ImmuneSubtype"] = df[[
+            "SubjectID", "Subtype_Immune_Model_Based", "ImmuneSubtype_class"
+        ]]
 
-            tr_X, te_X = radiomics_tr_X, radiomics_te_X
-            raw_te_X = load_radiomics(
-                data=raw_data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir
-            )
-            print("Selected raw testing radiomics:", raw_te_X.shape)
-            print(raw_te_X.head())
-        else:
-            raise NotImplementedError
-        
-        # df_prop = df_prop.apply(zscore)
-        print("Selected training omics:", tr_X.shape)
-        print(tr_X.head())
-        print("Selected testing omics:", te_X.shape)
-        print(te_X.head())
-        print("Selected raw testing omics:", raw_te_X.shape)
-        print(raw_te_X.head())
+    if "MolecularSubtype" in outcomes:
+        df = pd.read_csv(f"{outcome_dir}/phenotypes/molecular_subtype/molecular_subtype.csv")
+        df = add_subject_id(df)
+        df = df[df["Subtype_Selected"].notna()]
 
-        # feature selection
-        if feature_selection:
-            print("Selecting features...")
-            selector = VarianceThreshold(threshold=1e-4)
-            selector.fit(tr_X[tr_y["event"]])
-            selected_names = selector.get_feature_names_out().tolist()
-            num_removed = len(tr_X.columns) - len(selected_names)
-            print(f"Removing {num_removed} low-variance features...")
-            tr_X = tr_X[selected_names]
-            te_X = te_X[selected_names]
-            raw_te_X = raw_te_X[selected_names]
-            print("Selecting univariate feature...")
-            univariate_results = []
-            for name in list(tr_X.columns):
-                cph = CoxPHFitter()
-                df = pd.DataFrame(
-                    {
-                        "duration": tr_y["duration"], 
-                        "event": tr_y["event"],
-                        name: tr_X[name] 
-                    }
-                )
-                try:
-                    cph.fit(df, "duration", "event")
-                except Exception as e:
-                    print(f"Skipping {name} | Error: {e}")
-                    continue
-                summary = cph.summary
-                univariate_results.append({
-                    'name': name,
-                    'coef': summary['coef'].values[0],
-                    'HR': summary['exp(coef)'].values[0],
-                    'p_value': summary['p'].values[0],
-                    'CI_low': summary['exp(coef) lower 95%'].values[0],
-                    'CI_high': summary['exp(coef) upper 95%'].values[0]
-                })
-            results_df = pd.DataFrame(univariate_results)
-            selected_names = results_df[results_df['p_value'] < 0.2]['name'].tolist()
-            print(f"Selected features: {len(selected_names)}")
-            tr_X = tr_X[selected_names]
-            te_X = te_X[selected_names]
-            raw_te_X = raw_te_X[selected_names]
+        counts = df["Subtype_Selected"].value_counts()
+        valid = counts[counts >= minimum_per_class].index
+        df = df[df["Subtype_Selected"].isin(valid)]
 
-        # model fitting
-        print("Fitting survival model...")
-        if model == "Coxnet":
-            predictor = coxnet(split_idx, tr_X, tr_y, scorer, n_jobs)
-        elif model == "RSF":
-            predictor = rsf(split_idx, tr_X, tr_y, scorer, n_jobs)
-        elif model == "CoxPH":
-            predictor = coxph(split_idx, tr_X, tr_y, scorer, n_jobs)
-        elif model == "GradientBoost":
-            predictor = gradientboosting(split_idx, tr_X, tr_y, scorer, n_jobs)
-        elif model == "IPCRidge":
-            predictor = ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs)
-        elif model == "FastSVM":
-            predictor = fastsvm(split_idx, tr_X, tr_y, scorer, n_jobs, rank_ratio=1)
+        df["MolecularSubtype_class"], _ = pd.factorize(df["Subtype_Selected"])
+        tables["MolecularSubtype"] = df[[
+            "SubjectID", "Subtype_Selected", "MolecularSubtype_class"
+        ]]
 
-        # bootstrapping
-        if n_bootstraps > 0:
-            print("Bootstrapping...")
-            stable_coefs = np.zeros(len(selected_names))
-            for _ in range(n_bootstraps):
-                tr_x_s, tr_y_s = resample(tr_X, tr_y)
-                predictor.fit(tr_x_s, tr_y_s)
-                if scorer == "cindex":
-                    stable_coefs += (predictor.named_steps["model"].coef_ != 0).astype(int)
-                else:
-                    stable_coefs += (predictor.named_steps["model"].estimator_.coef_ != 0).astype(int)
-            stable_coefs = stable_coefs / n_bootstraps
-            final_coefs = np.where(stable_coefs > 0.8)[0]
-            stable_names = [selected_names[i] for i in final_coefs.tolist()]
-            tr_X = tr_X[stable_names]
-            te_X = te_X[stable_names]
-            raw_te_X = raw_te_X[stable_names]
-            predictor.fit(tr_X, tr_y)
+    if "PrimaryDisease" in outcomes:
+        df = pd.read_csv(
+            f"{outcome_dir}/phenotypes/sample_type_and_primary_disease/sample_type_primary_disease.csv")
+        df = add_subject_id(df)
+        df = df[df["_primary_disease"].notna()]
+        df = df.drop_duplicates(subset="SubjectID", keep="first")
 
-        raw_subject_ids = [p[0][0] for p in raw_data_te]
-        risk_results["raw_subject"] += raw_subject_ids
-        raw_risk_scores = predictor.predict(raw_te_X)
-        risk_results["raw_risk"] += raw_risk_scores.tolist()
+        counts = df["_primary_disease"].value_counts()
+        valid = counts[counts >= minimum_per_class].index
+        df = df[df["_primary_disease"].isin(valid)]
 
-        subject_ids = [p[0][0] for p in data_te]
-        risk_results["subject"] += subject_ids
-        risk_scores = predictor.predict(te_X)
-        risk_results["risk"] += risk_scores.tolist()
-        risk_results["event"] += te_y["event"].astype(int).tolist()
-        risk_results["duration"] += te_y["duration"].tolist()
-        C_index = concordance_index_censored(te_y["event"], te_y["duration"], risk_scores)[0]
-        C_index_ipcw = concordance_index_ipcw(tr_y, te_y, risk_scores)[0]
+        df["PrimaryDisease_class"], _ = pd.factorize(df["_primary_disease"])
+        tables["PrimaryDisease"] = df[[
+            "SubjectID", "_primary_disease", "PrimaryDisease_class"
+        ]]
 
-        lower, upper = np.percentile(te_y["duration"], [10, 90])
-        times = np.arange(lower, upper + 1, 7)
-        auc, mean_auc = cumulative_dynamic_auc(tr_y, te_y, risk_scores, times)
-        if hasattr(predictor, "predict_survival_function"):
-            try:
-                survs = predictor.predict_survival_function(te_X)
-                preds = np.asarray([[fn(t) for t in times] for fn in survs])
-                IBS = integrated_brier_score(tr_y, te_y, preds, times)
-            except Exception as e:
-                IBS = 0
-        else:
-            IBS = 0
-        scores_dict = {
-            "C-index": C_index,
-            "C-index-IPCW": C_index_ipcw,
-            "Mean AUC": mean_auc,
-            "IBS": IBS
-        }
+    # =====================================================
+    # 3. SIGNATURE TASKS (MANY COLUMNS)
+    # =====================================================
+    signature_paths = {
+        "GeneProgrames": f"{outcome_dir}/signatures/gene_programs/gene_programs.csv",
+        "HRDscore": f"{outcome_dir}/signatures/HRD_score/HRD_score.csv",
+        "ImmuneSignatureScore": f"{outcome_dir}/signatures/immune_signature_score/immune_signature_score.csv",
+        "StemnessScoreDNA": f"{outcome_dir}/signatures/stemness_score_DNA/stemness_scores_DNAmeth.csv",
+        "StemScoreRNA": f"{outcome_dir}/signatures/stemness_score_RNA/stemness_scores_RNAexp.csv",
+    }
 
-        fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(times, auc)
-        ax.set_xscale("linear")
-        ax.set_ylabel("time-dependent AUC")
-        ax.set_xlabel("days from enrollment")
-        ax.axhline(mean_auc, linestyle="--")
-        ax.grid(True)
-        plt.savefig(f"{relative_path}/figures/plots/AUC_fold{split_idx}.jpg") 
+    for task in outcomes:
+        if task in signature_paths:
+            df = pd.read_csv(signature_paths[task])
+            df = add_subject_id(df)
 
-        print(f"Updating regression results on fold {split_idx}")
-        predict_results.update({f"Fold {split_idx}": scores_dict})
-    print(predict_results)
-    for k in scores_dict.keys():
-        arr = np.array([v[k] for v in predict_results.values() if v[k] != 0])
-        print(f"CV {k} mean+std", arr.mean(), arr.std())
-    # plot survival curve
-    pd_risk = pd.DataFrame({k: risk_results[k] for k in ["risk", "event", "duration"]})
-    mean_risk = pd_risk["risk"].mean()
-    dem = pd_risk["risk"] > mean_risk
+            # Special normalization case
+            if task == "HRDscore":
+                df = df.applymap(lambda x: x / 100 if isinstance(x, (int, float)) else x)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
-    plt.rcParams.update({'font.size': 12})
-    kmf1 = KaplanMeierFitter()
-    kmf1.fit(pd_risk["duration"][dem], event_observed=pd_risk["event"][dem], label="High risk")
-    kmf1.plot_survival_function(ax=ax)
+            # Filter only selected signature columns
+            if signature_ids is not None:
+                df = df[["SubjectID"] + signature_ids]
 
-    kmf2 = KaplanMeierFitter()
-    kmf2.fit(pd_risk["duration"][~dem], event_observed=pd_risk["event"][~dem], label="Low risk")
-    kmf2.plot_survival_function(ax=ax)
-    add_at_risk_counts(kmf1, kmf2, ax=ax)
-    plt.tight_layout()
+            # Apply pooling
+            df = pool(df)
 
-    # logrank test
-    test_results = logrank_test(
-        pd_risk["duration"][dem], pd_risk["duration"][~dem], 
-        pd_risk["event"][dem], pd_risk["event"][~dem], 
-        alpha=.99
+            # Rename with prefix to avoid column collisions
+            df = prefix_columns(df, prefix=task)
+
+            tables[task] = df
+
+    # =====================================================
+    # Final merge (outer join keeps missing outcomes)
+    # =====================================================
+    merged = reduce(
+        lambda left, right: pd.merge(left, right, on="SubjectID", how="outer"),
+        tables.values()
     )
-    test_results.print_summary()
-    pvalue = test_results.p_value
-    print(f"p-value: {pvalue}")
-    ax.set_ylabel("Survival Probability")
-    # plt.subplots_adjust(left=0.2, bottom=0.2)
-    plt.savefig(f"{relative_path}/figures/plots/{omics}_survival_curve.png")
 
-    #save predicted results
-    save_path = f"{save_results_dir}/{omics}_" + \
-        f"radio+{radiomics_aggregated_mode}_" + \
-        f"patho+{pathomics_aggregated_mode}_" + \
-        f"model+{model}_scorer+{scorer}.json"
-    with open(save_path, "w") as f:
-        json.dump(risk_results, f, indent=4)
+    # keep only requested subjects
+    merged = merged[merged["SubjectID"].isin(subject_ids)].reset_index(drop=True)
 
-    return
+    logging.info(f"Final multi-task table shape: {merged.shape}")
+
+    return merged
+
+def generate_task_to_idx(outcomes):
+    """
+    Generate a mapping from subtask name to logits column index.
+    
+    Args:
+        outcomes: list of dicts (length = batch size)
+                  each dict has keys: "survival", "classification", "regression"
+    
+    Returns:
+        task_to_idx: dict {subtask_name: column_index}
+                     for regression subtasks, subtask_name includes the subcolumn, e.g.,
+                     "GeneProgrames_GP1"
+    """
+    task_to_idx = OrderedDict()
+    idx = 0
+
+    # Use the first sample to determine all subtasks
+    sample = outcomes[0]
+
+    # --- Survival ---
+    for task in sample["survival"].keys():
+        task_to_idx[task] = idx
+        idx += 1
+
+    # --- Classification ---
+    for task in sample["classification"].keys():
+        task_to_idx[task] = idx
+        idx += 1
+
+    # --- Regression ---
+    for task, subdict in sample["regression"].items():
+        for subcol in subdict.keys():
+            task_name = f"{task}_{subcol}" if subcol != task else task
+            task_to_idx[task_name] = idx
+            idx += 1
+
+    return task_to_idx
+
 
 def generate_data_split(
         x: list,
@@ -1443,53 +291,143 @@ def generate_data_split(
 
 def split_batch_output(output):
     """
-    output can be:
-      [outputs, features, atte_dict]
-      [outputs, labels]
-      [outputs, features]
-      [outputs]
-      or any list containing arrays and optional dicts.
+    Split batch outputs into sample-wise outputs.
 
-    Returns a list of length batch_size with sample-wise outputs.
+    Args:
+        output: list of arrays, dicts, or list of dicts. Examples:
+            [outputs, features, atte_dict]
+            [outputs, labels]  (labels can be list of dicts)
+            [outputs, features]
+            [outputs]
+    Returns:
+        step_output: list of length batch_size, each element is a tuple
+                     containing the i-th sample from each output
     """
-
-    # output is a list: [arr_or_dict, arr_or_dict, ...]
-    # find batch size from the first array
-    # (dicts do not have .shape)
+    # --- Determine batch size from the first array or list of dicts ---
+    batch_size = None
     for v in output:
-        if hasattr(v, "shape"):
+        if hasattr(v, "shape"):  # array
             batch_size = v.shape[0]
             break
-    else:
-        raise ValueError("No array found to infer batch size.")
+        elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict):
+            batch_size = len(v)
+            break
+    if batch_size is None:
+        raise ValueError("No array or list-of-dict found to infer batch size.")
 
-    # split each element
+    # --- Split each element ---
     split_items = []
     for v in output:
-        if hasattr(v, "shape"):
-            # numpy array → split
+        if hasattr(v, "shape"):  # numpy array
             split_items.append(np.split(v, batch_size, axis=0))
-        elif isinstance(v, dict):
-            # dict → split each value
-            split_items.append({
-                k: np.split(val, batch_size, axis=0)
-                for k, val in v.items()
-            })
+        elif isinstance(v, dict):  # dict of arrays
+            split_items.append({k: np.split(val, batch_size, axis=0) for k, val in v.items()})
+        elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict):  # list of dicts
+            split_items.append(v)  # already sample-wise
         else:
             raise TypeError(f"Unsupported output type: {type(v)}")
 
-    # Now build sample-wise outputs
+    # --- Build sample-wise outputs ---
     step_output = []
     for i in range(batch_size):
         sample_items = []
         for item in split_items:
-            if isinstance(item, list):
+            if isinstance(item, list) and isinstance(item[0], dict):
+                # list of dicts → pick i-th dict
+                sample_items.append(item[i])
+            elif isinstance(item, list):
                 sample_items.append(item[i])
             elif isinstance(item, dict):
                 sample_items.append({k: item[k][i] for k in item})
         step_output.append(tuple(sample_items))
 
     return step_output
+
+
+def evaluate_multitask(logit, true, task_to_idx):
+    """
+    Compute metrics per subtask and average per big class.
+    
+    Args:
+        logit: np.array [B, N] model outputs
+        true: list of dicts length B
+        task_to_idx: dict mapping subtask_name → column index
+    """
+    B = len(true)
+    metrics = {
+        "survival": [],
+        "classification": [],
+        "regression": []
+    }
+
+    # --- Survival ---
+    for task in true[0]["survival"].keys():
+        idx = task_to_idx.get(task)
+        if idx is None:
+            continue
+
+        hazard = logit[:, idx]
+        durations = []
+        events = []
+        for b in range(B):
+            val = true[b]["survival"].get(task, {"duration": None, "event": None})
+            durations.append(val["duration"])
+            events.append(val["event"])
+
+        durations = np.array(durations, dtype=np.float32)
+        events = np.array(events, dtype=np.int32)
+        mask = (~np.isnan(durations)) & (~np.isnan(events))
+
+        if mask.sum() > 0:
+            cidx = concordance_index(durations[mask], -hazard[mask], events[mask])
+            metrics["survival"].append(cidx)
+
+    # --- Classification ---
+    for task in true[0]["classification"].keys():
+        idx = task_to_idx.get(task)
+        if idx is None:
+            continue
+
+        logits_task = logit[:, idx]
+        labels_task = []
+        for b in range(B):
+            val = true[b]["classification"].get(task, {"class": None})
+            labels_task.append(-1 if val["class"] is None else val["class"])
+        labels_task = np.array(labels_task)
+        mask = labels_task != -1
+        if mask.sum() > 0:
+            preds = (logits_task[mask] > 0).astype(int)
+            f1 = f1_score(labels_task[mask], preds, average="macro")
+            metrics["classification"].append(f1)
+
+    # --- Regression ---
+    # Regression may have multiple columns per task
+    reg_subtasks = []
+    for task, subdict in true[0]["regression"].items():
+        for subcol in subdict.keys():
+            reg_subtasks.append(f"{task}_{subcol}")
+
+    for subtask in reg_subtasks:
+        idx = task_to_idx.get(subtask)
+        if idx is None:
+            continue
+
+        pred = logit[:, idx]
+        target = []
+        for b in range(B):
+            val = true[b]["regression"].get(subtask.split("_")[0], {}).get(subtask.split("_")[1], None)
+            target.append(val)
+        target = np.array(target, dtype=np.float32)
+        mask = ~np.isnan(target)
+        if mask.sum() > 0:
+            r2 = r2_score(target[mask], pred[mask])
+            metrics["regression"].append(r2)
+
+    # Compute average per big class
+    avg_metrics = {k: np.mean(v) if v else np.nan for k, v in metrics.items()}
+
+    return metrics, avg_metrics
+
 
 def run_once(
         dataset_dict,
@@ -1516,10 +454,10 @@ def run_once(
         optim_kwargs = {}
 
     if BayesGNN:
-        model = SurvivalBayesGraphArch(**arch_kwargs)
+        model = MultiTaskBayesGraphArch(**arch_kwargs)
         kl = {"loss": bnn.BKLLoss(), "weight": 0.1}
     else:
-        model = SurvivalGraphArch(**arch_kwargs)
+        model = MultiTaskGraphArch(**arch_kwargs)
         kl = None
     if pretrained is not None:
         model.load(pretrained)
@@ -1527,7 +465,7 @@ def run_once(
         model = model.to("cuda")
     else:
         model = model.to("cpu")
-    loss = CoxSurvLoss()
+    loss = MultiTaskLoss()
     optimizer_kwargs = {k: v for k, v in optim_kwargs.items() if k in ["lr", "weight_decay"]}
     optimizer = torch.optim.Adam(model.parameters(), **optimizer_kwargs)
     # optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, nesterov=True, **optim_kwargs)
@@ -1541,7 +479,7 @@ def run_once(
             if _loader_kwargs["batch_size"] > 4:
                 _loader_kwargs["batch_size"] = 4
             sampling_rate = 1.0
-        ds = SurvivalGraphDataset(
+        ds = MultiTaskGraphDataset(
             subset, 
             mode=subset_name, 
             preproc=preproc_func,
@@ -1581,14 +519,18 @@ def run_once(
                 output = list(zip(*step_output))
                 logit, true = output
                 logit = np.array(logit).squeeze()
-                true = np.array(true).squeeze()
-                event_status = true[:, 1] > 0
-                event_time = true[:, 0]
-                cindex = concordance_index_censored(event_status, event_time, logit)[0]
-                logging_dict[f"{loader_name}-Cindex"] = cindex
+                true = list(true)  # list of dicts
 
-                if "valid-A" in loader_name and cindex > best_score: 
-                    best_score = cindex
+                metrics, avg_metrics = evaluate_multitask(logit, true, task_to_idx)
+
+                # Log per-class metrics
+                logging_dict[f"{loader_name}-Cindex"] = avg_metrics["survival"]
+                logging_dict[f"{loader_name}-F1"] = avg_metrics["classification"]
+                logging_dict[f"{loader_name}-R2"] = avg_metrics["regression"]
+
+                # Optionally save best model based on survival
+                if "valid-A" in loader_name and avg_metrics["survival"] > best_score: 
+                    best_score = avg_metrics["survival"]
                     model.save(f"{save_dir}/best_model.weights.pth")
 
                 logging_dict[f"{loader_name}-raw-logit"] = logit
@@ -1629,7 +571,8 @@ def training(
         omics_dims,
         omics_pool_ratio,
         arch_opt,
-        train_opt
+        train_opt,
+        task_to_idx
 ):
     """train node classification neural networks
     Args:
@@ -1655,7 +598,8 @@ def training(
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
         "aggregation": arch_opt['AGGREGATION']['VALUE'],
-        "num_groups": arch_opt['AGGREGATION']['NUM_GROUPS']
+        "num_groups": arch_opt['AGGREGATION']['NUM_GROUPS'],
+        "task_to_idx": task_to_idx
     }
     omics_name = "_".join(arch_opt['OMICS'])
     if arch_opt['BayesGNN']:
@@ -1704,7 +648,7 @@ def inference(
         omics_pool_ratio,
         arch_opt,
         infer_opt,
-        pretrained_model_dir
+        pretrained_model_dir,
 ):
     """survival prediction
     """
@@ -1891,7 +835,7 @@ if __name__ == "__main__":
     
     if opt.get('SAVE_MODEL_DIR', False):
         save_model_dir = pathlib.Path(opt['SAVE_MODEL_DIR'])
-        save_model_dir = save_model_dir / f"{opt['DATASET']}_survival_{opt['OUTCOME']['VALUE']}"
+        save_model_dir = save_model_dir / f"{opt['DATASET']}_multitask"
         save_model_dir = save_model_dir / f"{radiomics_mode}+{pathomics_mode}"
     else:
         save_model_dir = None
@@ -1908,17 +852,117 @@ if __name__ == "__main__":
     )
 
     # load patient outcomes
-    df_outcome = prepare_patient_outcome(
-        outcome_file=opt['SAVE_OUTCOME_FILE'],
+    outcomes = []
+    for v in opt['OUTCOME'].values(): outcomes += v
+    df_outcome = prepare_multitask_outcomes(
+        outcome_dir=opt['SAVE_OUTCOME_DIR'],
         subject_ids=subject_ids,
-        dataset=opt['DATASET'],
-        outcome=opt['OUTCOME']['VALUE']
+        outcomes=outcomes
     )
     subject_ids = df_outcome['SubjectID'].to_list()
     logger.info(f"Found {len(subject_ids)} subjects with survival outcomes")
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
-    outcomes = df_outcome[['duration', 'event']].to_numpy(dtype=np.float32).tolist()
+
+    SURVIVAL = opt['OUTCOME']['SURVIVAL']
+    CLASSIFICATION = opt['OUTCOME']['CLASSIFICATION']
+    REGRESSION = opt['OUTCOME']['REGRESSION']
+
+    # Helper to test NaN
+    def _safe_val(x):
+        if pd.isna(x):
+            return None
+        return x
+
+    outcomes = []
+    # Precompute columns present
+    cols = set(df_outcome.columns)
+
+    for _, row in df_outcome.iterrows():
+        y_i = {
+            "survival": {},
+            "classification": {},
+            "regression": {}
+        }
+
+        # --- Survival: use task_duration and task_event columns ---
+        for task in SURVIVAL:
+            dur_col = f"{task}_duration"
+            ev_col = f"{task}_event"
+
+            duration = _safe_val(row[dur_col]) if dur_col in cols else None
+            event = _safe_val(row[ev_col]) if ev_col in cols else None
+
+            # convert to numeric types if present
+            if duration is not None:
+                # ensure float
+                try:
+                    duration = float(duration)
+                except Exception:
+                    duration = None
+            if event is not None:
+                try:
+                    event = int(event)
+                except Exception:
+                    event = None
+
+            # store a small dict to make survival loss calculation clear
+            y_i["survival"][task] = {"duration": duration, "event": event}
+
+        # --- Classification: keep raw label (if present) and factorized class (if present) ---
+        for task in CLASSIFICATION:
+            label_val = row[task] if task in cols else None
+            class_col = f"{task}_class"
+            class_val = row[class_col] if class_col in cols else None
+
+            label_val = _safe_val(label_val)
+            class_val = _safe_val(class_val)
+
+            # convert factorized to int
+            if class_val is not None:
+                try:
+                    class_val = int(class_val)
+                except Exception:
+                    class_val = None
+
+            y_i["classification"][task] = {
+                "label": label_val,        # original string label if exists
+                "class": class_val         # integer class if exists
+            }
+
+        # --- Regression: collect all columns that start with f"{task}_" OR exact task column ---
+        for task in REGRESSION:
+            task_dict = OrderedDict()
+
+            # 1) all prefixed columns, e.g. "GeneProgrames_GP1"
+            prefixed_cols = [c for c in df_outcome.columns if c.startswith(f"{task}_") and c != "SubjectID"]
+            for pc in prefixed_cols:
+                val = _safe_val(row[pc])
+                if val is not None:
+                    try:
+                        val = float(val)
+                    except Exception:
+                        val = None
+                task_dict[pc] = val
+
+            # 2) fallback: maybe there's a single column named exactly as the task
+            if (not prefixed_cols) and (task in cols):
+                val = _safe_val(row[task])
+                if val is not None:
+                    try:
+                        val = float(val)
+                    except Exception:
+                        val = None
+                task_dict[task] = val
+
+            # store (empty dict means no measurements for this task)
+            y_i["regression"][task] = dict(task_dict)
+
+        outcomes.append(y_i)
+
+    # get the mapping from subtasks to idx
+    task_to_idx = generate_task_to_idx(outcomes)
+    opt['ARCH']['DIM_TARGET'] = len(task_to_idx)
 
     # Build mapping: subject_id → (omics_path_info, outcome)
     matched_samples = {x[0]: (x, y) for x, y in zip(omics_paths, outcomes)}
@@ -1971,7 +1015,8 @@ if __name__ == "__main__":
             omics_dims=omics_dims,
             omics_pool_ratio=omics_pool_ratio,
             arch_opt=opt['ARCH'],
-            train_opt=opt['TRAIN']
+            train_opt=opt['TRAIN'],
+            task_to_idx=task_to_idx
         )
 
     if opt['TASKS']['INFERENCE']:
@@ -1983,42 +1028,6 @@ if __name__ == "__main__":
             arch_opt=opt['ARCH'],
             infer_opt=opt['INFERENCE'],
             pretrained_model_dir=save_model_dir
-        )
-
-    if opt['TASKS']['PREDICTION']:
-        # survival analysis from the splits
-        if opt['RADIOMICS'].get('KEYS', False):
-            radiomics_keys = opt['RADIOMICS']['KEYS']
-        else:
-            radiomics_keys = None
-        if opt['PATHOMICS'].get('KEYS', False):
-            pathomics_keys = opt['PATHOMICS']['KEYS']
-        else:
-            pathomics_keys = None
-
-        if opt['ARCH']['BayesGNN']:
-            model_folder = f"Bayes_Survival_Prediction_{opt['ARCH']['GNN']}"
-        else:
-            model_folder = f"Survival_Prediction_{opt['ARCH']['GNN']}"
-        save_omics_dir = save_model_dir / model_folder
-        
-        survival(
-            split_path=split_path,
-            omics=opt['PREDICTION']['USED_OMICS']['VALUE'],
-            save_omics_dir=save_omics_dir,
-            n_jobs=opt['PREDICTION']['N_JOBS'],
-            radiomics_aggregation=opt['RADIOMICS']['AGGREGATION'],
-            radiomics_aggregated_mode=opt['RADIOMICS']['AGGREGATED_MODE']['VALUE'],
-            pathomics_aggregation=opt['PATHOMICS']['AGGREGATION'],
-            pathomics_aggregated_mode=opt['PATHOMICS']['AGGREGATED_MODE']['VALUE'],
-            radiomics_keys=radiomics_keys,
-            pathomics_keys=pathomics_keys,
-            model=opt['PREDICTION']['MODEL']['VALUE'],
-            scorer=opt['PREDICTION']['SCORER']['VALUE'],
-            feature_selection=opt['PREDICTION']['FEATURE_SELECTION'],
-            n_bootstraps=opt['PREDICTION']['N_BOOTSTRAPS'],
-            use_graph_properties=opt['PREDICTION']['USE_GRAPH_PROPERTIES'],
-            save_results_dir=save_model_dir
         )
 
     # visualize radiomics

@@ -21,8 +21,8 @@ from torch_geometric.nn.aggr import SumAggregation, MeanAggregation, Attentional
 from functools import lru_cache
 from sparsemax import Sparsemax
     
-class SurvivalGraphDataset(Dataset):
-    """loading graph data for survival analysis
+class MultiTaskGraphDataset(Dataset):
+    """loading graph data for multi-task learning
     """
     def __init__(
         self,
@@ -85,12 +85,12 @@ class SurvivalGraphDataset(Dataset):
     # Main loading
     # ----------------------------------------------------------------------
     def get(self, idx):
-        # ---------------- Label handling ----------------
+        # ---------------- Load label dict ----------------
         if "train" in self.mode or "valid" in self.mode:
-            subject_info, label = self.info_list[idx]
-            label = torch.tensor(label).unsqueeze(0)
+            subject_info, y_dict = self.info_list[idx]
         else:
             subject_info = self.info_list[idx]
+            y_dict = None
 
         hetero = HeteroData()
         subject_paths = subject_info[1]
@@ -105,25 +105,22 @@ class SurvivalGraphDataset(Dataset):
 
             for parent in parents:
                 for child_name, npz_path in parent.items():
-                    # ---- Load from NPZ (fast, cached) ----
+
                     x, edge_index = self.load_npz_cached(npz_path)
 
-                    # ---- Preprocessing (applied once per epoch load) ----
                     if self.preproc:
                         proc = self.preproc.get(f"{key}_{child_name}")
                         if proc:
                             x = proc(x)
                             x = torch.as_tensor(x, dtype=torch.float32)
 
-                    # ---- Optional sampling ----
                     x, edge_index = self.sample_subgraph(x, edge_index)
 
-                    # ---- Group by child_name ----
                     entry = child_nodes.setdefault(
                         child_name, {"xs": [], "edges": [], "offset": 0}
                     )
-
                     offset = entry["offset"]
+
                     entry["xs"].append(x)
                     entry["edges"].append(edge_index + offset)
                     entry["offset"] += x.size(0)
@@ -131,24 +128,20 @@ class SurvivalGraphDataset(Dataset):
             # ---------------- Merge children into HeteroData ----------------
             for child_name, entry in child_nodes.items():
                 x_cat = torch.cat(entry["xs"], dim=0)
-                # mean = x_cat.mean(dim=0, keepdim=True)
-                # std = x_cat.std(dim=0, keepdim=True)
-                # std[std == 0] = 1.0
-                # x_cat_norm = (x_cat - mean) / std
                 edge_cat = torch.cat(entry["edges"], dim=1)
 
                 node_type = f"{key}_{child_name}"
                 hetero[node_type].x = x_cat
                 hetero[(node_type, "to", node_type)].edge_index = edge_cat
 
-                if "train" in self.mode or "valid" in self.mode:
-                    hetero[node_type].y = label
+        # ---------------- Attach hierarchical multitask labels ----------------
+        if y_dict is not None:
+            hetero.y = y_dict
 
         return hetero
 
     def len(self):
         return len(self.info_list)
-
 
 class Attn_Net_Gated(nn.Module):
     def __init__(self, L=1024, D=256, dropout=0., n_classes=1):
@@ -448,8 +441,8 @@ class OmicsIntegrationArch(nn.Module):
         ht = [torch.concat(ht, axis=0)]
         return (hs, ht), (ft_, ft)
 
-class SurvivalGraphArch(nn.Module):
-    """define Graph architecture for survival analysis
+class MultiTaskGraphArch(nn.Module):
+    """define Graph architecture for multi-task learning
     Args:
         aggregation: attention-based multiple instance learning (ABMIL) 
         or sparsity informed spatial regression and aggregation (SPARRA)
@@ -460,6 +453,7 @@ class SurvivalGraphArch(nn.Module):
             dim_target,
             layers,
             pool_ratio,
+            task_to_idx,
             dropout=0.0,
             conv="GINConv",
             aggregation="SPARRA",
@@ -478,6 +472,7 @@ class SurvivalGraphArch(nn.Module):
         self.lambda0 = lambda0
         self.alpha0 = alpha0
         self.beta0 = beta0
+        self.task_to_idx = task_to_idx
 
         self.dim_dict = {f"{mod}_{child}": val
             for mod, children in dim_features.items()
@@ -622,7 +617,6 @@ class SurvivalGraphArch(nn.Module):
                 for k in self.dim_dict.keys()
             ]
             VIparas = None
-            KAparas = None
             perm_dict = None
             feature = torch.concat(feature_list, dim=-1)
         elif self.aggregation == "SPARRA":
@@ -660,7 +654,6 @@ class SurvivalGraphArch(nn.Module):
             batch = torch.concat(batch_list, dim=0)
             batch_dict = {k: b for k, b in zip(self.dim_dict.keys(), batch_list)}
             score = torch.concat(score_list, dim=0)
-            KAparas = None
 
             # reparameterization
             sample, loc, logvar = self.sampling(feature)
@@ -726,7 +719,7 @@ class SurvivalGraphArch(nn.Module):
         # feature = self.final_norm(feature)
         output = self.classifier(feature)
 
-        return output, VIparas, KAparas, feature, perm_dict, gate_dict
+        return output, VIparas, feature, perm_dict, gate_dict
     
     @staticmethod
     def train_batch(model, batch_data, on_gpu, loss, optimizer, kl=None, l1_penalty=0.0):
@@ -735,10 +728,10 @@ class SurvivalGraphArch(nn.Module):
 
         model.train()
         optimizer.zero_grad()
-        outputs, VIparas, KAparas, _, _, _ = model(batch_data)
+        outputs, VIparas, _, _, _ = model(batch_data)
         outputs = outputs.squeeze()
-        labels = next(iter(batch_data.y_dict.values())).squeeze()
-        loss = loss(outputs, labels[:, 0], labels[:, 1], VIparas, KAparas)
+        labels = next(iter(batch_data.y_dict.values()))
+        loss = loss(outputs, labels, VIparas, model.task_to_idx)
         loss += l1_penalty * model.classifier.weight.abs().sum()
         loss.backward()
         optimizer.step()
@@ -755,12 +748,12 @@ class SurvivalGraphArch(nn.Module):
 
         model.eval()
         with torch.inference_mode():
-            outputs, _, _, features, perm_dict, gate_dict = model(batch_data)
+            outputs, _, features, perm_dict, gate_dict = model(batch_data)
         outputs = outputs.cpu().numpy()
         features = features.cpu().numpy()
         labels = None
         try:
-            labels = next(iter(batch_data.y_dict.values())).cpu().numpy()
+            labels = next(iter(batch_data.y_dict.values()))
         except:
             pass
         if labels is not None:
@@ -794,7 +787,7 @@ class SurvivalGraphArch(nn.Module):
             else:
                 return [outputs, features]
 
-class SurvivalBayesGraphArch(nn.Module):
+class MultiTaskBayesGraphArch(nn.Module):
     """define Graph architecture for survival analysis
     """
     def __init__(
@@ -978,84 +971,11 @@ class VILoss(nn.Module):
         print(loss_ae.item(), loss_kl.item(), precision.min().item(), precision.max().item())
         return self.tau_ae * loss_ae + loss_kl
     
-def calc_mmd(f1, f2, sigmas, normalized=False):
-    if len(f1.shape) != 2:
-        N, C, H, W = f1.shape
-        f1 = f1.view(N, -1)
-        N, C, H, W = f2.shape
-        f2 = f2.view(N, -1)
-
-    if normalized == True:
-        f1 = F.normalize(f1, p=2, dim=1)
-        f2 = F.normalize(f2, p=2, dim=1)
-
-    return mmd_rbf2(f1, f2, sigmas=sigmas)
-
-
-def mmd_rbf2(x, y, sigmas=None):
-    N, _ = x.shape
-    xx, yy, zz = torch.mm(x, x.t()), torch.mm(y, y.t()), torch.mm(x, y.t())
-
-    rx = (xx.diag().unsqueeze(0).expand_as(xx))
-    ry = (yy.diag().unsqueeze(0).expand_as(yy))
-
-    K = L = P = 0.0
-    XX2 = rx.t() + rx - 2*xx
-    YY2 = ry.t() + ry - 2*yy
-    XY2 = rx.t() + ry - 2*zz
-
-    if sigmas is None:
-        sigma2 = torch.mean((XX2.detach()+YY2.detach()+2*XY2.detach()) / 4)
-        sigmas2 = [sigma2/4, sigma2/2, sigma2, sigma2*2, sigma2*4]
-        alphas = [1.0 / (2 * sigma2) for sigma2 in sigmas2]
-    else:
-        alphas = [1.0 / (2 * sigma**2) for sigma in sigmas]
-
-    for alpha in alphas:
-        K += torch.exp(- alpha * (XX2.clamp(min=1e-12)))
-        L += torch.exp(- alpha * (YY2.clamp(min=1e-12)))
-        P += torch.exp(- alpha * (XY2.clamp(min=1e-12)))
-
-    beta = (1./(N*(N)))
-    gamma = (2./(N*N))
-
-    return F.relu(beta * (torch.sum(K)+torch.sum(L)) - gamma * torch.sum(P))
-
-class CFLoss(nn.Module):
-    """ Common Feature Learning Loss
-        CF Loss = MMD + beta * MSE
-    """
-    def __init__(self, sigmas=[0.001, 0.01, 0.05, 0.1, 0.2, 1, 2], normalized=True, beta=1.0):
-        super(CFLoss, self).__init__()
-        self.sigmas = sigmas
-        self.normalized = normalized
-        self.beta = beta
-
-    def forward(self, hs, ht, ft_, ft):
-        mmd_loss = 0.0
-        mse_loss = 0.0
-        # random sampling if hs is large-scale
-        if len(hs) > 1e5:
-            num_sampled = int(len(hs) * 0.01)
-            subset = torch.randperm(len(hs))[:num_sampled]
-            hs = hs[subset]
-            ht = [ht_i[subset] for ht_i in ht]
-        for ht_i in ht:
-            mmd_loss += calc_mmd(hs, ht_i, sigmas=self.sigmas, normalized=self.normalized)
-        for i in range(len(ft_)):
-            mse_loss += F.mse_loss(ft_[i], ft[i])
-        
-        return mmd_loss + self.beta*mse_loss
-    
 class CoxSurvLoss(nn.Module):
-    def __init__(self, tau_vi=0.1, tau_ka=1e-2):
+    def __init__(self):
         super(CoxSurvLoss, self).__init__()
-        self.tau_vi = tau_vi
-        self.tau_ka = tau_ka
-        self.loss_vi = VILoss()
-        self.loss_ka = CFLoss()
 
-    def forward(self, hazards, time, c, VIparas, KAparas):
+    def forward(self, hazards, time, c):
         # This calculation credit to Travers Ching https://github.com/traversc/cox-nnet
         # Cox-nnet: An artificial neural network method for prognosis prediction of high-throughput omics data
         current_batch_len = len(time)
@@ -1069,11 +989,87 @@ class CoxSurvLoss(nn.Module):
         theta = hazards.reshape(-1)
         exp_theta = torch.exp(theta)
         loss_cox = -torch.mean((theta - torch.log(torch.sum(exp_theta*R_mat, dim=1))) * c)
-        if VIparas is not None:
-            loss_vi = self.loss_vi(*VIparas)
-            loss_cox = loss_cox + self.tau_vi * loss_vi
-        if KAparas is not None:
-            loss_ka = self.loss_ka(*KAparas)
-            loss_cox = loss_cox + self.tau_ka * loss_ka
         return loss_cox
     
+class MultiTaskLoss(nn.Module):
+    def __init__(self, 
+                 tau_vi=0.1, tau_surv=1.0, tau_cls=1.0, tau_reg=1.0):
+        super(MultiTaskLoss, self).__init__()
+
+        self.tau_vi = tau_vi
+        self.tau_surv = tau_surv
+        self.tau_cls = tau_cls
+        self.tau_reg = tau_reg
+
+        self.loss_surv = CoxSurvLoss()
+        self.loss_vi = VILoss()
+        self.loss_cls = nn.CrossEntropyLoss(ignore_index=-1)
+        self.loss_reg = nn.MSELoss()
+
+    def forward(self, logits, labels, VIparas=None, task_to_idx=None):
+        """
+        logits: [B, N] → columns correspond to subtasks
+        labels: list of dicts, length B
+        task_to_idx: dict mapping subtask name → column index in logits
+        """
+        total_loss = 0.0
+        B = len(labels)
+
+        device = logits.device
+
+        # -------- Survival tasks --------
+        for task in labels[0]["survival"].keys():
+            idx = task_to_idx[task]
+            hazard = logits[:, idx]
+
+            durations = []
+            events = []
+            for b in range(B):
+                val = labels[b]["survival"].get(task, {"duration": None, "event": None})
+                durations.append(float('nan') if val["duration"] is None else float(val["duration"]))
+                events.append(float('nan') if val["event"] is None else float(val["event"]))
+
+            durations = torch.tensor(durations, device=device, dtype=torch.float32)
+            events = torch.tensor(events, device=device, dtype=torch.float32)
+            mask = (~torch.isnan(durations)) & (~torch.isnan(events))
+
+            if mask.sum() > 0:
+                total_loss += self.tau_surv * self.loss_surv(hazard[mask], durations[mask], events[mask])
+
+        # -------- Classification tasks --------
+        for task in labels[0]["classification"].keys():
+            idx = task_to_idx[task]
+            logits_task = logits[:, idx]
+
+            target = []
+            for b in range(B):
+                val = labels[b]["classification"].get(task, {"class": None})
+                target.append(-1 if val["class"] is None else val["class"])  # ignore_index=-1
+
+            target = torch.tensor(target, device=device, dtype=torch.long)
+            mask = target != -1
+
+            if mask.sum() > 0:
+                total_loss += self.tau_cls * self.loss_cls(logits_task[mask].unsqueeze(0), target[mask])
+
+        # -------- Regression tasks --------
+        for task, subcols in labels[0]["regression"].items():
+            for subcol in subcols.keys():
+                idx = task_to_idx[f"{task}_{subcol}"]
+                pred = logits[:, idx]
+
+                target = []
+                for b in range(B):
+                    val = labels[b]["regression"].get(task, {}).get(subcol, None)
+                    target.append(float('nan') if val is None else float(val))
+
+                target = torch.tensor(target, device=device, dtype=torch.float32)
+                mask = ~torch.isnan(target)
+                if mask.sum() > 0:
+                    total_loss += self.tau_reg * self.loss_reg(pred[mask], target[mask])
+
+        # -------- Optional VI loss --------
+        if VIparas is not None:
+            total_loss += self.tau_vi * self.loss_vi(*VIparas)
+
+        return total_loss

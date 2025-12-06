@@ -2,33 +2,13 @@
 DATASET: TCGA
 DATA_INFO: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
 OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
-SAVE_OUTCOME_FILE: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/clinical_data/survival_data.csv"
+SAVE_OUTCOME_DIR: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE:
+  SURVIVAL: ["OS", "DSS", "DFI", "PFI"]
+  CLASSIFICATION: ["ImmuneSubtype", "MolecularSubtype", "PrimaryDisease"]
+  REGRESSION:
     [
-      "OS", 
-      "DSS", 
-      "DFI", 
-      "PFI", 
-      "ImmuneSubtype", 
-      "MolecularSubtype", 
-      "PrimaryDisease",
-      "GeneProgrames",
-      "HRDscore",
-      "ImmuneSignatureScore",
-      "StemnessScoreDNA",
-      "StemScoreRNA",
-    ]
-  CHOICES: 
-    [
-      "OS", 
-      "DSS", 
-      "DFI", 
-      "PFI", 
-      "ImmuneSubtype", 
-      "MolecularSubtype", 
-      "PrimaryDisease",
       "GeneProgrames",
       "HRDscore",
       "ImmuneSignatureScore",
@@ -39,7 +19,6 @@ TASKS:
   TRAIN: True
   INFERENCE: False
   TEST: False
-  PREDICTION: False
 
 # Define parameters of radiomics
 RADIOMICS:
@@ -140,18 +119,3 @@ TEST:
   PRE_TRAINED: ""
   N_WORKS: 1
   BATCH_SIZE: 1
-
-PREDICTION:
-  USED_OMICS:
-    VALUE: "pathomics"
-    CHOICES: ["radiomics", "pathomics", "radiopathomics"]
-  N_JOBS: 32
-  MODEL:
-    VALUE: "Coxnet"
-    CHOICES: ["RSF", "CoxPH", "Coxnet", "FastSVM"]
-  SCORER:
-    VALUE: "cindex"
-    CHOICES: ["cindex", "cindex-ipcw", "auc", "ibs"]
-  FEATURE_SELECTION: False
-  N_BOOTSTRAPS: False
-  USE_GRAPH_PROPERTIES: False
