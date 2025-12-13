@@ -10,7 +10,7 @@ PATHOMICS:
     VALUE: "otsu"
     CHOICES: ["otsu", "morphological"]
   MODE:
-    VALUE: "UNI"
+    VALUE: "CONCH"
     CHOICES: ["CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
   TASKS:
     TISSUE_MASKING: False
@@ -26,4 +26,4 @@ PATHOMICS:
   RESOLUTION: 20
   UNITS: "power"
   SKIP_EXITS: True
-  DELETE_NPY: False
+  DELETE_NPY: True

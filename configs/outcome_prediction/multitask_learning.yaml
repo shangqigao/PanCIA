@@ -14,6 +14,7 @@ OUTCOME:
       "ImmuneSignatureScore",
       "StemnessScoreDNA",
       "StemScoreRNA",
+      # "ProteinExpression",
     ]
 TASKS:
   TRAIN: True
@@ -58,7 +59,7 @@ RADIOMICS:
 # Define parameters of pathomics
 PATHOMICS:
   MODE:
-    VALUE: "UNI"
+    VALUE: "CHIEF"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
     # SUFFIX:
     #   - "_graph_aggr_mean.npy"
@@ -89,16 +90,16 @@ ARCH:
   POOL_RATIO:
     RAIOMICS: 0.7
     PATHOMICS: 0.7
-  # OMICS: ["radiomics", "pathomics"]
+  OMICS: ["radiomics", "pathomics"]
   # OMICS: ["radiomics"]
-  OMICS: ["pathomics"]
+  # OMICS: ["pathomics"]
   AGGREGATION:
     VALUE: "SPARRA"
     CHOICES: ["ABMIL", "SPARRA"]
     NUM_GROUPS: 2
 
 TRAIN:
-  EPOCHS: 20
+  EPOCHS: 40
   N_WORKS: 32
   BATCH_SIZE: 32
   SAMPLING_RATE: 0.1
@@ -108,7 +109,7 @@ TRAIN:
     SPARRA: 0.0
   L1_PENALTY:
     ABMIL: 0.0
-    SPARRA: 2.0e-2
+    SPARRA: 1.0e-4
 
 INFERENCE:
   N_WORKS: 32

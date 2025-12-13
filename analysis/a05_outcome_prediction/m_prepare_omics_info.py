@@ -19,7 +19,7 @@ pathomics_dims = {
     "CNN": {'child0': 2048},
     "HIPT": {'child0': 384},
     "UNI": {'child0': 1024},
-    "CONCH": {'child0': 35},
+    "CONCH": {'child0': 512},
     "CHIEF": {'child0': 768}
 }
 

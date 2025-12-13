@@ -87,10 +87,10 @@ class MultiTaskGraphDataset(Dataset):
     def get(self, idx):
         # ---------------- Load label dict ----------------
         if "train" in self.mode or "valid" in self.mode:
-            subject_info, y_dict = self.info_list[idx]
+            subject_info, label_dict = self.info_list[idx]
         else:
             subject_info = self.info_list[idx]
-            y_dict = None
+            label_dict = None
 
         hetero = HeteroData()
         subject_paths = subject_info[1]
@@ -134,9 +134,54 @@ class MultiTaskGraphDataset(Dataset):
                 hetero[node_type].x = x_cat
                 hetero[(node_type, "to", node_type)].edge_index = edge_cat
 
-        # ---------------- Attach hierarchical multitask labels ----------------
-        if y_dict is not None:
-            hetero.y = y_dict
+        # ---------------- Handle labels (multi-task) ----------------
+        if label_dict is not None:
+            # ---- Survival ----
+            surv_tasks = list(label_dict["survival"].keys())
+            y_surv = []
+            mask_surv = []
+            for task in surv_tasks:
+                duration = label_dict["survival"][task]["duration"]
+                event = label_dict["survival"][task]["event"]
+                if duration is None or event is None:
+                    y_surv.append([0.0, 0.0])
+                    mask_surv.append(0)
+                else:
+                    y_surv.append([float(duration), float(event)])
+                    mask_surv.append(1)
+            hetero['survival'].y = torch.tensor(y_surv, dtype=torch.float32).unsqueeze(0)
+            hetero['survival'].mask = torch.tensor(mask_surv, dtype=torch.float32).unsqueeze(0)
+
+            # ---- Classification ----
+            cls_tasks = list(label_dict["classification"].keys())
+            y_cls = []
+            mask_cls = []
+            for task in cls_tasks:
+                cls_val = label_dict["classification"][task]["class"]
+                if cls_val is None:
+                    y_cls.append(-1)  # placeholder
+                    mask_cls.append(0)
+                else:
+                    y_cls.append(int(cls_val))
+                    mask_cls.append(1)
+            hetero['classification'].y = torch.tensor(y_cls, dtype=torch.long).unsqueeze(0)
+            hetero['classification'].mask = torch.tensor(mask_cls, dtype=torch.float32).unsqueeze(0)
+
+            # ---- Regression ----
+            reg_tasks = list(label_dict["regression"].keys())
+            y_reg = []
+            mask_reg = []
+            for task in reg_tasks:
+                sub_dict = label_dict["regression"][task]
+                for k, v in sub_dict.items():
+                    if v is None:
+                        y_reg.append(0.0)
+                        mask_reg.append(0)
+                    else:
+                        y_reg.append(float(v))
+                        mask_reg.append(1)
+            hetero['regression'].y = torch.tensor(y_reg, dtype=torch.float32).unsqueeze(0)
+            hetero['regression'].mask = torch.tensor(mask_reg, dtype=torch.float32).unsqueeze(0)
 
         return hetero
 
@@ -527,7 +572,7 @@ class MultiTaskGraphArch(nn.Module):
         if aggregation == "ABMIL":
             self.gate_nn_dict = nn.ModuleDict(
                 {
-                    k: Attn_Net_Gated(L=input_emb_dim, D=256, dropout=0.25, n_classes=1)
+                    k: Attn_Net_Gated(L=input_emb_dim, D=256, dropout=0.25, n_classes=input_emb_dim)
                     for k in self.dim_dict.keys()
                 }
             )
@@ -730,15 +775,16 @@ class MultiTaskGraphArch(nn.Module):
         optimizer.zero_grad()
         outputs, VIparas, _, _, _ = model(batch_data)
         outputs = outputs.squeeze()
-        labels = next(iter(batch_data.y_dict.values()))
-        loss = loss(outputs, labels, VIparas, model.task_to_idx)
+        labels = batch_data.y_dict
+        masks = batch_data.mask_dict
+        loss = loss(outputs, labels, masks, VIparas, model.task_to_idx)
         loss += l1_penalty * model.classifier.weight.abs().sum()
         loss.backward()
         optimizer.step()
 
         loss = loss.detach().cpu().numpy()
         assert not np.isnan(loss)
-        labels = labels.cpu().numpy()
+        labels = {k: v.cpu().numpy() for k, v in labels.items()}
         return [loss, outputs, labels]
     
     @staticmethod
@@ -751,13 +797,16 @@ class MultiTaskGraphArch(nn.Module):
             outputs, _, features, perm_dict, gate_dict = model(batch_data)
         outputs = outputs.cpu().numpy()
         features = features.cpu().numpy()
-        labels = None
+        labels, masks = None, None
         try:
-            labels = next(iter(batch_data.y_dict.values()))
+            labels = batch_data.y_dict
+            labels = {k: v.cpu().numpy() for k, v in labels.items()}
+            masks = batch_data.mask_dict
+            masks = {k: v.cpu().numpy() for k, v in masks.items()}
         except:
             pass
-        if labels is not None:
-            return [outputs, labels]
+        if labels is not None and masks is not None:
+            return [outputs, labels, masks]
         else:
             if perm_dict is not None:
                 atte_dict = {}
@@ -954,9 +1003,9 @@ class ScalarMovingAverage:
 class VILoss(nn.Module):
     """ variational inference loss
     """
-    def __init__(self, tau_ae=10):
+    def __init__(self, tau_kl=0.1):
         super(VILoss, self).__init__()
-        self.tau_ae = tau_ae
+        self.tau_kl = tau_kl
 
     def forward(self, loc, logvar, pre_list, enc_list, dec_list):
         precision, lambda0, mu0 = pre_list
@@ -969,7 +1018,7 @@ class VILoss(nn.Module):
             loss_ae += F.mse_loss(enc - torch.mean(enc, dim=0, keepdim=True), dec)
         loss_ae = loss_ae / len(dec_list)
         print(loss_ae.item(), loss_kl.item(), precision.min().item(), precision.max().item())
-        return self.tau_ae * loss_ae + loss_kl
+        return loss_ae + self.tau_kl * loss_kl
     
 class CoxSurvLoss(nn.Module):
     def __init__(self):
@@ -992,10 +1041,8 @@ class CoxSurvLoss(nn.Module):
         return loss_cox
     
 class MultiTaskLoss(nn.Module):
-    def __init__(self, 
-                 tau_vi=0.1, tau_surv=1.0, tau_cls=1.0, tau_reg=1.0):
+    def __init__(self, tau_vi=1.0, tau_surv=1.0, tau_cls=1.0, tau_reg=1.0):
         super(MultiTaskLoss, self).__init__()
-
         self.tau_vi = tau_vi
         self.tau_surv = tau_surv
         self.tau_cls = tau_cls
@@ -1003,73 +1050,105 @@ class MultiTaskLoss(nn.Module):
 
         self.loss_surv = CoxSurvLoss()
         self.loss_vi = VILoss()
-        self.loss_cls = nn.CrossEntropyLoss(ignore_index=-1)
-        self.loss_reg = nn.MSELoss()
+        self.loss_cls = nn.CrossEntropyLoss(reduction='none')
+        self.loss_reg = nn.MSELoss(reduction='none')
 
-    def forward(self, logits, labels, VIparas=None, task_to_idx=None):
+    def forward(self, logits, y_dict, mask_dict, VIparas=None, task_to_idx=None):
         """
-        logits: [B, N] → columns correspond to subtasks
-        labels: list of dicts, length B
-        task_to_idx: dict mapping subtask name → column index in logits
+        logits: model output [B, N_total_subtasks]
+        y_dict: HeteroData labels, with keys 'survival', 'classification', 'regression'
+        VIparas: optional parameters for VI loss
         """
-        total_loss = 0.0
-        B = len(labels)
+        survival_loss = 0.0
+        classification_loss = 0.0
+        regression_loss = 0.0
+        print('\n')
 
-        device = logits.device
+        # ---------------- Survival ----------------
+        if 'survival' in y_dict:
+            y_surv = y_dict['survival']          # [B, num_surv_tasks, 2]
+            mask_surv = mask_dict['survival']   # same shape
+            num_tasks = 0
+            for i, task in enumerate(task_to_idx['survival'].keys()):
 
-        # -------- Survival tasks --------
-        for task in labels[0]["survival"].keys():
-            idx = task_to_idx[task]
-            hazard = logits[:, idx]
+                # Mask valid entries
+                m = mask_surv[:, i] > 0
+                if m.sum() == 0:
+                    continue
+                
+                dur = y_surv[m, i, 0]
+                ev = y_surv[m, i, 1]
+                idx = task_to_idx['survival'][task]
 
-            durations = []
-            events = []
-            for b in range(B):
-                val = labels[b]["survival"].get(task, {"duration": None, "event": None})
-                durations.append(float('nan') if val["duration"] is None else float(val["duration"]))
-                events.append(float('nan') if val["event"] is None else float(val["event"]))
+                # Compute loss
+                l_i = self.loss_surv(logits[m, idx], dur, ev)
+                survival_loss += self.tau_surv * l_i
+                num_tasks += 1
+            survival_loss /= num_tasks
+            print('survival loss:', survival_loss.item())
 
-            durations = torch.tensor(durations, device=device, dtype=torch.float32)
-            events = torch.tensor(events, device=device, dtype=torch.float32)
-            mask = (~torch.isnan(durations)) & (~torch.isnan(events))
+        # ---------------- Classification ----------------
+        if 'classification' in y_dict:
+            y_cls = y_dict['classification']      # [B, num_cls_tasks]
+            mask_cls = mask_dict['classification']  # same shape
+            num_tasks = 0
+            for i, task in enumerate(task_to_idx['classification'].keys()):
+                idx_info = task_to_idx['classification'][task]
 
-            if mask.sum() > 0:
-                total_loss += self.tau_surv * self.loss_surv(hazard[mask], durations[mask], events[mask])
+                # Handle binary vs multi-class
+                if isinstance(idx_info, tuple):
+                    idx_s, idx_e = idx_info
+                    logits_task = logits[:, idx_s:idx_e]  # [B, num_classes]
+                else:
+                    idx = idx_info
+                    logits_task = logits[:, idx].unsqueeze(1)  # [B, 1]
 
-        # -------- Classification tasks --------
-        for task in labels[0]["classification"].keys():
-            idx = task_to_idx[task]
-            logits_task = logits[:, idx]
+                # Mask valid entries
+                m = mask_cls[:, i] > 0
+                if m.sum() == 0:
+                    continue
 
-            target = []
-            for b in range(B):
-                val = labels[b]["classification"].get(task, {"class": None})
-                target.append(-1 if val["class"] is None else val["class"])  # ignore_index=-1
+                targets = y_cls[m, i].long()  # ensure long type for CrossEntropyLoss
+                logits_valid = logits_task[m]
 
-            target = torch.tensor(target, device=device, dtype=torch.long)
-            mask = target != -1
+                # Compute loss
+                l_i = self.loss_cls(logits_valid, targets)
+                classification_loss += self.tau_cls * l_i.sum() / m.sum()
+                num_tasks += 1
+            classification_loss /= num_tasks
+            print('classification loss:', classification_loss.item())
 
-            if mask.sum() > 0:
-                total_loss += self.tau_cls * self.loss_cls(logits_task[mask].unsqueeze(0), target[mask])
+        # ---------------- Regression ----------------
+        if 'regression' in y_dict:
+            y_reg = y_dict['regression']        # [B, num_reg_tasks, n_subcols]
+            mask_reg = mask_dict['regression']  # same shape
+            num_tasks = 0
+            for i, task in enumerate(task_to_idx['regression'].keys()):
+                idx = task_to_idx['regression'][task]
 
-        # -------- Regression tasks --------
-        for task, subcols in labels[0]["regression"].items():
-            for subcol in subcols.keys():
-                idx = task_to_idx[f"{task}_{subcol}"]
-                pred = logits[:, idx]
+                # Extract targets and mask
+                targets = y_reg[:, i]           # [B, n_subcols] or [B] if single column
+                m = mask_reg[:, i] > 0          # [B,] boolean
 
-                target = []
-                for b in range(B):
-                    val = labels[b]["regression"].get(task, {}).get(subcol, None)
-                    target.append(float('nan') if val is None else float(val))
+                if m.sum() == 0:
+                    continue
 
-                target = torch.tensor(target, device=device, dtype=torch.float32)
-                mask = ~torch.isnan(target)
-                if mask.sum() > 0:
-                    total_loss += self.tau_reg * self.loss_reg(pred[mask], target[mask])
+                logits_valid = logits[m, idx]   # [num_valid, ...]
+                targets_valid = targets[m]      # [num_valid, ...]
 
-        # -------- Optional VI loss --------
+                # Compute loss
+                l_i = self.loss_reg(logits_valid, targets_valid)
+                regression_loss += self.tau_reg * l_i.sum() / m.sum()
+                num_tasks += 1
+            regression_loss /= num_tasks
+            print('regression loss:', regression_loss.item())
+
+        # multi-task loss
+        total_loss = survival_loss + classification_loss + regression_loss
+
+        # ---------------- VI Loss (optional) ----------------
         if VIparas is not None:
-            total_loss += self.tau_vi * self.loss_vi(*VIparas)
+            loss_vi = self.loss_vi(*VIparas)
+            total_loss += self.tau_vi * loss_vi
 
         return total_loss

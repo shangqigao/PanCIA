@@ -37,7 +37,7 @@ statsmodels
 tcia_utils
 tensorboard
 tensorboardX
-timm
+timm>=0.9.9
 torch_geometric
 torchbnn
 umap-learn

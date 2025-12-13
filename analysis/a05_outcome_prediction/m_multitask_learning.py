@@ -107,6 +107,7 @@ def prepare_multitask_outcomes(
         df = pd.read_csv(f"{outcome_dir}/phenotypes/immune_subtype/immune_subtype.csv")
         df = add_subject_id(df)
         df = df[df["Subtype_Immune_Model_Based"].notna()]
+        df = df.drop_duplicates(subset="SubjectID", keep="first")
 
         counts = df["Subtype_Immune_Model_Based"].value_counts()
         valid = counts[counts >= minimum_per_class].index
@@ -121,6 +122,7 @@ def prepare_multitask_outcomes(
         df = pd.read_csv(f"{outcome_dir}/phenotypes/molecular_subtype/molecular_subtype.csv")
         df = add_subject_id(df)
         df = df[df["Subtype_Selected"].notna()]
+        df = df.drop_duplicates(subset="SubjectID", keep="first")
 
         counts = df["Subtype_Selected"].value_counts()
         valid = counts[counts >= minimum_per_class].index
@@ -165,7 +167,9 @@ def prepare_multitask_outcomes(
 
             # Special normalization case
             if task == "HRDscore":
-                df = df.applymap(lambda x: x / 100 if isinstance(x, (int, float)) else x)
+                numeric_cols = df.select_dtypes(include=['number']).columns
+                df[numeric_cols] = df[numeric_cols] / 100
+
 
             # Filter only selected signature columns
             if signature_ids is not None:
@@ -178,6 +182,24 @@ def prepare_multitask_outcomes(
             df = prefix_columns(df, prefix=task)
 
             tables[task] = df
+
+    # =====================================================
+    # 4. PROTEIN EXPRESSION TASKS (MANY COLUMNS)
+    # =====================================================
+    if "ProteinExpression" in outcomes:
+        df = pd.read_csv(f"{outcome_dir}/protein_expression/protein_expression.csv")
+        df = add_subject_id(df)
+
+        # Apply pooling
+        df = pool(df)
+
+        # Rename with prefix to avoid column collisions
+        df = prefix_columns(df, prefix="ProteinExpression")
+
+        # Keep only columns with >= minimum_per_class non-NaN values
+        df = df.loc[:, df.notna().sum() >= minimum_per_class]
+
+        tables["ProteinExpression"] = df
 
     # =====================================================
     # Final merge (outer join keeps missing outcomes)
@@ -194,44 +216,100 @@ def prepare_multitask_outcomes(
 
     return merged
 
-def generate_task_to_idx(outcomes):
-    """
-    Generate a mapping from subtask name to logits column index.
-    
-    Args:
-        outcomes: list of dicts (length = batch size)
-                  each dict has keys: "survival", "classification", "regression"
-    
-    Returns:
-        task_to_idx: dict {subtask_name: column_index}
-                     for regression subtasks, subtask_name includes the subcolumn, e.g.,
-                     "GeneProgrames_GP1"
-    """
-    task_to_idx = OrderedDict()
-    idx = 0
 
-    # Use the first sample to determine all subtasks
+def extract_num_classes_from_outcomes(outcomes):
+    """
+    Extract number of classes for each classification task.
+    Looks for columns ending with '_class'.
+    """
+
+    num_classes_dict = {}
+
+    for col in outcomes.columns:
+        if col.endswith("_class"):
+            task = col.replace("_class", "")
+            # Drop NaN labels, get unique int classes
+            classes = outcomes[col].dropna().unique()
+            classes = [int(c) for c in classes if c == c]  # ignore NaN
+            num_classes_dict[task] = len(classes)
+
+    return num_classes_dict
+
+def generate_task_to_idx_grouped(outcomes, num_classes_dict):
+    """
+    Generate mapping from task type -> indices.
+    Classification tasks are intervals returned as (start, end) where `end` is exclusive.
+    Survival/regression single-output tasks are ints.
+
+    Args:
+        outcomes: list of dicts (length = batch size). Used only to discover task names.
+        num_classes_dict: dict mapping classification task name -> number of classes (K)
+
+    Returns:
+        task_to_idx: dict with keys "survival","classification","regression" as described above.
+    """
+    task_to_idx = {"survival": {}, "classification": {}, "regression": {}}
+    if len(outcomes) == 0:
+        return task_to_idx
+
+    idx = 0
     sample = outcomes[0]
 
-    # --- Survival ---
-    for task in sample["survival"].keys():
-        task_to_idx[task] = idx
+    # ---------------- Survival ----------------
+    # assume each survival task uses a single logit (hazard) -- change if you use 2-per-task
+    for task in sample.get("survival", {}).keys():
+        task_to_idx["survival"][task] = idx
         idx += 1
 
-    # --- Classification ---
-    for task in sample["classification"].keys():
-        task_to_idx[task] = idx
-        idx += 1
+    # ---------------- Classification ----------------
+    # allocate K logits per classification task; store interval [start, end) (end exclusive)
+    for task in sample.get("classification", {}).keys():
+        K = int(num_classes_dict.get(task, 1))
+        start = idx
+        end = idx + K   # exclusive
+        task_to_idx["classification"][task] = (start, end)
+        idx = end
 
-    # --- Regression ---
-    for task, subdict in sample["regression"].items():
+    # ---------------- Regression ----------------
+    # each regression subcolumn gets a single logit
+    for task, subdict in sample.get("regression", {}).items():
         for subcol in subdict.keys():
-            task_name = f"{task}_{subcol}" if subcol != task else task
-            task_to_idx[task_name] = idx
+            name = f"{task}_{subcol}"
+            task_to_idx["regression"][name] = idx
             idx += 1
 
     return task_to_idx
 
+
+def count_subtasks_and_predictions(task_to_idx):
+    """
+    Count subtasks and predictions for the structure returned above.
+
+    Subtask: each survival task, each classification task, each regression subcol (i.e. number of small tasks)
+    Predictions: total number of logits (model output dim)
+    """
+    num_subtasks = 0
+    num_predictions = 0
+
+    for k, v in task_to_idx.items():
+        if isinstance(v, dict):
+            for name, entry in v.items():
+                num_subtasks += 1
+                if isinstance(entry, int):
+                    num_predictions += 1
+                elif isinstance(entry, (tuple, list)) and len(entry) == 2:
+                    start, end = entry
+                    if not (isinstance(start, int) and isinstance(end, int)):
+                        raise ValueError(f"Interval indices must be ints: {entry}")
+                    if end < start:
+                        raise ValueError(f"Invalid interval: start {start} >= end {end}")
+                    num_predictions += (end - start)   # end is exclusive
+                else:
+                    raise ValueError(f"Unsupported task_to_idx entry: {entry}")
+        else:
+            raise ValueError("task_to_idx must be dict of dicts")
+
+    return num_subtasks, num_predictions
 
 def generate_data_split(
         x: list,
@@ -322,8 +400,6 @@ def split_batch_output(output):
             split_items.append(np.split(v, batch_size, axis=0))
         elif isinstance(v, dict):  # dict of arrays
             split_items.append({k: np.split(val, batch_size, axis=0) for k, val in v.items()})
-        elif isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict):  # list of dicts
-            split_items.append(v)  # already sample-wise
         else:
             raise TypeError(f"Unsupported output type: {type(v)}")
 
@@ -332,10 +408,7 @@ def split_batch_output(output):
     for i in range(batch_size):
         sample_items = []
         for item in split_items:
-            if isinstance(item, list) and isinstance(item[0], dict):
-                # list of dicts → pick i-th dict
-                sample_items.append(item[i])
-            elif isinstance(item, list):
+            if isinstance(item, list):
                 sample_items.append(item[i])
             elif isinstance(item, dict):
                 sample_items.append({k: item[k][i] for k in item})
@@ -344,90 +417,102 @@ def split_batch_output(output):
     return step_output
 
 
-def evaluate_multitask(logit, true, task_to_idx):
+def evaluate_multitask(logits, y_list, mask_list, task_to_idx):
     """
-    Compute metrics per subtask and average per big class.
-    
+    Evaluate multi-task outputs considering masks, for batch-wise list of dicts.
+
+    ```
     Args:
-        logit: np.array [B, N] model outputs
-        true: list of dicts length B
-        task_to_idx: dict mapping subtask_name → column index
+        logits: np.array, [B, N_total_outcomes]
+        y_list: list of dicts (length B) with keys 'survival', 'classification', 'regression'
+        mask_list: list of dicts (length B), same structure as y_list
+        task_to_idx: dict mapping tasks to idx or index intervals
+
+    Returns:
+        metrics: dict of per-task metrics
+        avg_metrics: dict of average metrics per big task
     """
-    B = len(true)
-    metrics = {
-        "survival": [],
-        "classification": [],
-        "regression": []
-    }
+    B = len(y_list)
+    metrics = {"survival": [], "classification": [], "regression": []}
 
-    # --- Survival ---
-    for task in true[0]["survival"].keys():
-        idx = task_to_idx.get(task)
-        if idx is None:
-            continue
+    # ---------------- Survival ----------------
+    if task_to_idx.get("survival"):
+        for i, task in enumerate(task_to_idx["survival"].keys()):
+            dur_list, ev_list, hazard_list = [], [], []
 
-        hazard = logit[:, idx]
-        durations = []
-        events = []
-        for b in range(B):
-            val = true[b]["survival"].get(task, {"duration": None, "event": None})
-            durations.append(val["duration"])
-            events.append(val["event"])
+            for b in range(B):
+                y_surv = y_list[b]["survival"].squeeze(0)   # [num_tasks, 2]
+                mask_surv = mask_list[b]["survival"].squeeze(0)  # [num_tasks]
+                if mask_surv[i] == 0:
+                    continue
+                dur_list.append(y_surv[i, 0])
+                ev_list.append(y_surv[i, 1])
+                hazard_list.append(logits[b, task_to_idx["survival"][task]])
 
-        durations = np.array(durations, dtype=np.float32)
-        events = np.array(events, dtype=np.int32)
-        mask = (~np.isnan(durations)) & (~np.isnan(events))
+            if dur_list:
+                dur = np.array(dur_list, dtype=np.float32)
+                ev = np.array(ev_list, dtype=np.int32)
+                hazard = np.array(hazard_list, dtype=np.float32)
+                cidx = concordance_index(dur, -hazard, ev)
+                metrics["survival"].append((task, cidx))
 
-        if mask.sum() > 0:
-            cidx = concordance_index(durations[mask], -hazard[mask], events[mask])
-            metrics["survival"].append(cidx)
+    # ---------------- Classification ----------------
+    if task_to_idx.get("classification"):
+        for i, task in enumerate(task_to_idx["classification"].keys()):
+            idx_info = task_to_idx["classification"][task]
 
-    # --- Classification ---
-    for task in true[0]["classification"].keys():
-        idx = task_to_idx.get(task)
-        if idx is None:
-            continue
+            labels_list, preds_list = [], []
 
-        logits_task = logit[:, idx]
-        labels_task = []
-        for b in range(B):
-            val = true[b]["classification"].get(task, {"class": None})
-            labels_task.append(-1 if val["class"] is None else val["class"])
-        labels_task = np.array(labels_task)
-        mask = labels_task != -1
-        if mask.sum() > 0:
-            preds = (logits_task[mask] > 0).astype(int)
-            f1 = f1_score(labels_task[mask], preds, average="macro")
-            metrics["classification"].append(f1)
+            for b in range(B):
+                y_cls = y_list[b]["classification"].squeeze(0)  # [num_tasks] or [num_tasks, ...]
+                mask_cls = mask_list[b]["classification"].squeeze(0)  # [num_tasks]
+                if mask_cls[i] == 0:
+                    continue
+                labels = np.array([y_cls[i]], dtype=int)
 
-    # --- Regression ---
-    # Regression may have multiple columns per task
-    reg_subtasks = []
-    for task, subdict in true[0]["regression"].items():
-        for subcol in subdict.keys():
-            reg_subtasks.append(f"{task}_{subcol}")
+                if isinstance(idx_info, tuple):  # multi-class
+                    start, end = idx_info
+                    pred_logits = logits[b, start:end]
+                    preds = np.array([np.argmax(pred_logits)], dtype=int)
+                else:  # binary
+                    preds = np.array([int(logits[b, idx_info] > 0)])
 
-    for subtask in reg_subtasks:
-        idx = task_to_idx.get(subtask)
-        if idx is None:
-            continue
+                labels_list.append(labels)
+                preds_list.append(preds)
 
-        pred = logit[:, idx]
-        target = []
-        for b in range(B):
-            val = true[b]["regression"].get(subtask.split("_")[0], {}).get(subtask.split("_")[1], None)
-            target.append(val)
-        target = np.array(target, dtype=np.float32)
-        mask = ~np.isnan(target)
-        if mask.sum() > 0:
-            r2 = r2_score(target[mask], pred[mask])
-            metrics["regression"].append(r2)
+            if labels_list:
+                labels_all = np.concatenate(labels_list)
+                preds_all = np.concatenate(preds_list)
+                f1 = f1_score(labels_all, preds_all, average="macro")
+                metrics["classification"].append((task, f1))
 
-    # Compute average per big class
-    avg_metrics = {k: np.mean(v) if v else np.nan for k, v in metrics.items()}
+    # ---------------- Regression ----------------
+    if task_to_idx.get("regression"):
+        for i, task in enumerate(task_to_idx["regression"].keys()):
+            target_list, pred_list = [], []
+            idx = task_to_idx["regression"][task]
+
+            for b in range(B):
+                y_reg = y_list[b]["regression"].squeeze(0)  # [num_tasks, n_subcols]
+                mask_reg = mask_list[b]["regression"].squeeze(0)  # [num_tasks]
+                if mask_reg[i] == 0:
+                    continue
+                target_list.append(np.array([y_reg[i]]))
+                pred_list.append(np.array([logits[b, idx]]))
+
+            if target_list:
+                target_all = np.concatenate(target_list)
+                pred_all = np.concatenate(pred_list)
+                r2 = r2_score(target_all, pred_all)
+                metrics["regression"].append((task, r2))
+
+    # ---------------- Average metrics ----------------
+    avg_metrics = {}
+    for k in metrics:
+        vals = [v for _, v in metrics[k]]
+        avg_metrics[k] = np.mean(vals) if vals else np.nan
 
     return metrics, avg_metrics
-
 
 def run_once(
         dataset_dict,
@@ -517,11 +602,12 @@ def run_once(
                     logging_dict[f"train-EMA-{val_name}"] = val
             elif "infer" in loader_name and any(v in loader_name for v in ["train", "valid"]):
                 output = list(zip(*step_output))
-                logit, true = output
+                logit, y_list, mask_list = output
                 logit = np.array(logit).squeeze()
-                true = list(true)  # list of dicts
+                y_list = list(y_list)
+                mask_list = list(mask_list)
 
-                metrics, avg_metrics = evaluate_multitask(logit, true, task_to_idx)
+                metrics, avg_metrics = evaluate_multitask(logit, y_list, mask_list, task_to_idx)
 
                 # Log per-class metrics
                 logging_dict[f"{loader_name}-Cindex"] = avg_metrics["survival"]
@@ -534,7 +620,7 @@ def run_once(
                     model.save(f"{save_dir}/best_model.weights.pth")
 
                 logging_dict[f"{loader_name}-raw-logit"] = logit
-                logging_dict[f"{loader_name}-raw-true"] = true
+                logging_dict[f"{loader_name}-raw-true"] = y_list
 
             for val_name, val in logging_dict.items():
                 if "raw" not in val_name:
@@ -822,16 +908,6 @@ if __name__ == "__main__":
         raise NotImplementedError
 
     logger.info(f"Found {len(omics_info['omics_paths'])} subjects with omics")
-
-    if not pathlib.Path(opt['SAVE_OUTCOME_FILE']).exists():
-        from analysis.utilities.m_request_clinical_data import request_survival_data_by_submitter_new
-        save_clinical_dir = pathlib.Path(opt['SAVE_OUTCOME_FILE']).parent
-        subject_ids = list(omics_info['omics_paths'].keys())
-        request_survival_data_by_submitter_new(
-            submitter_ids=subject_ids,
-            save_dir=save_clinical_dir,
-            dataset=opt['DATASET']
-        )
     
     if opt.get('SAVE_MODEL_DIR', False):
         save_model_dir = pathlib.Path(opt['SAVE_MODEL_DIR'])
@@ -860,7 +936,8 @@ if __name__ == "__main__":
         outcomes=outcomes
     )
     subject_ids = df_outcome['SubjectID'].to_list()
-    logger.info(f"Found {len(subject_ids)} subjects with survival outcomes")
+    logger.info(f"Found {len(subject_ids)} subjects with outcomes")
+    num_classes_dict = extract_num_classes_from_outcomes(df_outcome)
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
 
@@ -961,8 +1038,10 @@ if __name__ == "__main__":
         outcomes.append(y_i)
 
     # get the mapping from subtasks to idx
-    task_to_idx = generate_task_to_idx(outcomes)
-    opt['ARCH']['DIM_TARGET'] = len(task_to_idx)
+    task_to_idx = generate_task_to_idx_grouped(outcomes, num_classes_dict)
+    num_subtasks, num_preds = count_subtasks_and_predictions(task_to_idx)
+    opt['ARCH']['DIM_TARGET'] = num_preds
+    logger.info(f"Found {num_subtasks} subtasks with {num_preds} outcomes in total to predict")
 
     # Build mapping: subject_id → (omics_path_info, outcome)
     matched_samples = {x[0]: (x, y) for x, y in zip(omics_paths, outcomes)}
