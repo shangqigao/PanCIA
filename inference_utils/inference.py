@@ -56,19 +56,22 @@ def interactive_infer_image(model, image, prompts, resize_mask=True, return_feat
     batch_inputs = [data]
     results, image_size, extra = model.model.evaluate_demo(batch_inputs)
 
-    pred_masks = results['pred_masks'][0]
-    v_emb = results['pred_captions'][0]
-    t_emb = extra['grounding_class']
+    if results is not None:
+        pred_masks = results['pred_masks'][0]
+        v_emb = results['pred_captions'][0]
+        t_emb = extra['grounding_class']
 
-    t_emb = t_emb / (t_emb.norm(dim=-1, keepdim=True) + 1e-7)
-    v_emb = v_emb / (v_emb.norm(dim=-1, keepdim=True) + 1e-7)
+        t_emb = t_emb / (t_emb.norm(dim=-1, keepdim=True) + 1e-7)
+        v_emb = v_emb / (v_emb.norm(dim=-1, keepdim=True) + 1e-7)
 
-    temperature = model.model.sem_seg_head.predictor.lang_encoder.logit_scale
-    out_prob = vl_similarity(v_emb, t_emb, temperature=temperature)
-    
-    matched_id = out_prob.max(0)[1]
-    pred_masks_pos = pred_masks[matched_id,:,:]
-    pred_class = results['pred_logits'][0][matched_id].max(dim=-1)[1]
+        temperature = model.model.sem_seg_head.predictor.lang_encoder.logit_scale
+        out_prob = vl_similarity(v_emb, t_emb, temperature=temperature)
+        
+        matched_id = out_prob.max(0)[1]
+        pred_masks_pos = pred_masks[matched_id,:,:]
+        pred_class = results['pred_logits'][0][matched_id].max(dim=-1)[1]
+    else:
+        pred_masks_pos = torch.zeros_like(image, dtype=torch.float32)[0:1, :, :]
 
     if resize_mask:
         # interpolate mask to ori size

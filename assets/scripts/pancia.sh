@@ -80,7 +80,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --modality radiology \
 #             --save_dir $save_dir
 
-# dicom to nifit
+# dicom to nifit (save to /parent/to/dataset/dataset_NIFTI)
 # series="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_raw_series.json"
 
 # python analysis/a01_data_preprocessiong/m_dicom2nii.py \
@@ -127,16 +127,16 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --pre_diagnosis
 
 # pan-cancer segmentation
-# radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
+# radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_included_subjects.json"
+# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/CPTAC_Seg"
 # srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --radiology $radiology \
-#             --dataset TCGA \
+#             --dataset CPTAC \
 #             --save_dir $save_dir
 
 # extract radiomic features
-# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
         
 # extract pathomic features
 # pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
@@ -155,8 +155,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_model_dir $save_model_dir  
 
 # multi-task learning
-multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
-python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
+# multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
+# python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
 
 # survival analysis
 # survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"

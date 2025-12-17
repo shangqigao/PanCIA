@@ -57,7 +57,7 @@ if __name__ == "__main__":
                 wsi_paths=batch_wsi_paths,
                 save_msk_dir=save_msk_dir,
                 n_jobs=8,
-                method=opt['MASKING_METHOD']['VALUE'],
+                method=opt['PATHOMICS']['MASKING_METHOD']['VALUE'],
                 resolution=1.25,
                 units="power"
             )
@@ -68,8 +68,8 @@ if __name__ == "__main__":
         msk_paths = [save_msk_dir / f"{pathlib.Path(p).stem}.jpg" for p in wsi_paths]
         logger.info("The number of extracted tissue masks on {}: {}".format(opt['DATASET'], len(msk_paths)))
         extract_pathomic_feature(
-            wsi_paths=wsi_paths[2000:],
-            wsi_msk_paths=msk_paths[2000:],
+            wsi_paths=wsi_paths,
+            wsi_msk_paths=msk_paths,
             feature_mode=pathomics_mode,
             save_dir=save_feature_dir,
             resolution=opt['PATHOMICS']['RESOLUTION'],

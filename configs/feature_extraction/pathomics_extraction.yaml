@@ -1,6 +1,6 @@
 # Define parameters of pathomics
-DATASET: TCGA
-PATHOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+DATASET: CPTAC
+PATHOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_included_subjects.json"
 SAVE_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/pathomics"
 N_JOBS: 32
 
@@ -10,14 +10,14 @@ PATHOMICS:
     VALUE: "otsu"
     CHOICES: ["otsu", "morphological"]
   MODE:
-    VALUE: "CONCH"
+    VALUE: "CHIEF"
     CHOICES: ["CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
   TASKS:
     TISSUE_MASKING: False
     EXTRACTION: False
-    GRAPH_CONSTRUCTION: False
+    GRAPH_CONSTRUCTION: True
     GRAPH_AGGREGATION:
-      VALUE: False
+      VALUE: True
       MODE: "mean"
     CONVERT_JSON2NPZ: True
     MEASURE_GRAPH_PROPERTIES: False
@@ -26,4 +26,4 @@ PATHOMICS:
   RESOLUTION: 20
   UNITS: "power"
   SKIP_EXITS: True
-  DELETE_NPY: True
+  DELETE_NPY: False

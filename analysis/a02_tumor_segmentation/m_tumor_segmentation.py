@@ -36,6 +36,7 @@ from peft import LoraConfig, get_peft_model
 from tiatoolbox import logger
 
 def extract_radiology_segmentation(
+        dataset,
         img_paths, 
         text_prompts,
         model_mode, 
@@ -52,6 +53,7 @@ def extract_radiology_segmentation(
     ):
     """extract segmentation from radiology images
     Args:
+        dataset (str): name of dataset
         img_paths (list): a list of image paths
         text_prompts (list): a list of text prompts
         class_name (str): target of segmentation
@@ -63,6 +65,7 @@ def extract_radiology_segmentation(
     """
     if model_mode == "BiomedParse":
         _ = extract_BiomedParse_segmentation(
+            dataset,
             img_paths,
             text_prompts,
             save_dir,
@@ -80,12 +83,13 @@ def extract_radiology_segmentation(
         raise ValueError(f"Invalid model mode: {model_mode}")
     return
 
-def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
+def extract_BiomedParse_segmentation(dataset, img_paths, text_prompts, save_dir,
                                   format='nifti', modality='MR', site='breast', 
                                   meta_list=None, beta_params=None, 
                                   prompt_ensemble=False, save_radiomics=False,
                                   zoom_in=False, device="gpu", skip_exist=False):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
+        dataset: name of dataset
         img_paths: a list of paths for single-phase images
             or a list of lists, where each list has paths of multi-phase images.
             For multi-phase images, only nifti format is allowed.
@@ -135,8 +139,8 @@ def extract_BiomedParse_segmentation(img_paths, text_prompts, save_dir,
         else:
             if '/MAMA-MIA/' in str(img_path):
                 img_name = pathlib.Path(img_path).name.replace("_0001.nii.gz", "")
-            elif '/TCGA_NIFTI/' in str(img_path):
-                img_name = str(img_path).split('/TCGA_NIFTI/')[-1].replace(".nii.gz", "")
+            elif f'/{dataset}_NIFTI/' in str(img_path):
+                img_name = str(img_path).split(f'/{dataset}_NIFTI/')[-1].replace(".nii.gz", "")
             else:
                 img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         save_mask_path = pathlib.Path(f"{save_dir}/{img_name}.nii.gz")
@@ -378,6 +382,11 @@ if __name__ == "__main__":
             img_json=args.radiology,
             img_format=args.format
         )
+    elif args.dataset == 'CPTAC':
+        dataset_info = prepare_TCGA_radiology_info(
+            img_json=args.radiology,
+            img_format=args.format
+        )
     else:
         raise ValueError(f'Dataset {args.dataset} is currently unsupported')
 
@@ -385,6 +394,7 @@ if __name__ == "__main__":
     # warning: do not run this function in a loop
     logger.info(f"starting segmentation on {dataset_info['name']}...")
     extract_radiology_segmentation(
+        dataset=args.dataset,
         img_paths=dataset_info['img_paths'],
         text_prompts=dataset_info['text_prompts'],
         model_mode=args.model,

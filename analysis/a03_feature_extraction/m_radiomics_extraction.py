@@ -15,6 +15,7 @@ warnings.filterwarnings('ignore')
 
 from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_MAMAMIA_info
 from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_TCGA_radiology_info
+from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_CPTAC_radiology_info
 
 if __name__ == "__main__":
     ## argument parser
@@ -46,6 +47,13 @@ if __name__ == "__main__":
             lab_mode=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
             img_format=opt['DATA_FORMAT']
         )
+    elif opt['DATASET'] == 'CPTAC':
+        dataset_info = prepare_CPTAC_radiology_info(
+            img_json=opt['RADIOLOGY'],
+            lab_dir=opt['LABEL_DIR'],
+            lab_mode=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
+            img_format=opt['DATA_FORMAT']
+        )
     else:
         raise NotImplementedError
     
@@ -61,15 +69,15 @@ if __name__ == "__main__":
         from analysis.a03_feature_extraction.m_feature_extraction import extract_radiomic_feature
         print("Number of images", len(dataset_info['img_paths']))
         extract_radiomic_feature(
-            img_paths=dataset_info['img_paths'][2500:],
-            lab_paths=dataset_info['lab_paths'][2500:],
+            img_paths=dataset_info['img_paths'],
+            lab_paths=dataset_info['lab_paths'],
             feature_mode=opt['RADIOMICS']['MODE']['VALUE'],
             save_dir=save_feature_dir,
             class_name=opt['RADIOMICS']['TARGET'],
-            prompts=dataset_info['text_prompts'][2500:],
-            format=dataset_info['img_format'][2500:],
-            modality=dataset_info['modality'][2500:],
-            site=dataset_info['site'][2500:],
+            prompts=dataset_info['text_prompts'],
+            format=dataset_info['img_format'],
+            modality=dataset_info['modality'],
+            site=dataset_info['site'],
             batch_size=opt['RADIOMICS']['BATCH_SIZE'],
             dilation_mm=opt['RADIOMICS']['DILATION_MM'],
             layer_method=opt['RADIOMICS']['LAYER_METHOD']['VALUE'],
@@ -87,13 +95,13 @@ if __name__ == "__main__":
             feature_mode=opt['RADIOMICS']['MODE']['VALUE'], 
             save_dir=save_feature_dir, 
             class_name=opt['RADIOMICS']['TARGET'],
-            n_clusters=3,
+            n_clusters=8,
             n_jobs=opt['N_JOBS'],
             skip_exist=opt['RADIOMICS']['SKIP_EXITS']
         )
 
     # construct image graph
-    if opt['RADIOMICS']['TASKS']['GRAPH_CONSTRUCTION']:
+    if opt['RADIOMICS']['TASKS']['GRAPH_CONSTRUCTION']['VALUE']:
         from analysis.a04_feature_aggregation.m_graph_construction import construct_img_graph
         construct_img_graph(
             img_paths=dataset_info['img_paths'],
@@ -101,7 +109,7 @@ if __name__ == "__main__":
             radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
             class_name=opt['RADIOMICS']['TARGET'],
             window_size=24**3,
-            lambda_f=opt['RADIOMICS']['MODE']['FEATURE_DIS_WEIGHT'],
+            lambda_f=opt['RADIOMICS']['TASKS']['GRAPH_CONSTRUCTION']['FEATURE_DIS_WEIGHT'],
             n_jobs=opt['N_JOBS'],
             delete_npy=opt['RADIOMICS']['DELETE_NPY'],
             skip_exist=opt['RADIOMICS']['SKIP_EXITS']

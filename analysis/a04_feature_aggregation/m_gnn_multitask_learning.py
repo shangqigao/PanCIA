@@ -1041,7 +1041,7 @@ class CoxSurvLoss(nn.Module):
         return loss_cox
     
 class MultiTaskLoss(nn.Module):
-    def __init__(self, tau_vi=1.0, tau_surv=1.0, tau_cls=1.0, tau_reg=1.0):
+    def __init__(self, tau_vi=0.1, tau_surv=1.0, tau_cls=1.0, tau_reg=1.0):
         super(MultiTaskLoss, self).__init__()
         self.tau_vi = tau_vi
         self.tau_surv = tau_surv

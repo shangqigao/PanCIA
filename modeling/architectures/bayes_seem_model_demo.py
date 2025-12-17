@@ -338,12 +338,20 @@ class BayesianSEEM(nn.Module):
 
         targets = targets_grounding = queries_grounding = None
         # Bayesian image decomposition
+        extra = {}
         decomp_outputs = self.decomposition(images.tensor)
+        if self.return_feat_type == 'bayes_upsilon':
+            extra['deep_feature'] = 1 / decomp_outputs["upsilon"]
+            return None, images.tensor.shape, extra
+        if self.return_feat_type == 'bayes_feature':
+            extra['deep_feature'] = decomp_outputs["deep_feature"]
+            outputs = None
+            return None, images.tensor.shape, extra
+
         features = self.backbone(decomp_outputs['pred'])
         mask_features, transformer_encoder_features, multi_scale_features = self.sem_seg_head.pixel_decoder.forward_features(features)
         image_sizes = [x["image"].shape[-2:] for x in batched_inputs]
 
-        extra = {}
         if 'stroke' in batched_inputs[0]:
             pos_masks = (batched_inputs[0]['stroke'].to(self.device)).unbind(0)
             pos_masks = ImageList.from_tensors(pos_masks, self.size_divisibility).tensor.unbind(0)
@@ -375,11 +383,7 @@ class BayesianSEEM(nn.Module):
             extra['audio_class'] = gtext['class_emb']
         
         outputs = self.sem_seg_head.predictor(multi_scale_features, mask_features, target_queries=queries_grounding, extra=extra, task='demo')
-        if self.return_feat_type == 'bayes_upsilon':
-            extra['deep_feature'] = 1 / decomp_outputs["upsilon"]
-        elif self.return_feat_type == 'bayes_feature':
-            extra['deep_feature'] = decomp_outputs["deep_feature"]
-        elif self.return_feat_type == 'mask_feature':
+        if self.return_feat_type == 'mask_feature':
             extra['deep_feature'] = mask_features
         else:
             raise ValueError(f"Cannot return unsupported feature type: {self.return_feat_type}")

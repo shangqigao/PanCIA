@@ -550,7 +550,7 @@ def run_once(
         model = model.to("cuda")
     else:
         model = model.to("cpu")
-    loss = MultiTaskLoss()
+    loss = MultiTaskLoss(tau_vi=optim_kwargs['tau_vi'])
     optimizer_kwargs = {k: v for k, v in optim_kwargs.items() if k in ["lr", "weight_decay"]}
     optimizer = torch.optim.Adam(model.parameters(), **optimizer_kwargs)
     # optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, nesterov=True, **optim_kwargs)
@@ -687,11 +687,20 @@ def training(
         "num_groups": arch_opt['AGGREGATION']['NUM_GROUPS'],
         "task_to_idx": task_to_idx
     }
+
     omics_name = "_".join(arch_opt['OMICS'])
     if arch_opt['BayesGNN']:
         model_dir = model_dir / f"{omics_name}_Bayes_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
     else:
         model_dir = model_dir / f"{omics_name}_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
+
+    # if multi-omics and multi-scale, higher dimension, so stronger regularization
+    if len(omics_dims) > 1 and len(omics_dims['radiomics']) > 1:
+        tau_vi = 1.0
+    else:
+        tau_vi = 0.1
+    print(f"Setting the weight of variational loss to {tau_vi}")
+
     optim_kwargs = {
         "lr": 3e-4,
         "weight_decay": {
@@ -701,7 +710,8 @@ def training(
         "l1_penalty": {
             "ABMIL": train_opt['L1_PENALTY']['ABMIL'], 
             "SPARRA": train_opt['L1_PENALTY']['SPARRA']
-        }[arch_opt['AGGREGATION']['VALUE']]
+        }[arch_opt['AGGREGATION']['VALUE']],
+        "tau_vi": tau_vi
     }
     for split_idx, split in enumerate(splits):
         # if split_idx < 3: continue
@@ -764,9 +774,13 @@ def inference(
     model_dir = pretrained_model_dir / model_folder
 
     predict_results = {}
+    save_results = {}
     for split_idx, split in enumerate(splits):
-        new_split = {"infer": [v[0] for v in split["test"]]}
-        chkpts = model_dir / f"0{split_idx}/best_model.weights.pth"
+        if infer_opt['SAVE_OMICS']:
+            new_split = {"infer": [v[0] for v in split["test"]]}
+        else:
+            new_split = {"infer-valid": split["test"]}
+        chkpts = model_dir / f"0{split_idx}/epoch=039.weights.pth"
         print(str(chkpts))
         # Perform ensembling by averaging probabilities
         # across checkpoint predictions
@@ -785,9 +799,9 @@ def inference(
         )
         outputs = list(zip(*outputs))
         if len(outputs) == 3:
-            logits, features, _ = outputs
+            logits, out1, out2 = outputs
         elif len(outputs) == 2:
-            logits, features = outputs
+            logits, out1 = outputs
         # saving average features
         if infer_opt['SAVE_OMICS']:
             subject_ids = [d[0] for d in new_split["infer"]]
@@ -796,28 +810,32 @@ def inference(
             for i, subject_id in enumerate(subject_ids): 
                 save_name = f"{subject_id}.npy"
                 save_path = f"{save_dir}/{save_name}"
-                np.save(save_path, logits[i])
-            print('Only save risk score, setting C-index as 0.5')
-            cindex = 0.5
+                np.save(save_path, out1[i])
         else:
-            # * Calculate split statistics
-            logits = np.array(logits).squeeze()
-            pred_true = np.array([v[1] for v in split["test"]])
+            logit = np.array(logit).squeeze()
+            y_list = list(out1)
+            mask_list = list(out2)
 
-            pred_true = np.array(pred_true).squeeze()
-            event_status = pred_true[:, 1] > 0
-            event_time = pred_true[:, 0]
-            cindex = concordance_index_censored(event_status, event_time, logits)[0]
+            metrics, avg_metrics = evaluate_multitask(logit, y_list, mask_list, task_to_idx)
 
-        scores_dict = {
-            "C-Index": cindex
-        }
-        
-        predict_results.update({f"Fold {split_idx}": scores_dict})
-    print(predict_results)
-    for k in scores_dict.keys():
-        arr = np.array([v[k] for v in predict_results.values() if v[k] != 0])
-        print(f"CV {k} mean+std", arr.mean(), arr.std())
+            scores_dict = {
+                "C-Index": avg_metrics["survival"],
+                "F1": avg_metrics["classification"],
+                "R2": avg_metrics["regression"]
+            }     
+            predict_results.update({f"Fold {split_idx}": scores_dict})
+            save_results.update({f"Fold {split_idx}": metrics})
+
+    if len(predict_results) > 0:
+        print(predict_results)
+        for k in scores_dict.keys():
+            arr = np.array([v[k] for v in predict_results.values()])
+            print(f"CV {k} mean+std", arr.mean(), arr.std())
+
+    if len(save_results) > 0:
+        save_path = model_dir / "multitask_learning_results.json"
+        with open(save_path, "w") as f:
+            json.dump(save_results, f, indent=4)
 
     return
 

@@ -41,6 +41,8 @@ RADIOMICS:
     #   - "_tumor_layer2_graph_aggr_mean.npy"
     #   - "_tumor_layer3_graph_aggr_mean.npy"
     #   - "_tumor_layer4_graph_aggr_mean.npy"
+    # SUFFIX:
+    #   - "_tumor_graph.npz"
     SUFFIX:
       - "_tumor_layer0_graph.npz"
       - "_tumor_layer1_graph.npz"

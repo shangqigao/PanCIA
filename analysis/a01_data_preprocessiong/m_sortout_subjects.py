@@ -39,7 +39,12 @@ if __name__ == "__main__":
     with open(f"{args.included_wsi}", "r") as f:
         wsis = json.load(f)
     in_wsis = wsis["included series"]
-    in_wsi_ids = [Path(p).stem[:12] for p in in_wsis]
+    if args.dataset == 'TCGA':
+        in_wsi_ids = [Path(p).stem[:12] for p in in_wsis]
+    elif args.dataset == 'CPTAC':
+        in_wsi_ids = [Path(p).stem[:9] for p in in_wsis]
+    else:
+        raise NotImplementedError
     df_wsi = pd.DataFrame({'Subject ID': in_wsi_ids, 'WSI Path': in_wsis})
 
     if args.pre_diagnosis:
@@ -73,7 +78,10 @@ if __name__ == "__main__":
         radiology = df_nifti[df_nifti['Series ID'].isin(common)].set_index('Series ID').loc[common].reset_index()
 
         df_subject_common = df_subject[df_subject['Series ID'].isin(common)]
-        year_gaps = (df_subject_common['Study Date'].dt.year - dx_year).tolist()
+        if args.pre_diagnosis:
+            year_gaps = (df_subject_common['Study Date'].dt.year - dx_year).tolist()
+        else:
+            dx_year, year_gaps = None, None
         subject_dict = {
             'radiology': radiology['Series Path'].tolist(),
             'pathology': pathology['WSI Path'].tolist(),

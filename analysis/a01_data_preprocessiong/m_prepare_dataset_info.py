@@ -108,3 +108,42 @@ def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_forma
     }
 
     return dataset_info
+
+def prepare_CPTAC_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti'):
+    assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
+    with open(img_json, 'r') as f:
+        data = json.load(f)
+    included_subjects = data['included subjects']
+    img_paths = []
+    for k, v in included_subjects.items(): img_paths += v['radiology']
+    images, site, modality, prompts = [], [], [], []
+    for img_path in img_paths:
+        folds = str(img_path).split('/')
+        project = folds[-3]
+        img_mod = {'MR': 'MRI', 'CT': 'CT'}[folds[-4]]
+        if PANCIA_PROJECT_SITE.get(project, False):
+            images.append(img_path)
+            img_site = PANCIA_PROJECT_SITE[project]
+            site.append(img_site)
+            modality.append(img_mod)
+            target = PANCIA_PROMPT_TEMPLETES[img_site]
+            prompts.append(f"{target} on {img_mod}")
+    
+    if lab_dir is not None:
+        lab_paths = [str(p).split('/CPTAC_NIFTI/')[-1] for p in images]
+        lab_paths = [f"{lab_dir}/{lab_mode}/{p}" for p in lab_paths]
+    else:
+        lab_paths = [None]*len(img_paths)
+
+    dataset_info = {
+        'name': 'CPTAC-Radiology',
+        'img_paths': images,
+        'lab_paths': lab_paths,
+        'text_prompts': prompts,
+        'modality': modality,
+        'site': site,
+        'meta_list': None,
+        'img_format': [img_format] * len(images)
+    }
+
+    return dataset_info
