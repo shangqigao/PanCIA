@@ -24,6 +24,7 @@ peft
 plotly==5.24.1
 pydicom
 pyradiomics
+rt_utils
 scikit-image
 scikit-learn
 scikit-survival

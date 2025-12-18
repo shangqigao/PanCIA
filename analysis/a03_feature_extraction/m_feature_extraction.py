@@ -2012,15 +2012,13 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name,
 
     # Load model from pretrained weights
     pretrained_pth = os.path.join(root_dir, 'checkpoints/LVMMed/lvmmed_resnet.torch')
-
     model = smp.Unet(encoder_name="resnet50", encoder_weights=None, in_channels=3, classes=1)
     state_dict = torch.load(pretrained_pth, map_location='cpu')
-    # ensure SMP's internal pop() does not crash
-    state_dict["fc.weight"] = torch.empty(0)
-    state_dict["fc.bias"] = torch.empty(0)
-    missing, unexpected = model.encoder.load_state_dict(state_dict, strict=False)
-    print("Missing keys:", missing)
-    print("Unexpected keys:", unexpected)
+    
+    # Add fake classifier head to satisfy SMP
+    state_dict["fc.weight"] = torch.zeros(1000, 2048)
+    state_dict["fc.bias"] = torch.zeros(1000)
+    model.encoder.load_state_dict(state_dict, strict=True)
     model = model.eval().cuda()
 
     ## define preprocessing function
