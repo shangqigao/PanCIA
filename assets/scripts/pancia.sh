@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-36:00:00
-##SBATCH --time=0-00:10:00
+##SBATCH --time=0-36:00:00
+#SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-##SBATCH --qos=intr
+#SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -80,7 +80,19 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --modality radiology \
 #             --save_dir $save_dir
 
-# dicom to nifit (save to /parent/to/dataset/dataset_NIFTI)
+# rtstruct to nifti (save to /parent/to/dataset/dataset_seg/Expert)
+data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
+meta_dir="/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_Annotation_Metadata"
+save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/CPTAC_Seg/Expert"
+
+python analysis/a01_data_preprocessiong/m_rtstruct2nii.py \
+            --data_dir $data_dir \
+            --meta_dir $meta_dir \
+            --dataset CPTAC \
+            --modality radiology \
+            --save_dir $save_dir
+
+# dicom to nifti (save to /parent/to/dataset/dataset_NIFTI)
 # series="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_raw_series.json"
 
 # python analysis/a01_data_preprocessiong/m_dicom2nii.py \
@@ -135,8 +147,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # extract radiomic features
-radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
         
 # extract pathomic features
 # pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"

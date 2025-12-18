@@ -76,6 +76,18 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --modality radiology \
 #             --save_dir $save_dir
 
+# rtstruct to nifti (save to /parent/to/dataset/dataset_seg/Expert)
+data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
+meta_dir="/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_Annotation_Metadata"
+save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/CPTAC_Seg/Expert"
+
+python analysis/a01_data_preprocessiong/m_rtstruct2nii.py \
+            --data_dir $data_dir \
+            --meta_dir $meta_dir \
+            --dataset CPTAC \
+            --modality radiology \
+            --save_dir $save_dir
+            
 # dicom to nifit
 # series="/home/sg2162/rds/hpc-work/Experiments/radiomics/CPTAC_included_raw_series.json"
 
