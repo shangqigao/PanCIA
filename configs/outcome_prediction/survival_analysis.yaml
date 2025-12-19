@@ -8,10 +8,7 @@ OUTCOME:
   VALUE: "OS"
   CHOICES: ["OS", "DSS", "DFI", "PFI"]
 TASKS:
-  TRAIN: True
-  INFERENCE: False
-  TEST: False
-  PREDICTION: False
+  PREDICTION: True
 
 # Define parameters of radiomics
 RADIOMICS:
@@ -73,47 +70,8 @@ SPLIT:
   TRAIN_RATIO: 0.7
   FILTER_SUBJECTS: True # discard subjects without outcomes
 
-ARCH:
-  GNN: "GCNConv"
-  BayesGNN: False
-  DIM_TARGET: 1
-  LAYERS: [256, 128, 256]
-  DROPOUT: 0.5
-  POOL_RATIO:
-    RAIOMICS: 0.7
-    PATHOMICS: 0.7
-  # OMICS: ["radiomics", "pathomics"]
-  # OMICS: ["radiomics"]
-  OMICS: ["pathomics"]
-  AGGREGATION:
-    VALUE: "SPARRA"
-    CHOICES: ["ABMIL", "SPARRA"]
-    NUM_GROUPS: 2
-
-TRAIN:
-  EPOCHS: 20
-  N_WORKS: 32
-  BATCH_SIZE: 32
-  SAMPLING_RATE: 0.1
-  LR: 3e-4
-  WIEGHT_DECAY:
-    ABMIL: 1.0e-5
-    SPARRA: 0.0
-  L1_PENALTY:
-    ABMIL: 0.0
-    SPARRA: 2.0e-2
-
-INFERENCE:
-  N_WORKS: 32
-  BATCH_SIZE: 4
-  SAVE_OMICS: True
-
-TEST:
-  PRE_TRAINED: ""
-  N_WORKS: 1
-  BATCH_SIZE: 1
-
 PREDICTION:
+  OMICS_DIR: ""
   USED_OMICS:
     VALUE: "pathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]

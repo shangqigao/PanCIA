@@ -14,11 +14,8 @@ OUTCOME:
       "StemnessScoreDNA",
       "StemScoreRNA",
     ]
-  POOLING: 'mean'
+  POOLING: "mean"
 TASKS:
-  TRAIN: False
-  INFERENCE: False
-  TEST: False
   PREDICTION: True
 
 # Define parameters of radiomics
@@ -71,42 +68,7 @@ SPLIT:
   TEST_RATIO: 0.2
   VALID_RATIO: 0.1
   TRAIN_RATIO: 0.7
-
-ARCH:
-  BINARY_CLS: False #binary classification or multi classfication
-  DIM_TARGET: 1
-  GNN: "GCNConv"
-  BayesGNN: False
-  LAYERS: [256, 128, 256]
-  DROPOUT: 0.5
-  POOL_RATIO:
-    RAIOMICS: 0.7
-    PATHOMICS: 0.2
-  OMICS: ["radiomics", "pathomics"]
-  AGGREGATION:
-    VALUE: "SPARRA"
-    CHOICES: ["ABMIL", "SPARRA"]
-
-TRAIN:
-  EPOCHS: 20
-  N_WORKS: 32
-  BATCH_SIZE: 32
-  SAMPLING_RATE: 1.0
-  LR: 3e-4
-  WIEGHT_DECAY:
-    ABMIL: 1.0e-5
-    SPARRA: 0.0
-
-INFERENCE:
-  PRE_TRAINED: ""
-  N_WORKS: 32
-  BATCH_SIZE: 8
-  SAVE_OMICS: True
-
-TEST:
-  PRE_TRAINED: ""
-  N_WORKS: 1
-  BATCH_SIZE: 1
+  FILTER_SUBJECTS: True # discard subjects without outcomes
 
 PREDICTION:
   USED_OMICS:
@@ -119,6 +81,9 @@ PREDICTION:
   REFIT:
     VALUE: "r2"
     CHOICES: ["r2", "neg_mse"]
+  OUTCOME_LOGRANK_TEST:
+    VALUE: "OS" # which used to evaluate the risk stratification ability of predicted signature
+    CHOICES: ["OS", "DSS", "DFI", "PFI"]
   TARGET_SELECTION:
     VALUE: False
     CROSS_VALID: 5

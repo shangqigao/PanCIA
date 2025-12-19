@@ -49,9 +49,6 @@ from sklearn.utils import resample
 
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
-from analysis.a04_feature_aggregation.m_gnn_survival_analysis import SurvivalGraphDataset, SurvivalGraphArch, SurvivalBayesGraphArch
-from analysis.a04_feature_aggregation.m_gnn_survival_analysis import ScalarMovingAverage, CoxSurvLoss
-
 def plot_survival_curve(data_path):
     df = pd.read_csv(data_path)
 
@@ -891,10 +888,7 @@ def load_radiomics(
     ):
 
     if radiomics_aggregated_mode in ["ABMIL", "SPARRA"]:
-        parent_path = save_radiomics_dir.parent
-        folder_name = save_radiomics_dir.name
-        save_radiomics_dir = pathlib.Path(parent_path) / f"radiomics_{folder_name}_{radiomics_aggregated_mode}"
-        print(f"{save_radiomics_dir}")
+        print(f"loading radiomics from {save_radiomics_dir}...")
         radiomics_paths = []
         for p in data:
             subject_id = p[0][0]
@@ -942,10 +936,7 @@ def load_pathomics(
     ):
 
     if pathomics_aggregated_mode in ["ABMIL", "SPARRA"]:
-        parent_path = save_pathomics_dir.parent
-        folder_name = save_pathomics_dir.name
-        save_pathomics_dir = pathlib.Path(parent_path) / f"pathomics_{folder_name}_{pathomics_aggregated_mode}"
-        print(f"{save_pathomics_dir}")
+        print(f"loading pathomics from {save_pathomics_dir}...")
         pathomics_paths = []
         for p in data:
             subject_id = p[0][0]
@@ -993,14 +984,13 @@ def load_radiopathomics(
         n_jobs,
         save_radiopathomics_dir
     ):
-    if radiomics_aggregated_mode in ["ABMIL", "SPARRA"] and radiomics_aggregated_mode == pathomics_aggregated_mode:
-        parent_path = save_radiopathomics_dir.parent
-        folder_name = save_radiopathomics_dir.name
-        save_radiopathomics_dir = pathlib.Path(parent_path) / f"radiomics_pathomics_{folder_name}_{radiomics_aggregated_mode}"
+    if radiomics_aggregated_mode in ["ABMIL", "SPARRA"]:
+        assert radiomics_aggregated_mode == pathomics_aggregated_mode
+        print(f"loading radiopathomics from {save_radiopathomics_dir}...")
         radiopathomics_paths = []
         for p in data:
             subject_id = p[0][0]
-            path = save_radiopathomics_dir / radiomics_aggregated_mode / f"{subject_id}.npy"
+            path = pathlib.Path(save_radiopathomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
             radiopathomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
             joblib.delayed(load_subject_level_features)(idx, graph_path)
@@ -1049,26 +1039,26 @@ def load_radiopathomics(
     return radiopathomics_X
 
 def survival(
-        split_path,
-        radiomics_keys=None,
-        pathomics_keys=None,
-        omics="radiopathomics", 
-        save_omics_dir=None,
-        n_jobs=32,
-        radiomics_aggregation=False,
-        radiomics_aggregated_mode=None,
-        pathomics_aggregation=False,
-        pathomics_aggregated_mode=None,
-        model="CoxPH",
-        scorer="cindex",
-        feature_selection=True,
-        n_bootstraps=100,
-        use_graph_properties=False,
-        save_results_dir=None
-        ):
+    split_path,
+    radiomics_keys=None,
+    pathomics_keys=None,
+    omics="radiopathomics", 
+    save_omics_dir=None,
+    n_jobs=32,
+    radiomics_aggregation=False,
+    radiomics_aggregated_mode=None,
+    pathomics_aggregation=False,
+    pathomics_aggregated_mode=None,
+    model="CoxPH",
+    scorer="cindex",
+    feature_selection=True,
+    n_bootstraps=100,
+    use_graph_properties=False,
+    save_results_dir=None
+    ):
     splits = joblib.load(split_path)
     predict_results = {}
-    risk_results = {
+    survival_results = {
         "raw_subject": [], "raw_risk": [], 
         "subject": [], "risk": [], 
         "event": [], "duration": []
@@ -1298,16 +1288,16 @@ def survival(
             predictor.fit(tr_X, tr_y)
 
         raw_subject_ids = [p[0][0] for p in raw_data_te]
-        risk_results["raw_subject"] += raw_subject_ids
+        survival_results["raw_subject"] += raw_subject_ids
         raw_risk_scores = predictor.predict(raw_te_X)
-        risk_results["raw_risk"] += raw_risk_scores.tolist()
+        survival_results["raw_risk"] += raw_risk_scores.tolist()
 
         subject_ids = [p[0][0] for p in data_te]
-        risk_results["subject"] += subject_ids
+        survival_results["subject"] += subject_ids
         risk_scores = predictor.predict(te_X)
-        risk_results["risk"] += risk_scores.tolist()
-        risk_results["event"] += te_y["event"].astype(int).tolist()
-        risk_results["duration"] += te_y["duration"].tolist()
+        survival_results["risk"] += risk_scores.tolist()
+        survival_results["event"] += te_y["event"].astype(int).tolist()
+        survival_results["duration"] += te_y["duration"].tolist()
         C_index = concordance_index_censored(te_y["event"], te_y["duration"], risk_scores)[0]
         C_index_ipcw = concordance_index_ipcw(tr_y, te_y, risk_scores)[0]
 
@@ -1346,7 +1336,7 @@ def survival(
         arr = np.array([v[k] for v in predict_results.values() if v[k] != 0])
         print(f"CV {k} mean+std", arr.mean(), arr.std())
     # plot survival curve
-    pd_risk = pd.DataFrame({k: risk_results[k] for k in ["risk", "event", "duration"]})
+    pd_risk = pd.DataFrame({k: survival_results[k] for k in ["risk", "event", "duration"]})
     mean_risk = pd_risk["risk"].mean()
     dem = pd_risk["risk"] > mean_risk
 
@@ -1379,9 +1369,17 @@ def survival(
     save_path = f"{save_results_dir}/{omics}_" + \
         f"radio+{radiomics_aggregated_mode}_" + \
         f"patho+{pathomics_aggregated_mode}_" + \
-        f"model+{model}_scorer+{scorer}.json"
+        f"model+{model}_scorer+{scorer}_results.json"
     with open(save_path, "w") as f:
-        json.dump(risk_results, f, indent=4)
+        json.dump(survival_results, f, indent=4)
+
+    # save metrics
+    save_path = f"{save_results_dir}/{omics}_" + \
+        f"radio+{radiomics_aggregated_mode}_" + \
+        f"patho+{pathomics_aggregated_mode}_" + \
+        f"model+{model}_scorer+{scorer}_metrics.json"
+    with open(save_path, "w") as f:
+        json.dump(predict_results, f, indent=4)
 
     return
 
@@ -1440,408 +1438,6 @@ def generate_data_split(
         splits.append(split_dict)
 
     return splits
-
-def split_batch_output(output):
-    """
-    output can be:
-      [outputs, features, atte_dict]
-      [outputs, labels]
-      [outputs, features]
-      [outputs]
-      or any list containing arrays and optional dicts.
-
-    Returns a list of length batch_size with sample-wise outputs.
-    """
-
-    # output is a list: [arr_or_dict, arr_or_dict, ...]
-    # find batch size from the first array
-    # (dicts do not have .shape)
-    for v in output:
-        if hasattr(v, "shape"):
-            batch_size = v.shape[0]
-            break
-    else:
-        raise ValueError("No array found to infer batch size.")
-
-    # split each element
-    split_items = []
-    for v in output:
-        if hasattr(v, "shape"):
-            # numpy array → split
-            split_items.append(np.split(v, batch_size, axis=0))
-        elif isinstance(v, dict):
-            # dict → split each value
-            split_items.append({
-                k: np.split(val, batch_size, axis=0)
-                for k, val in v.items()
-            })
-        else:
-            raise TypeError(f"Unsupported output type: {type(v)}")
-
-    # Now build sample-wise outputs
-    step_output = []
-    for i in range(batch_size):
-        sample_items = []
-        for item in split_items:
-            if isinstance(item, list):
-                sample_items.append(item[i])
-            elif isinstance(item, dict):
-                sample_items.append({k: item[k][i] for k in item})
-        step_output.append(tuple(sample_items))
-
-    return step_output
-
-def run_once(
-        dataset_dict,
-        num_epochs,
-        save_dir,
-        on_gpu=True,
-        preproc_func=None,
-        pretrained=None,
-        loader_kwargs=None,
-        arch_kwargs=None,
-        optim_kwargs=None,
-        BayesGNN=False,
-        data_types=["radiomics", "pathomics"],
-        sampling_rate=1.0
-):
-    """running the inference or training loop once"""
-    if loader_kwargs is None:
-        loader_kwargs = {}
-
-    if arch_kwargs is None:
-        arch_kwargs = {}
-
-    if optim_kwargs is None:
-        optim_kwargs = {}
-
-    if BayesGNN:
-        model = SurvivalBayesGraphArch(**arch_kwargs)
-        kl = {"loss": bnn.BKLLoss(), "weight": 0.1}
-    else:
-        model = SurvivalGraphArch(**arch_kwargs)
-        kl = None
-    if pretrained is not None:
-        model.load(pretrained)
-    if on_gpu:
-        model = model.to("cuda")
-    else:
-        model = model.to("cpu")
-    loss = CoxSurvLoss()
-    optimizer_kwargs = {k: v for k, v in optim_kwargs.items() if k in ["lr", "weight_decay"]}
-    optimizer = torch.optim.Adam(model.parameters(), **optimizer_kwargs)
-    # optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, nesterov=True, **optim_kwargs)
-    # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 80], gamma=0.1)
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
-
-    loader_dict = {}
-    for subset_name, subset in dataset_dict.items():
-        _loader_kwargs = copy.deepcopy(loader_kwargs)
-        if not "train" in subset_name: 
-            if _loader_kwargs["batch_size"] > 4:
-                _loader_kwargs["batch_size"] = 4
-            sampling_rate = 1.0
-        ds = SurvivalGraphDataset(
-            subset, 
-            mode=subset_name, 
-            preproc=preproc_func,
-            data_types=data_types,
-            sampling_rate=sampling_rate
-        )
-        loader_dict[subset_name] = DataLoader(
-            ds,
-            drop_last=subset_name == "train",
-            shuffle=subset_name == "train",
-            **_loader_kwargs,
-        )
-    best_score = 0
-    for epoch in range(num_epochs):
-        logger.info("EPOCH: %03d", epoch)
-        for loader_name, loader in loader_dict.items():
-            step_output = []
-            ema = ScalarMovingAverage()
-            pbar = create_pbar(loader_name, len(loader))
-            for step, batch_data in enumerate(loader):
-                if loader_name == "train":
-                    output = model.train_batch(model, batch_data, on_gpu, loss, optimizer, kl, optim_kwargs['l1_penalty'])
-                    ema({"loss": output[0]})
-                    pbar.postfix[1]["step"] = step
-                    pbar.postfix[1]["EMA"] = ema.tracking_dict["loss"]
-                else:
-                    output = model.infer_batch(model, batch_data, on_gpu)
-                    step_output += split_batch_output(output)
-                pbar.update()
-            pbar.close()
-
-            logging_dict = {}
-            if loader_name == "train":
-                for val_name, val in ema.tracking_dict.items():
-                    logging_dict[f"train-EMA-{val_name}"] = val
-            elif "infer" in loader_name and any(v in loader_name for v in ["train", "valid"]):
-                output = list(zip(*step_output))
-                logit, true = output
-                logit = np.array(logit).squeeze()
-                true = np.array(true).squeeze()
-                event_status = true[:, 1] > 0
-                event_time = true[:, 0]
-                cindex = concordance_index_censored(event_status, event_time, logit)[0]
-                logging_dict[f"{loader_name}-Cindex"] = cindex
-
-                if "valid-A" in loader_name and cindex > best_score: 
-                    best_score = cindex
-                    model.save(f"{save_dir}/best_model.weights.pth")
-
-                logging_dict[f"{loader_name}-raw-logit"] = logit
-                logging_dict[f"{loader_name}-raw-true"] = true
-
-            for val_name, val in logging_dict.items():
-                if "raw" not in val_name:
-                    logging.info("%s: %0.5f\n", val_name, val)
-            
-            if "train" not in loader_dict:
-                continue
-
-            if (epoch + 1) % 10 == 0:
-                new_stats = {}
-                if (save_dir / "stats.json").exists():
-                    old_stats = load_json(f"{save_dir}/stats.json")
-                    save_as_json(old_stats, f"{save_dir}/stats.old.json", exist_ok=True)
-                    new_stats = copy.deepcopy(old_stats)
-                    new_stats = {int(k): v for k, v in new_stats.items()}
-
-                old_epoch_stats = {}
-                if epoch in new_stats:
-                    old_epoch_stats = new_stats[epoch]
-                old_epoch_stats.update(logging_dict)
-                new_stats[epoch] = old_epoch_stats
-                save_as_json(new_stats, f"{save_dir}/stats.json", exist_ok=True)
-                model.save(
-                    f"{save_dir}/epoch={epoch:03d}.weights.pth",
-                )
-        lr_scheduler.step()
-    
-    return step_output
-
-
-def training(
-        split_path,
-        model_dir,
-        omics_dims,
-        omics_pool_ratio,
-        arch_opt,
-        train_opt
-):
-    """train node classification neural networks
-    Args:
-        num_epochs (int): the number of epochs for training
-        split_path (str): the path of storing data splits
-        scaler_path (str): the path of storing data normalization
-        num_node_features (int): the dimension of node feature
-        model_dir (str): directory of saving models
-    """
-    splits = joblib.load(split_path)
-    # node_scalers = [joblib.load(scaler_path[k]) for k in omics_modes.keys()] 
-    # transform_dict = {k: s.transform for k, s in zip(omics_modes.keys(), node_scalers)}
-    
-    loader_kwargs = {
-        "num_workers": train_opt['N_WORKS'], 
-        "batch_size": train_opt['BATCH_SIZE'],
-    }
-    arch_kwargs = {
-        "dim_features": omics_dims,
-        "dim_target": arch_opt['DIM_TARGET'],
-        "layers": arch_opt['LAYERS'],
-        "dropout": arch_opt['DROPOUT'],
-        "pool_ratio": omics_pool_ratio,
-        "conv": arch_opt['GNN'],
-        "aggregation": arch_opt['AGGREGATION']['VALUE'],
-        "num_groups": arch_opt['AGGREGATION']['NUM_GROUPS']
-    }
-    omics_name = "_".join(arch_opt['OMICS'])
-    if arch_opt['BayesGNN']:
-        model_dir = model_dir / f"{omics_name}_Bayes_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
-    else:
-        model_dir = model_dir / f"{omics_name}_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
-    optim_kwargs = {
-        "lr": 3e-4,
-        "weight_decay": {
-            "ABMIL": train_opt['WIEGHT_DECAY']['ABMIL'], 
-            "SPARRA": train_opt['WIEGHT_DECAY']['SPARRA']
-        }[arch_opt['AGGREGATION']['VALUE']],
-        "l1_penalty": {
-            "ABMIL": train_opt['L1_PENALTY']['ABMIL'], 
-            "SPARRA": train_opt['L1_PENALTY']['SPARRA']
-        }[arch_opt['AGGREGATION']['VALUE']]
-    }
-    for split_idx, split in enumerate(splits):
-        # if split_idx < 3: continue
-        new_split = {
-            "train": split["train"],
-            "infer-train": split["train"],
-            "infer-valid-A": split["valid"],
-            "infer-valid-B": split["test"],
-        }
-        split_save_dir = pathlib.Path(f"{model_dir}/{split_idx:02d}/")
-        rm_n_mkdir(split_save_dir)
-        reset_logging(split_save_dir)
-        run_once(
-            new_split,
-            train_opt['EPOCHS'],
-            save_dir=split_save_dir,
-            arch_kwargs=arch_kwargs,
-            loader_kwargs=loader_kwargs,
-            optim_kwargs=optim_kwargs,
-            preproc_func=None,
-            BayesGNN=arch_opt['BayesGNN'],
-            data_types=arch_opt['OMICS'],
-            sampling_rate=train_opt['SAMPLING_RATE']
-        )
-    return
-
-def inference(
-        split_path,
-        omics_dims,
-        omics_pool_ratio,
-        arch_opt,
-        infer_opt,
-        pretrained_model_dir
-):
-    """survival prediction
-    """
-    splits = joblib.load(split_path)
-    # node_scalers = [joblib.load(scaler_path[k]) for k in omics_modes.keys()] 
-    # transform_dict = {k: s.transform for k, s in zip(omics_modes.keys(), node_scalers)}
-    
-    loader_kwargs = {
-        "num_workers": infer_opt['N_WORKS'], 
-        "batch_size": infer_opt['BATCH_SIZE'],
-    }
-    arch_kwargs = {
-        "dim_features": omics_dims,
-        "dim_target": arch_opt['DIM_TARGET'],
-        "layers": arch_opt['LAYERS'],
-        "dropout": arch_opt['DROPOUT'],
-        "pool_ratio": omics_pool_ratio,
-        "conv": arch_opt['GNN'],
-        "aggregation": arch_opt['AGGREGATION']['VALUE'],
-        "num_groups": arch_opt['AGGREGATION']['NUM_GROUPS']
-    }
-    omics_name = "_".join(arch_opt['OMICS'])
-    if arch_opt['BayesGNN']:
-        model_folder = f"{omics_name}_Bayes_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
-    else:
-        model_folder = f"{omics_name}_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
-    model_dir = pretrained_model_dir / model_folder
-
-    predict_results = {}
-    for split_idx, split in enumerate(splits):
-        new_split = {"infer": [v[0] for v in split["test"]]}
-        chkpts = model_dir / f"0{split_idx}/best_model.weights.pth"
-        print(str(chkpts))
-        # Perform ensembling by averaging probabilities
-        # across checkpoint predictions
-
-        outputs = run_once(
-            new_split,
-            num_epochs=1,
-            on_gpu=True,
-            save_dir=None,
-            arch_kwargs=arch_kwargs,
-            loader_kwargs=loader_kwargs,
-            preproc_func=None,
-            pretrained=chkpts,
-            BayesGNN=arch_opt['BayesGNN'],
-            data_types=arch_opt['OMICS'],
-        )
-        outputs = list(zip(*outputs))
-        if len(outputs) == 3:
-            logits, features, _ = outputs
-        elif len(outputs) == 2:
-            logits, features = outputs
-        # saving average features
-        if infer_opt['SAVE_OMICS']:
-            subject_ids = [d[0] for d in new_split["infer"]]
-            save_dir = model_dir / arch_opt['AGGREGATION']['VALUE']
-            mkdir(save_dir)
-            for i, subject_id in enumerate(subject_ids): 
-                save_name = f"{subject_id}.npy"
-                save_path = f"{save_dir}/{save_name}"
-                np.save(save_path, logits[i])
-            print('Only save risk score, setting C-index as 0.5')
-            cindex = 0.5
-        else:
-            # * Calculate split statistics
-            logits = np.array(logits).squeeze()
-            pred_true = np.array([v[1] for v in split["test"]])
-
-            pred_true = np.array(pred_true).squeeze()
-            event_status = pred_true[:, 1] > 0
-            event_time = pred_true[:, 0]
-            cindex = concordance_index_censored(event_status, event_time, logits)[0]
-
-        scores_dict = {
-            "C-Index": cindex
-        }
-        
-        predict_results.update({f"Fold {split_idx}": scores_dict})
-    print(predict_results)
-    for k in scores_dict.keys():
-        arr = np.array([v[k] for v in predict_results.values() if v[k] != 0])
-        print(f"CV {k} mean+std", arr.mean(), arr.std())
-
-    return
-
-def test(
-    graph_path,
-    omics_dims,
-    arch_opt,
-    test_opt
-):
-    """node classification 
-    """
-    omics_pool_ratio = {
-        "radiomics": arch_opt['POOL_RATIO']['RAIOMICS'], 
-        "pathomics": arch_opt['POOL_RATIO']['PATHOMICS']
-    }
-    omics_pool_ratio = {k: omics_pool_ratio[k] for k in arch_opt['OMICS']}
-
-    # node_scalers = [joblib.load(scaler_path[k]) for k in arch_opt['OMICS']] 
-    # transform_dict = {k: s.transform for k, s in zip(arch_opt['OMICS'], node_scalers)}
-    
-    loader_kwargs = {
-        "num_workers": test_opt['N_WORKS'],
-        "batch_size": test_opt['BATCH_SIZE'],
-    }
-    arch_kwargs = {
-        "dim_features": omics_dims,
-        "dim_target": arch_opt['DIM_TARGET'],
-        "layers": arch_opt['LAYERS'],
-        "dropout": arch_opt['DROPOUT'],
-        "pool_ratio": omics_pool_ratio,
-        "conv": arch_opt['GNN'],
-        "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION']
-    }
-
-    # BayesGNN = True
-    new_split = {"infer": [graph_path]}
-    outputs = run_once(
-        new_split,
-        num_epochs=1,
-        save_dir=None,
-        on_gpu=True,
-        pretrained=test_opt['PRE_TRAINED'],
-        arch_kwargs=arch_kwargs,
-        loader_kwargs=loader_kwargs,
-        preproc_func=None,
-        BayesGNN=arch_opt['BayesGNN'],
-        data_types=arch_opt['OMICS'],
-    )
-
-    pred_logit, _, attention = list(zip(*outputs))
-    hazard = np.exp(np.array(pred_logit).squeeze())
-    attention = np.array(attention).squeeze()
-    return hazard, attention
 
 if __name__ == "__main__":
     ## argument parser
@@ -1953,38 +1549,6 @@ if __name__ == "__main__":
     num_test = len(splits[0]["test"])
     logging.info(f"Number of testing samples: {num_test}.")
 
-    from analysis.a05_outcome_prediction.m_prepare_omics_info import radiomics_dims
-    from analysis.a05_outcome_prediction.m_prepare_omics_info import pathomics_dims
-    from analysis.a05_outcome_prediction.m_prepare_omics_info import radiomics_pool_ratio
-    from analysis.a05_outcome_prediction.m_prepare_omics_info import pathomics_pool_ratio
-    omics_dims = {"radiomics": radiomics_dims[radiomics_mode], "pathomics": pathomics_dims[pathomics_mode]}
-    omics_pool_ratio = {"radiomics": radiomics_pool_ratio[radiomics_mode], "pathomics": pathomics_pool_ratio[pathomics_mode]}
-    omics_keys = opt['ARCH']['OMICS']
-    omics_dims = {k: omics_dims[k] for k in omics_keys}
-    omics_pool_ratio = {k: omics_pool_ratio[k] for k in omics_keys}
-
-    if opt['TASKS']['TRAIN']:
-        # training
-        training(
-            split_path=split_path,
-            model_dir=save_model_dir,
-            omics_dims=omics_dims,
-            omics_pool_ratio=omics_pool_ratio,
-            arch_opt=opt['ARCH'],
-            train_opt=opt['TRAIN']
-        )
-
-    if opt['TASKS']['INFERENCE']:
-        # inference
-        inference(
-            split_path=split_path,
-            omics_dims=omics_dims,
-            omics_pool_ratio=omics_pool_ratio,
-            arch_opt=opt['ARCH'],
-            infer_opt=opt['INFERENCE'],
-            pretrained_model_dir=save_model_dir
-        )
-
     if opt['TASKS']['PREDICTION']:
         # survival analysis from the splits
         if opt['RADIOMICS'].get('KEYS', False):
@@ -1995,17 +1559,11 @@ if __name__ == "__main__":
             pathomics_keys = opt['PATHOMICS']['KEYS']
         else:
             pathomics_keys = None
-
-        if opt['ARCH']['BayesGNN']:
-            model_folder = f"Bayes_Survival_Prediction_{opt['ARCH']['GNN']}"
-        else:
-            model_folder = f"Survival_Prediction_{opt['ARCH']['GNN']}"
-        save_omics_dir = save_model_dir / model_folder
         
         survival(
             split_path=split_path,
             omics=opt['PREDICTION']['USED_OMICS']['VALUE'],
-            save_omics_dir=save_omics_dir,
+            save_omics_dir=opt['PREDICTION']['OMICS_DIR'],
             n_jobs=opt['PREDICTION']['N_JOBS'],
             radiomics_aggregation=opt['RADIOMICS']['AGGREGATION'],
             radiomics_aggregated_mode=opt['RADIOMICS']['AGGREGATED_MODE']['VALUE'],

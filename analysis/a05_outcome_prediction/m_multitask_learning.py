@@ -690,9 +690,9 @@ def training(
 
     omics_name = "_".join(arch_opt['OMICS'])
     if arch_opt['BayesGNN']:
-        model_dir = model_dir / f"{omics_name}_Bayes_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
+        model_dir = model_dir / f"{omics_name}_Bayes_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
     else:
-        model_dir = model_dir / f"{omics_name}_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
+        model_dir = model_dir / f"{omics_name}_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
 
     # if multi-omics and multi-scale, higher dimension, so stronger regularization
     if len(omics_dims) > 1 and len(omics_dims['radiomics']) > 1:

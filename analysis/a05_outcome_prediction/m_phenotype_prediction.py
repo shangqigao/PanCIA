@@ -46,9 +46,6 @@ from xgboost import XGBClassifier
 
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
-from analysis.a04_feature_aggregation.m_gnn_phenotype_prediction import PhenotypeGraphDataset, PhenotypeGraphArch, PhenotypeBayesGraphArch
-from analysis.a04_feature_aggregation.m_gnn_therapy_response import ScalarMovingAverage, R2TLoss
-
 def prepare_graph_properties(data_dict, prop_keys=None, subgraphs=False, omics="radiomics"):
     if prop_keys == None: 
         prop_keys = [
@@ -280,6 +277,16 @@ def load_wsi_level_features(idx, wsi_feature_paths, pooling="mean"):
     feat_dict = {}
     for i, feat in enumerate(feat_list):
         k = f"pathomics.feature{i}"
+        feat_dict[k] = feat
+    return {f"{idx}": feat_dict}
+
+def load_subject_level_features(idx, subject_feature_path):
+    feat_list = np.load(subject_feature_path).squeeze().tolist() 
+    if np.isscalar(feat_list):
+        feat_list = [feat_list]
+    feat_dict = {}
+    for i, feat in enumerate(feat_list):
+        k = f"subject.feature{i}"
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
@@ -615,41 +622,39 @@ def svc(split_idx, tr_X, tr_y, refit, n_jobs):
     return pipe
 
 def load_radiomics(
-        split_idx,
         data,
         radiomics_aggregation,
         radiomics_aggregated_mode,
         radiomics_keys,
         use_graph_properties,
-        n_jobs
+        n_jobs,
+        save_radiomics_dir=None
     ):
 
-    if radiomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
+    if radiomics_aggregated_mode in ["ABMIL", "SPARRA"]:
+        print(f"loading radiomics from {save_radiomics_dir}...")
         radiomics_paths = []
         for p in data:
-            path_list = pathlib.Path(p[0][1]["radiomics"])
-            new_path_list = []
-            for path_dict in path_list:
-                new_path_dict = {}
-                for k, path in path_dict.items():
-                    dir = path.parents[1] / radiomics_aggregated_mode / f"0{split_idx}"
-                    name = path.name.replace(".json", ".npy")
-                    new_path_dict[k] = dir / path.parent.name / name
-                new_path_list.append(new_path_dict)
-            radiomics_paths.append(new_path_list)
+            subject_id = p[0][0]
+            path = pathlib.Path(save_radiomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
+            radiomics_paths.append(path)
+        dict_list = joblib.Parallel(n_jobs=n_jobs)(
+            joblib.delayed(load_subject_level_features)(idx, graph_path)
+            for idx, graph_path in enumerate(radiomics_paths)
+        )
     else:
         radiomics_paths = [p[0][1]["radiomics"] for p in data]
+        if radiomics_aggregation:
+            dict_list = joblib.Parallel(n_jobs=n_jobs)(
+                joblib.delayed(prepare_graph_radiomics)(idx, graph_path)
+                for idx, graph_path in enumerate(radiomics_paths)
+            )
+        else:
+            dict_list = joblib.Parallel(n_jobs=n_jobs)(
+                joblib.delayed(load_radiomic_properties)(idx, graph_path, radiomics_keys)
+                for idx, graph_path in enumerate(radiomics_paths)
+            )
 
-    if radiomics_aggregation:
-        dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(prepare_graph_radiomics)(idx, graph_path)
-            for idx, graph_path in enumerate(radiomics_paths)
-        )
-    else:
-        dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_radiomic_properties)(idx, graph_path, radiomics_keys)
-            for idx, graph_path in enumerate(radiomics_paths)
-        )
     radiomics_dict = {}
     for d in dict_list: radiomics_dict.update(d)
     radiomics_X = [radiomics_dict[f"{i}"] for i in range(len(radiomics_paths))]
@@ -665,41 +670,38 @@ def load_radiomics(
     return radiomics_X
 
 def load_pathomics(
-        split_idx,
         data,
         pathomics_aggregation,
         pathomics_aggregated_mode,
         pathomics_keys,
         use_graph_properties,
-        n_jobs
+        n_jobs,
+        save_pathomics_dir
     ):
 
-    if pathomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
+    if pathomics_aggregated_mode in ["ABMIL", "SPARRA"]:
+        print(f"loading pathomics from {save_pathomics_dir}...")
         pathomics_paths = []
         for p in data:
-            path_list = pathlib.Path(p[0][1]["pathomics"])
-            new_path_list = []
-            for path_dict in path_list:
-                new_path_dict = {}
-                for k, path in path_dict.items():
-                    dir = path.parents[1] / pathomics_aggregated_mode / f"0{split_idx}"
-                    name = path.name.replace(".json", ".npy")
-                    new_path_dict[k] = dir / path.parent.name / name
-                new_path_list.append(new_path_dict)
-            pathomics_paths.append(new_path_list)
+            subject_id = p[0][0]
+            path = pathlib.Path(save_pathomics_dir) / pathomics_aggregated_mode / f"{subject_id}.npy"
+            pathomics_paths.append(path)
+        dict_list = joblib.Parallel(n_jobs=n_jobs)(
+            joblib.delayed(load_subject_level_features)(idx, graph_path)
+            for idx, graph_path in enumerate(pathomics_paths)
+        )
     else:
         pathomics_paths = [p[0][1]["pathomics"] for p in data]
-
-    if pathomics_aggregation:
-        dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(prepare_graph_pathomics)(idx, graph_path, pathomics_keys)
-            for idx, graph_path in enumerate(pathomics_paths)
-        )
-    else:
-        dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_wsi_level_features)(idx, graph_path)
-            for idx, graph_path in enumerate(pathomics_paths)
-        )
+        if pathomics_aggregation:
+            dict_list = joblib.Parallel(n_jobs=n_jobs)(
+                joblib.delayed(prepare_graph_pathomics)(idx, graph_path, pathomics_keys)
+                for idx, graph_path in enumerate(pathomics_paths)
+            )
+        else:
+            dict_list = joblib.Parallel(n_jobs=n_jobs)(
+                joblib.delayed(load_wsi_level_features)(idx, graph_path)
+                for idx, graph_path in enumerate(pathomics_paths)
+            )
     pathomics_dict = {}
     for d in dict_list: pathomics_dict.update(d)
     pathomics_X = [pathomics_dict[f"{i}"] for i in range(len(pathomics_paths))]
@@ -714,11 +716,78 @@ def load_pathomics(
         pathomics_X = pd.concat([pathomics_X, prop_X], axis=1)
     return pathomics_X
 
+def load_radiopathomics(
+        data,
+        radiomics_aggregation,
+        radiomics_aggregated_mode,
+        radiomics_keys,
+        pathomics_aggregation,
+        pathomics_aggregated_mode,
+        pathomics_keys,
+        use_graph_properties,
+        n_jobs,
+        save_radiopathomics_dir
+    ):
+    if radiomics_aggregated_mode in ["ABMIL", "SPARRA"]:
+        assert radiomics_aggregated_mode == pathomics_aggregated_mode
+        print(f"loading radiopathomics from {save_radiopathomics_dir}...")
+        radiopathomics_paths = []
+        for p in data:
+            subject_id = p[0][0]
+            path = pathlib.Path(save_radiopathomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
+            radiopathomics_paths.append(path)
+        dict_list = joblib.Parallel(n_jobs=n_jobs)(
+            joblib.delayed(load_subject_level_features)(idx, graph_path)
+            for idx, graph_path in enumerate(radiopathomics_paths)
+        )
+
+        radiopathomics_dict = {}
+        for d in dict_list: radiopathomics_dict.update(d)
+        radiopathomics_X = [radiopathomics_dict[f"{i}"] for i in range(len(radiopathomics_paths))]
+        radiopathomics_X = pd.DataFrame(radiopathomics_X)
+
+        if use_graph_properties:
+            prop_paths = [p[0][1]["radiomics"] for p in data]
+            prop_paths = [f"{p}".replace(".json", "_graph_properties.json") for p in prop_paths]
+            prop_dict_list = [load_json(p) for p in prop_paths]
+            prop_X = [prepare_graph_properties(d, omics="radiomics") for d in prop_dict_list]
+            prop_X = pd.DataFrame(prop_X)
+            radiopathomics_X = pd.concat([radiopathomics_X, prop_X], axis=1)
+            prop_paths = [p[0][1]["pathomics"] for p in data]
+            prop_paths = [f"{p}".replace(".json", "_graph_properties.json") for p in prop_paths]
+            prop_dict_list = [load_json(p) for p in prop_paths]
+            prop_X = [prepare_graph_properties(d, omics="pathomics") for d in prop_dict_list]
+            prop_X = pd.DataFrame(prop_X)
+            radiopathomics_X = pd.concat([radiopathomics_X, prop_X], axis=1)
+    else:
+        radiomics_X = load_radiomics(
+            data=data,
+            radiomics_aggregation=radiomics_aggregation,
+            radiomics_aggregated_mode=radiomics_aggregated_mode,
+            radiomics_keys=radiomics_keys,
+            use_graph_properties=use_graph_properties,
+            n_jobs=n_jobs
+        )
+        
+        pathomics_X = load_pathomics(
+            data=data,
+            pathomics_aggregation=pathomics_aggregation,
+            pathomics_aggregated_mode=pathomics_aggregated_mode,
+            pathomics_keys=pathomics_keys,
+            use_graph_properties=use_graph_properties,
+            n_jobs=n_jobs
+        ) 
+
+        radiopathomics_X = pd.concat([radiomics_X, pathomics_X], axis=1)
+
+    return radiopathomics_X
+
 def phenotype_classification(
     split_path,
     radiomics_keys=None,
     pathomics_keys=None,
-    omics="all", 
+    omics="radiopathomics",
+    save_omics_dir=None,
     n_jobs=32,
     radiomics_aggregation=False,
     radiomics_aggregated_mode=None,
@@ -729,14 +798,23 @@ def phenotype_classification(
     feature_selection=True,
     feature_var_threshold=1e-4,
     n_selected_features=64,
-    use_graph_properties=False
+    use_graph_properties=False,
+    save_results_dir=None
     ):
     splits = joblib.load(split_path)
     predict_results = {}
+    classification_results = {
+        "raw_subject": [], "raw_pred": [], "raw_prob": [],
+        "subject": [], "pred": [],  "prob": [],
+        "label": [],
+    }
     for split_idx, split in enumerate(splits):
         print(f"Performing cross-validation on fold {split_idx}...")
-        data_tr, data_va, data_te = split["train"], split["valid"], split["test"]
-        data_tr = data_tr + data_va
+        raw_data_tr, raw_data_va, raw_data_te = split["train"], split["valid"], split["test"]
+        raw_data_tr = raw_data_tr + raw_data_va
+
+        data_tr = [p for p in raw_data_tr if p[1] is not None]
+        data_te = [p for p in raw_data_te if p[1] is not None]
 
         tr_y = np.array([p[1] for p in data_tr])
         tr_y = pd.DataFrame({'label': tr_y})
@@ -745,109 +823,125 @@ def phenotype_classification(
 
         # Concatenate multi-omics if required
         if omics == "radiopathomics":
-            radiomics_tr_X = load_radiomics(
-                split_idx=split_idx,
+            tr_X = load_radiopathomics(
                 data=data_tr,
                 radiomics_aggregation=radiomics_aggregation,
                 radiomics_aggregated_mode=radiomics_aggregated_mode,
                 radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs
-            )
-            print("Selected training radiomics:", radiomics_tr_X.shape)
-            print(radiomics_tr_X.head())
-
-            pathomics_tr_X = load_pathomics(
-                split_idx=split_idx,
-                data=data_tr,
                 pathomics_aggregation=pathomics_aggregation,
                 pathomics_aggregated_mode=pathomics_aggregated_mode,
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs
+                n_jobs=n_jobs,
+                save_radiopathomics_dir=save_omics_dir
             )
-            print("Selected training pathomics:", pathomics_tr_X.shape)
-            print(pathomics_tr_X.head())
+            print("Selected training radiopathomics:", tr_X.shape)
+            print(tr_X.head())
 
-            tr_X = pd.concat([radiomics_tr_X, pathomics_tr_X], axis=1)
-
-            radiomics_te_X = load_radiomics(
-                split_idx=split_idx,
+            te_X = load_radiopathomics(
                 data=data_te,
                 radiomics_aggregation=radiomics_aggregation,
                 radiomics_aggregated_mode=radiomics_aggregated_mode,
                 radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs
-            )
-            print("Selected testing radiomics:", radiomics_te_X.shape)
-            print(radiomics_te_X.head())
-
-            pathomics_te_X = load_pathomics(
-                split_idx=split_idx,
-                data=data_te,
                 pathomics_aggregation=pathomics_aggregation,
                 pathomics_aggregated_mode=pathomics_aggregated_mode,
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs
+                n_jobs=n_jobs,
+                save_radiopathomics_dir=save_omics_dir
             )
-            print("Selected testing pathomics:", pathomics_te_X.shape)
-            print(pathomics_te_X.head())
+            print("Selected testing radiopathomics:", te_X.shape)
+            print(te_X.head())
 
-            te_X = pd.concat([radiomics_te_X, pathomics_te_X], axis=1)
+            raw_te_X = load_radiopathomics(
+                data=raw_data_te,
+                radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode,
+                radiomics_keys=radiomics_keys,
+                pathomics_aggregation=pathomics_aggregation,
+                pathomics_aggregated_mode=pathomics_aggregated_mode,
+                pathomics_keys=pathomics_keys,
+                use_graph_properties=use_graph_properties,
+                n_jobs=n_jobs,
+                save_radiopathomics_dir=save_omics_dir
+            )
+            print("Selected raw testing radiopathomics:", raw_te_X.shape)
+            print(raw_te_X.head())
         elif omics == "pathomics":
             pathomics_tr_X = load_pathomics(
-                split_idx=split_idx,
                 data=data_tr,
                 pathomics_aggregation=pathomics_aggregation,
                 pathomics_aggregated_mode=pathomics_aggregated_mode,
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs
+                n_jobs=n_jobs,
+                save_pathomics_dir=save_omics_dir
             )
             print("Selected training pathomics:", pathomics_tr_X.shape)
             print(pathomics_tr_X.head())
 
             pathomics_te_X = load_pathomics(
-                split_idx=split_idx,
                 data=data_te,
                 pathomics_aggregation=pathomics_aggregation,
                 pathomics_aggregated_mode=pathomics_aggregated_mode,
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs
+                n_jobs=n_jobs,
+                save_pathomics_dir=save_omics_dir
             )
             print("Selected testing pathomics:", pathomics_te_X.shape)
             print(pathomics_te_X.head())
 
             tr_X, te_X = pathomics_tr_X, pathomics_te_X
+
+            raw_te_X = load_pathomics(
+                data=raw_data_te,
+                pathomics_aggregation=pathomics_aggregation,
+                pathomics_aggregated_mode=pathomics_aggregated_mode,
+                pathomics_keys=pathomics_keys,
+                use_graph_properties=use_graph_properties,
+                n_jobs=n_jobs,
+                save_pathomics_dir=save_omics_dir
+            )
+            print("Selected raw testing pathomics:", raw_te_X.shape)
+            print(raw_te_X.head())
         elif omics == "radiomics":
             radiomics_tr_X = load_radiomics(
-                split_idx=split_idx,
                 data=data_tr,
                 radiomics_aggregation=radiomics_aggregation,
                 radiomics_aggregated_mode=radiomics_aggregated_mode,
                 radiomics_keys=radiomics_keys,
                 use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs
+                n_jobs=n_jobs,
+                save_radiomics_dir=save_omics_dir
             )
             print("Selected training radiomics:", radiomics_tr_X.shape)
             print(radiomics_tr_X.head())
 
             radiomics_te_X = load_radiomics(
-                split_idx=split_idx,
                 data=data_te,
                 radiomics_aggregation=radiomics_aggregation,
                 radiomics_aggregated_mode=radiomics_aggregated_mode,
                 radiomics_keys=radiomics_keys,
                 use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs
+                n_jobs=n_jobs,
+                save_radiomics_dir=save_omics_dir
             )
             print("Selected testing radiomics:", radiomics_te_X.shape)
             print(radiomics_te_X.head())
 
             tr_X, te_X = radiomics_tr_X, radiomics_te_X
+            raw_te_X = load_radiomics(
+                data=raw_data_te,
+                radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode,
+                radiomics_keys=radiomics_keys,
+                use_graph_properties=use_graph_properties,
+                n_jobs=n_jobs,
+                save_radiomics_dir=save_omics_dir
+            )
+            print("Selected raw testing radiomics:", raw_te_X.shape)
+            print(raw_te_X.head())
         else:
             raise NotImplementedError
         
@@ -856,12 +950,9 @@ def phenotype_classification(
         print(tr_X.head())
         print("Selected testing omics:", te_X.shape)
         print(te_X.head())
+        print("Selected raw testing omics:", raw_te_X.shape)
+        print(raw_te_X.head())
 
-        # Normalization
-        scaler = StandardScaler()
-        tr_X = pd.DataFrame(scaler.fit_transform(tr_X), columns=tr_X.columns,index=tr_X.index)
-        te_X = pd.DataFrame(scaler.transform(te_X), columns=te_X.columns, index=te_X.index)
-        
         # feature selection
         if feature_selection:
             print("Selecting features using LinearSVC + L1...")
@@ -886,6 +977,7 @@ def phenotype_classification(
             
             tr_X = tr_X[selected_names] 
             te_X = te_X[selected_names]
+            raw_te_X = raw_te_X[selected_names]
             print(f"Selected features: {len(tr_X.columns)}")
 
         # model selection
@@ -902,12 +994,24 @@ def phenotype_classification(
             raise NotImplementedError
 
         # Predictions
+        raw_subject_ids = [p[0][0] for p in raw_data_te]
+        classification_results["raw_subject"] += raw_subject_ids
+        raw_pred = predictor.predict(raw_te_X)
+        classification_results["raw_pred"] += raw_pred.tolist()
+        raw_prob = predictor.predict_proba(raw_te_X)
+        classification_results["raw_prob"] += raw_prob.tolist()
+
+        subject_ids = [p[0][0] for p in data_te]
+        classification_results["subject"] += subject_ids
         pred = predictor.predict(te_X)
+        classification_results["pred"] += pred.tolist()
         prob = predictor.predict_proba(te_X)
+        classification_results["prob"] += prob.tolist()
         num_class = prob.shape[1]
 
         # True labels
         label = te_y["label"].to_numpy(dtype=int)
+        classification_results["label"] += label.tolist()
 
         # Initialize lists to store metrics per class
         acc_list, f1_list, auroc_list, auprc_list = [], [], [], []
@@ -939,6 +1043,23 @@ def phenotype_classification(
     for k in scores_dict.keys():
         arr = np.array([v[k] for v in predict_results.values()])
         print(f"CV {k} mean+std", arr.mean(axis=0), arr.std(axis=0))
+    
+    #save predicted results
+    save_path = f"{save_results_dir}/{omics}_" + \
+        f"radio+{radiomics_aggregated_mode}_" + \
+        f"patho+{pathomics_aggregated_mode}_" + \
+        f"model+{model}_scorer+{refit}_results.json"
+    with open(save_path, "w") as f:
+        json.dump(classification_results, f, indent=4)
+
+    # save metrics
+    save_path = f"{save_results_dir}/{omics}_" + \
+        f"radio+{radiomics_aggregated_mode}_" + \
+        f"patho+{pathomics_aggregated_mode}_" + \
+        f"model+{model}_scorer+{refit}_metrics.json"
+    with open(save_path, "w") as f:
+        json.dump(predict_results, f, indent=4)
+        
     return
 
 def generate_data_split(
@@ -948,7 +1069,7 @@ def generate_data_split(
         valid: float,
         test: float,
         num_folds: int,
-        seed: int = 5,
+        seed: int = 42
 ):
     """Helper to generate splits
     Args:
@@ -962,491 +1083,40 @@ def generate_data_split(
     Returns:
         splits (list): a list of folds, each fold consists of train, valid, and test splits
     """
-    assert train + valid + test - 1.0 < 1.0e-10, "Ratios must sum to 1.0"
+    from sklearn.model_selection import train_test_split
+    assert train + valid <= 1.0, "train + valid ratio must be <= 1.0"
 
-    outer_splitter = StratifiedShuffleSplit(
-        n_splits=num_folds,
-        train_size=train + valid,
-        random_state=seed,
-    )
-    inner_splitter = StratifiedShuffleSplit(
-        n_splits=1,
-        train_size=train / (train + valid),
-        random_state=seed,
-    )
-
-    l = np.array(y)
-
+    outer_splitter = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
     splits = []
-    for train_valid_idx, test_idx in outer_splitter.split(x, l):
-        test_x = [x[idx] for idx in test_idx]
-        test_y = [y[idx] for idx in test_idx]
-        x_ = [x[idx] for idx in train_valid_idx]
-        y_ = [y[idx] for idx in train_valid_idx]
-        l_ = [l[idx] for idx in train_valid_idx]
 
-        if valid > 0:
-            train_idx, valid_idx = next(iter(inner_splitter.split(x_, l_)))
-            valid_x = [x_[idx] for idx in valid_idx]
-            valid_y = [y_[idx] for idx in valid_idx]
-            train_x = [x_[idx] for idx in train_idx]
-            train_y = [y_[idx] for idx in train_idx]
-        else:
-            train_x, train_y = x_, y_
+    for train_valid_idx, test_idx in outer_splitter.split(x):
+        # Split test set
+        test_x = [x[i] for i in test_idx]
+        test_y = [y[i] for i in test_idx]
 
-        train_x_subjects = []
-        for i in train_x: train_x_subjects.append(i[0])
-        test_x_subjects = []
-        for i in test_x: test_x_subjects.append(i[0])
-        if valid > 0:
-            valid_x_subjects = []
-            for i in valid_x: valid_x_subjects.append(i[0])
-            assert len(set(train_x_subjects).intersection(set(valid_x_subjects))) == 0
-            assert len(set(valid_x_subjects).intersection(set(test_x_subjects))) == 0
-        else:
-            assert len(set(train_x_subjects).intersection(set(test_x_subjects))) == 0
+        train_valid_x = [x[i] for i in train_valid_idx]
+        train_valid_y = [y[i] for i in train_valid_idx]
 
+        # Optional validation split
         if valid > 0:
-            splits.append(
-                {
-                    "train": list(zip(train_x, train_y)),
-                    "valid": list(zip(valid_x, valid_y)),
-                    "test": list(zip(test_x, test_y)),
-                }
+            ratio = valid / (train + valid)
+            train_x, valid_x, train_y, valid_y = train_test_split(
+                train_valid_x, train_valid_y, test_size=ratio, random_state=seed, shuffle=True
             )
         else:
-            splits.append(
-                {
-                    "train": list(zip(train_x, train_y)),
-                    "test": list(zip(test_x, test_y)),
-                }
-            )
-    return splits
+            train_x, train_y = train_valid_x, train_valid_y
+            valid_x, valid_y = None, None
 
-def run_once(
-        dataset_dict,
-        num_epochs,
-        save_dir,
-        on_gpu=True,
-        preproc_func=None,
-        pretrained=None,
-        loader_kwargs=None,
-        arch_kwargs=None,
-        optim_kwargs=None,
-        BayesGNN=False,
-        data_types=["radiomics", "pathomics"],
-        sampling_rate=1.0
-):
-    """running the inference or training loop once"""
-    if loader_kwargs is None:
-        loader_kwargs = {}
-
-    if arch_kwargs is None:
-        arch_kwargs = {}
-
-    if optim_kwargs is None:
-        optim_kwargs = {}
-
-    if BayesGNN:
-        model = PhenotypeBayesGraphArch(**arch_kwargs)
-        kl = {"loss": bnn.BKLLoss(), "weight": 0.1}
-    else:
-        model = PhenotypeGraphArch(**arch_kwargs)
-        kl = None
-    if pretrained is not None:
-        model.load(pretrained)
-    if on_gpu:
-        model = model.to("cuda")
-    else:
-        model = model.to("cpu")
-    loss = R2TLoss(binary_cls=arch_kwargs['binary_cls'])
-    optimizer = torch.optim.Adam(model.parameters(), **optim_kwargs)
-    # optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, nesterov=True, **optim_kwargs)
-    # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 80], gamma=0.1)
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
-
-    loader_dict = {}
-    for subset_name, subset in dataset_dict.items():
-        _loader_kwargs = copy.deepcopy(loader_kwargs)
-        if not "train" in subset_name: 
-            if _loader_kwargs["batch_size"] > 8:
-                _loader_kwargs["batch_size"] = 8
-            sampling_rate = 1.0
-        ds = PhenotypeGraphDataset(
-            subset, 
-            mode=subset_name, 
-            preproc=preproc_func,
-            data_types=data_types,
-            sampling_rate=sampling_rate
-        )
-        loader_dict[subset_name] = DataLoader(
-            ds,
-            drop_last=subset_name == "train",
-            shuffle=subset_name == "train",
-            **_loader_kwargs,
-        )
-
-    for epoch in range(num_epochs):
-        logger.info("EPOCH: %03d", epoch)
-        for loader_name, loader in loader_dict.items():
-            step_output = []
-            ema = ScalarMovingAverage()
-            pbar = create_pbar(loader_name, len(loader))
-            for step, batch_data in enumerate(loader):
-                if loader_name == "train":
-                    output = model.train_batch(model, batch_data, on_gpu, loss, optimizer, kl)
-                    ema({"loss": output[0]})
-                    pbar.postfix[1]["step"] = step
-                    pbar.postfix[1]["EMA"] = ema.tracking_dict["loss"]
-                else:
-                    output = model.infer_batch(model, batch_data, on_gpu)
-                    batch_size = loader_kwargs["batch_size"]
-                    batch_size = output[0].shape[0]
-                    output = [np.split(v, batch_size, axis=0) for v in output]
-                    output = list(zip(*output))
-                    step_output += output
-                pbar.update()
-            pbar.close()
-
-            logging_dict = {}
-            if loader_name == "train":
-                for val_name, val in ema.tracking_dict.items():
-                    logging_dict[f"train-EMA-{val_name}"] = val
-            elif "infer" in loader_name and any(v in loader_name for v in ["train", "valid"]):
-                output = list(zip(*step_output))
-                logit, label = output
-                logit = np.array(logit).squeeze()
-                label = np.array(label).squeeze()
-                assert logit.ndim == 2
-
-                if not arch_kwargs['binary_cls']:
-                    prob = softmax(logit, axis=1)
-                    num_class = prob.shape[1]
-                    pred = np.argmax(prob, axis=1)
-
-                    val = acc_scorer(label, pred)
-                    logging_dict[f"{loader_name}-acc"] = val
-
-                    val = f1_scorer(label, pred)
-                    logging_dict[f"{loader_name}-f1"] = val
-
-                    prob = prob[:, 1] if num_class == 2 else prob
-                    val = auroc_scorer(label, prob, multi_class="ovr")
-                    logging_dict[f"{loader_name}-auroc"] = val
-
-                    if num_class == 2:
-                        val = auprc_scorer(label, prob)
-                    else:
-                        onehot = np.eye(num_class)[label]
-                        val = auprc_scorer(onehot, prob)
-                    logging_dict[f"{loader_name}-auprc"] = val
-                else:
-                    prob = 1 / (1 + np.exp(-logit))
-                    num_class = prob.shape[1]
-                    pred = (prob > 0.5).astype(np.int8)
-
-                    acc_list = []
-                    for i in range(num_class):
-                        acc_list.append(acc_scorer(label[:, i], pred[:, i]))
-                    logging_dict[f"{loader_name}-acc"] = sum(acc_list) / num_class
-
-                    f1_list = []
-                    for i in range(num_class):
-                        f1_list.append(f1_scorer(label[:, i], pred[:, i]))
-                    logging_dict[f"{loader_name}-f1"] = sum(f1_list) / num_class
-
-                    auroc_list = []
-                    for i in range(num_class):
-                        auroc_list.append(auroc_scorer(label[:, i], pred[:, i]))
-                    logging_dict[f"{loader_name}-auroc"] = sum(auroc_list) / num_class
-
-                    auprc_list = []
-                    for i in range(num_class):
-                        auprc_list.append(auprc_scorer(label[:, i], pred[:, i]))
-                    logging_dict[f"{loader_name}-auprc"] = sum(auroc_list) / num_class
-
-                logging_dict[f"{loader_name}-raw-logit"] = logit
-                logging_dict[f"{loader_name}-raw-label"] = label
-            for val_name, val in logging_dict.items():
-                if "raw" not in val_name:
-                    logging.info("%s: %0.5f\n", val_name, val)
-            
-            if "train" not in loader_dict:
-                continue
-
-            if (epoch + 1) % 10 == 0:
-                new_stats = {}
-                if (save_dir / "stats.json").exists():
-                    old_stats = load_json(f"{save_dir}/stats.json")
-                    save_as_json(old_stats, f"{save_dir}/stats.old.json", exist_ok=True)
-                    new_stats = copy.deepcopy(old_stats)
-                    new_stats = {int(k): v for k, v in new_stats.items()}
-
-                old_epoch_stats = {}
-                if epoch in new_stats:
-                    old_epoch_stats = new_stats[epoch]
-                old_epoch_stats.update(logging_dict)
-                new_stats[epoch] = old_epoch_stats
-                save_as_json(new_stats, f"{save_dir}/stats.json", exist_ok=True)
-                model.save(
-                    f"{save_dir}/epoch={epoch:03d}.weights.pth",
-                )
-        lr_scheduler.step()
-    
-    return step_output
-
-def training(
-        split_path,
-        scaler_path,
-        model_dir,
-        omics_dims,
-        arch_opt,
-        train_opt
-):
-    """train node classification neural networks
-    Args:
-        num_epochs (int): the number of epochs for training
-        split_path (str): the path of storing data splits
-        scaler_path (str): the path of storing data normalization
-        num_node_features (int): the dimension of node feature
-        model_dir (str): directory of saving models
-    """
-    omics_pool_ratio = {
-        "radiomics": arch_opt['POOL_RATIO']['RAIOMICS'], 
-        "pathomics": arch_opt['POOL_RATIO']['PATHOMICS']
-    }
-    omics_pool_ratio = {k: omics_pool_ratio[k] for k in arch_opt['OMICS']}
-
-    splits = joblib.load(split_path)
-    node_scalers = [joblib.load(scaler_path[k]) for k in arch_opt['OMICS']] 
-    transform_dict = {k: s.transform for k, s in zip(arch_opt['OMICS'], node_scalers)}
-    
-    loader_kwargs = {
-        "num_workers": train_opt['N_WORKS'], 
-        "batch_size": train_opt['BATCH_SIZE'],
-    }
-    arch_kwargs = {
-        "dim_features": omics_dims,
-        "dim_target": arch_opt['DIM_TARGET'],
-        "layers": arch_opt['LAYERS'],
-        "dropout": arch_opt['DROPOUT'],
-        "pool_ratio": omics_pool_ratio,
-        "conv": arch_opt['GNN'],
-        "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION'],
-        'binary_cls': arch_opt['BINARY_CLS']
-    }
-    omics_name = "_".join(arch_opt['OMICS'])
-    if arch_opt['BayesGNN']:
-        model_dir = model_dir / f"{omics_name}_Bayes_Phenotype_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']}"
-    else:
-        model_dir = model_dir / f"{omics_name}_Phenotype_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']}"
-    optim_kwargs = {
-        "lr": 3e-4,
-        "weight_decay": {
-            "ABMIL": train_opt['WIEGHT_DECAY']['ABMIL'], 
-            "SISIR": train_opt['WIEGHT_DECAY']['SPARRA']
-        }[arch_opt['AGGREGATION']],
-    }
-    for split_idx, split in enumerate(splits):
-        # if split_idx < 3: continue
-        new_split = {
-            "train": split["train"],
-            "infer-train": split["train"],
-            "infer-valid-A": split["valid"],
-            "infer-valid-B": split["test"],
+        split_dict = {
+            "train": list(zip(train_x, train_y)),
+            "test": list(zip(test_x, test_y))
         }
-        split_save_dir = pathlib.Path(f"{model_dir}/{split_idx:02d}/")
-        rm_n_mkdir(split_save_dir)
-        reset_logging(split_save_dir)
-        run_once(
-            new_split,
-            train_opt['EPOCHS'],
-            save_dir=split_save_dir,
-            arch_kwargs=arch_kwargs,
-            loader_kwargs=loader_kwargs,
-            optim_kwargs=optim_kwargs,
-            preproc_func=transform_dict,
-            BayesGNN=arch_opt['BayesGNN'],
-            data_types=arch_opt['OMICS'],
-            sampling_rate=train_opt['SAMPLING_RATE']
-        )
-    return
+        if valid > 0:
+            split_dict["valid"] = list(zip(valid_x, valid_y))
 
-def inference(
-        split_path,
-        scaler_path,
-        omics_dims,
-        arch_opt,
-        infer_opt
-):
-    """survival prediction
-    """
-    omics_pool_ratio = {
-        "radiomics": arch_opt['POOL_RATIO']['RAIOMICS'], 
-        "pathomics": arch_opt['POOL_RATIO']['PATHOMICS']
-    }
-    omics_pool_ratio = {k: omics_pool_ratio[k] for k in arch_opt['OMICS']}
+        splits.append(split_dict)
 
-    splits = joblib.load(split_path)
-    node_scalers = [joblib.load(scaler_path[k]) for k in arch_opt['OMICS']] 
-    transform_dict = {k: s.transform for k, s in zip(arch_opt['OMICS'], node_scalers)}
-    
-    loader_kwargs = {
-        "num_workers": infer_opt['N_WORKS'], 
-        "batch_size": infer_opt['BATCH_SIZE'],
-    }
-    arch_kwargs = {
-        "dim_features": omics_dims,
-        "dim_target": arch_opt['DIM_TARGET'],
-        "layers": arch_opt['LAYERS'],
-        "dropout": arch_opt['DROPOUT'],
-        "pool_ratio": omics_pool_ratio,
-        "conv": arch_opt['GNN'],
-        "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION'],
-        'binary_cls': arch_opt['BINARY_CLS']
-    }
-    omics_name = "_".join(arch_opt['OMICS'])
-
-    cum_stats = []
-    if "radiomics_pathomics" == omics_name: aggregation = f"radiopathomics_{aggregation}"
-    for split_idx, split in enumerate(splits):
-        if infer_opt['SAVE_OMICS']:
-            all_samples = splits[split_idx]["train"] + splits[split_idx]["valid"] + splits[split_idx]["test"]
-        else:
-            all_samples = split["test"]
-
-        new_split = {"infer": [v[0] for v in all_samples]}
-        chkpts = pathlib.Path(infer_opt['PRE_TRAINED']) / f"0{split_idx}/epoch=019.weights.pth"
-        print(str(chkpts))
-        # Perform ensembling by averaging probabilities
-        # across checkpoint predictions
-
-        outputs = run_once(
-            new_split,
-            num_epochs=1,
-            on_gpu=True,
-            save_dir=None,
-            arch_kwargs=arch_kwargs,
-            loader_kwargs=loader_kwargs,
-            preproc_func=transform_dict,
-            pretrained=chkpts,
-            BayesGNN=arch_opt['BayesGNN'],
-            data_types=arch_opt['OMICS'],
-        )
-        logits, features = list(zip(*outputs))
-        # saving average features
-        if infer_opt['SAVE_OMICS']:
-            if "radiomics" == omics_name:
-                graph_paths = [d["radiomics"] for d in new_split["infer"]]
-            elif "pathomics" == omics_name:
-                graph_paths = [d["pathomics"] for d in new_split["infer"]]
-            elif "radiomics_pathomics" == omics_name:
-                graph_paths = [d["pathomics"] for d in new_split["infer"]]
-
-            save_dir = pathlib.Path(graph_paths[0]).parents[0] / aggregation / f"0{split_idx}"
-            mkdir(save_dir)
-            for i, path in enumerate(graph_paths): 
-                save_name = pathlib.Path(path).name.replace(".json", ".npy") 
-                save_path = f"{save_dir}/{save_name}"
-                np.save(save_path, features[i])
-    
-        # * Calculate split statistics
-        logits = np.array(logits).squeeze()
-        prob = softmax(logits, axis=1)
-        num_class = prob.shape[1]
-        label = np.array([v[1] for v in split["test"]])
-        if num_class <= 2:
-            label = (label > 0).astype(np.int32)
-            onehot = label
-        else:
-            onehot = np.eye(num_class)[label]  
-        
-        ## compute per-class accuracy
-        pred = np.argmax(prob, axis=1)
-        uids = np.unique(label)
-        acc_scores = []
-        for i in range(len(uids)):
-            indices = label == uids[i]
-            score = acc_scorer(label[indices], pred[indices])
-            acc_scores.append(score)
-
-        cum_stats.append(
-            {
-                "acc": np.array(acc_scores),
-                "auroc": auroc_scorer(label, prob, average=None, multi_class="ovr"), 
-                "auprc": auprc_scorer(onehot, prob, average=None),
-            }
-        )
-        print(f"Fold-{split_idx}:", cum_stats[-1])
-    acc_list = [stat["acc"] for stat in cum_stats]
-    auroc_list = [stat["auroc"] for stat in cum_stats]
-    auprc_list = [stat["auprc"] for stat in cum_stats]
-    avg_stat = {
-        "acc-mean": np.stack(acc_list, axis=0).mean(axis=0),
-        "acc-std": np.stack(acc_list, axis=0).std(axis=0),
-        "auroc-mean": np.stack(auroc_list, axis=0).mean(axis=0),
-        "auroc-std": np.stack(auroc_list, axis=0).std(axis=0),
-        "auprc-mean": np.stack(auprc_list, axis=0).mean(axis=0),
-        "auprc-std": np.stack(auprc_list, axis=0).std(axis=0)
-    }
-    print(f"Avg:", avg_stat)
-    return avg_stat
-
-def test(
-    graph_path,
-    scaler_path,
-    omics_dims,
-    arch_opt,
-    test_opt
-):
-    """node classification 
-    """
-    omics_pool_ratio = {
-        "radiomics": arch_opt['POOL_RATIO']['RAIOMICS'], 
-        "pathomics": arch_opt['POOL_RATIO']['PATHOMICS']
-    }
-    omics_pool_ratio = {k: omics_pool_ratio[k] for k in arch_opt['OMICS']}
-
-    node_scalers = [joblib.load(scaler_path[k]) for k in arch_opt['OMICS']] 
-    transform_dict = {k: s.transform for k, s in zip(arch_opt['OMICS'], node_scalers)}
-    
-    loader_kwargs = {
-        "num_workers": test_opt['N_WORKS'],
-        "batch_size": test_opt['BATCH_SIZE'],
-    }
-    arch_kwargs = {
-        "dim_features": omics_dims,
-        "dim_target": arch_opt['DIM_TARGET'],
-        "layers": arch_opt['LAYERS'],
-        "dropout": arch_opt['DROPOUT'],
-        "pool_ratio": omics_pool_ratio,
-        "conv": arch_opt['GNN'],
-        "keys": arch_opt['OMICS'],
-        "aggregation": arch_opt['AGGREGATION'],
-        'binary_cls': arch_opt['BINARY_CLS']
-    }
-
-    # BayesGNN = True
-    new_split = {"infer": [graph_path]}
-    outputs = run_once(
-        new_split,
-        num_epochs=1,
-        save_dir=None,
-        on_gpu=True,
-        pretrained=test_opt['PRE_TRAINED'],
-        arch_kwargs=arch_kwargs,
-        loader_kwargs=loader_kwargs,
-        preproc_func=transform_dict,
-        BayesGNN=arch_opt['BayesGNN'],
-        data_types=arch_opt['OMICS'],
-    )
-
-    pred_logit, _, attention = list(zip(*outputs))
-    hazard = np.exp(np.array(pred_logit).squeeze())
-    attention = np.array(attention).squeeze()
-    return hazard, attention
+    return splits
 
 if __name__ == "__main__":
     ## argument parser
@@ -1491,6 +1161,17 @@ if __name__ == "__main__":
     else:
         save_model_dir = None
 
+    # split data set based on subject ids
+    subject_ids=list(omics_info['omics_paths'].keys())
+    splits = generate_data_split(
+        x=subject_ids,
+        y=[None]*len(subject_ids),
+        train=opt['SPLIT']['TRAIN_RATIO'],
+        valid=opt['SPLIT']['VALID_RATIO'],
+        test=opt['SPLIT']['TEST_RATIO'],
+        num_folds=opt['SPLIT']['FOLDS']
+    )
+
     # load patient outcomes
     df_outcome = prepare_patient_outcome(
         outcome_dir=opt['SAVE_OUTCOME_dir'],
@@ -1501,21 +1182,33 @@ if __name__ == "__main__":
     logger.info(f"Found {len(subject_ids)} subjects with phenotypes")
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
-    
-    y = df_outcome['PhenotypeClass'].to_numpy(dtype=np.float32).tolist()
+    outcomes = df_outcome['PhenotypeClass'].to_numpy(dtype=np.float32).tolist()
 
-    # split data set
-    splits = generate_data_split(
-        x=omics_paths,
-        y=y,
-        train=opt['SPLIT']['TRAIN_RATIO'],
-        valid=opt['SPLIT']['VALID_RATIO'],
-        test=opt['SPLIT']['TEST_RATIO'],
-        num_folds=opt['SPLIT']['FOLDS']
-    )
+    # Build mapping: subject_id → (omics_path_info, outcome)
+    matched_samples = {x[0]: (x, y) for x, y in zip(omics_paths, outcomes)}
+    all_samples = {k: ([k, v], None) for k, v in omics_info['omics_paths'].items()}
+
+    # Filter splits based on available subject_ids
+    if opt['SPLIT']['FILTER_SUBJECTS']:
+        new_splits = []
+        for split in splits:
+            new_split = {
+                key: [matched_samples[k] for (k, _) in subjects if k in subject_ids]
+                for key, subjects in split.items()
+            }
+            new_splits.append(new_split)
+    else:
+        new_splits = []
+        for split in splits:
+            new_split = {
+                key: [matched_samples[k] if k in subject_ids else all_samples[k] for (k, _) in subjects]
+                for key, subjects in split.items()
+            }
+            new_splits.append(new_split)
+    
     mkdir(save_model_dir)
-    split_path = f"{save_model_dir}/survival_{radiomics_mode}_{pathomics_mode}_splits.dat"
-    joblib.dump(splits, split_path)
+    split_path = f"{save_model_dir}/phenotype_{radiomics_mode}_{pathomics_mode}_splits.dat"
+    joblib.dump(new_splits, split_path)
     splits = joblib.load(split_path)
     num_train = len(splits[0]["train"])
     logging.info(f"Number of training samples: {num_train}.")
@@ -1523,60 +1216,6 @@ if __name__ == "__main__":
     logging.info(f"Number of validating samples: {num_valid}.")
     num_test = len(splits[0]["test"])
     logging.info(f"Number of testing samples: {num_test}.")
-
-    from analysis.a05_outcome_prediction.m_prepare_omics_info import radiomics_dims
-    from analysis.a05_outcome_prediction.m_prepare_omics_info import pathomics_dims
-    omics_dims = {"radiomics": radiomics_dims[radiomics_mode], "pathomics": pathomics_dims[pathomics_mode]}
-    omics_keys = opt['ARCH']['OMICS']
-    omics_dims = {k: omics_dims[k] for k in omics_keys}
-
-    if opt['TASKS']['TRAIN']:
-        # compute mean and std on training data for normalization 
-        splits = joblib.load(split_path)
-        train_graph_paths = [path for path, _ in splits[0]["train"]]
-        loader = PhenotypeGraphDataset(train_graph_paths, mode="infer", data_types=omics_keys)
-        loader = DataLoader(
-            loader,
-            num_workers=8,
-            batch_size=1,
-            shuffle=False,
-            drop_last=False,
-        )
-        if len(omics_keys) > 1:
-            omic_features = [{k: v.x_dict[k].numpy() for k in omics_keys} for v in loader]
-        else:
-            omic_features = [{k: v.x.numpy() for k in omics_keys} for v in loader]
-        omics_modes = {"radiomics": radiomics_mode, "pathomics": pathomics_mode}
-        omics_modes = {k: omics_modes[k] for k in omics_keys}
-        for k, v in omics_modes.items():
-            node_features = [d[k] for d in omic_features]
-            node_features = np.concatenate(node_features, axis=0)
-            node_scaler = StandardScaler(copy=False)
-            node_scaler.fit(node_features)
-            scaler_path = f"{save_model_dir}/survival_{k}_{v}_scaler.dat"
-            joblib.dump(node_scaler, scaler_path)
-
-        # training
-        split_path = f"{save_model_dir}/survival_radiopathomics_{radiomics_mode}_{pathomics_mode}_splits.dat"
-        scaler_paths = {k: f"{save_model_dir}/survival_{k}_{v}_scaler.dat" for k, v in omics_modes.items()}
-        training(
-            split_path=split_path,
-            scaler_path=scaler_paths,
-            model_dir=save_model_dir,
-            omics_dims=omics_dims,
-            arch_opt=opt['ARCH'],
-            train_opt=opt['TRAIN']
-        )
-
-    if opt['TASKS']['INFERENCE']:
-        # inference
-        inference(
-            split_path=split_path,
-            scaler_path=scaler_paths,
-            omics_dims=omics_dims,
-            arch_opt=opt['ARCH'],
-            infer_opt=opt['INFERENCE']
-        )
 
     if opt['TASKS']['PREDICTION']:
         # survival analysis from the splits
@@ -1591,6 +1230,7 @@ if __name__ == "__main__":
         phenotype_classification(
             split_path=split_path,
             omics=opt['PREDICTION']['USED_OMICS']['VALUE'],
+            save_omics_dir=opt['PREDICTION']['OMICS_DIR'],
             n_jobs=opt['PREDICTION']['N_JOBS'],
             radiomics_aggregation=opt['RADIOMICS']['AGGREGATION'],
             radiomics_aggregated_mode=opt['RADIOMICS']['AGGREGATED_MODE']['VALUE'],
@@ -1603,7 +1243,8 @@ if __name__ == "__main__":
             feature_selection=opt['PREDICTION']['FEATURE_SELECTION']['VALUE'],
             feature_var_threshold=opt['PREDICTION']['FEATURE_SELECTION']['VAR_THRESHOLD'],
             n_selected_features=opt['PREDICTION']['FEATURE_SELECTION']['NUM_FEATURES'],
-            use_graph_properties=opt['PREDICTION']['USE_GRAPH_PROPERTIES']
+            use_graph_properties=opt['PREDICTION']['USE_GRAPH_PROPERTIES'],
+            save_results_dir=save_model_dir
         )
 
     # visualize radiomics

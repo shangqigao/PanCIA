@@ -7,8 +7,7 @@ SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
   SURVIVAL: ["OS", "DSS", "DFI", "PFI"]
   CLASSIFICATION: ["ImmuneSubtype", "MolecularSubtype", "PrimaryDisease"]
-  REGRESSION:
-    [
+  REGRESSION: [
       "GeneProgrames",
       "HRDscore",
       "ImmuneSignatureScore",
