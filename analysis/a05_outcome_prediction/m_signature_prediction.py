@@ -103,14 +103,23 @@ def load_radiomic_properties(idx, radiomic_paths, prop_keys=None, pooling="mean"
         for radiomic_key, radiomic_path in path_dict.items():
             suffix = pathlib.Path(radiomic_path).suffix
             if suffix == ".json":
-                if prop_keys is None: 
-                    prop_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
-                data_dict = load_json(radiomic_path)
-                properties = {}
-                for key, value in data_dict.items():
-                    selected = [((k in key) and ("diagnostics" not in key)) for k in prop_keys]
-                    if any(selected): properties[f"{radiomic_key}.{key}"] = value
-                if len(properties) > 0: properties_dict.update(properties)
+                if "/pyradiomics/" in radiomic_path:
+                    if prop_keys is None: 
+                        prop_keys = ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
+                    data_dict = load_json(radiomic_path)
+                    properties = {}
+                    for key, value in data_dict.items():
+                        selected = [((k in key) and ("diagnostics" not in key)) for k in prop_keys]
+                        if any(selected): properties[f"{radiomic_key}.{key}"] = value
+                    if len(properties) > 0: properties_dict.update(properties)
+                elif "/BayesBP/" in radiomic_path:
+                    data_dict = load_json(radiomic_path)
+                    properties = {}
+                    for key, value in data_dict.items():
+                        properties[f"{radiomic_key}.{key}"] = value
+                    if len(properties) > 0: properties_dict.update(properties)
+                else:
+                    raise NotImplementedError
             elif suffix == ".npy":
                 feature = np.load(radiomic_path)
                 feat_list = np.array(feature).squeeze().tolist()
@@ -286,15 +295,40 @@ def load_wsi_level_features(idx, wsi_feature_paths, pooling="mean"):
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
-def load_subject_level_features(idx, subject_feature_path):
-    feat_list = np.load(subject_feature_path).squeeze().tolist() 
-    if np.isscalar(feat_list):
-        feat_list = [feat_list]
+def load_subject_level_features(idx, subject_feature_path, outcome=None):
+    _, ext = os.path.splitext(subject_feature_path)
+
     feat_dict = {}
-    for i, feat in enumerate(feat_list):
-        k = f"subject.feature{i}"
-        feat_dict[k] = feat
-    return {f"{idx}": feat_dict}
+
+    if ext == ".npy":
+        feat_list = np.load(subject_feature_path, allow_pickle=True).squeeze()
+
+        # Ensure iterable
+        if np.isscalar(feat_list):
+            feat_list = [feat_list]
+
+        for i, feat in enumerate(feat_list):
+            k = f"subject.feature{i}"
+            feat_dict[k] = feat
+
+    elif ext == ".json":
+        with open(subject_feature_path, "r") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict):
+            raise ValueError("JSON feature file must contain a dictionary")
+
+        # Use JSON keys and values directly
+        for k, feat in data.items():
+            if outcome is None:
+                feat_dict[k] = feat
+            else:
+                if outcome == k.split('_')[0]: feat_dict[k] = feat
+
+    else:
+        raise ValueError(f"Unsupported feature file format: {ext}")
+
+    return {str(idx): feat_dict}
 
 def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, signature_ids=None, pooling='mean'):
     if outcome == "GeneProgrames":
@@ -631,7 +665,8 @@ def load_radiomics(
         radiomics_keys,
         use_graph_properties,
         n_jobs,
-        save_radiomics_dir=None
+        save_radiomics_dir=None,
+        outcome=None
     ):
 
     if radiomics_aggregated_mode in ["ABMIL", "SPARRA"]:
@@ -639,10 +674,10 @@ def load_radiomics(
         radiomics_paths = []
         for p in data:
             subject_id = p[0][0]
-            path = pathlib.Path(save_radiomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
+            path = pathlib.Path(save_radiomics_dir) / radiomics_aggregated_mode / f"{subject_id}.json"
             radiomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path)
+            joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
             for idx, graph_path in enumerate(radiomics_paths)
         )
     else:
@@ -679,7 +714,8 @@ def load_pathomics(
         pathomics_keys,
         use_graph_properties,
         n_jobs,
-        save_pathomics_dir
+        save_pathomics_dir=None,
+        outcome=None
     ):
 
     if pathomics_aggregated_mode in ["ABMIL", "SPARRA"]:
@@ -687,10 +723,10 @@ def load_pathomics(
         pathomics_paths = []
         for p in data:
             subject_id = p[0][0]
-            path = pathlib.Path(save_pathomics_dir) / pathomics_aggregated_mode / f"{subject_id}.npy"
+            path = pathlib.Path(save_pathomics_dir) / pathomics_aggregated_mode / f"{subject_id}.json"
             pathomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path)
+            joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
             for idx, graph_path in enumerate(pathomics_paths)
         )
     else:
@@ -729,7 +765,8 @@ def load_radiopathomics(
         pathomics_keys,
         use_graph_properties,
         n_jobs,
-        save_radiopathomics_dir
+        save_radiopathomics_dir,
+        outcome=None
     ):
     if radiomics_aggregated_mode in ["ABMIL", "SPARRA"]:
         assert radiomics_aggregated_mode == pathomics_aggregated_mode
@@ -737,10 +774,10 @@ def load_radiopathomics(
         radiopathomics_paths = []
         for p in data:
             subject_id = p[0][0]
-            path = pathlib.Path(save_radiopathomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
+            path = pathlib.Path(save_radiopathomics_dir) / radiomics_aggregated_mode / f"{subject_id}.json"
             radiopathomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path)
+            joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
             for idx, graph_path in enumerate(radiopathomics_paths)
         )
 
@@ -816,6 +853,7 @@ def signature_regression(
     pathomics_keys=None,
     omics="radiopathomics", 
     save_omics_dir=None,
+    outcome=None,
     n_jobs=32,
     radiomics_aggregation=False,
     radiomics_aggregated_mode=None,
@@ -872,7 +910,8 @@ def signature_regression(
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
                 n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir
+                save_radiopathomics_dir=save_omics_dir,
+                outcome=outcome
             )
             print("Selected training radiopathomics:", tr_X.shape)
             print(tr_X.head())
@@ -887,7 +926,8 @@ def signature_regression(
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
                 n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir
+                save_radiopathomics_dir=save_omics_dir,
+                outcome=outcome
             )
             print("Selected testing radiopathomics:", te_X.shape)
             print(te_X.head())
@@ -902,7 +942,8 @@ def signature_regression(
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
                 n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir
+                save_radiopathomics_dir=save_omics_dir,
+                outcome=outcome
             )
             print("Selected raw testing radiopathomics:", raw_te_X.shape)
             print(raw_te_X.head())
@@ -914,7 +955,8 @@ def signature_regression(
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
                 n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir
+                save_pathomics_dir=save_omics_dir,
+                outcome=outcome
             )
             print("Selected training pathomics:", pathomics_tr_X.shape)
             print(pathomics_tr_X.head())
@@ -926,7 +968,8 @@ def signature_regression(
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
                 n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir
+                save_pathomics_dir=save_omics_dir,
+                outcome=outcome
             )
             print("Selected testing pathomics:", pathomics_te_X.shape)
             print(pathomics_te_X.head())
@@ -940,7 +983,8 @@ def signature_regression(
                 pathomics_keys=pathomics_keys,
                 use_graph_properties=use_graph_properties,
                 n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir
+                save_pathomics_dir=save_omics_dir,
+                outcome=outcome
             )
             print("Selected raw testing pathomics:", raw_te_X.shape)
             print(raw_te_X.head())
@@ -952,7 +996,8 @@ def signature_regression(
                 radiomics_keys=radiomics_keys,
                 use_graph_properties=use_graph_properties,
                 n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir
+                save_radiomics_dir=save_omics_dir,
+                outcome=outcome
             )
             print("Selected training radiomics:", radiomics_tr_X.shape)
             print(radiomics_tr_X.head())
@@ -964,7 +1009,8 @@ def signature_regression(
                 radiomics_keys=radiomics_keys,
                 use_graph_properties=use_graph_properties,
                 n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir
+                save_radiomics_dir=save_omics_dir,
+                outcome=outcome
             )
             print("Selected testing radiomics:", radiomics_te_X.shape)
             print(radiomics_te_X.head())
@@ -977,7 +1023,8 @@ def signature_regression(
                 radiomics_keys=radiomics_keys,
                 use_graph_properties=use_graph_properties,
                 n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir
+                save_radiomics_dir=save_omics_dir,
+                outcome=outcome
             )
             print("Selected raw testing radiomics:", raw_te_X.shape)
             print(raw_te_X.head())
@@ -1276,33 +1323,50 @@ def generate_data_split(
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config_files', nargs='+', required=True, help='Path(s) to the config file(s).')
+    parser.add_argument(
+        '--config_files',
+        nargs='+',
+        required=True,
+        help='Path(s) to the config file(s).'
+    )
+    parser.add_argument(
+        '--override',
+        action='append',
+        default=[],
+        metavar='KEY=VALUE',
+        help='Override config entries'
+    )
+
     args = parser.parse_args()
     
-    from utilities.arguments import load_opt_from_config_files
-    opt = load_opt_from_config_files(args.config_files)
+    from utilities.arguments import load_opt_from_config_files_overrides
+    opt = load_opt_from_config_files_overrides(args.config_files, overrides=args.override)
+
     radiomics_mode = opt['RADIOMICS']['MODE']['VALUE']
     pathomics_mode = opt['PATHOMICS']['MODE']['VALUE']
 
     if opt['DATASET'] == "MAMAMIA":
         from analysis.a05_outcome_prediction.m_prepare_omics_info import prepare_MAMAMIA_omics_info
+        from analysis.a05_outcome_prediction.m_prepare_omics_info import radiomics_suffix
         omics_info = prepare_MAMAMIA_omics_info(
             img_dir=opt['DATA_INFO'],
             save_omics_dir=opt['OMICS_DIR'],
             segmentator=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
             radiomics_mode=radiomics_mode,
-            radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
+            radiomics_suffix=radiomics_suffix[radiomics_mode],
         )
     elif opt['DATASET'] == "TCGA":
         from analysis.a05_outcome_prediction.m_prepare_omics_info import prepare_TCGA_omics_info
+        from analysis.a05_outcome_prediction.m_prepare_omics_info import radiomics_suffix
+        from analysis.a05_outcome_prediction.m_prepare_omics_info import pathomics_suffix
         omics_info = prepare_TCGA_omics_info(
             dataset_json=opt['DATA_INFO'],
             save_omics_dir=opt['OMICS_DIR'],
             radiomics_mode=radiomics_mode,
             segmentator=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
-            radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
+            radiomics_suffix=radiomics_suffix[radiomics_mode],
             pathomics_mode=pathomics_mode,
-            pathomics_suffix=opt['PATHOMICS']['MODE']['SUFFIX']
+            pathomics_suffix=pathomics_suffix[pathomics_mode]
         )
     else:
         raise NotImplementedError
@@ -1392,10 +1456,22 @@ if __name__ == "__main__":
             pathomics_keys = opt['PATHOMICS']['KEYS']
         else:
             pathomics_keys = None
+
+        save_omics_dir = opt['PREDICTION']['OMICS_DIR'] + f"/{radiomics_mode}+{pathomics_mode}"
+        if opt['PREDICTION']['USED_OMICS']['VALUE'] == "radiomics":
+            save_omics_dir = save_omics_dir + f"/radiomics_Survival_Prediction_GCNConv_" \
+                + opt['RADIOMICS']['AGGREGATED_MODE']['VALUE']
+        elif opt['PREDICTION']['USED_OMICS']['VALUE'] == "pathomics":
+            save_omics_dir = save_omics_dir + f"/pathomics_Survival_Prediction_GCNConv_" \
+                + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
+        elif opt['PREDICTION']['USED_OMICS']['VALUE'] == "radiopathomics":
+            save_omics_dir = save_omics_dir + f"/radiomics_pathomics_Survival_Prediction_GCNConv_" \
+                + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
+            
         signature_regression(
             split_path=split_path,
             omics=opt['PREDICTION']['USED_OMICS']['VALUE'],
-            save_omics_dir=opt['PREDICTION']['OMICS_DIR'],
+            save_omics_dir=save_omics_dir,
             n_jobs=opt['PREDICTION']['N_JOBS'],
             radiomics_aggregation=opt['RADIOMICS']['AGGREGATION'],
             radiomics_aggregated_mode=opt['RADIOMICS']['AGGREGATED_MODE']['VALUE'],
