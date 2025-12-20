@@ -49,6 +49,53 @@ signatures_predictable = {
     "StemScoreRNA": None
 }
 
+radiomics_suffix = {
+    "None": None,
+    "pyradiomics": [
+        "_tumor_radiomics.json"
+    ],
+    "SegVol": [
+        "_tumor_graph_aggr_mean.npy"
+    ],
+    "BiomedParse": [
+        "_tumor_graph_aggr_mean.npy"
+    ],
+    "BayesBP": [
+        "_tumor_radiomics_pooled.json"
+    ],
+    "LVMMed": [
+        "_tumor_layer0_graph_aggr_mean.npy",
+        "_tumor_layer1_graph_aggr_mean.npy",
+        "_tumor_layer2_graph_aggr_mean.npy",
+        "_tumor_layer3_graph_aggr_mean.npy",
+        "_tumor_layer4_graph_aggr_mean.npy",
+    ]
+}
+
+pathomics_suffix = {
+    "None": [
+        "_graph_aggr_mean.npy"
+    ],
+    "CNN": [
+        "_graph_aggr_mean.npy"
+    ],
+    "HIPT": [
+        "_graph_aggr_mean.npy"
+    ],
+    "UNI": [
+        "_graph_aggr_mean.npy"
+    ],
+    "CONCH": [
+        "_graph_aggr_mean.npy"
+    ],
+    "CHIEF": [
+        "_graph_aggr_mean.npy"
+    ],
+    "UNI2": [
+        "_graph_aggr_mean.npy"
+    ]
+}
+
 def prepare_MAMAMIA_omics_info(
         img_dir, 
         save_omics_dir, 

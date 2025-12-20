@@ -45,6 +45,32 @@ def load_opt_from_config_files(conf_files):
         load_config_dict_to_opt(opt, config_dict)
 
     return opt
+    
+def set_nested_key(d, key_path, value):
+    keys = key_path.split(".")
+    current = d
+    for k in keys[:-1]:
+        if k not in current:
+            current[k] = {}
+        current = current[k]
+    current[keys[-1]] = value
+
+def load_opt_from_config_files_overrides(conf_files, overrides=None):
+    opt = {}
+    for conf_file in conf_files:
+        with open(conf_file, encoding='utf-8') as f:
+            config_dict = yaml.safe_load(f) or {}
+        load_config_dict_to_opt(opt, config_dict)
+
+    if overrides:
+        for ov in overrides:
+            if "=" not in ov:
+                raise ValueError(f"Invalid override: {ov}")
+            key, value = ov.split("=", 1)
+            set_nested_key(opt, key, value)
+
+    return opt
+
 
 
 def load_opt_command(args):

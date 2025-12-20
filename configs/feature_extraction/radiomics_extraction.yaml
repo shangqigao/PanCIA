@@ -1,8 +1,8 @@
 # Define parameters of radiomics
-DATASET: CPTAC
-RADIOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_included_subjects.json"
+DATASET: TCGA
+RADIOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
 DATA_FORMAT: "nifti"
-LABEL_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/CPTAC_Seg"
+LABEL_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
 SAVE_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/radiomics"
 N_JOBS: 32
 
@@ -13,7 +13,7 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "LVMMed"
+    VALUE: "BayesBP"
     CHOICES: ["pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
     SUFFIX:
       - "radiomics.npy"
@@ -27,8 +27,8 @@ RADIOMICS:
     VALUE: null
     CHOICES: [null, "shells", "peeling"]
   TASKS:
-    EXTRACTION: True
-    CLUSTERING: False
+    EXTRACTION: False
+    CLUSTERING: True
     GRAPH_CONSTRUCTION:
       VALUE: False
       FEATURE_DIS_WEIGHT: 0.01 # 0.01 for LVMMed else 0.1, for clustering in graph construction

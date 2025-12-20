@@ -44,8 +44,12 @@ def cluster_radiomic_feature(
 def Bayes_radiomics_pooling(feature_path, save_path, n_clusters=3):
     """pool layer-wise Bayesian features into fixed clusters
     """
-    with open(feature_path, 'r') as f:
-        data = json.load(f)
+    try:
+        with open(feature_path, "r") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        logger.info(f"Skipping invalid JSON: {feature_path} ({e})")
+        return
 
     df_ori = pd.DataFrame(data['radiomics'][1:])
     df = df_ori.dropna().reset_index(drop=True)
@@ -101,12 +105,13 @@ def cluster_Bayes_BiomedParse_radiomics(img_paths, save_dir, class_name="tumour"
     """
     def _feature_clustering(idx, img_path):
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        save_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics_pooled.json")
+        parent_name = pathlib.Path(img_path).parent.name
+        save_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics_pooled.json")
         if save_path.exists() and skip_exist:
             logger.info(f"{save_path.name} has existed, skip!")
             return
 
-        feature_path = pathlib.Path(f"{save_dir}/{img_name}_{class_name}_radiomics.json")
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics.json")
         if not feature_path.exists(): 
             logger.info(f"{feature_path.name} doesn't exist, skip!")
             return

@@ -5,7 +5,7 @@ OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 SAVE_OUTCOME_FILE: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/clinical_data/survival_data.csv"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "OS"
+  VALUE: "DSS"
   CHOICES: ["OS", "DSS", "DFI", "PFI"]
 TASKS:
   PREDICTION: True
@@ -20,27 +20,9 @@ RADIOMICS:
     VALUE: "LVMMed"
     CHOICES:
       ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
-    # SUFFIX:
-    #   - "_tumor_radiomics.json"
-    # SUFFIX:
-    #   - "_tumor_graph_aggr_mean.npy"
-    # SUFFIX:
-    #   - "_tumor_layer0_graph_aggr_mean.npy"
-    #   - "_tumor_layer1_graph_aggr_mean.npy"
-    #   - "_tumor_layer2_graph_aggr_mean.npy"
-    #   - "_tumor_layer3_graph_aggr_mean.npy"
-    #   - "_tumor_layer4_graph_aggr_mean.npy"
-    SUFFIX:
-      - "_tumor_layer0_graph.npz"
-      - "_tumor_layer1_graph.npz"
-      - "_tumor_layer2_graph.npz"
-      - "_tumor_layer3_graph.npz"
-      - "_tumor_layer4_graph.npz"
-  # KEYS: ["shape", "firstorder", "glcm", "gldm", "glrlm", "glszm", "ngtdm"]
-  # KEYS: ["n_voxels", "mean", "max", "min", "var", "skewness", "kurtosis", "entropy"]
   AGGREGATION: False
   AGGREGATED_MODE:
-    VALUE: "ABMIL"
+    VALUE: "None"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
   RESOLUTION: 1
   UNITS: "mm"
@@ -50,14 +32,9 @@ PATHOMICS:
   MODE:
     VALUE: "UNI"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
-    # SUFFIX:
-    #   - "_graph_aggr_mean.npy"
-    SUFFIX:
-      - "_graph.npz"
-  # KEYS: ["TUM", "NORM", "DEB"]
   AGGREGATION: False
   AGGREGATED_MODE:
-    VALUE: "ABMIL"
+    VALUE: "None"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
   RESOLUTION: 20
   UNITS: "power"
@@ -68,12 +45,12 @@ SPLIT:
   TEST_RATIO: 0.2
   VALID_RATIO: 0.1
   TRAIN_RATIO: 0.7
-  FILTER_SUBJECTS: True # discard subjects without outcomes
+  FILTER_SUBJECTS: False # discard subjects without outcomes
 
 PREDICTION:
-  OMICS_DIR: ""
+  OMICS_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_multitask"
   USED_OMICS:
-    VALUE: "pathomics"
+    VALUE: "radiomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:

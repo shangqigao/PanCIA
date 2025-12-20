@@ -217,25 +217,72 @@ def prepare_multitask_outcomes(
     return merged
 
 
-def extract_num_classes_from_outcomes(outcomes):
+def extract_class_info_from_outcomes(outcomes):
     """
-    Extract number of classes for each classification task.
-    Looks for columns ending with '_class'.
+    Extract number of classes and class-name mappings
+    for each classification task.
+
+    Robust to extra columns.
     """
 
-    num_classes_dict = {}
+    class_info = {}
 
-    for col in outcomes.columns:
-        if col.endswith("_class"):
-            task = col.replace("_class", "")
-            # Drop NaN labels, get unique int classes
-            classes = outcomes[col].dropna().unique()
-            classes = [int(c) for c in classes if c == c]  # ignore NaN
-            num_classes_dict[task] = len(classes)
+    for class_col in outcomes.columns:
+        if not class_col.endswith("_class"):
+            continue
 
-    return num_classes_dict
+        task = class_col.replace("_class", "")
 
-def generate_task_to_idx_grouped(outcomes, num_classes_dict):
+        # Candidate name columns:
+        candidate_cols = [
+            c for c in outcomes.columns
+            if c not in ("SubjectID", class_col)
+        ]
+
+        name_col = None
+
+        for c in candidate_cols:
+            tmp = outcomes[[c, class_col]].dropna()
+
+            # Check one-to-one mapping: each class id → exactly one name
+            mapping = tmp.groupby(class_col)[c].nunique()
+
+            if (mapping == 1).all():
+                name_col = c
+                break
+
+        if name_col is None:
+            raise ValueError(
+                f"Could not infer class-name column for task '{task}'. "
+                f"Candidates tried: {candidate_cols}"
+            )
+
+        df_valid = outcomes[[name_col, class_col]].dropna()
+
+        pairs = (
+            df_valid
+            .drop_duplicates(subset=class_col)
+            .sort_values(class_col)
+        )
+
+        class_to_name = {
+            int(row[class_col]): row[name_col]
+            for _, row in pairs.iterrows()
+        }
+
+        name_to_class = {v: k for k, v in class_to_name.items()}
+
+        class_info[task] = {
+            "num_classes": len(class_to_name),
+            "class_to_name": class_to_name,
+            "name_to_class": name_to_class,
+            "class_name_column": name_col,
+        }
+
+    return class_info
+
+
+def generate_task_to_idx_grouped(outcomes, classes_dict):
     """
     Generate mapping from task type -> indices.
     Classification tasks are intervals returned as (start, end) where `end` is exclusive.
@@ -243,14 +290,15 @@ def generate_task_to_idx_grouped(outcomes, num_classes_dict):
 
     Args:
         outcomes: list of dicts (length = batch size). Used only to discover task names.
-        num_classes_dict: dict mapping classification task name -> number of classes (K)
+        classes_dict: dict mapping classification task name -> dict{number of classes (K)}
 
     Returns:
         task_to_idx: dict with keys "survival","classification","regression" as described above.
     """
     task_to_idx = {"survival": {}, "classification": {}, "regression": {}}
+    outcome_to_idx = {}
     if len(outcomes) == 0:
-        return task_to_idx
+        return task_to_idx, outcome_to_idx
 
     idx = 0
     sample = outcomes[0]
@@ -259,15 +307,19 @@ def generate_task_to_idx_grouped(outcomes, num_classes_dict):
     # assume each survival task uses a single logit (hazard) -- change if you use 2-per-task
     for task in sample.get("survival", {}).keys():
         task_to_idx["survival"][task] = idx
+        outcome_to_idx[task] = idx
         idx += 1
 
     # ---------------- Classification ----------------
     # allocate K logits per classification task; store interval [start, end) (end exclusive)
     for task in sample.get("classification", {}).keys():
-        K = int(num_classes_dict.get(task, 1))
+        K = int(classes_dict[task].get("num_classes", 1))
         start = idx
         end = idx + K   # exclusive
         task_to_idx["classification"][task] = (start, end)
+        for i in range(K): 
+            name = classes_dict[task]["class_to_name"][i]
+            outcome_to_idx[f"{task}_{name}"] = idx + i
         idx = end
 
     # ---------------- Regression ----------------
@@ -276,9 +328,10 @@ def generate_task_to_idx_grouped(outcomes, num_classes_dict):
         for subcol in subdict.keys():
             name = f"{task}_{subcol}"
             task_to_idx["regression"][name] = idx
+            outcome_to_idx[subcol] = idx
             idx += 1
 
-    return task_to_idx
+    return task_to_idx, outcome_to_idx
 
 
 def count_subtasks_and_predictions(task_to_idx):
@@ -550,7 +603,7 @@ def run_once(
         model = model.to("cuda")
     else:
         model = model.to("cpu")
-    loss = MultiTaskLoss(tau_vi=optim_kwargs['tau_vi'])
+    loss = MultiTaskLoss(tau_vi=optim_kwargs.get('tau_vi', 0.1))
     optimizer_kwargs = {k: v for k, v in optim_kwargs.items() if k in ["lr", "weight_decay"]}
     optimizer = torch.optim.Adam(model.parameters(), **optimizer_kwargs)
     # optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, nesterov=True, **optim_kwargs)
@@ -744,6 +797,8 @@ def inference(
         omics_pool_ratio,
         arch_opt,
         infer_opt,
+        task_to_idx,
+        outcome_to_idx,
         pretrained_model_dir,
 ):
     """survival prediction
@@ -764,8 +819,10 @@ def inference(
         "pool_ratio": omics_pool_ratio,
         "conv": arch_opt['GNN'],
         "aggregation": arch_opt['AGGREGATION']['VALUE'],
-        "num_groups": arch_opt['AGGREGATION']['NUM_GROUPS']
+        "num_groups": arch_opt['AGGREGATION']['NUM_GROUPS'],
+        "task_to_idx": task_to_idx
     }
+
     omics_name = "_".join(arch_opt['OMICS'])
     if arch_opt['BayesGNN']:
         model_folder = f"{omics_name}_Bayes_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
@@ -808,9 +865,13 @@ def inference(
             save_dir = model_dir / arch_opt['AGGREGATION']['VALUE']
             mkdir(save_dir)
             for i, subject_id in enumerate(subject_ids): 
-                save_name = f"{subject_id}.npy"
+                save_name = f"{subject_id}.json"
                 save_path = f"{save_dir}/{save_name}"
-                np.save(save_path, out1[i])
+                scores = logits[i].squeeze().tolist()
+                scores_dict = {k: scores[v] for k, v in outcome_to_idx.items()}
+                with open(save_path, "w") as f:
+                    json.dump(scores_dict, f, indent=4)
+            print(f"Saving subject omics to {save_dir}...")
         else:
             logit = np.array(logit).squeeze()
             y_list = list(out1)
@@ -955,7 +1016,7 @@ if __name__ == "__main__":
     )
     subject_ids = df_outcome['SubjectID'].to_list()
     logger.info(f"Found {len(subject_ids)} subjects with outcomes")
-    num_classes_dict = extract_num_classes_from_outcomes(df_outcome)
+    classes_dict = extract_class_info_from_outcomes(df_outcome)
 
     omics_paths = [[k, omics_info['omics_paths'][k]] for k in subject_ids]
 
@@ -1056,7 +1117,7 @@ if __name__ == "__main__":
         outcomes.append(y_i)
 
     # get the mapping from subtasks to idx
-    task_to_idx = generate_task_to_idx_grouped(outcomes, num_classes_dict)
+    task_to_idx, outcome_to_idx = generate_task_to_idx_grouped(outcomes, classes_dict)
     num_subtasks, num_preds = count_subtasks_and_predictions(task_to_idx)
     opt['ARCH']['DIM_TARGET'] = num_preds
     logger.info(f"Found {num_subtasks} subtasks with {num_preds} outcomes in total to predict")
@@ -1124,6 +1185,8 @@ if __name__ == "__main__":
             omics_pool_ratio=omics_pool_ratio,
             arch_opt=opt['ARCH'],
             infer_opt=opt['INFERENCE'],
+            task_to_idx=task_to_idx,
+            outcome_to_idx=outcome_to_idx,
             pretrained_model_dir=save_model_dir
         )
 

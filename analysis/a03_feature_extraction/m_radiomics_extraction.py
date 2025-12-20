@@ -95,7 +95,7 @@ if __name__ == "__main__":
             feature_mode=opt['RADIOMICS']['MODE']['VALUE'], 
             save_dir=save_feature_dir, 
             class_name=opt['RADIOMICS']['TARGET'],
-            n_clusters=8,
+            n_clusters=6,
             n_jobs=opt['N_JOBS'],
             skip_exist=opt['RADIOMICS']['SKIP_EXITS']
         )
