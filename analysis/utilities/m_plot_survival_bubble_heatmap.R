@@ -250,7 +250,7 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 n_rows <- length(unique(df_complete$row_id))
 
 ggsave(
-  "survival_bubble_heatmap.png",
+  file.path(out_dir, "survival_bubble_heatmap.png"),
   plot  = p,
   width = 180,
   height = n_rows * 10,   # ~6 mm per row
