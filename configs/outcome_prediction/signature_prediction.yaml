@@ -5,7 +5,7 @@ OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "StemScoreRNA"
+  VALUE: "GeneProgrames"
   CHOICES:
     [
       "GeneProgrames",
@@ -56,8 +56,9 @@ SPLIT:
   FILTER_SUBJECTS: False # discard subjects without outcomes
 
 PREDICTION:
+  OMICS_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_multitask"
   USED_OMICS:
-    VALUE: "pathomics"
+    VALUE: "radiopathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:
@@ -67,7 +68,7 @@ PREDICTION:
     VALUE: "r2"
     CHOICES: ["r2", "neg_mse"]
   OUTCOME_LOGRANK_TEST:
-    VALUE: "OS" # which used to evaluate the risk stratification ability of predicted signature
+    VALUE: "PFI" # which used to evaluate the risk stratification ability of predicted signature
     CHOICES: ["OS", "DSS", "DFI", "PFI"]
   TARGET_SELECTION:
     VALUE: False
