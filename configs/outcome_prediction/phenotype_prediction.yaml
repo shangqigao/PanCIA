@@ -5,7 +5,7 @@ OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "MolecularSubtype"
+  VALUE: "ImmuneSubtype"
   CHOICES: ["ImmuneSubtype", "MolecularSubtype", "PrimaryDisease"]
 TASKS:
   PREDICTION: True
@@ -48,6 +48,7 @@ SPLIT:
   FILTER_SUBJECTS: False # discard subjects without outcomes
 
 PREDICTION:
+  OMICS_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_multitask"
   USED_OMICS:
     VALUE: "radiopathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
