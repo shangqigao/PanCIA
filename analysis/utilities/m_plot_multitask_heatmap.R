@@ -1,3 +1,18 @@
+# ==============================
+# Heatmap for Multiple Tasks
+# ==============================
+install.packages(c(
+  "ggplot2",
+  "dplyr",
+  "purrr",
+  "stringr",
+  "jsonlite",
+  "scales",
+  "tidyr",
+  "patchwork",
+  "purrr"
+))
+
 library(ggplot2)
 library(dplyr)
 library(purrr)
@@ -5,18 +20,22 @@ library(stringr)
 library(jsonlite)
 library(tidyr)
 library(scales)
+library(patchwork)
+library(purrr)
 
 base_dir <- "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/outcomes"
 out_dir  <- "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/PanCIA/figures/plots"
 
 big_tasks <- list(
   survival   = list(subtasks = c("OS", "DSS", "DFI", "PFI"), metric = "C-index"),
-  phenotype  = list(subtasks = c("ImmuneSubtype", "MolecularSubtype", "PrimaryDisease"), metric = "F1"),
-  signature  = list(subtasks = c("GeneProgrames", "HRDscore", "ImmuneSignatureScore", "StemnessScoreDNA", "StemScoreRNA"), metric = "R2")
+  phenotype  = list(subtasks = c("ImmuneSubtype", "MolecularSubtype", "PrimaryDisease"), metric = "f1"),
+  signature  = list(subtasks = c("GeneProgrames", "HRDscore", "ImmuneSignatureScore", "StemnessScoreDNA", "StemScoreRNA"), metric = "r2")
 )
 
 agg_levels <- c("MEAN", "ABMIL", "SPARRA")
+omics_levels <- c("radiomics", "pathomics", "radiopathomics")
 
+row_order <- c("MEAN", "ABMIL", "SPARRA")
 omics_type_order <- c("radiomics", "pathomics", "radiopathomics")
 radiomics_order  <- c("pyradiomics", "BiomedParse", "LVMMed")
 pathomics_order  <- c("CHIEF", "CONCH", "UNI")
@@ -64,9 +83,9 @@ parse_one <- function(file, big_task, metric_name) {
 
   js <- fromJSON(file)
 
-  metric_vals <- unlist(js[names(js) != "p-value"])[metric_name]
-  metric_vals <- metric_vals[!is.na(metric_vals)]
-
+  metric_vals <- js[names(js) != "p-value"] |>
+    map_dbl(~ mean(as.numeric(.x[[metric_name]]), na.rm = TRUE))
+  
   tibble(
     big_task   = big_task,
     omics_type = omics_type,
@@ -75,6 +94,7 @@ parse_one <- function(file, big_task, metric_name) {
     metric     = mean(metric_vals, na.rm = TRUE)
   )
 }
+
 
 df_all <- imap_dfr(big_tasks, function(cfg, big_task) {
 
@@ -96,18 +116,37 @@ df_all <- imap_dfr(big_tasks, function(cfg, big_task) {
           metric_name = cfg$metric)
 })
 
+# ------------------------------
+# Explicit row and column order
+# ------------------------------
+radiopathomics_order <- c()
+for (r in radiomics_order) {
+  for (p in pathomics_order) {
+    radiopathomics_order <- c(radiopathomics_order, paste(r, p, sep = "+"))
+  }
+}
+
 df_plot <- df_all %>%
   group_by(big_task, omics_type, agg_mode, model) %>%
   summarise(mean_metric = mean(metric, na.rm = TRUE), .groups = "drop") %>%
+  # reorder agg_mode per task
   mutate(
-    row_id = paste(big_task, agg_mode, sep = " | "),
-    agg_mode = factor(agg_mode, levels = agg_levels),
+    agg_mode = factor(agg_mode, levels = row_order),
     big_task = factor(big_task, levels = names(big_tasks)),
     omics_type = factor(omics_type, levels = omics_type_order)
+  ) %>%
+  # create row_id using ordered agg_mode
+  arrange(big_task, agg_mode) %>%
+  mutate(
+    row_id = paste(big_task, agg_mode, sep = " | "),
+    row_id = factor(row_id, levels = paste(rep(names(big_tasks), each = length(row_order)),
+                                           rep(row_order, times = length(names(big_tasks))),
+                                           sep = " | "))
   )
 
-radiopathomics_order <- as.vector(outer(radiomics_order, pathomics_order, paste, sep = "+"))
-
+# ------------------------------
+# Column (model) order per omics_type
+# ------------------------------
 model_order_list <- list(
   radiomics      = radiomics_order,
   pathomics      = pathomics_order,
@@ -119,37 +158,51 @@ df_plot <- df_plot %>%
   mutate(model = factor(model, levels = model_order_list[[unique(omics_type)]])) %>%
   ungroup()
 
-p <- ggplot(df_plot, aes(x = model, y = row_id, fill = mean_metric)) +
-  geom_tile(color = "white", linewidth = 0.3) +
+# ------------------------------
+# Function to plot one big_task
+# ------------------------------
+plot_one_task <- function(task_name) {
+  cfg <- big_tasks[[task_name]]
+  d <- df_plot %>% filter(big_task == task_name)
+  if(nrow(d) == 0) return(NULL)
 
-  facet_grid(
-    big_task ~ omics_type,
-    scales = "free_x",
-    space  = "free_x"
-  ) +
+  d <- d %>% mutate(row_id = factor(row_id, levels = rev(unique(row_id))))
 
-  scale_fill_gradientn(
-    colours = task_palettes,
-    name = "Mean metric"
-  ) +
+  palette_option <- switch(task_name,
+                           survival  = "inferno",
+                           phenotype = "magma",
+                           signature = "plasma")
 
-  labs(x = NULL, y = NULL) +
+  ggplot(d, aes(x=model, y=row_id, fill=mean_metric)) +
+    geom_tile(color="white", linewidth=0.3) +
+    facet_grid(. ~ omics_type, scales="free_x", space="free_x") +
+    scale_fill_viridis_c(option=palette_option, name=cfg$metric) +
+    labs(title=str_to_title(task_name), x=NULL, y=NULL) +
+    theme_minimal(base_size=13) +
+    theme(
+      axis.text.x = element_text(angle=45, hjust=1),
+      strip.text = element_text(face="bold"),
+      panel.grid = element_blank(),
+      legend.title = element_text(face="bold")
+    )
+}
 
-  theme_minimal(base_size = 13) +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    strip.text = element_text(face = "bold"),
-    panel.grid = element_blank(),
-    legend.position = "right"
-  )
+# ------------------------------
+# Generate plots for each task
+# ------------------------------
+task_plots <- map(names(big_tasks), plot_one_task) %>% compact()
 
-dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+# Combine vertically
+combined_plot <- wrap_plots(task_plots, ncol=1) & theme(legend.position="right")
 
-ggsave(
-  file.path(out_dir, "multi_task_heatmap.png"),
-  p,
-  width  = 180,
-  height = length(unique(df_plot$row_id)) * 8,
-  units  = "mm",
-  dpi    = 300
-)
+# ------------------------------
+# Save
+# ------------------------------
+n_rows <- df_plot %>% distinct(big_task, row_id) %>% count(big_task) %>% pull(n)
+
+ggsave(file.path(out_dir, "multi_task_heatmap.png"),
+       combined_plot,
+       width=180,
+       height=sum(n_rows)*30,
+       units="mm",
+       dpi=300)
