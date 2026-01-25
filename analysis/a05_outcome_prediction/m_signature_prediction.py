@@ -359,6 +359,17 @@ def prepare_patient_outcome(outcome_dir, subject_ids, outcome=None, signature_id
         df = pd.read_csv(outcome_file)
         df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
         df_matched = df[df["SubjectID"].isin(subject_ids)]
+    elif outcome == "AGE":
+        outcome_file = f"{outcome_dir}/phenotypes/clinical_data/survival_data.csv"
+        df = pd.read_csv(outcome_file)
+        df["SubjectID"] = df["SampleID"].str.extract(r'^(TCGA-\w\w-\w{4})')
+        df_matched = df[df["SubjectID"].isin(subject_ids)]
+        df_matched = df_matched[
+            ["SubjectID", "age_at_initial_pathologic_diagnosis"]
+        ]
+        df_matched = df_matched.applymap(
+            lambda x: x / 100.0 if isinstance(x, (int, float)) else x
+        )
     else:
         raise NotImplementedError
     

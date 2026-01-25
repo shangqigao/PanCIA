@@ -1,0 +1,183 @@
+#!/bin/bash
+
+#SBATCH -A CRISPIN-ORTUZAR-SL2-GPU
+#SBATCH -J radiopath
+#SBATCH -o log.%x.job_%j
+#SBATCH --nodes=1
+##SBATCH --cpus-per-task=32
+#SBATCH --time=0-36:00:00
+##SBATCH --time=0-00:10:00
+##SBATCH -p cclake
+##SBATCH -p cclake-himem
+#SBATCH -p ampere
+#SBATCH --gres=gpu:1
+##SBATCH --qos=intr
+
+## activate environment
+source ~/.bashrc
+conda activate PanCIA
+
+export OMPI_ALLOW_RUN_AS_ROOT=1
+export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+
+# Force output flushing
+export PYTHONUNBUFFERED=1   # if running Python
+export SLURM_EXPORT_ENV=ALL
+stdbuf -oL -eL echo "Starting job at $(date)"
+
+# python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
+
+#---------------MAMA-MIA----------------
+# fit Beta distributions on training data
+# img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
+# save_dir="/home/sg2162/rds/hpc-work/PanCIA/analysis/tumor_segmentation"
+# srun --mpi=pmi2 python analysis/a02_tumor_segmentation/m_fit_beta_distribution.py \
+#             --img_dir $img_dir \
+#             --save_dir $save_dir
+
+# tumor segmentation sanity test
+# img_dir="/home/sg2162/rds/hpc-work/sanity-check/images"
+# save_dir="/home/sg2162/rds/hpc-work/sanity-check/predictions"
+# beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
+# meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
+# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+#             --img_dir $img_dir \
+#             --save_dir $save_dir \
+#             --beta_params $beta_params \
+#             --meta_info $meta_info
+
+# tumor segmentation MAMA-MIA
+# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
+# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations/BiomedParse"
+# beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
+# meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
+# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+#             --img_dir $img_dir \
+#             --save_dir $save_dir \
+#             --beta_params $beta_params \
+#             --meta_info $meta_info
+
+# extract radiomic features
+# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
+# lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+# meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
+
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py \
+#             --img_dir $img_dir \
+#             --lab_dir $lab_dir \
+#             --save_dir $save_dir \
+#             --meta_info $meta_info 
+
+#----------------Pan-Cancer--------------------
+# radiology exclusion and inclusion
+# data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+
+# python analysis/a01_data_preprocessiong/m_inclusion_exclusion.py \
+#             --data_dir $data_dir \
+#             --dataset TCGA \
+#             --modality radiology \
+#             --save_dir $save_dir
+
+# rtstruct to nifti (save to /parent/to/dataset/dataset_seg/Expert)
+# data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
+# meta_dir="/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_Annotation_Metadata"
+# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/CPTAC_Seg/Expert"
+
+# python analysis/a01_data_preprocessiong/m_rtstruct2nii.py \
+#             --data_dir $data_dir \
+#             --meta_dir $meta_dir \
+#             --dataset CPTAC \
+#             --modality radiology \
+#             --save_dir $save_dir
+
+# dicom to nifti (save to /parent/to/dataset/dataset_NIFTI)
+# series="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_raw_series.json"
+
+# python analysis/a01_data_preprocessiong/m_dicom2nii.py \
+#             --series $series \
+#             --dataset TCGA
+
+# pathology exclusion and inclusion
+# data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/pathomics"
+
+# python analysis/a01_data_preprocessiong/m_inclusion_exclusion.py \
+#             --data_dir $data_dir \
+#             --dataset TCGA \
+#             --modality pathology \
+#             --save_dir $save_dir
+
+# subject exclusion and inclusion
+# included_nifti="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_nifti.json"
+# included_wsi="/home/sg2162/rds/hpc-work/Experiments/pathomics/TCGA_included_wsi.json"
+# meta_data="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_pathology_has_radiology.csv"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
+
+# python analysis/a01_data_preprocessiong/m_sortout_subjects.py \
+#             --included_nifti $included_nifti \
+#             --included_wsi $included_wsi \
+#             --meta_data $meta_data \
+#             --dataset TCGA \
+#             --save_dir $save_dir
+
+# pre-diagnosis subject exclusion and inclusion
+# included_nifti="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_nifti.json"
+# included_wsi="/home/sg2162/rds/hpc-work/Experiments/pathomics/TCGA_included_wsi.json"
+# meta_data="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_pathology_has_radiology.csv"
+# clinical_data="/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/clinical_data/survival_data.csv"
+# save_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
+
+# python analysis/a01_data_preprocessiong/m_sortout_subjects.py \
+#             --included_nifti $included_nifti \
+#             --included_wsi $included_wsi \
+#             --meta_data $meta_data \
+#             --clinical_data $clinical_data \
+#             --dataset TCGA \
+#             --save_dir $save_dir \
+#             --pre_diagnosis
+
+# pan-cancer segmentation
+# radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_included_subjects.json"
+# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/CPTAC_Seg"
+# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+#             --radiology $radiology \
+#             --dataset CPTAC \
+#             --save_dir $save_dir
+
+# extract radiomic features
+# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+        
+# extract pathomic features
+# pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_pathomics_extraction.py --config_files $pathomics_config
+
+# classification
+# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
+# save_radiomics_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+# save_clinical_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
+# save_model_dir="/home/sg2162/rds/hpc-work/Experiments/outcomes"
+
+# python analysis/a05_outcome_prediction/m_therapy_response.py \
+#             --img_dir $img_dir \
+#             --save_radiomics_dir $save_radiomics_dir \
+#             --save_clinical_dir $save_clinical_dir \
+#             --save_model_dir $save_model_dir  
+
+# multi-task learning
+# multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
+# python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
+
+# survival analysis
+survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
+python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
+
+# phenotype prediction
+# phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
+# python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
+
+# signature prediction
+# signature_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"
+# python analysis/a05_outcome_prediction/m_signature_prediction.py --config_files $signature_config

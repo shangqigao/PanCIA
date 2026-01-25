@@ -27,24 +27,24 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "BiomedParse"
+    VALUE: "LVMMed"
     CHOICES:
       ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
-    SUFFIX:
-      - "_tumor_graph.npz"
     # SUFFIX:
-    #   - "_tumor_layer0_graph.npz"
-    #   - "_tumor_layer1_graph.npz"
-    #   - "_tumor_layer2_graph.npz"
-    #   - "_tumor_layer3_graph.npz"
-    #   - "_tumor_layer4_graph.npz"
+    #   - "_tumor_graph.npz"
+    SUFFIX:
+      - "_tumor_layer0_graph.npz"
+      - "_tumor_layer1_graph.npz"
+      - "_tumor_layer2_graph.npz"
+      - "_tumor_layer3_graph.npz"
+      - "_tumor_layer4_graph.npz"
   RESOLUTION: 1
   UNITS: "mm"
 
 # Define parameters of pathomics
 PATHOMICS:
   MODE:
-    VALUE: "CHIEF"
+    VALUE: "UNI"
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
     SUFFIX:
       - "_graph.npz"
@@ -73,25 +73,28 @@ ARCH:
   # OMICS: ["pathomics"]
   AGGREGATION:
     VALUE: "SPARRA"
-    CHOICES: ["ABMIL", "SPARRA"]
-    NUM_GROUPS: 2
+    CHOICES: ["MEAN", "ABMIL", "SPARRA"]
+    NUM_GROUPS: 1
 
 TRAIN:
   EPOCHS: 40
   N_WORKS: 32
-  BATCH_SIZE: 32
-  SAMPLING_RATE: 0.1
+  BATCH_SIZE: 16
+  SAMPLING_RATE: 0.1 # only applied to radiomics
   LR: 3e-4
   WIEGHT_DECAY:
+    MEAN: 1.0e-5
     ABMIL: 1.0e-5
-    SPARRA: 0.0
+    SPARRA: 1.0e-5
   L1_PENALTY:
-    ABMIL: 0.0
-    SPARRA: 1.0e-4
+    MEAN: 1.0e-5
+    ABMIL: 1.0e-5
+    SPARRA: 1.0e-5
 
 INFERENCE:
   N_WORKS: 32
   BATCH_SIZE: 4
+  SAMPLING_RATE: 0.1 # only applied to radiomics
   SAVE_OMICS: True
 
 TEST:

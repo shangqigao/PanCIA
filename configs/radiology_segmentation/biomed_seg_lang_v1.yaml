@@ -288,7 +288,8 @@ DATASETS:
     # - "biomed_NACTTumorMP_Breast_test"
     # - "biomed_MMs_Heart_test"
     # - "biomed_AMOS22CT_Abdomen_test"
-    - "biomed_AMOS22MR_Abdomen_test"
+    # - "biomed_AMOS22MR_Abdomen_test"
+    - "biomed_Pancreas40CT_Tumor+Background_test"
 
   CLASS_CONCAT: false
   SIZE_DIVISIBILITY: 32

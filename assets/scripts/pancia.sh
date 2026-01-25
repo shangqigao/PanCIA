@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-36:00:00
-##SBATCH --time=0-00:10:00
+##SBATCH --time=0-36:00:00
+#SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-##SBATCH --qos=intr
+#SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -167,8 +167,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_model_dir $save_model_dir  
 
 # multi-task learning
-# multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
-# python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
+multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
+python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
 
 # survival analysis
 # survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
@@ -179,5 +179,5 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
 
 # signature prediction
-signature_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"
-python analysis/a05_outcome_prediction/m_signature_prediction.py --config_files $signature_config
+# signature_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"
+# python analysis/a05_outcome_prediction/m_signature_prediction.py --config_files $signature_config

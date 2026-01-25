@@ -63,7 +63,8 @@ datasets = [
     'NACTTumorMP_Breast',
     'MMs_Heart',
     'AMOS22CT_Abdomen',
-    'AMOS22MR_Abdomen'
+    'AMOS22MR_Abdomen',
+    'Pancreas40CT_Tumor+Background'
     ]   # provide name of the dataset under biomedparse_datasets
 splits = ['train', 'test']    # provide split name, e.g., train, test, val
 

@@ -37,8 +37,8 @@ srun --mpi=pmi2 python entry.py evaluate \
             FP16 True \
             WEIGHT True \
             STANDARD_TEXT_FOR_EVAL True \
-            LoRA.ENABLE False \
+            LoRA.ENABLE True \
             SAVE_PROB_MAP True \
-            SAVE_FOLDER test_BiomedParse \
-            RESUME_FROM checkpoints/BiomedParse/biomedparse_v1.pt \
+            SAVE_FOLDER test_BiomedParse_with_LoRA \
+            RESUME_FROM checkpoints/BiomedParse/PanCancer_LoRA/module_training_states.pt \
             

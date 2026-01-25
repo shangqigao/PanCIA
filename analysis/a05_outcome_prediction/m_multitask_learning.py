@@ -34,7 +34,7 @@ from sklearn.model_selection import KFold
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
 from analysis.a04_feature_aggregation.m_gnn_multitask_learning import MultiTaskGraphDataset, MultiTaskGraphArch, MultiTaskBayesGraphArch
-from analysis.a04_feature_aggregation.m_gnn_multitask_learning import ScalarMovingAverage, MultiTaskLoss
+from analysis.a04_feature_aggregation.m_gnn_multitask_learning import ScalarMovingAverage, MultiPredEnsembleLoss
 
 def prepare_multitask_outcomes(
     outcome_dir,
@@ -567,6 +567,55 @@ def evaluate_multitask(logits, y_list, mask_list, task_to_idx):
 
     return metrics, avg_metrics
 
+import torch
+import json
+
+def export_all_weights(model, outcome_to_idx, save_dir):
+    """
+    Export ALL linear weights per modality.
+
+    Output format:
+    {
+        modality: {
+            outcome_name: {
+                feature_name: weight_value
+            }
+        }
+    }
+    """
+
+    idx_to_outcome = {v: k for k, v in outcome_to_idx.items()}
+    output_dict = {}
+
+    for modality, linear_layer in model.predictor_dict.items():
+
+        # shape: [dim_target, input_dim]
+        weight = linear_layer.weight.detach().cpu()
+        dim_target, input_dim = weight.shape
+
+        modality_dict = {}
+
+        for outcome_idx in range(dim_target):
+
+            outcome_name = idx_to_outcome[outcome_idx]
+            weights_row = weight[outcome_idx]
+
+            feature_dict = {}
+
+            for feature_idx in range(input_dim):
+                feature_name = f"feature_{feature_idx}"  # replace if real feature names exist
+                feature_dict[feature_name] = float(weights_row[feature_idx].item())
+
+            modality_dict[outcome_name] = feature_dict
+
+        output_dict[modality] = modality_dict
+
+    save_path = f"{save_dir}/all_predictor_weights.json"
+    with open(save_path, "w") as f:
+        json.dump(output_dict, f)
+
+    print(f"Saved full weights to {save_path}")
+
 def run_once(
         dataset_dict,
         num_epochs,
@@ -599,13 +648,22 @@ def run_once(
         kl = None
     if pretrained is not None:
         model.load(pretrained)
+        export_all_weights(model, arch_kwargs["outcome_to_idx"], pretrained.parent)
+
+    # loss = MultiTaskLoss(tau_vi=optim_kwargs.get('tau_vi', 0.1))
+    task_to_idx = model.task_to_idx
+    graph_to_idx = list(model.dim_dict.keys())
+    loss = MultiPredEnsembleLoss(task_to_idx, graph_to_idx)
+
     if on_gpu:
         model = model.to("cuda")
+        loss = loss.to("cuda")
     else:
         model = model.to("cpu")
-    loss = MultiTaskLoss(tau_vi=optim_kwargs.get('tau_vi', 0.1))
+        loss = loss.to("cpu")
+
     optimizer_kwargs = {k: v for k, v in optim_kwargs.items() if k in ["lr", "weight_decay"]}
-    optimizer = torch.optim.Adam(model.parameters(), **optimizer_kwargs)
+    optimizer = torch.optim.Adam(list(model.parameters()) + list(loss.parameters()), **optimizer_kwargs)
     # optimizer = torch.optim.SGD(model.parameters(), momentum=0.9, nesterov=True, **optim_kwargs)
     # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60, 80], gamma=0.1)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
@@ -613,10 +671,10 @@ def run_once(
     loader_dict = {}
     for subset_name, subset in dataset_dict.items():
         _loader_kwargs = copy.deepcopy(loader_kwargs)
-        if not "train" in subset_name: 
-            if _loader_kwargs["batch_size"] > 4:
-                _loader_kwargs["batch_size"] = 4
-            sampling_rate = 1.0
+        # if not "train" in subset_name: 
+        #     if _loader_kwargs["batch_size"] > 4:
+        #         _loader_kwargs["batch_size"] = 4
+        #     sampling_rate = 1.0
         ds = MultiTaskGraphDataset(
             subset, 
             mode=subset_name, 
@@ -749,7 +807,7 @@ def training(
 
     # if multi-omics and multi-scale, higher dimension, so stronger regularization
     if len(omics_dims) > 1 and len(omics_dims['radiomics']) > 1:
-        tau_vi = 1.0
+        tau_vi = 0.1
     else:
         tau_vi = 0.1
     print(f"Setting the weight of variational loss to {tau_vi}")
@@ -757,10 +815,12 @@ def training(
     optim_kwargs = {
         "lr": 3e-4,
         "weight_decay": {
+            "MEAN": train_opt['WIEGHT_DECAY']['MEAN'],
             "ABMIL": train_opt['WIEGHT_DECAY']['ABMIL'], 
             "SPARRA": train_opt['WIEGHT_DECAY']['SPARRA']
         }[arch_opt['AGGREGATION']['VALUE']],
         "l1_penalty": {
+            "MEAN": train_opt['L1_PENALTY']['MEAN'],
             "ABMIL": train_opt['L1_PENALTY']['ABMIL'], 
             "SPARRA": train_opt['L1_PENALTY']['SPARRA']
         }[arch_opt['AGGREGATION']['VALUE']],
@@ -820,14 +880,16 @@ def inference(
         "conv": arch_opt['GNN'],
         "aggregation": arch_opt['AGGREGATION']['VALUE'],
         "num_groups": arch_opt['AGGREGATION']['NUM_GROUPS'],
-        "task_to_idx": task_to_idx
+        "task_to_idx": task_to_idx,
+        "outcome_to_idx": outcome_to_idx
     }
 
     omics_name = "_".join(arch_opt['OMICS'])
     if arch_opt['BayesGNN']:
-        model_folder = f"{omics_name}_Bayes_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
+        model_folder = f"{omics_name}_Bayes_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
     else:
-        model_folder = f"{omics_name}_Survival_Prediction_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
+        # model_folder = f"{omics_name}_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
+        model_folder = 'radiomics_pathomics_GCNConv_SPARRA_heter_vi0.1ae1e-2_pool0.7_relugate_>20'
     model_dir = pretrained_model_dir / model_folder
 
     predict_results = {}
@@ -853,6 +915,7 @@ def inference(
             pretrained=chkpts,
             BayesGNN=arch_opt['BayesGNN'],
             data_types=arch_opt['OMICS'],
+            sampling_rate=infer_opt['SAMPLING_RATE']
         )
         outputs = list(zip(*outputs))
         if len(outputs) == 3:
@@ -865,12 +928,15 @@ def inference(
             save_dir = model_dir / arch_opt['AGGREGATION']['VALUE']
             mkdir(save_dir)
             for i, subject_id in enumerate(subject_ids): 
-                save_name = f"{subject_id}.json"
+                # save_name = f"{subject_id}.json"
+                # save_path = f"{save_dir}/{save_name}"
+                # scores = logits[i].squeeze().tolist()
+                # scores_dict = {k: scores[v] for k, v in outcome_to_idx.items()}
+                # with open(save_path, "w") as f:
+                #     json.dump(scores_dict, f, indent=4)
+                save_name = f"{subject_id}.npy"
                 save_path = f"{save_dir}/{save_name}"
-                scores = logits[i].squeeze().tolist()
-                scores_dict = {k: scores[v] for k, v in outcome_to_idx.items()}
-                with open(save_path, "w") as f:
-                    json.dump(scores_dict, f, indent=4)
+                np.save(save_path, out1[i])
             print(f"Saving subject omics to {save_dir}...")
         else:
             logit = np.array(logit).squeeze()

@@ -923,12 +923,12 @@ def load_radiomics(
         outcome=None
     ):
 
-    if radiomics_aggregated_mode in ["ABMIL", "SPARRA"]:
+    if radiomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
         print(f"loading radiomics from {save_radiomics_dir}...")
         radiomics_paths = []
         for p in data:
             subject_id = p[0][0]
-            path = pathlib.Path(save_radiomics_dir) / radiomics_aggregated_mode / f"{subject_id}.json"
+            path = pathlib.Path(save_radiomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
             radiomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
             joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
@@ -972,12 +972,12 @@ def load_pathomics(
         outcome=None
     ):
 
-    if pathomics_aggregated_mode in ["ABMIL", "SPARRA"]:
+    if pathomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
         print(f"loading pathomics from {save_pathomics_dir}...")
         pathomics_paths = []
         for p in data:
             subject_id = p[0][0]
-            path = pathlib.Path(save_pathomics_dir) / pathomics_aggregated_mode / f"{subject_id}.json"
+            path = pathlib.Path(save_pathomics_dir) / pathomics_aggregated_mode / f"{subject_id}.npy"
             pathomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
             joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
@@ -1022,13 +1022,13 @@ def load_radiopathomics(
         save_radiopathomics_dir,
         outcome=None
     ):
-    if radiomics_aggregated_mode in ["ABMIL", "SPARRA"]:
+    if radiomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
         assert radiomics_aggregated_mode == pathomics_aggregated_mode
         print(f"loading radiopathomics from {save_radiopathomics_dir}...")
         radiopathomics_paths = []
         for p in data:
             subject_id = p[0][0]
-            path = pathlib.Path(save_radiopathomics_dir) / radiomics_aggregated_mode / f"{subject_id}.json"
+            path = pathlib.Path(save_radiopathomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
             radiopathomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
             joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
@@ -1628,13 +1628,13 @@ if __name__ == "__main__":
 
         save_omics_dir = opt['PREDICTION']['OMICS_DIR'] + f"/{radiomics_mode}+{pathomics_mode}"
         if opt['PREDICTION']['USED_OMICS']['VALUE'] == "radiomics":
-            save_omics_dir = save_omics_dir + f"/radiomics_Survival_Prediction_GCNConv_" \
+            save_omics_dir = save_omics_dir + f"/radiomics_GCNConv_" \
                 + opt['RADIOMICS']['AGGREGATED_MODE']['VALUE']
         elif opt['PREDICTION']['USED_OMICS']['VALUE'] == "pathomics":
-            save_omics_dir = save_omics_dir + f"/pathomics_Survival_Prediction_GCNConv_" \
+            save_omics_dir = save_omics_dir + f"/pathomics_GCNConv_" \
                 + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
         elif opt['PREDICTION']['USED_OMICS']['VALUE'] == "radiopathomics":
-            save_omics_dir = save_omics_dir + f"/radiomics_pathomics_Survival_Prediction_GCNConv_" \
+            save_omics_dir = save_omics_dir + f"/radiomics_pathomics_GCNConv_" \
                 + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
 
         survival(

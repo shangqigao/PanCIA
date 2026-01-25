@@ -114,7 +114,8 @@ class MultiTaskGraphDataset(Dataset):
                             x = proc(x)
                             x = torch.as_tensor(x, dtype=torch.float32)
 
-                    x, edge_index = self.sample_subgraph(x, edge_index)
+                    if key == "radiomics":
+                        x, edge_index = self.sample_subgraph(x, edge_index)
 
                     entry = child_nodes.setdefault(
                         child_name, {"xs": [], "edges": [], "offset": 0}
@@ -374,13 +375,15 @@ class DownsampleArch(nn.Module):
             return nn.Sequential(
                 Linear(in_dims, out_dims),
                 ReLU(),
-                # LayerNorm(out_dims),
+                LayerNorm(out_dims),
                 Dropout(self.dropout),
                 Linear(out_dims, out_dims)
             )
         
         input_emb_dim = dim_features
-        for out_emb_dim in [dim_hidden, dim_hidden]:
+        # self.head = create_block(input_emb_dim, dim_features)
+        for out_emb_dim in [dim_features, dim_hidden]:
+            self.pools.append(TopKPooling(input_emb_dim, ratio=pool_ratio)) 
             conv_class, alpha = conv_dict[self.conv_name]
             if self.conv_name in ["GINConv", "EdgeConv"]:
                 block = create_block(alpha * input_emb_dim, out_emb_dim)
@@ -391,11 +394,17 @@ class DownsampleArch(nn.Module):
                 self.convs.append(subnet)
             else:
                 subnet = create_block(alpha * input_emb_dim, out_emb_dim)
-                self.convs.append(subnet)
-            self.pools.append(TopKPooling(out_emb_dim, ratio=pool_ratio))    
+                self.convs.append(subnet)   
             input_emb_dim = out_emb_dim
+        # self.tail = create_block(input_emb_dim, dim_hidden)
 
     def forward(self, feature, edge_index, batch):
+        # feature = self.head(feature)
+        # N = maybe_num_nodes(batch)
+        # feature_mean = scatter(feature, index=batch, dim=0, dim_size=N, reduce='mean')
+        # feature_mean = feature_mean.index_select(0, batch)
+        # feature = feature - feature_mean
+
         perm_list = []
         for l in range(2):
             feature, edge_index, _, batch, perm, score = self.pools[l](feature, edge_index, batch=batch)
@@ -404,6 +413,9 @@ class DownsampleArch(nn.Module):
                 feature = self.convs[l](feature)
             else:
                 feature = self.convs[l](feature, edge_index)
+        
+        # feature = self.tail(feature)
+        
         return feature, edge_index, batch, perm_list, score
     
 class OmicsIntegrationArch(nn.Module):
@@ -506,12 +518,11 @@ class MultiTaskGraphArch(nn.Module):
             mu0=0, 
             lambda0=1, 
             alpha0=2, 
-            beta0=1e-4,
+            beta0=1e-2,
             **kwargs,
     ):
         super().__init__()
         self.dropout = dropout
-        self.embedding_dims = layers
         self.aggregation = aggregation
         self.mu0 = mu0
         self.lambda0 = lambda0
@@ -528,95 +539,60 @@ class MultiTaskGraphArch(nn.Module):
             for child, val in children.items()
         }
 
-        self.num_layers = len(self.embedding_dims)
-        self.enc_convs = nn.ModuleList()
-        self.enc_linears = nn.ModuleList()
-        self.dec_convs = nn.ModuleList()
-        self.dec_linears = nn.ModuleList()
         self.conv_name = conv
 
-        self.sparsemax = Sparsemax(dim=0)
-
-        def create_block(in_dims, out_dims, normalize=False):
-            if normalize:
-                return nn.Sequential(
-                    Linear(in_dims, out_dims),
-                    ReLU(),
-                    LayerNorm(out_dims),
-                    Dropout(self.dropout),
-                    Linear(out_dims, out_dims)
-                )
-            else:
-                return nn.Sequential(
-                    Linear(in_dims, out_dims),
-                    ReLU(),
-                    # Dropout(self.dropout),
-                    # Linear(out_dims, out_dims)
-                )
-       
-        out_emb_dim = self.embedding_dims[0]
-        self.enc_branches = nn.ModuleDict(
-            {
-                k: create_block(v, out_emb_dim) 
-                for k, v in self.dim_dict.items()
-            }
-        )
-        self.dec_branches = nn.ModuleDict(
-            {
-                k: Linear(out_emb_dim, v) 
-                for k, v in self.dim_dict.items()
-            }
-        )
-        input_emb_dim = out_emb_dim
-
-        if aggregation == "ABMIL":
+        if aggregation == "MEAN":
+            self.Aggregation = MeanAggregation()
+        elif aggregation == "ABMIL":
             self.gate_nn_dict = nn.ModuleDict(
                 {
-                    k: Attn_Net_Gated(L=input_emb_dim, D=256, dropout=0.25, n_classes=input_emb_dim)
-                    for k in self.dim_dict.keys()
+                    k: Attn_Net_Gated(L=v, D=256, dropout=0.25, n_classes=v)
+                    for k, v in self.dim_dict.items()
                 }
             )
             self.Aggregation = SumAggregation()
-            # self.final_norm = LayerNorm(num_groups*len(self.dim_dict)*out_emb_dim)
-            self.final_norm = GroupNorm(num_groups, num_groups*len(self.dim_dict)*out_emb_dim)
         elif aggregation == "SPARRA":
-            hid_emb_dim = self.embedding_dims[1]
-            self.mean_nn_branch = create_block(input_emb_dim, hid_emb_dim)
+            self.gate_nn_dict = nn.ModuleDict(
+                {
+                    k: Attn_Net_Gated(L=v, D=256, dropout=0.25, n_classes=v)
+                    for k, v in self.dim_dict.items()
+                }
+            )
             self.downsample_nn_dict = nn.ModuleDict(
                 {
                     k: DownsampleArch(
-                        dim_features=input_emb_dim,
-                        dim_hidden=2 * hid_emb_dim,
+                        dim_features=v,
+                        dim_hidden=2*v,
                         dropout=0.0,
                         pool_ratio=self.pool_dict[k],
                         conv=self.conv_name
                     )
-                    for k in self.dim_dict.keys()
+                    for k, v in self.dim_dict.items()
                 }
             )
-            out_emb_dim = hid_emb_dim
-            input_emb_dim = hid_emb_dim
-            # self.gate_nn = Attn_Net_Gated(
-            #     L=input_emb_dim, 
-            #     D=256, 
-            #     dropout=0.25, 
-            #     n_classes=1
-            # )
-            hid_emb_dim = self.embedding_dims[0]
-            self.inverse_score_nn = ImportanceScoreArch(
-                dim_features=input_emb_dim,
-                dim_target=hid_emb_dim,
-                layers=self.embedding_dims[1:],
-                dropout=0.0,
-                conv=self.conv_name
+            self.hetero_gate_dict = nn.ModuleDict(
+                {
+                    k: Linear(v, 1, bias=True)
+                    for k, v in self.dim_dict.items()
+                }
             )
             self.MeanAggregation = MeanAggregation()
             self.SumAggregation = SumAggregation()
-            self.final_norm = GroupNorm(num_groups, num_groups*len(self.dim_dict)*out_emb_dim)
+            self.omega = nn.Parameter(
+                torch.tensor([0.8, 0.2]).unsqueeze(0).repeat(len(self.dim_dict), 1)
+            )
         else:
             raise NotImplementedError
 
-        self.classifier = Linear(num_groups*len(self.dim_dict)*out_emb_dim, dim_target)
+        self.predictor_dict = nn.ModuleDict(
+            {
+                k: Linear(num_groups * v, dim_target, bias=True)
+                for k, v in self.dim_dict.items()
+            }
+        )
+    
+        feature_dim = sum(list(self.dim_dict.values()))
+        self.predictor = Linear(num_groups * feature_dim, dim_target, bias=True)
 
     def save(self, path):
         state_dict = self.state_dict()
@@ -624,18 +600,22 @@ class MultiTaskGraphArch(nn.Module):
 
     def load(self, path):
         state_dict = torch.load(path)
-        self.load_state_dict(state_dict)
+        try:
+            self.load_state_dict(state_dict)
+        except RuntimeError as e:
+            print("Loading failed:", e)
+            pass
 
     def sampling(self, data):
         loc, logvar = torch.chunk(data, chunks=2, dim=-1)
-        logvar = torch.clamp(logvar, min=-20, max=20)
+        logvar = torch.clamp(logvar, min=-20, max=0)
         gauss = torch.distributions.Normal(loc, torch.exp(0.5*logvar))
         return gauss.sample(), loc, logvar
 
     def precision(self, loc, logvar):
         alpha = self.alpha0 + 0.5
         beta = self.beta0 + 0.5*(self.lambda0*(loc - self.mu0)**2 + self.lambda0*torch.exp(logvar))
-        beta = beta.detach()
+        # beta = beta.clone().detach()
         return alpha, beta
 
     def group_sparsemax(self, x, index):
@@ -646,125 +626,161 @@ class MultiTaskGraphArch(nn.Module):
         return out
 
     def forward(self, data):
-        feature_dict = {k : self.enc_branches[k](data.x_dict[k]) for k in self.dim_dict.keys()}
-        batch_dict = {k: data.batch_dict[k] for k in self.dim_dict.keys()}
-
-        if self.aggregation == "ABMIL":
+        if self.aggregation == "MEAN":
+            gate_dict = {}
+            
+            # feature aggregation
+            feature_dict = {
+                k: self.Aggregation(data.x_dict[k], index=data.batch_dict[k])
+                for k in self.dim_dict.keys()
+            }
+            VIparas = None
+            perm_dict = None
+        elif self.aggregation == "ABMIL":
             gate_dict = {}
             for k in self.dim_dict.keys():
-                gate = self.gate_nn_dict[k](feature_dict[k])
-                gate = softmax(gate, index=batch_dict[k], dim=-2)
+                gate = self.gate_nn_dict[k](data.x_dict[k])
+                gate = softmax(gate, index=data.batch_dict[k], dim=-2)
                 gate_dict.update({k: gate})
             
             # feature aggregation
-            feature_list = [
-                self.Aggregation(feature_dict[k] * gate_dict[k], index=batch_dict[k])
+            feature_dict = {
+                k: self.Aggregation(data.x_dict[k] * gate_dict[k], index=data.batch_dict[k])
                 for k in self.dim_dict.keys()
-            ]
+            }
             VIparas = None
             perm_dict = None
-            feature = torch.concat(feature_list, dim=-1)
         elif self.aggregation == "SPARRA":
-            # get homogeneous features
-            homo_feature_list = [
-                self.MeanAggregation(self.mean_nn_branch(feature_dict[k]), index=batch_dict[k])
-                for k in self.dim_dict.keys()
-            ]
             # encoder
-            feature_list, edge_index_list, batch_list = [], [], []
+            feature_dict, batch_dict = {}, {}
             perm_dict, score_list = {}, []
             for k in self.dim_dict.keys():
+                feature = self.gate_nn_dict[k](data.x_dict[k])
                 feature, edge_index, batch, perm_list, score = self.downsample_nn_dict[k](
-                    feature = feature_dict[k], 
+                    feature = feature, 
                     edge_index = data.edge_index_dict[k, "to", k], 
-                    batch = batch_dict[k]
+                    batch = data.batch_dict[k]
                 )
-                feature_list.append(feature)
-                edge_index_list.append(edge_index)
-                batch_list.append(batch)
+                feature_dict.update({k: feature})
+                batch_dict.update({k: batch})
                 perm_dict.update({k: perm_list})
-                score_list.append(score)
-            
-            # graph concatenation
-            feature = torch.concat(feature_list, dim=0)
-            edge_index = [e.clone() for e in edge_index_list]
-            ins = [0]
-            index_shift = 0
-            for i in range(1, len(self.dim_dict)): 
-                index_shift += len(feature_list[i - 1])
-                edge_index[i] += index_shift
-                ins.append(index_shift)
-            ins.append(len(feature))
-            edge_index = torch.concat(edge_index, dim=1)
-            batch = torch.concat(batch_list, dim=0)
-            batch_dict = {k: b for k, b in zip(self.dim_dict.keys(), batch_list)}
-            score = torch.concat(score_list, dim=0)
 
-            # reparameterization
-            sample, loc, logvar = self.sampling(feature)
-            VIparas = [loc, logvar]
+            # sparsity-informed aggregation
+            sample_dict, loc_dict, logvar_dict = {}, {}, {}
+            gate_dict, precision_dict = {}, {}
+            for k in self.dim_dict.keys():
+                # sparse_score = self.gate_nn_dict[k](feature_dict[k])
+                sample, loc, logvar = self.sampling(feature_dict[k])
+                sample_dict.update({k: sample})
+                loc_dict.update({k: loc})
+                logvar_dict.update({k: logvar})
+                alpha, beta = self.precision(loc, logvar)
+                precision = alpha / beta # smaller, more uncertain
 
-            # caculate normalized inverse precision
-            alpha, beta = self.precision(loc, logvar)
-            inv_precision = beta / (alpha - 1)  # mean of inverse precision/gamma
-            gate = inv_precision
+                precision_prior_mode = (self.alpha0 - 1) / self.beta0
+                # w = min(0.2, 0.01 + epoch * 0.02)
+                # w = max(0.4, 3 - epoch * 0.5)
+                # threshold = precision.mean().detach().clamp(
+                #     max=0.2 * precision_prior_mode
+                # )
+                # gate = torch.relu(precision - threshold)
+                gate = torch.relu(precision - 0.2 * precision_prior_mode)
 
-            # caculate raw moments
-            if self.training:
-                feature = sample
-            else:
-                feature = loc
-            # feature = sample  # the first raw moment
-            # feature = torch.concat([feature, loc**2 + inv_precision], dim=-1)  # the second raw moment
-            # feature = torch.concat([feature, loc**3 + 3*loc*inv_precision], dim=-1)  # the third raw moment
-            # feature = torch.concat([feature, loc**4 + 6*loc**2*inv_precision + 3*inv_precision*beta/(alpha-2)], dim=-1)  # the fourth raw moment
-            # gate = self.group_sparsemax(inv_precision, index=batch)
-            # N = maybe_num_nodes(batch)
-            # inv_precision_sum = scatter(inv_precision, index=batch, dim=-2, dim_size=N, reduce='sum')
-            # inv_precision_sum = inv_precision_sum.index_select(-2, batch)
-            # gate = inv_precision / inv_precision_sum
-            # if self.training:
-            #     gate = self.group_sparsemax(sample, index=batch)
-            # else:
-            #     gate = self.group_sparsemax(loc, index=batch)
-            precision_list = [alpha / beta, self.lambda0, self.mu0]
-            VIparas.append(precision_list)
+                sparsity = (gate == 0).float().mean(axis=0)
+                s_min = sparsity.min().item()
+                s_mean = sparsity.mean().item()
+                s_max = sparsity.max().item()
+                print(f'{k} Sparsity:', (s_min, s_mean, s_max))
+                # gate = F.softplus(precision - 0.2 * precision_prior_mode)
+                # gate = precision * torch.sigmoid(0.05 * (precision - precision_prior_mode))
+                batch = batch_dict[k]
+                N = maybe_num_nodes(batch)
+                gate_sum = scatter(gate, index=batch, dim=0, dim_size=N, reduce='sum')
+                gate_sum = gate_sum.index_select(0, batch)
+                gate_dict.update({k: gate / (gate_sum + 1e-6)})
+                precision_dict.update({k: [alpha / beta, self.lambda0, self.mu0]})
 
-            
-            feature_dict = {k: feature[ins[i]:ins[i+1]] for i, k in enumerate(self.dim_dict.keys())}
-            gate_dict = {k: gate[ins[i]:ins[i+1]] for i, k in enumerate(self.dim_dict.keys())}
+                # get inverse precison
+                # batch = batch_dict[k]
+                # N = maybe_num_nodes(batch)
+                # inv_precision_sum = scatter(inv_precision, index=batch, dim=0, dim_size=N, reduce='sum')
+                # inv_precision_sum = inv_precision_sum.max(dim=1, keepdim=True)[0]
+                # inv_precision_sum = inv_precision_sum.mean(dim=1, keepdim=True)
+                # inv_precision_sum = inv_precision_sum.index_select(0, batch)
+                # gate = inv_precision / inv_precision_sum
+                # gate_dict.update({k: gate})
+                # precision_dict.update({k: [alpha / beta, self.lambda0, self.mu0]})
 
-            # decoder
-            decode = self.inverse_score_nn(sample, edge_index)
-
-            dec_list = [
-                self.dec_branches[k](decode[ins[i]:ins[i+1], ...]) 
-                for i, k in enumerate(self.dim_dict.keys())
-            ]
+            VIparas = [loc_dict, logvar_dict, precision_dict]
 
             # get references of downsampled graphs
-            ds_enc_list = []
+            ds_enc_dict = {}
             for k in self.dim_dict.keys():
                 enc = data.x_dict[k]
                 perm_list = perm_dict[k]
                 for p in perm_list: 
                     enc = enc[p]
-                ds_enc_list.append(enc)
-            VIparas.append(ds_enc_list)
-            VIparas.append(dec_list)
+                ds_enc_dict.update({k: enc})
+            VIparas.append(ds_enc_dict)
+            VIparas.append(sample_dict)
             
-            # get heterogeneous features
-            hetero_feature_list = [
-                self.MeanAggregation(feature_dict[k], index=batch_dict[k])
+            # get homogeneous features
+            homo_feature_dict = {
+                k: self.MeanAggregation(data.x_dict[k], index=data.batch_dict[k])
                 for k in self.dim_dict.keys()
-            ]
-            feature = torch.concat(homo_feature_list + hetero_feature_list, dim=-1)
-        
-        # outcome prediction
-        # feature = self.final_norm(feature)
-        output = self.classifier(feature)
+            }
 
-        return output, VIparas, feature, perm_dict, gate_dict
+            # get heterogeneous features
+            # if self.training:
+            #     feature_dict = sample_dict
+            # else:
+            #     feature_dict = loc_dict
+            hetero_feature_dict = {
+                k: self.SumAggregation(ds_enc_dict[k] * gate_dict[k], index=batch_dict[k])
+                for k in self.dim_dict.keys()
+            }
+            
+            # get fused features
+            # hetero_gate = {
+            #     k: torch.sigmoid(self.hetero_gate_dict[k](hetero_feature_dict[k] - homo_feature_dict[k]))
+            #     for k in self.dim_dict.keys()
+            # }
+            # feature_dict = {
+            #     k: (1 - hetero_gate[k]) * homo_feature_dict[k] + hetero_gate[k] * hetero_feature_dict[k]
+            #     for k in self.dim_dict.keys()
+            # }
+            # print('Hetero gate:', [(k, v.min().item(), v.max().item()) for k, v in hetero_gate.items()])
+            # omega = torch.softmax(self.omega, dim=1)
+            # feature_dict = {
+            #     k: omega[i, 0] * homo_feature_dict[k] + omega[i, 1] * hetero_feature_dict[k]
+            #     for i, k in enumerate(self.dim_dict.keys())
+            # }
+            # print("Omega:", omega[:, 0].min().item(), omega[:, 1].max().item())
+            feature_dict = {
+                k: 0.0 * homo_feature_dict[k] + 1.0 * hetero_feature_dict[k]
+                for k in self.dim_dict.keys()
+            }
+        
+        # normalize feature due to different scales for different graphs
+        feature_dict = {
+            k: v / v.norm(dim=-1, keepdim=True).clamp_min(1e-6) * 16
+            for k, v in feature_dict.items()
+        }
+
+        # graph-specific predictions for training the aggregation modules
+        pred_dict = {
+            k: self.predictor_dict[k](feature_dict[k])
+            for k in self.dim_dict.keys()
+        }
+
+        # only used for training a predictor, so detached
+        feature = torch.concat(
+            [feature_dict[k] for k in self.dim_dict.keys()],
+            dim=-1
+        ).detach()
+        prediction = self.predictor(feature)
+        
+        return prediction, pred_dict, VIparas, feature, perm_dict, gate_dict
     
     @staticmethod
     def train_batch(model, batch_data, on_gpu, loss, optimizer, kl=None, l1_penalty=0.0):
@@ -773,12 +789,20 @@ class MultiTaskGraphArch(nn.Module):
 
         model.train()
         optimizer.zero_grad()
-        outputs, VIparas, _, _, _ = model(batch_data)
-        outputs = outputs.squeeze()
+        predictions, outputs, VIparas, _, _, _ = model(batch_data)
         labels = batch_data.y_dict
         masks = batch_data.mask_dict
-        loss = loss(outputs, labels, masks, VIparas, model.task_to_idx)
-        loss += l1_penalty * model.classifier.weight.abs().sum()
+        loss = loss(predictions, outputs, labels, masks, VIparas)
+
+        # add regularization
+        loss += l1_penalty * model.predictor.weight.abs().sum()
+        if model.predictor.bias is not None:
+            loss += 10 * l1_penalty * model.predictor.bias.abs().sum()
+        for predictor in model.predictor_dict.values():
+            loss += l1_penalty * predictor.weight.abs().sum()
+            if predictor.bias is not None:
+                loss += 10 * l1_penalty * predictor.bias.abs().sum()
+
         loss.backward()
         optimizer.step()
 
@@ -794,7 +818,7 @@ class MultiTaskGraphArch(nn.Module):
 
         model.eval()
         with torch.inference_mode():
-            outputs, _, features, perm_dict, gate_dict = model(batch_data)
+            outputs, _, _, features, perm_dict, gate_dict = model(batch_data)
         outputs = outputs.cpu().numpy()
         features = features.cpu().numpy()
         labels, masks = None, None
@@ -1003,46 +1027,89 @@ class ScalarMovingAverage:
 class VILoss(nn.Module):
     """ variational inference loss
     """
-    def __init__(self, tau_kl=0.1):
+    def __init__(self, tau_ae=1e-2):
         super(VILoss, self).__init__()
-        self.tau_kl = tau_kl
+        self.tau_ae = tau_ae
 
-    def forward(self, loc, logvar, pre_list, enc_list, dec_list):
-        precision, lambda0, mu0 = pre_list
+    def forward(self, loc, logvar, pre, enc, dec):
+        precision, lambda0, mu0 = pre
         precision = precision.clone().detach()
+        pre_min = precision.min().item()
+        pre_mean = precision.mean().item()
+        pre_max = precision.max().item()
+
         loss_kl = 0.5*torch.mean(lambda0*precision*((loc - mu0)**2 + torch.exp(logvar)) - logvar)
-        loss_ae = 0.0
-        for enc, dec in zip(enc_list, dec_list):
-            # subset = torch.randperm(len(enc))[:len(dec)]
-            # enc = enc[subset]
-            loss_ae += F.mse_loss(enc - torch.mean(enc, dim=0, keepdim=True), dec)
-        loss_ae = loss_ae / len(dec_list)
-        print(loss_ae.item(), loss_kl.item(), precision.min().item(), precision.max().item())
-        return loss_ae + self.tau_kl * loss_kl
+        loss_ae = F.mse_loss(enc - torch.mean(enc, dim=0, keepdim=True), dec)
+        print(loss_ae.item(), loss_kl.item(), (pre_min, pre_mean, pre_max))
+
+        return self.tau_ae * loss_ae + loss_kl
+
+# class VILoss(nn.Module):
+#     """ variational inference loss
+#     """
+#     def __init__(self, tau_ae=10):
+#         super(VILoss, self).__init__()
+#         self.tau_ae = tau_ae
+
+#     def forward(self, loc_dict, logvar_dict, pre_dict, enc_dict, dec_dict):
+#         loss_ae = 0.0
+#         loss_kl = 0.0
+#         pre_min = []
+#         pre_max = []
+#         sparsity = []
+#         for k in loc_dict.keys():
+#             loc, logvar = loc_dict[k], logvar_dict[k]
+#             precision, lambda0, mu0 = pre_dict[k]
+#             precision = precision.clone().detach()
+#             pre_min.append(precision.min().item())
+#             pre_max.append(precision.max().item())
+#             sparsity.append((precision > 100).float().mean().item())
+
+#             loss_kl += 0.5*torch.mean(lambda0*precision*((loc - mu0)**2 + torch.exp(logvar)) - logvar)
+#             enc, dec = enc_dict[k], dec_dict[k]
+#             loss_ae += F.mse_loss(enc - torch.mean(enc, dim=0, keepdim=True), dec)
+#         loss_ae = loss_ae / len(dec_dict)
+#         loss_kl = loss_kl / len(dec_dict)
+#         print(loss_ae.item(), loss_kl.item(), min(pre_min), max(pre_max), min(sparsity), max(sparsity))
+#         return self.tau_ae * loss_ae + loss_kl
     
 class CoxSurvLoss(nn.Module):
     def __init__(self):
-        super(CoxSurvLoss, self).__init__()
+        super().__init__()
 
-    def forward(self, hazards, time, c):
-        # This calculation credit to Travers Ching https://github.com/traversc/cox-nnet
-        # Cox-nnet: An artificial neural network method for prognosis prediction of high-throughput omics data
-        current_batch_len = len(time)
-        R_mat = np.zeros([current_batch_len, current_batch_len], dtype=int)
-        for i in range(current_batch_len):
-            for j in range(current_batch_len):
-                R_mat[i,j] = time[j] >= time[i]
+    def forward(self, hazards, time, event):
+        """
+        hazards: (B, 1) or (B,)
+        time:    (B,)
+        event:   (B,)  {1=event, 0=censored}
+        """
 
-        # c = torch.tensor(c).to(hazards.device)
-        R_mat = torch.tensor(R_mat).to(hazards.device)
-        theta = hazards.reshape(-1)
-        exp_theta = torch.exp(theta)
-        loss_cox = -torch.mean((theta - torch.log(torch.sum(exp_theta*R_mat, dim=1))) * c)
-        return loss_cox
+        device = hazards.device
+        hazards = hazards.view(-1)
+        time = time.view(-1)
+        event = event.view(-1)
+
+        # Skip if no events in batch
+        if event.sum() == 0:
+            return torch.tensor(0.0, device=device)
+
+        # Sort by descending time
+        order = torch.argsort(time, descending=True)
+        hazards = hazards[order]
+        event = event[order]
+
+        # log cumulative sum exp (numerically stable)
+        log_cumsum_exp = torch.logcumsumexp(hazards, dim=0)
+
+        # Cox loss
+        loss = -(hazards - log_cumsum_exp) * event
+        return loss.sum() / event.sum()
+
     
 class MultiTaskLoss(nn.Module):
-    def __init__(self, tau_vi=0.1, tau_surv=1.0, tau_cls=1.0, tau_reg=1.0):
+    def __init__(self, task_to_idx, tau_vi=0.1, tau_surv=1.0, tau_cls=1.0, tau_reg=1.0):
         super(MultiTaskLoss, self).__init__()
+        self.task_to_idx = task_to_idx
         self.tau_vi = tau_vi
         self.tau_surv = tau_surv
         self.tau_cls = tau_cls
@@ -1053,7 +1120,7 @@ class MultiTaskLoss(nn.Module):
         self.loss_cls = nn.CrossEntropyLoss(reduction='none')
         self.loss_reg = nn.MSELoss(reduction='none')
 
-    def forward(self, logits, y_dict, mask_dict, VIparas=None, task_to_idx=None):
+    def forward(self, logits, y_dict, mask_dict, graph_idx, VIparas=None):
         """
         logits: model output [B, N_total_subtasks]
         y_dict: HeteroData labels, with keys 'survival', 'classification', 'regression'
@@ -1062,14 +1129,14 @@ class MultiTaskLoss(nn.Module):
         survival_loss = 0.0
         classification_loss = 0.0
         regression_loss = 0.0
-        print('\n')
+        num_tasks = 0
+        precision_dict = {}
 
         # ---------------- Survival ----------------
         if 'survival' in y_dict:
             y_surv = y_dict['survival']          # [B, num_surv_tasks, 2]
             mask_surv = mask_dict['survival']   # same shape
-            num_tasks = 0
-            for i, task in enumerate(task_to_idx['survival'].keys()):
+            for i, task in enumerate(self.task_to_idx['survival'].keys()):
 
                 # Mask valid entries
                 m = mask_surv[:, i] > 0
@@ -1078,22 +1145,20 @@ class MultiTaskLoss(nn.Module):
                 
                 dur = y_surv[m, i, 0]
                 ev = y_surv[m, i, 1]
-                idx = task_to_idx['survival'][task]
+                idx = self.task_to_idx['survival'][task]
 
                 # Compute loss
                 l_i = self.loss_surv(logits[m, idx], dur, ev)
                 survival_loss += self.tau_surv * l_i
                 num_tasks += 1
-            survival_loss /= num_tasks
-            print('survival loss:', survival_loss.item())
+            # print('survival loss:', survival_loss.item())
 
         # ---------------- Classification ----------------
         if 'classification' in y_dict:
             y_cls = y_dict['classification']      # [B, num_cls_tasks]
             mask_cls = mask_dict['classification']  # same shape
-            num_tasks = 0
-            for i, task in enumerate(task_to_idx['classification'].keys()):
-                idx_info = task_to_idx['classification'][task]
+            for i, task in enumerate(self.task_to_idx['classification'].keys()):
+                idx_info = self.task_to_idx['classification'][task]
 
                 # Handle binary vs multi-class
                 if isinstance(idx_info, tuple):
@@ -1115,16 +1180,14 @@ class MultiTaskLoss(nn.Module):
                 l_i = self.loss_cls(logits_valid, targets)
                 classification_loss += self.tau_cls * l_i.sum() / m.sum()
                 num_tasks += 1
-            classification_loss /= num_tasks
-            print('classification loss:', classification_loss.item())
+            # print('classification loss:', classification_loss.item())
 
         # ---------------- Regression ----------------
         if 'regression' in y_dict:
             y_reg = y_dict['regression']        # [B, num_reg_tasks, n_subcols]
             mask_reg = mask_dict['regression']  # same shape
-            num_tasks = 0
-            for i, task in enumerate(task_to_idx['regression'].keys()):
-                idx = task_to_idx['regression'][task]
+            for i, task in enumerate(self.task_to_idx['regression'].keys()):
+                idx = self.task_to_idx['regression'][task]
 
                 # Extract targets and mask
                 targets = y_reg[:, i]           # [B, n_subcols] or [B] if single column
@@ -1140,15 +1203,170 @@ class MultiTaskLoss(nn.Module):
                 l_i = self.loss_reg(logits_valid, targets_valid)
                 regression_loss += self.tau_reg * l_i.sum() / m.sum()
                 num_tasks += 1
-            regression_loss /= num_tasks
-            print('regression loss:', regression_loss.item())
+            # print('regression loss:', regression_loss.item())
 
         # multi-task loss
-        total_loss = survival_loss + classification_loss + regression_loss
+        total_loss = (survival_loss + classification_loss + regression_loss) / num_tasks
 
         # ---------------- VI Loss (optional) ----------------
         if VIparas is not None:
             loss_vi = self.loss_vi(*VIparas)
             total_loss += self.tau_vi * loss_vi
 
-        return total_loss
+        return total_loss, precision_dict
+
+class WeightedMultiTaskLoss(nn.Module):
+    def __init__(self, task_to_idx, graph_to_idx, tau_vi=0.1):
+        super(WeightedMultiTaskLoss, self).__init__()
+        self.task_to_idx = task_to_idx
+        self.tau_vi = tau_vi
+
+        self.subtask_idx = (
+            list(task_to_idx['survival'].keys()) +
+            list(task_to_idx['classification'].keys()) +
+            list(task_to_idx['regression'].keys())
+        )
+        self.graph_to_idx = list(graph_to_idx) + ['integration']
+        self.log_sigma = nn.Parameter(
+            torch.zeros([len(self.graph_to_idx), len(self.subtask_idx)])
+        )
+
+        self.loss_surv = CoxSurvLoss()
+        self.loss_vi = VILoss()
+        self.loss_cls = nn.CrossEntropyLoss(reduction='none')
+        self.loss_reg = nn.MSELoss(reduction='none')
+    
+    def get_log_sigma(self, graph_name, task_name):
+        i = self.graph_to_idx.index(graph_name)
+        j = self.subtask_idx.index(task_name)
+        return self.log_sigma[i,j]
+
+    def forward(self, logits, y_dict, mask_dict, graph_idx, VIparas=None):
+        """
+        logits: model output [B, N_total_subtasks]
+        y_dict: HeteroData labels, with keys 'survival', 'classification', 'regression'
+        VIparas: optional parameters for VI loss
+        """
+        survival_loss = 0.0
+        classification_loss = 0.0
+        regression_loss = 0.0
+        num_tasks = 0
+        precision_dict = {}
+
+        # ---------------- Survival ----------------
+        if 'survival' in y_dict:
+            y_surv = y_dict['survival']          # [B, num_surv_tasks, 2]
+            mask_surv = mask_dict['survival']   # same shape
+            for i, task in enumerate(self.task_to_idx['survival'].keys()):
+
+                # Mask valid entries
+                m = mask_surv[:, i] > 0
+                if m.sum() == 0:
+                    continue
+                
+                dur = y_surv[m, i, 0]
+                ev = y_surv[m, i, 1]
+                idx = self.task_to_idx['survival'][task]
+
+                # Compute loss
+                l_i = self.loss_surv(logits[m, idx], dur, ev)
+                log_sigma = self.get_log_sigma(graph_idx, task)
+                precision = torch.exp(-log_sigma)
+                precision_dict.update({task: precision.item()})
+                survival_loss += precision * l_i + log_sigma
+                num_tasks += 1
+
+        # ---------------- Classification ----------------
+        if 'classification' in y_dict:
+            y_cls = y_dict['classification']      # [B, num_cls_tasks]
+            mask_cls = mask_dict['classification']  # same shape
+            for i, task in enumerate(self.task_to_idx['classification'].keys()):
+                idx_info = self.task_to_idx['classification'][task]
+
+                # Handle binary vs multi-class
+                if isinstance(idx_info, tuple):
+                    idx_s, idx_e = idx_info
+                    logits_task = logits[:, idx_s:idx_e]  # [B, num_classes]
+                else:
+                    idx = idx_info
+                    logits_task = logits[:, idx].unsqueeze(1)  # [B, 1]
+
+                # Mask valid entries
+                m = mask_cls[:, i] > 0
+                if m.sum() == 0:
+                    continue
+
+                targets = y_cls[m, i].long()  # ensure long type for CrossEntropyLoss
+                logits_valid = logits_task[m]
+
+                # Compute loss
+                l_i = self.loss_cls(logits_valid, targets)
+                log_sigma = self.get_log_sigma(graph_idx, task)
+                precision = torch.exp(-log_sigma)
+                precision_dict.update({task: precision.item()})
+                classification_loss += precision * l_i.sum() / m.sum() + log_sigma
+                num_tasks += 1
+
+        # ---------------- Regression ----------------
+        if 'regression' in y_dict:
+            y_reg = y_dict['regression']        # [B, num_reg_tasks, n_subcols]
+            mask_reg = mask_dict['regression']  # same shape
+            for i, task in enumerate(self.task_to_idx['regression'].keys()):
+                idx = self.task_to_idx['regression'][task]
+
+                # Extract targets and mask
+                targets = y_reg[:, i]           # [B, n_subcols] or [B] if single column
+                m = mask_reg[:, i] > 0          # [B,] boolean
+
+                if m.sum() == 0:
+                    continue
+
+                logits_valid = logits[m, idx]   # [num_valid, ...]
+                targets_valid = targets[m]      # [num_valid, ...]
+
+                # Compute loss
+                l_i = self.loss_reg(logits_valid, targets_valid)
+                log_sigma = self.get_log_sigma(graph_idx, task)
+                precision = torch.exp(-log_sigma)
+                precision_dict.update({task: precision.item()})
+                regression_loss += precision * l_i.sum() / m.sum() + log_sigma
+                num_tasks += 1
+
+        # multi-task loss
+        total_loss = (survival_loss + classification_loss + regression_loss) / num_tasks
+
+        # ---------------- VI Loss (optional) ----------------
+        if VIparas is not None:
+            loss_vi = self.loss_vi(*VIparas)
+            total_loss += self.tau_vi * loss_vi
+
+        return total_loss, precision_dict
+
+class MultiPredEnsembleLoss(nn.Module):
+    def __init__(self, task_to_idx, graph_to_idx, task_weighted=True, lambda_fuse=1.0):
+        super(MultiPredEnsembleLoss, self).__init__()
+        self.steps = 0
+        self.lambda_fuse = lambda_fuse
+        if not task_weighted:
+            self.multi_task_loss = MultiTaskLoss(task_to_idx)
+        else:
+            self.multi_task_loss = WeightedMultiTaskLoss(task_to_idx, graph_to_idx)
+
+    def forward(self, predictions, pred_dict, y_dict, mask_dict, VIparas=None):
+        loss = 0.0
+        self.steps += 1
+        for i, k in enumerate(pred_dict.keys()):
+            if VIparas is not None:
+                VI = [p[k] for p in VIparas]
+            else:
+                VI = None
+            mt_loss, mt_precision_dict = self.multi_task_loss(pred_dict[k], y_dict, mask_dict, k, VI)
+            loss += mt_loss
+            if self.steps % 20 == 0:
+                print(f'\nGraph {k} multi-task weights:', mt_precision_dict)
+
+        # add loss for fused predictions
+        mt_loss, _ = self.multi_task_loss(predictions, y_dict, mask_dict, 'integration')
+        loss += self.lambda_fuse * mt_loss
+
+        return loss
