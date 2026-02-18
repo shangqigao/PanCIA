@@ -1636,6 +1636,7 @@ if __name__ == "__main__":
         elif opt['PREDICTION']['USED_OMICS']['VALUE'] == "radiopathomics":
             save_omics_dir = save_omics_dir + f"/radiomics_pathomics_GCNConv_" \
                 + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
+        # save_omics_dir = opt['PREDICTION']['OMICS_DIR'] + f"/{radiomics_mode}+{pathomics_mode}" + f"/pathomics_GCNConv_SPARRA_homo+heter_vi0.1ae10_noDS_x_enc_sample0.1"
 
         survival(
             split_path=split_path,

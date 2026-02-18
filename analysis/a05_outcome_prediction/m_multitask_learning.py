@@ -888,8 +888,8 @@ def inference(
     if arch_opt['BayesGNN']:
         model_folder = f"{omics_name}_Bayes_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
     else:
-        # model_folder = f"{omics_name}_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
-        model_folder = 'radiomics_pathomics_GCNConv_SPARRA_heter_vi0.1ae1e-2_pool0.7_relugate_>20'
+        model_folder = f"{omics_name}_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
+        # model_folder = 'pathomics_GCNConv_SPARRA_homo+heter_vi0.1ae10_noDS_x_ref_sample0.1'
     model_dir = pretrained_model_dir / model_folder
 
     predict_results = {}

@@ -50,7 +50,7 @@ SPLIT:
 PREDICTION:
   OMICS_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_multitask"
   USED_OMICS:
-    VALUE: "radiopathomics"
+    VALUE: "pathomics"
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:
@@ -60,7 +60,7 @@ PREDICTION:
     VALUE: "f1"
     CHOICES: ["accuracy", "f1", "roc_auc"]
   FEATURE_SELECTION:
-    VALUE: False
+    VALUE: True
     VAR_THRESHOLD: 0.0001
     NUM_FEATURES: 256
   USE_GRAPH_PROPERTIES: False
