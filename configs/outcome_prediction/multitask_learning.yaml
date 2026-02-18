@@ -16,8 +16,8 @@ OUTCOME:
       # "ProteinExpression",
     ]
 TASKS:
-  TRAIN: False
-  INFERENCE: True
+  TRAIN: True
+  INFERENCE: False
   TEST: False
 
 # Define parameters of radiomics
@@ -57,19 +57,19 @@ SPLIT:
   TEST_RATIO: 0.2
   VALID_RATIO: 0.1
   TRAIN_RATIO: 0.7
-  FILTER_SUBJECTS: False # discard subjects without outcomes
+  FILTER_SUBJECTS: True # discard subjects without outcomes
 
 ARCH:
   GNN: "GCNConv"
   BayesGNN: False
   DIM_TARGET: 1
-  LAYERS: [256, 128, 256]
+  LAYERS: [256, 256, 256]
   DROPOUT: 0.5
   POOL_RATIO:
     RAIOMICS: 0.7
     PATHOMICS: 0.7
-  OMICS: ["radiomics", "pathomics"]
-  # OMICS: ["radiomics"]
+  # OMICS: ["radiomics", "pathomics"]
+  OMICS: ["radiomics"]
   # OMICS: ["pathomics"]
   AGGREGATION:
     VALUE: "SPARRA"
@@ -80,7 +80,7 @@ TRAIN:
   EPOCHS: 40
   N_WORKS: 32
   BATCH_SIZE: 16
-  SAMPLING_RATE: 0.1 # only applied to radiomics
+  SAMPLING_RATE: 0.1
   LR: 3e-4
   WIEGHT_DECAY:
     MEAN: 1.0e-5
@@ -94,7 +94,7 @@ TRAIN:
 INFERENCE:
   N_WORKS: 32
   BATCH_SIZE: 4
-  SAMPLING_RATE: 0.1 # only applied to radiomics
+  SAMPLING_RATE: 0.1
   SAVE_OMICS: True
 
 TEST:

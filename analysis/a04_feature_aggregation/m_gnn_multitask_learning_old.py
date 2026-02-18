@@ -61,14 +61,14 @@ class MultiTaskGraphDataset(Dataset):
     # ----------------------------------------------------------------------
     # Optional k-hop sampling
     # ----------------------------------------------------------------------
-    def sample_subgraph(self, x, edge_index, ds):
+    def sample_subgraph(self, x, edge_index):
         assert x.size(0) > edge_index.max(), "Edge index contains invalid node indices"
         num_nodes = x.size(0)
 
         if self.sampling_rate >= 1 or num_nodes <= self.max_num_nodes:
             return x, edge_index
 
-        num_sampled = int(num_nodes * self.sampling_rate * ds)
+        num_sampled = int(num_nodes * self.sampling_rate)
         seed_count = max(1, num_sampled // 10)
 
         seeds = torch.randperm(num_nodes)[:seed_count]
@@ -116,10 +116,8 @@ class MultiTaskGraphDataset(Dataset):
                             x = proc(x)
                             x = torch.as_tensor(x, dtype=torch.float32)
 
-                    if key == "radiomics":
-                        x, edge_index = self.sample_subgraph(x, edge_index, ds=1.0)
-                    else:
-                        x, edge_index = self.sample_subgraph(x, edge_index, ds=1.0)
+                    # if key == "radiomics":
+                    x, edge_index = self.sample_subgraph(x, edge_index)
 
                     entry = child_nodes.setdefault(
                         child_name,
@@ -526,7 +524,7 @@ def graph_sparse_diff(
     if diff_type == "laplacian":
         if edge_weight is None:
             edge_weight = torch.ones(row.size(0), device=S.device)
-        
+
         # Weighted degree
         deg = torch.zeros(N, device=S.device)
         deg.scatter_add_(0, row, edge_weight)
@@ -580,6 +578,98 @@ def graph_sparse_diff(
 
     return diff, row_norm_sq_node.view(-1, 1) 
 
+def uniform_bin_pooling_weighted_normalized_soft(features, gate, batch_index, step_size, lower_bound, upper_bound):
+    """
+    Soft bin pooling for hierarchical graph features.
+
+    features: (N, C)
+    gate: (N, C), attention (can be any real value), requires grad
+    batch_index: (N,), node-to-graph assignment
+    step_size: float, bin width
+    upper_bound: float, maximum gate value
+    Returns:
+        pooled_feats: (num_graphs, C)
+    """
+
+    N, C = features.shape
+    device = features.device
+    num_graphs = batch_index.max().item() + 1
+
+    # Number of bins
+    # Number of bins
+    num_bins = int((upper_bound - lower_bound + step_size - 1e-6) // step_size)
+
+    bins_edges = torch.arange(
+        lower_bound,
+        lower_bound + (num_bins + 1) * step_size,
+        step_size,
+        device=device
+    )
+
+    bin_feats_list = []
+    bin_weights_list = []
+
+    for bin_idx in range(num_bins):
+        lower, upper = bins_edges[bin_idx], bins_edges[bin_idx + 1]
+
+        # Soft triangular mask
+        bin_mask_soft = torch.clamp((gate - lower) / step_size, min=0.0, max=1.0)
+        bin_mask_soft *= torch.clamp((upper - gate) / step_size, min=0.0, max=1.0)
+
+        feat_weighted = features * gate * bin_mask_soft
+        gate_weighted = gate * bin_mask_soft
+
+        node_idx, channel_idx = torch.nonzero(bin_mask_soft > 0, as_tuple=True)
+        if len(node_idx) == 0:
+            continue
+
+        values_feat = feat_weighted[node_idx, channel_idx]
+        values_gate = gate_weighted[node_idx, channel_idx]
+        graph_channel_idx = batch_index[node_idx] * C + channel_idx
+
+        sum_feat = scatter_add(
+            values_feat,
+            graph_channel_idx,
+            dim=0,
+            dim_size=num_graphs * C
+        )
+
+        sum_gate = scatter_add(
+            values_gate,
+            graph_channel_idx,
+            dim=0,
+            dim_size=num_graphs * C
+        ) + 1e-6
+
+        feat_bin = (sum_feat / sum_gate).view(num_graphs, C)
+        bin_feats_list.append(feat_bin)
+
+        count_nodes = scatter_add(
+            (bin_mask_soft > 0).float()[node_idx, channel_idx],
+            graph_channel_idx,
+            dim=0,
+            dim_size=num_graphs * C
+        )
+
+        bin_weight = (sum_gate / (count_nodes + 1e-6)).view(num_graphs, C)
+        bin_weights_list.append(bin_weight)
+
+    if len(bin_feats_list) == 0:
+        return torch.zeros((num_graphs, C), device=device)
+
+    bin_feats = torch.stack(bin_feats_list, dim=0)      # (num_bins, num_graphs, C)
+    bin_weights = torch.stack(bin_weights_list, dim=0)  # (num_bins, num_graphs, C)
+
+    norm_weights = bin_weights / (bin_weights.sum(dim=0, keepdim=True) + 1e-6)
+
+    pooled_feats = (bin_feats * norm_weights).sum(dim=0)
+    # pooled_feats = bin_feats.mean(dim=0)
+
+    return pooled_feats
+
+import torch
+from torch_scatter import scatter_add
+
 def gamma_bin_pooling_weighted_normalized_soft_hierarchical(
     features,
     gate,
@@ -601,147 +691,6 @@ def gamma_bin_pooling_weighted_normalized_soft_hierarchical(
         num_bins: int
         alpha: (N, C)
         beta: (N, C)
-
-    Returns:
-        graph_feats: (num_graphs, C)
-    """
-
-    N, C = features.shape
-    device = features.device
-
-    # --------------------------------------------------
-    # 1️⃣ Create unique subgraph IDs from (batch, parent)
-    # --------------------------------------------------
-
-    # Make (batch, parent) pairs unique
-    pair = torch.stack([batch_index, parent_id], dim=1)
-    unique_pairs, subgraph_index = torch.unique(pair, dim=0, return_inverse=True)
-
-    num_subgraphs = unique_pairs.size(0)
-    num_graphs = batch_index.max().item() + 1
-
-    # Each subgraph belongs to exactly one graph
-    subgraph_to_graph = unique_pairs[:, 0]  # (num_subgraphs,)
-
-    eps = 1e-6
-    probs = torch.linspace(eps, 1 - eps, num_bins + 1, device=device)
-
-    bin_feats_list = []
-
-    # --------------------------------------------------
-    # 3️⃣ Pool per subgraph
-    # --------------------------------------------------
-
-    for bin_idx in range(num_bins):
-
-        p_lower = probs[bin_idx]
-        p_upper = probs[bin_idx + 1]
-
-        # ---- Gamma quantile approximation (memory safe) ----
-        # with torch.no_grad():
-        z_lower = torch.erfinv(2 * p_lower - 1) * (2 ** 0.5)
-        z_upper = torch.erfinv(2 * p_upper - 1) * (2 ** 0.5)
-
-        term_lower = 1 - 1 / (9 * alpha) + z_lower / (3 * torch.sqrt(alpha))
-        term_upper = 1 - 1 / (9 * alpha) + z_upper / (3 * torch.sqrt(alpha))
-
-        lower = (alpha / beta) * term_lower.pow(3)
-        upper = (alpha / beta) * term_upper.pow(3)
-
-        lower = lower.clamp(min=1e-6)
-        upper = upper.clamp(min=1e-6)
-
-        width = (upper - lower).clamp(min=1e-6)
-
-        bin_mask_soft = torch.clamp((gate - lower) / width, 0.0, 1.0)
-        bin_mask_soft *= torch.clamp((upper - gate) / width, 0.0, 1.0)
-
-        if bin_mask_soft.sum() < 1e-6:
-            continue
-
-        feat_weighted = features * gate * bin_mask_soft
-        gate_weighted = gate * bin_mask_soft
-
-        node_idx, channel_idx = torch.nonzero(bin_mask_soft > 0, as_tuple=True)
-
-        # Subgraph-channel indexing
-        subgraph_channel_idx = subgraph_index[node_idx] * C + channel_idx
-
-        sum_feat = scatter_add(
-            feat_weighted[node_idx, channel_idx],
-            subgraph_channel_idx,
-            dim=0,
-            dim_size=num_subgraphs * C,
-        )
-
-        sum_gate = scatter_add(
-            gate_weighted[node_idx, channel_idx],
-            subgraph_channel_idx,
-            dim=0,
-            dim_size=num_subgraphs * C,
-        ) + 1e-6
-
-        feat_bin = (sum_feat / sum_gate).view(num_subgraphs, C)
-
-        bin_feats_list.append(feat_bin)
-
-    if len(bin_feats_list) == 0:
-        return torch.zeros((num_graphs, C), device=device)
-
-    # --------------------------------------------------
-    # 4️⃣ Equal-weight bin aggregation (per subgraph)
-    # --------------------------------------------------
-
-    subgraph_feats = torch.stack(bin_feats_list, dim=0).mean(dim=0)
-    # shape: (num_subgraphs, C)
-
-    # --------------------------------------------------
-    # 5️⃣ Aggregate subgraphs → graphs (patients)
-    # --------------------------------------------------
-
-    graph_feats = scatter_add(
-        subgraph_feats,
-        subgraph_to_graph,
-        dim=0,
-        dim_size=num_graphs,
-    )
-
-    # Optional: normalize by number of subgraphs per graph
-    subgraph_count = scatter_add(
-        torch.ones_like(subgraph_to_graph, dtype=torch.float),
-        subgraph_to_graph,
-        dim=0,
-        dim_size=num_graphs,
-    ).unsqueeze(-1)
-
-    graph_feats = graph_feats / (subgraph_count + 1e-6)
-
-    return graph_feats
-
-
-def gamma_bin_pooling_weighted_normalized_soft_hierarchical_gated(
-    features,
-    gate,
-    batch_index,
-    parent_id,
-    num_bins,
-    alpha,
-    beta,
-    attn_net
-):
-    """
-    Hierarchical soft Gamma-bin pooling:
-    Node → Subgraph → Graph
-
-    Args:
-        features: (N, C)
-        gate: (N, C)
-        batch_index: (N,) patient id
-        parent_id: (N,) slide/scan id (can repeat across patients)
-        num_bins: int
-        alpha: (N, C)
-        beta: (N, C)
-        attn_net: gated attention net
 
     Returns:
         graph_feats: (num_graphs, C)
@@ -835,86 +784,6 @@ def gamma_bin_pooling_weighted_normalized_soft_hierarchical_gated(
     # shape: (num_subgraphs, C)
 
     # --------------------------------------------------
-    # 5️⃣ Aggregate subgraphs → graphs (patients) with gated attention
-    # --------------------------------------------------
-    attn_logits = attn_net(subgraph_feats)
-    attn_weights = softmax(attn_logits, index=subgraph_to_graph, dim=-2)
-    graph_feats = scatter_add(
-        subgraph_feats * attn_weights,
-        subgraph_to_graph,
-        dim=0,
-        dim_size=num_graphs,
-    )
-
-    return graph_feats
-
-def gamma_weighted_normalized_soft_hierarchical(
-    features,
-    gate,
-    batch_index,
-    parent_id
-):
-    """
-    Hierarchical soft Gamma-bin pooling:
-    Node → Subgraph → Graph
-
-    Args:
-        features: (N, C)
-        gate: (N, C)
-        batch_index: (N,) patient id
-        parent_id: (N,) slide/scan id (can repeat across patients)
-
-    Returns:
-        graph_feats: (num_graphs, C)
-    """
-
-    N, C = features.shape
-    device = features.device
-
-    # --------------------------------------------------
-    # 1️⃣ Create unique subgraph IDs from (batch, parent)
-    # --------------------------------------------------
-
-    # Make (batch, parent) pairs unique
-    pair = torch.stack([batch_index, parent_id], dim=1)
-    unique_pairs, subgraph_index = torch.unique(pair, dim=0, return_inverse=True)
-
-    num_subgraphs = unique_pairs.size(0)
-    num_graphs = batch_index.max().item() + 1
-
-    # Each subgraph belongs to exactly one graph
-    subgraph_to_graph = unique_pairs[:, 0]  # (num_subgraphs,)
-
-    # --------------------------------------------------
-    # 3️⃣ Direct gated pooling per subgraph
-    # --------------------------------------------------
-
-    eps = 1e-6
-
-    # weight features
-    feat_weighted = features * gate          # (N, C)
-    gate_weighted = gate                     # (N, C)
-
-    # aggregate per subgraph
-    sum_feat = scatter_add(
-        feat_weighted,
-        subgraph_index,
-        dim=0,
-        dim_size=num_subgraphs,
-    )
-
-    sum_gate = scatter_add(
-        gate_weighted,
-        subgraph_index,
-        dim=0,
-        dim_size=num_subgraphs,
-    )
-
-    # normalized weighted mean
-    subgraph_feats = sum_feat / (sum_gate + eps)
-    # shape: (num_subgraphs, C)
-
-    # --------------------------------------------------
     # 5️⃣ Aggregate subgraphs → graphs (patients)
     # --------------------------------------------------
 
@@ -998,9 +867,39 @@ class MultiTaskGraphArch(nn.Module):
                     for k, v in self.dim_dict.items()
                 }
             )
+            self.downsample_nn_dict = nn.ModuleDict(
+                {
+                    k: DownsampleArch(
+                        dim_features=v,
+                        dim_hidden=v,
+                        dropout=0.0,
+                        pool_ratio=self.pool_dict[k],
+                        conv=self.conv_name
+                    )
+                    for k, v in self.dim_dict.items()
+                }
+            )
+            # self.hetero_gate_dict = nn.ModuleDict(
+            #     {
+            #         k: Linear(v, 1, bias=True)
+            #         for k, v in self.dim_dict.items()
+            #     }
+            # )
+            self.MeanAggregation = MeanAggregation()
+            self.SumAggregation = SumAggregation()
+            # self.omega = nn.Parameter(
+            #     torch.tensor([0.8, 0.2]).unsqueeze(0).repeat(len(self.dim_dict), 1)
+            # )
         else:
             raise NotImplementedError
         
+        # self.norm_layers = nn.ModuleDict(
+        #     {
+        #         k: nn.BatchNorm1d(num_groups * v)
+        #         for k, v in self.dim_dict.items()
+        #     }
+        # )
+
         self.predictor_dict = nn.ModuleDict(
             {
                 k: Linear(num_groups * v, dim_target, bias=True)
@@ -1068,46 +967,163 @@ class MultiTaskGraphArch(nn.Module):
             VIparas = None
             perm_dict = None
         elif self.aggregation == "SPARRA":
-            # sparsity-informed spatial aggregation
+            # get homogeneous features
+            # homo_feature_dict = {
+            #     k: self.MeanAggregation(data.x_dict[k], index=data.batch_dict[k])
+            #     for k in self.dim_dict.keys()
+            # }
+
+            # encoder
+            # feature_dict, batch_dict, edge_dict = {}, {}, {}
+            # perm_dict, score_list = {}, []
+            # for k in self.dim_dict.keys():
+            #     # feature = self.gate_nn_dict[k](data.x_dict[k])
+            #     feature, edge_index, batch, perm_list, score = self.downsample_nn_dict[k](
+            #         feature = data.x_dict[k], 
+            #         edge_index = data.edge_index_dict[k, "to", k], 
+            #         batch = data.batch_dict[k]
+            #     )
+            #     # feature = data.x_dict[k]
+            #     # edge_index = data.edge_index_dict[k, "to", k]
+            #     # batch = data.batch_dict[k]
+            #     # perm_list = []
+            #     feature_dict.update({k: feature})
+            #     batch_dict.update({k: batch})
+            #     edge_dict.update({k: edge_index})
+            #     perm_dict.update({k: perm_list})
+
+            # sparsity-informed aggregation
             sample_dict, loc_dict, logvar_dict, scale_dict = {}, {}, {}, {}
             gate_dict, precision_dict = {}, {}
-            feature_dict = {}
+            hetero_feature_dict, ds_enc_dict = {}, {}
             perm_dict = None
             for k in self.dim_dict.keys():
                 sparse_score = self.gate_nn_dict[k](data.x_dict[k])
                 sample, loc, logvar = self.sampling(sparse_score)
                 sample_dict.update({k: sample})
+                # loc_dict.update({k: loc})
+                # scale_dict.update({k: 1})
                 diff, row_norm_qr = graph_sparse_diff(loc, data.edge_index_dict[k, "to", k])
                 loc_dict.update({k: diff})
                 scale_dict.update({k: row_norm_qr})
                 logvar_dict.update({k: logvar})
+
+                # get references of downsampled graphs
+                # enc = data.x_dict[k]
+                # parent_id = data.parent_id_dict[k]
+                # perm_list = perm_dict[k]
+                # for p in perm_list: 
+                #     enc = enc[p]
+                #     parent_id = parent_id[p]
+                ds_enc_dict.update({k: data.x_dict[k]})
         
                 alpha, beta = self.precision(loc, logvar)
                 precision = alpha / beta # smaller, more uncertain
                 precision_dict.update({k: [precision, self.lambda0, self.mu0]})
 
+                # w = min(0.2, 0.01 + epoch * 0.02)
+                # w = max(0.4, 3 - epoch * 0.5)
+                # threshold = precision.mean().detach().clamp(
+                #     max=1.0 * precision_prior_mode
+                # )
+                # gate = torch.relu(precision - threshold)
+                # gate = torch.relu(precision - 1.0 * precision_prior_mode)
+                # precision_prior_mode = (self.alpha0 - 1) / self.beta0
+                # lower_bound = 0.05 * precision_prior_mode
+                # upper_bound = (self.alpha0 - 1) / self.beta0
+                # gate = precision
+                # gate_dict.update({k: gate})
+                # hetero_feature_dict.update(
+                #     {
+                #         k: uniform_bin_pooling_weighted_normalized_soft(
+                #             enc, gate, batch_dict[k], 5, lower_bound, upper_bound
+                #         )
+                #     }
+                # )
+
                 if self.training:
                     gamma = torch.distributions.Gamma(alpha, beta)
                     gate = gamma.rsample()
                 else:
-                    gate = (alpha - 1) / beta # mode of gamma distribution
+                    gate = (alpha - 1) / beta
                 gate_dict.update({k: gate})
-
-                feature_dict.update(
+                # alpha_prior = self.alpha0 * torch.ones_like(alpha)
+                # beta_prior = self.beta0 * torch.ones_like(beta)
+                hetero_feature_dict.update(
                     {
-                        k: gamma_weighted_normalized_soft_hierarchical(
-                            data.x_dict[k], gate, data.batch_dict[k], data.parent_id_dict[k]
+                        k: gamma_bin_pooling_weighted_normalized_soft_hierarchical(
+                            data.x_dict[k], gate, data.batch_dict[k], data.parent_id_dict[k], 10, alpha, beta
                         )
                     }
                 )
 
-            VIparas = [loc_dict, logvar_dict, scale_dict, precision_dict, data.x_dict, sample_dict]
+                # sparsity = (gate == 0).float().mean(axis=0)
+                # s_min = sparsity.min().item()
+                # s_mean = sparsity.mean().item()
+                # s_max = sparsity.max().item()
+                # print(f'{k} Sparsity:', (s_min, s_mean, s_max))
+                # gate = F.softplus(precision - 0.2 * precision_prior_mode)
+                # gate = precision * torch.sigmoid(0.05 * (precision - precision_prior_mode))
+                # batch = batch_dict[k]
+                # N = maybe_num_nodes(batch)
+                # gate_sum = scatter(gate, index=batch, dim=0, dim_size=N, reduce='sum')
+                # gate_sum = gate_sum.index_select(0, batch)
+                # gate_dict.update({k: gate / (gate_sum + 1e-6)})
+
+                # get inverse precison
+                # batch = batch_dict[k]
+                # N = maybe_num_nodes(batch)
+                # inv_precision_sum = scatter(inv_precision, index=batch, dim=0, dim_size=N, reduce='sum')
+                # inv_precision_sum = inv_precision_sum.max(dim=1, keepdim=True)[0]
+                # inv_precision_sum = inv_precision_sum.mean(dim=1, keepdim=True)
+                # inv_precision_sum = inv_precision_sum.index_select(0, batch)
+                # gate = inv_precision / inv_precision_sum
+                # gate_dict.update({k: gate})
+                # precision_dict.update({k: [alpha / beta, self.lambda0, self.mu0]})
+
+            VIparas = [loc_dict, logvar_dict, scale_dict, precision_dict, ds_enc_dict, sample_dict]
+
+            # get heterogeneous features
+            # if self.training:
+            #     feature_dict = sample_dict
+            # else:
+            #     feature_dict = loc_dict
+            # hetero_feature_dict = {
+            #     k: self.SumAggregation(ds_enc_dict[k] * gate_dict[k], index=batch_dict[k])
+            #     for k in self.dim_dict.keys()
+            # }
+            
+            # get fused features
+            # hetero_gate = {
+            #     k: torch.sigmoid(self.hetero_gate_dict[k](hetero_feature_dict[k] - homo_feature_dict[k]))
+            #     for k in self.dim_dict.keys()
+            # }
+            # feature_dict = {
+            #     k: (1 - hetero_gate[k]) * homo_feature_dict[k] + hetero_gate[k] * hetero_feature_dict[k]
+            #     for k in self.dim_dict.keys()
+            # }
+            # print('Hetero gate:', [(k, v.min().item(), v.max().item()) for k, v in hetero_gate.items()])
+            # omega = torch.softmax(self.omega, dim=1)
+            # feature_dict = {
+            #     k: homo_feature_dict[k] + hetero_feature_dict[k]
+            #     for i, k in enumerate(self.dim_dict.keys())
+            # }
+            # print("Omega:", omega[:, 0].min().item(), omega[:, 1].max().item())
+            # feature_dict = {
+            #     k: torch.cat([homo_feature_dict[k], hetero_feature_dict[k]], dim=1)
+            #     for k in self.dim_dict.keys()
+            # }
+            feature_dict = hetero_feature_dict
 
         # normalize feature due to different scales for different graphs
         feature_dict = {
             k: v / v.norm(dim=-1, keepdim=True).clamp_min(1e-6) * 16
             for k, v in feature_dict.items()
         }
+        # feature_dict = {
+        #     k: self.norm_layers[k](feature_dict[k]) 
+        #     for k, v in feature_dict.items()
+        # }
 
         # graph-specific predictions for training the aggregation modules
         pred_dict = {
@@ -1115,6 +1131,7 @@ class MultiTaskGraphArch(nn.Module):
             for k in self.dim_dict.keys()
         }
 
+        # only used for training a predictor, so detached
         feature = torch.concat(
             [feature_dict[k] for k in self.dim_dict.keys()],
             dim=-1
@@ -1368,7 +1385,7 @@ class ScalarMovingAverage:
 class VILoss(nn.Module):
     """ variational inference loss
     """
-    def __init__(self, tau_ae=10):
+    def __init__(self, tau_ae=1.0):
         super(VILoss, self).__init__()
         self.tau_ae = tau_ae
 
@@ -1380,6 +1397,8 @@ class VILoss(nn.Module):
         pre_max = precision.max().item()
 
         loss_kl = 0.5*torch.mean(lambda0*precision*((loc - mu0)**2 + scale * torch.exp(logvar)) - logvar)
+        # loss_ae = F.mse_loss(enc - torch.mean(enc, dim=0, keepdim=True), dec)
+        # loss_ae = F.mse_loss(enc, dec)
         # ref = enc - torch.mean(enc, dim=0, keepdim=True)
         loss_ae = 1 - F.cosine_similarity(enc.detach(), dec, dim=-1).mean()
         print(loss_ae.item(), loss_kl.item(), (pre_min, pre_mean, pre_max))

@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-##SBATCH --time=0-36:00:00
-#SBATCH --time=0-00:10:00
+#SBATCH --time=0-36:00:00
+##SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-#SBATCH --qos=intr
+##SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -26,6 +26,7 @@ export SLURM_EXPORT_ENV=ALL
 stdbuf -oL -eL echo "Starting job at $(date)"
 
 # python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
+# python analysis/utilities/m_compute_lesion_level_statistics.py
 
 #---------------MAMA-MIA----------------
 # fit Beta distributions on training data

@@ -11,6 +11,8 @@
 - conda install -c conda-forge gcc_linux-64 gxx_linux-64 (optional)
 - pip install --no-build-isolation git+https://github.com/MaureenZOU/detectron2-xyz.git
 - pip install -r requirements.txt
+- pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
+- pip install torch-sparse  -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
 
 If GCC is too old (need GCC 9 or later):
 - conda install -c conda-forge gcc_linux-64 gxx_linux-64

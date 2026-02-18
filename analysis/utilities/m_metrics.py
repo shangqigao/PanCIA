@@ -1,5 +1,7 @@
 import numpy as np
 from sklearn.metrics import f1_score
+from scipy.ndimage import binary_erosion, distance_transform_edt
+from scipy.spatial.distance import cdist
 
 
 def find_best_dice_threshold(probs, labels, thresholds=np.linspace(0.0, 1.0, 101), epsilon=1e-6):
@@ -135,6 +137,100 @@ def calculate_soft_dice(predictions, labels, epsilon=1e-6):
 
     return soft_dice
 
+def compute_hd95(predictions, labels, voxel_spacing=None):
+    """
+    Compute the 95th percentile Hausdorff Distance (HD95) for binary segmentation.
+
+    Args:
+        predictions (np.ndarray): Binary predictions of shape (B, H, W) or (H, W)
+        labels (np.ndarray): Binary ground truth (same shape)
+        voxel_spacing (tuple or None): Pixel spacing (e.g., (1.0, 1.0)).
+                                       If None, spacing = 1.
+
+    Returns:
+        float: HD95 value (averaged over batch if B dimension exists)
+    """
+    if predictions.ndim == 2:
+        predictions = predictions[None, ...]
+        labels = labels[None, ...]
+
+    batch_hd95 = []
+
+    for pred, gt in zip(predictions, labels):
+        pred = pred.astype(np.bool_)
+        gt = gt.astype(np.bool_)
+
+        # If one mask is empty → HD undefined
+        if pred.sum() == 0 and gt.sum() == 0:
+            batch_hd95.append(0.0)
+            continue
+
+        if pred.sum() == 0 or gt.sum() == 0:
+            # worst possible boundary error = image diagonal
+            if voxel_spacing is None:
+                spatial_shape = pred.shape
+            else:
+                spatial_shape = np.array(pred.shape) * np.array(voxel_spacing)
+
+            max_distance = np.linalg.norm(spatial_shape)
+            batch_hd95.append(max_distance)
+            continue
+
+        # Extract surface pixels
+        pred_surface = pred ^ binary_erosion(pred)
+        gt_surface = gt ^ binary_erosion(gt)
+
+        pred_points = np.argwhere(pred_surface)
+        gt_points = np.argwhere(gt_surface)
+
+        if voxel_spacing is not None:
+            pred_points = pred_points * np.array(voxel_spacing)
+            gt_points = gt_points * np.array(voxel_spacing)
+
+        # Compute pairwise distances
+        distances = cdist(pred_points, gt_points)
+
+        # Directed distances
+        d_pred_to_gt = distances.min(axis=1)
+        d_gt_to_pred = distances.min(axis=0)
+
+        hd95 = np.percentile(
+            np.hstack([d_pred_to_gt, d_gt_to_pred]), 95
+        )
+
+        batch_hd95.append(hd95)
+
+    return float(np.mean(batch_hd95))
+
+def compute_normalized_hd95(predictions, labels, voxel_spacing=None):
+    """
+    Compute normalized HD95 (normalized by image diagonal).
+
+    Args:
+        predictions (np.ndarray): Binary mask [B,H,W] or [H,W]
+        labels (np.ndarray): Binary mask
+        voxel_spacing (tuple or None): Physical spacing
+
+    Returns:
+        float: normalized HD95
+    """
+    hd95 = compute_hd95(predictions, labels, voxel_spacing)
+
+    # Get spatial shape
+    if predictions.ndim == 2:
+        spatial_shape = predictions.shape
+    else:
+        spatial_shape = predictions.shape[1:]
+
+    if voxel_spacing is not None:
+        spatial_shape = np.array(spatial_shape) * np.array(voxel_spacing)
+
+    diagonal = np.linalg.norm(spatial_shape)
+
+    if diagonal == 0:
+        return 0.0
+
+    return hd95 / diagonal
 
 import numpy as np
 import torch
@@ -166,6 +262,9 @@ def evaluate_segmentation_metrics(predictions, labels, from_logits=False, thresh
 
     binary_preds = (probs >= threshold).astype(np.uint8)
     labels = labels.astype(np.uint8)
+
+    # Compute HD95
+    hd95 = compute_normalized_hd95(binary_preds, labels)
 
     # Flatten
     pred_flat = binary_preds.flatten()
@@ -207,6 +306,7 @@ def evaluate_segmentation_metrics(predictions, labels, from_logits=False, thresh
         "specificity": specificity,
         "dice": dice,
         "soft_dice": soft_dice,
+        "hd95": hd95,
         "ca": (
             (TP / float((label_flat == 1).sum()) if (label_flat == 1).sum() > 0 else 0) +
             (TN / float((label_flat == 0).sum()) if (label_flat == 0).sum() > 0 else 0)
