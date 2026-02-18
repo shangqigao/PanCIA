@@ -501,7 +501,7 @@ def CPTAC_DICOMRTSTRUCT2NIFTI(dicom_series_path, rtstruct_path, output_img_dir, 
     return str(output_img_path), mask_paths
 
 
-def process_CPTAC(input_meta_dir, input_img_dir, output_dir, json_output="output_index.json"):
+def process_CPTAC(input_meta_dir, input_img_dir, output_dir, json_output="output_index1.json"):
     input_meta_dir = Path(input_meta_dir)
     output_dir = Path(output_dir)
 
@@ -511,7 +511,8 @@ def process_CPTAC(input_meta_dir, input_img_dir, output_dir, json_output="output
     csv_files = list(input_meta_dir.glob("*.csv"))
     for csv_file in csv_files:
         df = pd.read_csv(csv_file)
-        df = df[df["Annotation Type"].isin(["Segmentation", "No Findings"])]
+        # df = df[df["Annotation Type"].isin(["Segmentation", "No Findings"])]
+        df = df[df["Annotation Type"].isin(["No Findings"])]
         df = df[df["ReferencedSeriesModality"].isin(['CT', 'MR'])]
 
         print(f"Found {len(df)} segmentation annotations in {csv_file.name}")
