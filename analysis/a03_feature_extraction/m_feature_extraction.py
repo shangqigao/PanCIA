@@ -174,6 +174,19 @@ def extract_radiomic_feature(
             device=device,
             skip_exist=skip_exist
         )
+    elif feature_mode == "FMCIB":
+        _ = extract_FMCIB_radiomics(
+            img_paths=img_paths,
+            lab_paths=lab_paths,
+            save_dir=save_dir,
+            class_name=class_name,
+            label=label,
+            dilation_mm=dilation_mm,
+            resolution=resolution,
+            units=units,
+            device=device,
+            skip_exist=skip_exist
+        )
     elif feature_mode == "M3D-CLIP":
         _ = extract_M3DCLIP_radiomics(
             img_paths=img_paths,
@@ -1269,6 +1282,392 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, class_name, labe
         coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{class_name}_coordinates.npy"
         logging.info(f"Saving feature coordinates to {coordinates_path}")
         np.save(coordinates_path, coordinates)
+    return
+
+def FMCIB_image_transforms(spatial_size):
+    from typing import Mapping, Hashable, Dict
+    from monai.transforms import MapTransform, Transform
+    from monai.config.type_definitions import NdarrayOrTensor
+    from monai import transforms as monai_transforms
+
+    class SeedBasedPatchCrop(Transform):
+        """
+        Crop a 3D patch centered at a given coordinate.
+
+        Expected input shape:
+            (C, H, W, D)
+
+        Args:
+            roi_size (tuple): patch size (H, W, D)
+            pad_if_needed (bool): pad to maintain exact patch size near borders
+        """
+
+        def __init__(self, roi_size, pad_if_needed: bool = True):
+            super().__init__()
+            self.roi_size = roi_size
+            self.pad_if_needed = pad_if_needed
+
+        def _to_numpy(self, x):
+            if isinstance(x, torch.Tensor):
+                return x.cpu().numpy()
+            return x
+
+        def __call__(
+            self,
+            img: NdarrayOrTensor,
+            center: tuple
+        ) -> NdarrayOrTensor:
+            """
+            Args:
+                img: image tensor (C, H, W, D)
+                center: (x, y, z) center coordinate
+            """
+            if len(img.shape) != 4:
+                raise ValueError("Input image must have shape (C, H, W, D)")
+
+            C, H, W, D = img.shape
+            Ph, Pw, Pd = self.roi_size
+
+            center = np.array(center, dtype=int)
+
+            # Compute crop bounds
+            min_h = max(center[0] - Ph // 2, 0)
+            max_h = min(min_h + Ph, H)
+
+            min_w = max(center[1] - Pw // 2, 0)
+            max_w = min(min_w + Pw, W)
+
+            min_d = max(center[2] - Pd // 2, 0)
+            max_d = min(min_d + Pd, D)
+
+            patch = img[:, min_h:max_h, min_w:max_w, min_d:max_d]
+
+            # Pad if near borders
+            if self.pad_if_needed:
+                pad_h = Ph - patch.shape[1]
+                pad_w = Pw - patch.shape[2]
+                pad_d = Pd - patch.shape[3]
+
+                if pad_h > 0 or pad_w > 0 or pad_d > 0:
+                    patch_np = self._to_numpy(patch)
+                    patch_np = np.pad(
+                        patch_np,
+                        (
+                            (0, 0),
+                            (0, max(pad_h, 0)),
+                            (0, max(pad_w, 0)),
+                            (0, max(pad_d, 0)),
+                        ),
+                        mode="constant",
+                    )
+                    patch = torch.as_tensor(patch_np) if isinstance(img, torch.Tensor) else patch_np
+
+            return patch
+
+    class CenterMassPatchCropd(MapTransform):
+        """
+        Crop patches centered at the label center of mass.
+
+        Args:
+            keys: keys to crop (e.g. ["image", "label"])
+            label_key: key used to compute center
+            roi_size: patch size (H, W, D)
+            coord_orientation: "RAS" or "LPS"
+            global_coordinates: use affine transform if True
+            fallback_to_center: use image center if label empty
+        """
+
+        def __init__(
+            self,
+            keys,
+            label_key,
+            roi_size,
+            allow_missing_keys=False,
+            fallback_to_center=False,
+        ):
+            super().__init__(keys=keys, allow_missing_keys=allow_missing_keys)
+            self.label_key = label_key
+            self.fallback_to_center = fallback_to_center
+            self.cropper = SeedBasedPatchCrop(roi_size=roi_size)
+
+        def _center_of_mass(self, label):
+            """Compute center of mass in voxel space."""
+            if isinstance(label, torch.Tensor):
+                coords = torch.nonzero(label > 0)
+                if coords.numel() == 0:
+                    return None
+                center = coords.float().mean(0).cpu().numpy()
+            else:
+                coords = np.argwhere(label > 0)
+                if coords.size == 0:
+                    return None
+                center = coords.mean(axis=0)
+
+            return center[1:]  # remove channel dimension
+
+        def __call__(self, data: Mapping[Hashable, NdarrayOrTensor]) -> Dict:
+            d = dict(data)
+            label = d[self.label_key]
+
+            center = self._center_of_mass(label)
+
+            if center is None:
+                if not self.fallback_to_center:
+                    raise ValueError("Label is empty; cannot compute center.")
+                _, H, W, D = label.shape
+                center = (H // 2, W // 2, D // 2)
+
+            center = tuple(center.astype(int))
+
+            for key in self.key_iterator(d):
+                d[key] = self.cropper(
+                    d[key],
+                    center=center
+                )
+
+            return d
+
+    transform = monai_transforms.Compose(
+        [
+            # Load both
+            monai_transforms.LoadImaged(
+                keys=["image", "label"],
+                reader="ITKReader",
+            ),
+
+            monai_transforms.EnsureChannelFirstd(keys=["image", "label"]),
+
+            # Intensity normalization (image only)
+            monai_transforms.NormalizeIntensityd(
+                keys=["image"],
+                subtrahend=-1024,
+                divisor=3072,
+            ),
+
+            # Spacing (important: different interpolation modes)
+            monai_transforms.Spacingd(
+                keys=["image", "label"],
+                pixdim=(1, 1, 1),
+                mode=("linear", "nearest"),
+                padding_mode="zeros",
+                align_corners=True,
+                diagonal=True,
+            ),
+
+            # Orientation
+            monai_transforms.Orientationd(
+                keys=["image", "label"],
+                axcodes="LPS",
+            ),
+
+            # 🔥 Label-based foreground crop
+            CenterMassPatchCropd(
+                keys=["image", "label"],
+                label_key="label",
+                roi_size=spatial_size,
+            ),
+
+            # Pad to fixed spatial size
+            monai_transforms.SpatialPadd(
+                keys=["image", "label"],
+                spatial_size=spatial_size,
+            ),
+
+            # Optional transpose if your model expects specific axis order
+            monai_transforms.Transposed(
+                keys=["image", "label"],
+                indices=(0, 3, 2, 1),
+            ),
+
+            # Select only what you need
+            monai_transforms.SelectItemsd(keys=["image", "label"]),
+        ]
+    )
+
+    return transform
+
+class LoadModel(torch.nn.Module):
+    """
+    A class representing a loaded model.
+
+    Args:
+        trunk (torch.nn.Module, optional): The trunk of the model. Defaults to None.
+        weights_path (str, optional): The path to the weights file. Defaults to None.
+        heads (list, optional): The list of head layers in the model. Defaults to [].
+
+    Attributes:
+        trunk (torch.nn.Module): The trunk of the model.
+        heads (torch.nn.Sequential): The concatenated head layers of the model.
+
+    Methods:
+        forward(x: torch.Tensor) -> torch.Tensor: Forward pass through the model.
+        load(weights): Load the pretrained model weights.
+    """
+
+    def __init__(self, trunk=None, weights_path=None, heads=[]) -> None:
+        """
+        Initialize the model.
+
+        Args:
+            trunk (optional): The trunk of the model.
+            weights_path (optional): The path to the weights file.
+            heads (list, optional): A list of layer sizes for the heads of the model.
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+        super().__init__()
+        self.trunk = trunk
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        head_layers = []
+        for idx in range(len(heads) - 1):
+            current_layers = []
+            current_layers.append(torch.nn.Linear(heads[idx], heads[idx + 1], bias=True))
+
+            if idx != (len(heads) - 2):
+                current_layers.append(torch.nn.ReLU(inplace=True))
+
+            head_layers.append(torch.nn.Sequential(*current_layers))
+
+        if len(head_layers):
+            self.heads = torch.nn.Sequential(*head_layers)
+        else:
+            self.heads = torch.nn.Identity()
+
+        if weights_path is not None:
+            self.load(weights_path)
+
+    def forward(self, x: torch.Tensor):
+        """
+        Forward pass of the neural network.
+
+        Args:
+            x (torch.Tensor): The input tensor.
+
+        Returns:
+            torch.Tensor: The output tensor.
+        """
+        out = self.trunk(x)
+        out = self.heads(out)
+        return out
+
+    def load(self, weights):
+        """
+        Load pretrained model weights from a file.
+
+        Args:
+            weights (str): The path to the file containing the pretrained model weights.
+
+        Raises:
+            KeyError: If the input weights file does not contain the expected keys.
+            Exception: If there is an error when loading the pretrained heads.
+
+        Returns:
+            None.
+
+        Note:
+            This function assumes that the pretrained model weights file is in the format expected by the model architecture.
+
+        Warnings:
+            - Missing keys: This warning message indicates the keys in the pretrained model weights file that are missing from the current model.
+            - Unexpected keys: This warning message indicates the keys in the pretrained model weights file that are not expected by the current model.
+
+        Raises the appropriate warnings and logs informational messages.
+        """
+        pretrained_model = torch.load(weights, map_location=self.device, weights_only=True)
+
+        if "trunk_state_dict" in pretrained_model:  # Loading ViSSL pretrained model
+            trained_trunk = pretrained_model["trunk_state_dict"]
+            msg = self.trunk.load_state_dict(trained_trunk, strict=False)
+            logging.warning(f"Model Trunk - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
+
+        # Load trained heads
+        if "head_state_dict" in pretrained_model:
+            trained_heads = pretrained_model["head_state_dict"]
+
+            try:
+                msg = self.heads.load_state_dict(trained_heads, strict=False)
+            except Exception as e:
+                logging.error(f"Failed to load trained heads with error {e}. This is expected if the models do not match!")
+            logging.warning(f"Model Head - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
+
+        # Loading Lighter and other pretrained model
+        if "state_dict" in pretrained_model:
+            trained_model = pretrained_model["state_dict"]
+
+            # match the keys (https://github.com/Project-MONAI/MONAI/issues/6811)
+            weights = {key.replace("module.", ""): value for key, value in trained_model.items()}
+            weights = {key.replace("model.trunk.", ""): value for key, value in trained_model.items()}
+            msg = self.trunk.load_state_dict(weights, strict=False)
+            logging.warning(f"Model Trunk - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
+
+            weights = {
+                key.replace("model.heads.", ""): value for key, value in trained_model.items() if key.startswith("model.heads")
+            }
+            msg = self.heads.load_state_dict(weights, strict=False)
+            logging.warning(f"Model Head - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
+
+        logging.info(f"Loaded pretrained model weights \n")
+
+def extract_FMCIB_radiomics(img_paths, lab_paths, save_dir, class_name, label=1, dilation_mm=0, resolution=1, units="mm", device="cuda", skip_exist=False):
+    import nibabel as nib
+    from monai.networks.nets import resnet50
+    
+    roi_size = (50, 50, 50)
+    trunk = resnet50(
+        pretrained=False,
+        n_input_channels=1,
+        widen_factor=2,
+        conv1_t_stride=2,
+        feed_forward=False,
+        bias_downsample=True,
+    )
+    # print(vit)
+    model_checkpoint = os.path.join(root_dir, 'checkpoints/FMCIB/model_weights.torch')
+    model = LoadModel(trunk=trunk, weights_path=model_checkpoint).to(device)
+    model.eval()
+    print(f'Loaded ResNet50 encoder param: {model_checkpoint}')
+
+    transform = FMCIB_image_transforms(roi_size)
+    mkdir(save_dir)
+    
+    for idx, (img_path, lab_path) in enumerate(zip(img_paths, lab_paths)):
+        lab_name = pathlib.Path(lab_path).name
+        nii = nib.load(lab_path)
+        label = nii.get_fdata(dtype=np.float32)
+
+        # skip empty masks
+        if not np.any(label > 0):
+            logging.info(f"Skip case {lab_name}, no foreground found.")
+            continue
+
+        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        parent_name = pathlib.Path(img_path).parent.name
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics.npy")
+        if feature_path.exists() and skip_exist:
+            logging.info(f"{feature_path.name} has existed, skip!")
+            continue
+        feature_path.parent.mkdir(parents=True, exist_ok=True)
+
+        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+        case_dict = {"image": img_path, "label": lab_path}
+        data = transform(case_dict)
+        image = data["image"][0]
+        img_shape = image.shape
+
+        image = image.unsqueeze(0).unsqueeze(0).to(device)
+        feature = model(image).squeeze().cpu().numpy()
+
+        feat_shape = feature.shape
+        feat_memory = feature.nbytes / 1024**2
+        logging.info(f"Got image of shape {img_shape}, image feature of shape {feat_shape} ({feat_memory:.2f}MiB)")
+
+        logging.info(f"Saving radiomic features to {feature_path}")
+        np.save(feature_path, feature)
+
     return
 
 def M3DCLIP_image_transforms(keys, padding):

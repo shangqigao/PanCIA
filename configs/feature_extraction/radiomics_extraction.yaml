@@ -13,8 +13,9 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "BayesBP"
-    CHOICES: ["pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
+    VALUE: "FMCIB"
+    CHOICES:
+      ["pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB"]
     SUFFIX:
       - "radiomics.npy"
     # SUFFIX:
@@ -27,8 +28,8 @@ RADIOMICS:
     VALUE: null
     CHOICES: [null, "shells", "peeling"]
   TASKS:
-    EXTRACTION: False
-    CLUSTERING: True
+    EXTRACTION: True
+    CLUSTERING: False
     GRAPH_CONSTRUCTION:
       VALUE: False
       FEATURE_DIS_WEIGHT: 0.01 # 0.01 for LVMMed else 0.1, for clustering in graph construction
