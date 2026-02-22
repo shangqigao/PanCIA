@@ -5,7 +5,7 @@ OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
 SAVE_OUTCOME_dir: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "ImmuneSignatureScore"
+  VALUE: "StemScoreRNA"
   CHOICES:
     [
       "GeneProgrames",
@@ -28,7 +28,7 @@ RADIOMICS:
   MODE:
     VALUE: "LVMMed"
     CHOICES:
-      ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
+      ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB"]
   AGGREGATION: False
   AGGREGATED_MODE:
     VALUE: "SPARRA"
@@ -59,7 +59,8 @@ SPLIT:
 PREDICTION:
   OMICS_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_multitask"
   USED_OMICS:
-    VALUE: "pathomics"
+    VALUE: "radiopathomics"
+    CONCAT: True
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32
   MODEL:
@@ -78,5 +79,5 @@ PREDICTION:
   FEATURE_SELECTION:
     VALUE: True
     VAR_THRESHOLD: 0.0001
-    NUM_FEATURES: 256
+    NUM_FEATURES: 512
   USE_GRAPH_PROPERTIES: False

@@ -1290,6 +1290,72 @@ def FMCIB_image_transforms(spatial_size):
     from monai.config.type_definitions import NdarrayOrTensor
     from monai import transforms as monai_transforms
 
+    class ModalityAwareIntensityd(MapTransform):
+        """
+        CT → HU scaling
+        MRI → percentile clipping + scaling
+
+        Requires data["modality"] key.
+        """
+
+        def __init__(
+            self,
+            keys,
+            modality_key="modality",
+            lower_percentile=1,
+            upper_percentile=99,
+            ct_subtrahend=-1024,
+            ct_divisor=3072,
+            allow_missing_keys=False,
+        ):
+            super().__init__(keys, allow_missing_keys)
+            self.modality_key = modality_key
+            self.lower_percentile = lower_percentile
+            self.upper_percentile = upper_percentile
+            self.ct_sub = ct_subtrahend
+            self.ct_div = ct_divisor
+
+        def _to_numpy(self, x):
+            if isinstance(x, torch.Tensor):
+                return x.cpu().numpy()
+            return x
+
+        def _to_tensor(self, x, ref):
+            return torch.as_tensor(x) if isinstance(ref, torch.Tensor) else x
+
+        def __call__(self, data):
+            d = dict(data)
+
+            modality = str(d.get(self.modality_key, "")).upper()
+            is_ct = modality == "CT"
+
+            for key in self.key_iterator(d):
+                img = d[key]
+
+                if is_ct:
+                    # CT normalization (HU → 0–1)
+                    img = (img - self.ct_sub) / self.ct_div
+                    img = img.clamp(0, 1) if isinstance(img, torch.Tensor) else np.clip(img, 0, 1)
+
+                else:
+                    # MRI normalization
+                    img_np = self._to_numpy(img)
+
+                    lo = np.percentile(img_np, self.lower_percentile)
+                    hi = np.percentile(img_np, self.upper_percentile)
+
+                    if hi > lo:
+                        img_np = np.clip(img_np, lo, hi)
+                        img_np = (img_np - lo) / (hi - lo)
+                    else:
+                        img_np = np.zeros_like(img_np)
+
+                    img = self._to_tensor(img_np, img)
+
+                d[key] = img
+
+            return d
+
     class SeedBasedPatchCrop(Transform):
         """
         Crop a 3D patch centered at a given coordinate.
@@ -1438,20 +1504,15 @@ def FMCIB_image_transforms(spatial_size):
             monai_transforms.EnsureChannelFirstd(keys=["image", "label"]),
 
             # Intensity normalization (image only)
-            monai_transforms.NormalizeIntensityd(
-                keys=["image"],
-                subtrahend=-1024,
-                divisor=3072,
-            ),
+            ModalityAwareIntensityd(keys=["image"]),
 
             # Spacing (important: different interpolation modes)
             monai_transforms.Spacingd(
                 keys=["image", "label"],
                 pixdim=(1, 1, 1),
-                mode=("linear", "nearest"),
+                mode=("bilinear", "nearest"),
                 padding_mode="zeros",
                 align_corners=True,
-                diagonal=True,
             ),
 
             # Orientation
@@ -1623,7 +1684,7 @@ def extract_FMCIB_radiomics(img_paths, lab_paths, save_dir, class_name, label=1,
         widen_factor=2,
         conv1_t_stride=2,
         feed_forward=False,
-        bias_downsample=True,
+        # bias_downsample=True,
     )
     # print(vit)
     model_checkpoint = os.path.join(root_dir, 'checkpoints/FMCIB/model_weights.torch')
@@ -1652,14 +1713,16 @@ def extract_FMCIB_radiomics(img_paths, lab_paths, save_dir, class_name, label=1,
             continue
         feature_path.parent.mkdir(parents=True, exist_ok=True)
 
-        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
-        case_dict = {"image": img_path, "label": lab_path}
+        modality = 'CT' if '/CT/' in str(img_path) else 'MR'
+        logging.info(f"extracting {modality} radiomics: {idx + 1}/{len(img_paths)}...")
+        case_dict = {"image": img_path, "label": lab_path, "modality": modality}
         data = transform(case_dict)
         image = data["image"][0]
         img_shape = image.shape
 
-        image = image.unsqueeze(0).unsqueeze(0).to(device)
-        feature = model(image).squeeze().cpu().numpy()
+        image = torch.from_numpy(image).unsqueeze(0).unsqueeze(0).to(device)
+        with torch.no_grad():
+            feature = model(image).squeeze().cpu().numpy()
 
         feat_shape = feature.shape
         feat_memory = feature.nbytes / 1024**2

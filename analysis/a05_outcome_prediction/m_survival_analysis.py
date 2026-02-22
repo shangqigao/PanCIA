@@ -40,7 +40,7 @@ from sksurv.metrics import (
 )
 from sklearn.exceptions import FitFailedWarning
 from sklearn.model_selection import GridSearchCV, KFold
-from sklearn.feature_selection import VarianceThreshold
+from sklearn.feature_selection import VarianceThreshold, SelectFromModel
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
@@ -315,7 +315,7 @@ def load_wsi_level_features(idx, wsi_feature_paths, pooling="mean"):
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
-def load_subject_level_features(idx, subject_feature_path, outcome=None):
+def load_subject_level_features(idx, subject_feature_path, omics='', outcome=None):
     _, ext = os.path.splitext(subject_feature_path)
 
     feat_dict = {}
@@ -328,7 +328,7 @@ def load_subject_level_features(idx, subject_feature_path, outcome=None):
             feat_list = [feat_list]
 
         for i, feat in enumerate(feat_list):
-            k = f"subject.feature{i}"
+            k = f"subject.{omics}.feature{i}"
             feat_dict[k] = feat
 
     elif ext == ".json":
@@ -401,25 +401,36 @@ def prepare_patient_outcome(outcome_file, subject_ids, dataset="MAMA-MIA", outco
     return df
 
 def plot_coefficients(coefs, n_highlight):
-    _, ax = plt.subplots(figsize=(9, 6))
-    n_features = coefs.shape[0]
-    alphas = coefs.columns
-    for row in coefs.itertuples():
-        ax.semilogx(alphas, row[1:], ".-", label=row.Index)
+    fig, ax = plt.subplots(figsize=(9, 6))
 
+    alphas = coefs.columns.to_numpy()
+
+    # plot coefficient paths
+    for row in coefs.itertuples():
+        ax.semilogx(alphas, row[1:], ".-", linewidth=1)
+
+    # use smallest alpha (least regularized model)
     alpha_min = alphas.min()
-    top_coefs = coefs.loc[:, alpha_min].map(abs).sort_values().tail(n_highlight)
+
+    # select column safely
+    coef_column = coefs.loc[:, alpha_min]
+
+    top_coefs = coef_column.abs().sort_values().tail(n_highlight)
+
     for name in top_coefs.index:
-        coef = coefs.loc[name, alpha_min]
-        plt.text(alpha_min, coef, name + "   ", horizontalalignment="right", verticalalignment="center")
+        coef_val = float(coef_column.loc[name])
+        ax.text(alpha_min, coef_val, name,
+                ha="right", va="center")
 
     ax.yaxis.set_label_position("right")
     ax.yaxis.tick_right()
     ax.grid(True)
     ax.set_xlabel("alpha")
     ax.set_ylabel("coefficient")
+
     plt.subplots_adjust(left=0.2)
-    plt.savefig(f"{relative_path}/figures/plots/coefficients.jpg")
+    plt.savefig(f"{relative_path}/figures/plots/coefficients.jpg", dpi=150)
+    plt.close(fig)
 
 def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
     from sksurv.linear_model import CoxnetSurvivalAnalysis
@@ -427,8 +438,12 @@ def coxnet(split_idx, tr_X, tr_y, scorer, n_jobs, l1_ratio=0.9, min_ratio=0.1):
     print("Selecting the best regularization parameter...")
     cox_elastic_net = CoxnetSurvivalAnalysis(l1_ratio=l1_ratio, alpha_min_ratio=min_ratio)
     cox_elastic_net.fit(tr_X, tr_y)
-    coefficients = pd.DataFrame(cox_elastic_net.coef_, index=tr_X.columns, columns=np.round(cox_elastic_net.alphas_, 5))
-    
+    coefficients = pd.DataFrame(
+        cox_elastic_net.coef_,
+        index=tr_X.columns,
+        columns=cox_elastic_net.alphas_,
+    )
+
     plot_coefficients(coefficients, n_highlight=5)
 
     # choosing penalty strength by cross validation
@@ -931,7 +946,7 @@ def load_radiomics(
             path = pathlib.Path(save_radiomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
             radiomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
+            joblib.delayed(load_subject_level_features)(idx, graph_path, 'radiomics', outcome)
             for idx, graph_path in enumerate(radiomics_paths)
         )
     else:
@@ -980,7 +995,7 @@ def load_pathomics(
             path = pathlib.Path(save_pathomics_dir) / pathomics_aggregated_mode / f"{subject_id}.npy"
             pathomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
+            joblib.delayed(load_subject_level_features)(idx, graph_path, 'pathomics', outcome)
             for idx, graph_path in enumerate(pathomics_paths)
         )
     else:
@@ -1022,7 +1037,7 @@ def load_radiopathomics(
         save_radiopathomics_dir,
         outcome=None
     ):
-    if radiomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
+    if isinstance(save_radiopathomics_dir, str):
         assert radiomics_aggregated_mode == pathomics_aggregated_mode
         print(f"loading radiopathomics from {save_radiopathomics_dir}...")
         radiopathomics_paths = []
@@ -1031,7 +1046,7 @@ def load_radiopathomics(
             path = pathlib.Path(save_radiopathomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
             radiopathomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
+            joblib.delayed(load_subject_level_features)(idx, graph_path, 'radiopathomics', outcome)
             for idx, graph_path in enumerate(radiopathomics_paths)
         )
 
@@ -1053,14 +1068,15 @@ def load_radiopathomics(
             prop_X = [prepare_graph_properties(d, omics="pathomics") for d in prop_dict_list]
             prop_X = pd.DataFrame(prop_X)
             radiopathomics_X = pd.concat([radiopathomics_X, prop_X], axis=1)
-    else:
+    elif isinstance(save_radiopathomics_dir, dict):
         radiomics_X = load_radiomics(
             data=data,
             radiomics_aggregation=radiomics_aggregation,
             radiomics_aggregated_mode=radiomics_aggregated_mode,
             radiomics_keys=radiomics_keys,
             use_graph_properties=use_graph_properties,
-            n_jobs=n_jobs
+            n_jobs=n_jobs,
+            save_radiomics_dir=save_radiopathomics_dir['radiomics']
         )
         
         pathomics_X = load_pathomics(
@@ -1069,12 +1085,104 @@ def load_radiopathomics(
             pathomics_aggregated_mode=pathomics_aggregated_mode,
             pathomics_keys=pathomics_keys,
             use_graph_properties=use_graph_properties,
-            n_jobs=n_jobs
+            n_jobs=n_jobs,
+            save_pathomics_dir=save_radiopathomics_dir['pathomics']
         ) 
 
         radiopathomics_X = pd.concat([radiomics_X, pathomics_X], axis=1)
+        # radiopathomics_X = [radiomics_X, pathomics_X]
 
     return radiopathomics_X
+
+def select_multivariate_cox_features(
+    tr_X,
+    tr_y,
+    variance_threshold=1e-4,
+    alpha=0.01,          # regularization strength (λ)
+    l1_ratio=1.0,        # 1.0 = LASSO, <1 = elastic net
+    max_features=30,
+    coef_threshold=1e-6,
+    verbose=True,
+):
+    """
+    Fast multivariate feature selection using Coxnet (glmnet-style).
+
+    Parameters
+    ----------
+    tr_X : pd.DataFrame
+    tr_y : pd.DataFrame with columns ['duration','event']
+    variance_threshold : float
+    alpha : float
+        Regularization strength (larger -> more sparsity)
+    l1_ratio : float
+        1.0 = LASSO, 0.5 = elastic net
+    max_features : int
+    coef_threshold : float
+    verbose : bool
+
+    Returns
+    -------
+    selected_names : list
+    """
+
+    from sksurv.linear_model import CoxnetSurvivalAnalysis
+
+    X = tr_X.copy()
+
+    if verbose:
+        print("Starting feature selection...")
+        print(f"Initial feature count: {X.shape[1]}")
+
+    # --------------------------------------------------
+    # 1️⃣ Remove low-variance features
+    # --------------------------------------------------
+    var_selector = VarianceThreshold(threshold=variance_threshold)
+    X = X.loc[:, var_selector.fit(X).get_support()]
+
+    if verbose:
+        print(f"Remaining after variance filter: {X.shape[1]}")
+
+    # --------------------------------------------------
+    # 2️⃣ Standardize features
+    # --------------------------------------------------
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # --------------------------------------------------
+    # 3️⃣ Prepare survival target
+    # --------------------------------------------------
+
+    if verbose:
+        print("Fitting Coxnet model...")
+
+    # --------------------------------------------------
+    # 4️⃣ Fit Coxnet (fast)
+    # --------------------------------------------------
+    model = CoxnetSurvivalAnalysis(
+        alphas=[alpha],   # single penalty strength
+        l1_ratio=l1_ratio
+    )
+    model.fit(X_scaled, tr_y)
+
+    # coefficients shape: (n_alphas, n_features)
+    coefs = np.abs(model.coef_).ravel()
+
+    coef_series = pd.Series(coefs, index=X.columns)
+
+    # threshold filtering
+    selected = coef_series[coef_series > coef_threshold]
+
+    # limit number of features
+    if max_features is not None:
+        selected = selected.sort_values(ascending=False).head(max_features)
+
+    selected_names = selected.index.tolist()
+
+    if verbose:
+        print(f"Selected features: {len(selected_names)}")
+
+    return selected_names
+
 
 def survival(
     split_path,
@@ -1091,6 +1199,8 @@ def survival(
     model="CoxPH",
     scorer="cindex",
     feature_selection=True,
+    feature_var_threshold=1e-4,
+    n_selected_features=64,
     n_bootstraps=100,
     use_graph_properties=False,
     save_results_dir=None
@@ -1102,6 +1212,12 @@ def survival(
         "subject": [], "risk": [], 
         "event": [], "duration": []
     }
+    ml_model_name = f"{omics}_" + \
+        f"radio+{radiomics_aggregated_mode}_" + \
+        f"patho+{pathomics_aggregated_mode}_" + \
+        f"model+{model}_scorer+{scorer}"
+    model_dir = os.path.join(save_results_dir, ml_model_name)
+    os.makedirs(model_dir, exist_ok=True)
     for split_idx, split in enumerate(splits):
         print(f"Performing cross-validation on fold {split_idx}...")
         raw_data_tr, raw_data_va, raw_data_te = split["train"], split["valid"], split["test"]
@@ -1132,8 +1248,6 @@ def survival(
                 save_radiopathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected training radiopathomics:", tr_X.shape)
-            print(tr_X.head())
 
             te_X = load_radiopathomics(
                 data=data_te,
@@ -1148,8 +1262,6 @@ def survival(
                 save_radiopathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected testing radiopathomics:", te_X.shape)
-            print(te_X.head())
 
             raw_te_X = load_radiopathomics(
                 data=raw_data_te,
@@ -1164,8 +1276,6 @@ def survival(
                 save_radiopathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected raw testing radiopathomics:", raw_te_X.shape)
-            print(raw_te_X.head())
         elif omics == "pathomics":
             pathomics_tr_X = load_pathomics(
                 data=data_tr,
@@ -1177,8 +1287,6 @@ def survival(
                 save_pathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected training pathomics:", pathomics_tr_X.shape)
-            print(pathomics_tr_X.head())
 
             pathomics_te_X = load_pathomics(
                 data=data_te,
@@ -1190,8 +1298,6 @@ def survival(
                 save_pathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected testing pathomics:", pathomics_te_X.shape)
-            print(pathomics_te_X.head())
 
             tr_X, te_X = pathomics_tr_X, pathomics_te_X
 
@@ -1205,8 +1311,6 @@ def survival(
                 save_pathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected raw testing pathomics:", raw_te_X.shape)
-            print(raw_te_X.head())
         elif omics == "radiomics":
             radiomics_tr_X = load_radiomics(
                 data=data_tr,
@@ -1218,8 +1322,6 @@ def survival(
                 save_radiomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected training radiomics:", radiomics_tr_X.shape)
-            print(radiomics_tr_X.head())
 
             radiomics_te_X = load_radiomics(
                 data=data_te,
@@ -1231,8 +1333,6 @@ def survival(
                 save_radiomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected testing radiomics:", radiomics_te_X.shape)
-            print(radiomics_te_X.head())
 
             tr_X, te_X = radiomics_tr_X, radiomics_te_X
             raw_te_X = load_radiomics(
@@ -1245,18 +1345,77 @@ def survival(
                 save_radiomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected raw testing radiomics:", raw_te_X.shape)
-            print(raw_te_X.head())
         else:
             raise NotImplementedError
         
         # df_prop = df_prop.apply(zscore)
-        print("Selected training omics:", tr_X.shape)
-        print(tr_X.head())
-        print("Selected testing omics:", te_X.shape)
-        print(te_X.head())
-        print("Selected raw testing omics:", raw_te_X.shape)
-        print(raw_te_X.head())
+        if hasattr(tr_X,'shape'):
+            print("Selected training omics:", tr_X.shape)
+            print(tr_X.head())
+        if hasattr(te_X,'shape'):
+            print("Selected testing omics:", te_X.shape)
+            print(te_X.head())
+        if hasattr(raw_te_X,'shape'):
+            print("Selected raw testing omics:", raw_te_X.shape)
+            print(raw_te_X.head())
+
+        # -----------------------------
+        # Feature selection
+        # -----------------------------
+        # if feature_selection:
+        #     print("\n=== Feature Selection ===")
+
+        #     fs_kwargs = dict(
+        #         alpha=0.01,
+        #         l1_ratio=0.7,
+        #         max_features=n_selected_features,
+        #         variance_threshold=feature_var_threshold,
+        #         coef_threshold=1e-6,
+        #         verbose=True,
+        #     )
+
+        #     # --------------------------------------------------
+        #     # CASE 1️⃣ Multimodal input (list of DataFrames)
+        #     # --------------------------------------------------
+        #     if isinstance(tr_X, list):
+
+        #         selected_modalities = []
+        #         tr_selected = []
+        #         te_selected = []
+        #         raw_te_selected = []
+
+        #         for i, (m_tr, m_te, m_raw) in enumerate(zip(tr_X, te_X, raw_te_X)):
+        #             print(f"\nSelecting modality {i+1} features...")
+                    
+        #             selected = select_multivariate_cox_features(m_tr, tr_y, **fs_kwargs)
+
+        #             print(f"Modality {i+1}: kept {len(selected)} features")
+
+        #             tr_selected.append(m_tr[selected])
+        #             te_selected.append(m_te[selected])
+        #             raw_te_selected.append(m_raw[selected])
+        #             selected_modalities.append(selected)
+
+        #         # concatenate AFTER selection
+        #         tr_X = pd.concat(tr_selected, axis=1)
+        #         te_X = pd.concat(te_selected, axis=1)
+        #         raw_te_X = pd.concat(raw_te_selected, axis=1)
+
+        #         print("\nFinal concatenated shape:", tr_X.shape)
+        #         print(tr_X.head())
+
+        #     # --------------------------------------------------
+        #     # CASE 2️⃣ Unimodal input (DataFrame)
+        #     # --------------------------------------------------
+        #     else:
+        #         selected = select_multivariate_cox_features(tr_X, tr_y, **fs_kwargs)
+
+        #         print(f"Selected {len(selected)} features")
+
+        #         tr_X = tr_X[selected]
+        #         te_X = te_X[selected]
+        #         raw_te_X = raw_te_X[selected]
+
 
         # feature selection
         if feature_selection:
@@ -1334,6 +1493,16 @@ def survival(
             te_X = te_X[stable_names]
             raw_te_X = raw_te_X[stable_names]
             predictor.fit(tr_X, tr_y)
+
+        # save model and feature names
+        model_path = os.path.join(model_dir, f"{ml_model_name}_fold{split_idx}.joblib")
+
+        joblib.dump({
+            "model": predictor,
+            "features": list(tr_X.columns)
+        }, model_path)
+
+        print(f"Saved model to {model_path}")
 
         raw_subject_ids = [p[0][0] for p in raw_data_te]
         survival_results["raw_subject"] += raw_subject_ids
@@ -1415,18 +1584,12 @@ def survival(
     plt.savefig(f"{relative_path}/figures/plots/{omics}_survival_curve.png")
 
     #save predicted results
-    save_path = f"{save_results_dir}/{omics}_" + \
-        f"radio+{radiomics_aggregated_mode}_" + \
-        f"patho+{pathomics_aggregated_mode}_" + \
-        f"model+{model}_scorer+{scorer}_results.json"
+    save_path = f"{save_results_dir}/{ml_model_name}_results.json"
     with open(save_path, "w") as f:
         json.dump(survival_results, f, indent=4)
 
     # save metrics
-    save_path = f"{save_results_dir}/{omics}_" + \
-        f"radio+{radiomics_aggregated_mode}_" + \
-        f"patho+{pathomics_aggregated_mode}_" + \
-        f"model+{model}_scorer+{scorer}_metrics.json"
+    save_path = f"{save_results_dir}/{ml_model_name}_metrics.json"
     with open(save_path, "w") as f:
         json.dump(predict_results, f, indent=4)
 
@@ -1626,16 +1789,24 @@ if __name__ == "__main__":
         else:
             pathomics_keys = None
 
-        save_omics_dir = opt['PREDICTION']['OMICS_DIR'] + f"/{radiomics_mode}+{pathomics_mode}"
+        save_omics_dir = opt['PREDICTION']['OMICS_DIR']
         if opt['PREDICTION']['USED_OMICS']['VALUE'] == "radiomics":
-            save_omics_dir = save_omics_dir + f"/radiomics_GCNConv_" \
+            save_omics_dir = save_omics_dir + f"/{radiomics_mode}" + f"/radiomics_GCNConv_" \
                 + opt['RADIOMICS']['AGGREGATED_MODE']['VALUE']
         elif opt['PREDICTION']['USED_OMICS']['VALUE'] == "pathomics":
-            save_omics_dir = save_omics_dir + f"/pathomics_GCNConv_" \
+            save_omics_dir = save_omics_dir + f"/{pathomics_mode}" + f"/pathomics_GCNConv_" \
                 + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
         elif opt['PREDICTION']['USED_OMICS']['VALUE'] == "radiopathomics":
-            save_omics_dir = save_omics_dir + f"/radiomics_pathomics_GCNConv_" \
-                + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
+            if opt['PREDICTION']['USED_OMICS']['CONCAT']:
+                save_omics_dir = {
+                    "radiomics": save_omics_dir + f"/{radiomics_mode}" + f"/radiomics_GCNConv_" \
+                        + opt['RADIOMICS']['AGGREGATED_MODE']['VALUE'],
+                    "pathomics": save_omics_dir + f"/{pathomics_mode}" + f"/pathomics_GCNConv_" \
+                        + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
+                }
+            else:
+                save_omics_dir = save_omics_dir + f"/{radiomics_mode}+{pathomics_mode}" + f"/radiomics_pathomics_GCNConv_" \
+                    + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
         # save_omics_dir = opt['PREDICTION']['OMICS_DIR'] + f"/{radiomics_mode}+{pathomics_mode}" + f"/pathomics_GCNConv_SPARRA_homo+heter_vi0.1ae10_noDS_x_enc_sample0.1"
 
         survival(
@@ -1651,7 +1822,9 @@ if __name__ == "__main__":
             pathomics_keys=pathomics_keys,
             model=opt['PREDICTION']['MODEL']['VALUE'],
             scorer=opt['PREDICTION']['SCORER']['VALUE'],
-            feature_selection=opt['PREDICTION']['FEATURE_SELECTION'],
+            feature_selection=opt['PREDICTION']['FEATURE_SELECTION']['VALUE'],
+            feature_var_threshold=opt['PREDICTION']['FEATURE_SELECTION']['VAR_THRESHOLD'],
+            n_selected_features=opt['PREDICTION']['FEATURE_SELECTION']['NUM_FEATURES'],
             n_bootstraps=opt['PREDICTION']['N_BOOTSTRAPS'],
             use_graph_properties=opt['PREDICTION']['USE_GRAPH_PROPERTIES'],
             save_results_dir=save_model_dir

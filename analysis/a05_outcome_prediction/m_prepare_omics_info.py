@@ -8,6 +8,7 @@ from utilities.constants import PANCIA_PROJECT_SITE
 radiomics_dims = {
     "None": None,
     "pyradiomics": {'child0': 851},
+    "FMCIB": {'child0': 4096},
     "SegVol": {'child0': 768},
     "BiomedParse": {'child0': 512},
     "BayesBP": {'child0': 64},
@@ -26,6 +27,7 @@ pathomics_dims = {
 radiomics_pool_ratio = {
     "None": None,
     "pyradiomics": {'child0': 1},
+    "FMCIB": {'child0': 1},
     "SegVol": {'child0': 0.7},
     "BiomedParse": {'child0': 0.7},
     "BayesBP": {'child0': 0.7},
@@ -46,13 +48,17 @@ signatures_predictable = {
     "HRDscore": None,
     "ImmuneSignatureScore": None,
     "StemnessScoreDNA": None,
-    "StemScoreRNA": None
+    "StemScoreRNA": None,
+    "AGE": None
 }
 
 radiomics_suffix = {
     "None": None,
     "pyradiomics": [
         "_tumor_radiomics.json"
+    ],
+    "FMCIB": [
+        "_tumor_radiomics.npy"
     ],
     "SegVol": [
         "_tumor_graph_aggr_mean.npy"

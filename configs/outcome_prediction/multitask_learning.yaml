@@ -29,7 +29,7 @@ RADIOMICS:
   MODE:
     VALUE: "LVMMed"
     CHOICES:
-      ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed"]
+      ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB"]
     # SUFFIX:
     #   - "_tumor_graph.npz"
     SUFFIX:
@@ -68,8 +68,8 @@ ARCH:
   POOL_RATIO:
     RAIOMICS: 0.7
     PATHOMICS: 0.7
-  # OMICS: ["radiomics", "pathomics"]
-  OMICS: ["radiomics"]
+  OMICS: ["radiomics", "pathomics"]
+  # OMICS: ["radiomics"]
   # OMICS: ["pathomics"]
   AGGREGATION:
     VALUE: "SPARRA"

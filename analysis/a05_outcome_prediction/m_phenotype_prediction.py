@@ -289,7 +289,7 @@ def load_wsi_level_features(idx, wsi_feature_paths, pooling="mean"):
         feat_dict[k] = feat
     return {f"{idx}": feat_dict}
 
-def load_subject_level_features(idx, subject_feature_path, outcome=None):
+def load_subject_level_features(idx, subject_feature_path, omics='', outcome=None):
     _, ext = os.path.splitext(subject_feature_path)
 
     feat_dict = {}
@@ -302,7 +302,7 @@ def load_subject_level_features(idx, subject_feature_path, outcome=None):
             feat_list = [feat_list]
 
         for i, feat in enumerate(feat_list):
-            k = f"subject.feature{i}"
+            k = f"subject.{omics}.feature{i}"
             feat_dict[k] = feat
 
     elif ext == ".json":
@@ -494,10 +494,14 @@ def logisticregression(split_idx, tr_X, tr_y, refit, n_jobs):
     # choosing parameters by cross validation
     cv = KFold(n_splits=5, shuffle=True, random_state=0)
     model = LogisticRegression(
-        penalty='elasticnet', solver='saga', l1_ratio=0.5, 
+        penalty='elasticnet', solver='saga', l1_ratio=0.9, 
         C=1.0, max_iter=1000, class_weight="balanced", random_state=42
     )
     param_grid={"model__C": np.logspace(-3, 3, 7)}
+    param_grid = {
+        "model__C": np.logspace(-3, 3, 7),
+        "model__l1_ratio": [0.2, 0.5, 0.8]
+    }
     pipe = Pipeline(
         [
             ("scale", StandardScaler()),
@@ -674,7 +678,7 @@ def load_radiomics(
             path = pathlib.Path(save_radiomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
             radiomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
+            joblib.delayed(load_subject_level_features)(idx, graph_path, 'radiomics', outcome)
             for idx, graph_path in enumerate(radiomics_paths)
         )
     else:
@@ -723,7 +727,7 @@ def load_pathomics(
             path = pathlib.Path(save_pathomics_dir) / pathomics_aggregated_mode / f"{subject_id}.npy"
             pathomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
+            joblib.delayed(load_subject_level_features)(idx, graph_path, 'pathomics', outcome)
             for idx, graph_path in enumerate(pathomics_paths)
         )
     else:
@@ -765,7 +769,7 @@ def load_radiopathomics(
         save_radiopathomics_dir,
         outcome=None
     ):
-    if radiomics_aggregated_mode in ["MEAN", "ABMIL", "SPARRA"]:
+    if isinstance(save_radiopathomics_dir, str):
         assert radiomics_aggregated_mode == pathomics_aggregated_mode
         print(f"loading radiopathomics from {save_radiopathomics_dir}...")
         radiopathomics_paths = []
@@ -774,7 +778,7 @@ def load_radiopathomics(
             path = pathlib.Path(save_radiopathomics_dir) / radiomics_aggregated_mode / f"{subject_id}.npy"
             radiopathomics_paths.append(path)
         dict_list = joblib.Parallel(n_jobs=n_jobs)(
-            joblib.delayed(load_subject_level_features)(idx, graph_path, outcome)
+            joblib.delayed(load_subject_level_features)(idx, graph_path, 'radiopathomics', outcome)
             for idx, graph_path in enumerate(radiopathomics_paths)
         )
 
@@ -796,14 +800,15 @@ def load_radiopathomics(
             prop_X = [prepare_graph_properties(d, omics="pathomics") for d in prop_dict_list]
             prop_X = pd.DataFrame(prop_X)
             radiopathomics_X = pd.concat([radiopathomics_X, prop_X], axis=1)
-    else:
+    elif isinstance(save_radiopathomics_dir, dict):
         radiomics_X = load_radiomics(
             data=data,
             radiomics_aggregation=radiomics_aggregation,
             radiomics_aggregated_mode=radiomics_aggregated_mode,
             radiomics_keys=radiomics_keys,
             use_graph_properties=use_graph_properties,
-            n_jobs=n_jobs
+            n_jobs=n_jobs,
+            save_radiomics_dir=save_radiopathomics_dir['radiomics']
         )
         
         pathomics_X = load_pathomics(
@@ -812,12 +817,139 @@ def load_radiopathomics(
             pathomics_aggregated_mode=pathomics_aggregated_mode,
             pathomics_keys=pathomics_keys,
             use_graph_properties=use_graph_properties,
-            n_jobs=n_jobs
+            n_jobs=n_jobs,
+            save_pathomics_dir=save_radiopathomics_dir['pathomics']
         ) 
 
         radiopathomics_X = pd.concat([radiomics_X, pathomics_X], axis=1)
+        # radiopathomics_X = [radiomics_X, pathomics_X]
 
     return radiopathomics_X
+
+
+def make_json_safe(obj):
+    """Recursively convert numpy types & NaN/Inf to JSON-safe values."""
+    if isinstance(obj, dict):
+        return {k: make_json_safe(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_safe(v) for v in obj]
+    elif isinstance(obj, tuple):
+        return tuple(make_json_safe(v) for v in obj)
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    elif isinstance(obj, (np.floating,)):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return float(obj)
+    elif isinstance(obj, float):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return obj
+    else:
+        return obj
+
+
+def select_l1_svc_features(
+    tr_X,
+    tr_y,
+    label_col="label",
+    C=0.01,
+    variance_threshold=1e-4,
+    max_features=None,
+    coef_threshold=1e-6,
+    standardize=True,
+    random_state=42,
+    verbose=True,
+):
+    """
+    Feature selection using LinearSVC with L1 penalty.
+
+    Parameters
+    ----------
+    tr_X : pd.DataFrame
+        Training features.
+    tr_y : pd.DataFrame or pd.Series
+        Training labels. If DataFrame, must contain `label_col`.
+    label_col : str
+        Column name for labels if tr_y is a DataFrame.
+    C : float
+        Regularization strength (smaller -> more sparsity).
+    max_features : int or None
+        Maximum number of features to keep.
+    coef_threshold : float
+        Minimum absolute coefficient magnitude.
+    standardize : bool
+        Whether to standardize features before fitting.
+    random_state : int
+    verbose : bool
+
+    Returns
+    -------
+    selected_names : list
+        Names of selected features.
+    """
+
+    X = tr_X.copy()
+
+    if verbose:
+        print("Starting LinearSVC L1 feature selection...")
+        print(f"Initial feature count: {X.shape[1]}")
+
+    # --------------------------------------------------
+    # 1️⃣ Remove low-variance features
+    # --------------------------------------------------
+    var_selector = VarianceThreshold(threshold=variance_threshold)
+    X = X.loc[:, var_selector.fit(X).get_support()]
+
+    # --------------------------------------------------
+    # 1️⃣ Prepare labels
+    # --------------------------------------------------
+    if isinstance(tr_y, pd.DataFrame):
+        y = tr_y[label_col].values
+    else:
+        y = tr_y.values
+
+    # --------------------------------------------------
+    # 2️⃣ Standardize features (important for SVM)
+    # --------------------------------------------------
+    if standardize:
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+    else:
+        X_scaled = X.values
+
+    # --------------------------------------------------
+    # 3️⃣ Fit LinearSVC with L1 penalty
+    # --------------------------------------------------
+    svc = LinearSVC(
+        penalty="l1",
+        dual=False,
+        C=C,
+        class_weight="balanced",
+        max_iter=5000,
+        random_state=random_state,
+    )
+
+    svc.fit(X_scaled, y)
+
+    # --------------------------------------------------
+    # 4️⃣ Select non-zero coefficients
+    # --------------------------------------------------
+    selector = SelectFromModel(
+        svc,
+        prefit=True,
+        threshold=coef_threshold,
+        max_features=max_features,
+    )
+
+    mask = selector.get_support()
+    selected_names = X.columns[mask].tolist()
+
+    if verbose:
+        print(f"Selected features: {len(selected_names)}")
+
+    return selected_names
+
 
 def phenotype_classification(
     split_path,
@@ -846,6 +978,12 @@ def phenotype_classification(
         "subject": [], "pred": [],  "prob": [],
         "label": [],
     }
+    ml_model_name = f"{omics}_" + \
+        f"radio+{radiomics_aggregated_mode}_" + \
+        f"patho+{pathomics_aggregated_mode}_" + \
+        f"model+{model}_scorer+{refit}"
+    model_dir = os.path.join(save_results_dir, ml_model_name)
+    os.makedirs(model_dir, exist_ok=True)
     for split_idx, split in enumerate(splits):
         print(f"Performing cross-validation on fold {split_idx}...")
         raw_data_tr, raw_data_va, raw_data_te = split["train"], split["valid"], split["test"]
@@ -874,8 +1012,6 @@ def phenotype_classification(
                 save_radiopathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected training radiopathomics:", tr_X.shape)
-            print(tr_X.head())
 
             te_X = load_radiopathomics(
                 data=data_te,
@@ -890,8 +1026,6 @@ def phenotype_classification(
                 save_radiopathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected testing radiopathomics:", te_X.shape)
-            print(te_X.head())
 
             raw_te_X = load_radiopathomics(
                 data=raw_data_te,
@@ -906,8 +1040,6 @@ def phenotype_classification(
                 save_radiopathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected raw testing radiopathomics:", raw_te_X.shape)
-            print(raw_te_X.head())
         elif omics == "pathomics":
             pathomics_tr_X = load_pathomics(
                 data=data_tr,
@@ -919,8 +1051,6 @@ def phenotype_classification(
                 save_pathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected training pathomics:", pathomics_tr_X.shape)
-            print(pathomics_tr_X.head())
 
             pathomics_te_X = load_pathomics(
                 data=data_te,
@@ -932,8 +1062,6 @@ def phenotype_classification(
                 save_pathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected testing pathomics:", pathomics_te_X.shape)
-            print(pathomics_te_X.head())
 
             tr_X, te_X = pathomics_tr_X, pathomics_te_X
 
@@ -947,8 +1075,6 @@ def phenotype_classification(
                 save_pathomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected raw testing pathomics:", raw_te_X.shape)
-            print(raw_te_X.head())
         elif omics == "radiomics":
             radiomics_tr_X = load_radiomics(
                 data=data_tr,
@@ -960,8 +1086,6 @@ def phenotype_classification(
                 save_radiomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected training radiomics:", radiomics_tr_X.shape)
-            print(radiomics_tr_X.head())
 
             radiomics_te_X = load_radiomics(
                 data=data_te,
@@ -973,8 +1097,6 @@ def phenotype_classification(
                 save_radiomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected testing radiomics:", radiomics_te_X.shape)
-            print(radiomics_te_X.head())
 
             tr_X, te_X = radiomics_tr_X, radiomics_te_X
             raw_te_X = load_radiomics(
@@ -987,45 +1109,109 @@ def phenotype_classification(
                 save_radiomics_dir=save_omics_dir,
                 outcome=outcome
             )
-            print("Selected raw testing radiomics:", raw_te_X.shape)
-            print(raw_te_X.head())
         else:
             raise NotImplementedError
         
         # df_prop = df_prop.apply(zscore)
-        print("Selected training omics:", tr_X.shape)
-        print(tr_X.head())
-        print("Selected testing omics:", te_X.shape)
-        print(te_X.head())
-        print("Selected raw testing omics:", raw_te_X.shape)
-        print(raw_te_X.head())
+        if hasattr(tr_X,'shape'):
+            print("Selected training omics:", tr_X.shape)
+            print(tr_X.head())
+        if hasattr(te_X,'shape'):
+            print("Selected testing omics:", te_X.shape)
+            print(te_X.head())
+        if hasattr(raw_te_X,'shape'):
+            print("Selected raw testing omics:", raw_te_X.shape)
+            print(raw_te_X.head())
+
+        # -----------------------------
+        # Feature selection
+        # -----------------------------
+        # if feature_selection:
+        #     print("\n=== Feature Selection ===")
+
+        #     fs_kwargs = dict(
+        #         C=0.01,
+        #         max_features=n_selected_features,
+        #         variance_threshold=feature_var_threshold,
+        #         coef_threshold=1e-6,
+        #         verbose=True,
+        #     )
+
+        #     # --------------------------------------------------
+        #     # CASE 1️⃣ Multimodal input (list of DataFrames)
+        #     # --------------------------------------------------
+        #     if isinstance(tr_X, list):
+
+        #         selected_modalities = []
+        #         tr_selected = []
+        #         te_selected = []
+        #         raw_te_selected = []
+
+        #         for i, (m_tr, m_te, m_raw) in enumerate(zip(tr_X, te_X, raw_te_X)):
+        #             print(f"\nSelecting modality {i+1} features...")
+                    
+        #             selected = select_l1_svc_features(m_tr, tr_y, **fs_kwargs)
+
+        #             print(f"Modality {i+1}: kept {len(selected)} features")
+
+        #             tr_selected.append(m_tr[selected])
+        #             te_selected.append(m_te[selected])
+        #             raw_te_selected.append(m_raw[selected])
+        #             selected_modalities.append(selected)
+
+        #         # concatenate AFTER selection
+        #         tr_X = pd.concat(tr_selected, axis=1)
+        #         te_X = pd.concat(te_selected, axis=1)
+        #         raw_te_X = pd.concat(raw_te_selected, axis=1)
+
+        #         print("\nFinal concatenated shape:", tr_X.shape)
+        #         print(tr_X.head())
+
+        #     # --------------------------------------------------
+        #     # CASE 2️⃣ Unimodal input (DataFrame)
+        #     # --------------------------------------------------
+        #     else:
+        #         selected = select_l1_svc_features(tr_X, tr_y, **fs_kwargs)
+
+        #         print(f"Selected {len(selected)} features")
+
+        #         tr_X = tr_X[selected]
+        #         te_X = te_X[selected]
+        #         raw_te_X = raw_te_X[selected]
 
         # feature selection
         if feature_selection:
             print("Selecting features using LinearSVC + L1...")
-                
-            # Initialize LinearSVC with L1 penalty
-            svc = LinearSVC(
-                penalty='l1',
-                dual=False,       # required for L1
-                C=1.0,            # can tune C for sparsity
-                class_weight='balanced',
+
+            scaler = StandardScaler()
+            tr_X_scaled = scaler.fit_transform(tr_X)
+
+            svc_fs = LinearSVC(
+                penalty="l1",
+                dual=False,
+                C=0.01,              # encourages sparsity, smaller is more sparse
+                class_weight="balanced",
                 max_iter=5000,
-                random_state=42
+                random_state=42,
             )
-            
-            # Fit to training data
-            svc.fit(tr_X, tr_y["label"])
-            
-            # Select features with non-zero coefficients
-            selector = SelectFromModel(svc, prefit=True, max_features=n_selected_features)
+
+            svc_fs.fit(tr_X_scaled, tr_y["label"])
+
+            selector = SelectFromModel(
+                svc_fs,
+                prefit=True,
+                threshold=1e-6,   # keep non-zero weights
+                max_features=n_selected_features      # <- maximum number of features to keep
+            )
+
             selected_mask = selector.get_support()
             selected_names = tr_X.columns[selected_mask]
-            
-            tr_X = tr_X[selected_names] 
+
+            tr_X = tr_X[selected_names]
             te_X = te_X[selected_names]
             raw_te_X = raw_te_X[selected_names]
-            print(f"Selected features: {len(tr_X.columns)}")
+
+            print(f"Selected features: {len(selected_names)}")
 
         # model selection
         print("Selecting classifier...")
@@ -1039,6 +1225,16 @@ def phenotype_classification(
             predictor = svc(split_idx, tr_X, tr_y['label'], refit, n_jobs)
         else:
             raise NotImplementedError
+
+        # save model and feature names
+        model_path = os.path.join(model_dir, f"{ml_model_name}_fold{split_idx}.joblib")
+
+        joblib.dump({
+            "model": predictor,
+            "features": list(tr_X.columns)
+        }, model_path)
+
+        print(f"Saved model to {model_path}")
 
         # Predictions
         raw_subject_ids = [p[0][0] for p in raw_data_te]
@@ -1064,16 +1260,33 @@ def phenotype_classification(
         acc_list, f1_list, auroc_list, auprc_list = [], [], [], []
 
         for cls in range(num_class):
-            # Binary one-vs-rest labels for this class
+            # Binary one-vs-rest labels
             y_true_cls = (label == cls).astype(int)
             y_pred_cls = (pred == cls).astype(int)
             y_prob_cls = prob[:, cls]
 
-            # Compute metrics using existing scorer functions
+            # Accuracy & F1 always safe
             acc_list.append(acc_scorer(y_true_cls, y_pred_cls))
             f1_list.append(f1_scorer(y_true_cls, y_pred_cls))
-            auroc_list.append(auroc_scorer(y_true_cls, y_prob_cls))
-            auprc_list.append(auprc_scorer(y_true_cls, y_prob_cls))
+
+            # ---- AUROC ----
+            try:
+                if len(np.unique(y_true_cls)) < 2:
+                    raise ValueError("single class")
+                auroc = auroc_scorer(y_true_cls, y_prob_cls)
+            except Exception:
+                auroc = np.nan
+            auroc_list.append(auroc)
+
+            # ---- AUPRC ----
+            try:
+                if len(np.unique(y_true_cls)) < 2:
+                    raise ValueError("single class")
+                auprc = auprc_scorer(y_true_cls, y_prob_cls)
+            except Exception:
+                auprc = np.nan
+            auprc_list.append(auprc)
+
 
         # Optional: organize as dictionary
         scores_dict = {
@@ -1087,23 +1300,23 @@ def phenotype_classification(
 
     # print average results across folds per class
     print(predict_results)
-    for k in scores_dict.keys():
-        arr = np.array([v[k] for v in predict_results.values()])
-        print(f"CV {k} mean+std", arr.mean(axis=0), arr.std(axis=0))
+    for metric in scores_dict.keys():
+        arr = np.array([v[metric] for v in predict_results.values()])
+
+        mean_val = np.nanmean(arr, axis=0)
+        std_val = np.nanstd(arr, axis=0)
+
+        print(f"CV {metric} mean ± std:", mean_val, std_val)
     
     #save predicted results
-    save_path = f"{save_results_dir}/{omics}_" + \
-        f"radio+{radiomics_aggregated_mode}_" + \
-        f"patho+{pathomics_aggregated_mode}_" + \
-        f"model+{model}_scorer+{refit}_results.json"
+    save_path = f"{save_results_dir}/{ml_model_name}_results.json"
+    classification_results = make_json_safe(classification_results)
     with open(save_path, "w") as f:
         json.dump(classification_results, f, indent=4)
 
     # save metrics
-    save_path = f"{save_results_dir}/{omics}_" + \
-        f"radio+{radiomics_aggregated_mode}_" + \
-        f"patho+{pathomics_aggregated_mode}_" + \
-        f"model+{model}_scorer+{refit}_metrics.json"
+    save_path = f"{save_results_dir}/{ml_model_name}_metrics.json"
+    predict_results = make_json_safe(predict_results)
     with open(save_path, "w") as f:
         json.dump(predict_results, f, indent=4)
         
@@ -1292,16 +1505,24 @@ if __name__ == "__main__":
         else:
             pathomics_keys = None
         
-        save_omics_dir = opt['PREDICTION']['OMICS_DIR'] + f"/{radiomics_mode}+{pathomics_mode}"
+        save_omics_dir = opt['PREDICTION']['OMICS_DIR']
         if opt['PREDICTION']['USED_OMICS']['VALUE'] == "radiomics":
-            save_omics_dir = save_omics_dir + f"/radiomics_GCNConv_" \
+            save_omics_dir = save_omics_dir + f"/{radiomics_mode}" + f"/radiomics_GCNConv_" \
                 + opt['RADIOMICS']['AGGREGATED_MODE']['VALUE']
         elif opt['PREDICTION']['USED_OMICS']['VALUE'] == "pathomics":
-            save_omics_dir = save_omics_dir + f"/pathomics_GCNConv_" \
+            save_omics_dir = save_omics_dir + f"/{pathomics_mode}" + f"/pathomics_GCNConv_" \
                 + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
         elif opt['PREDICTION']['USED_OMICS']['VALUE'] == "radiopathomics":
-            save_omics_dir = save_omics_dir + f"/radiomics_pathomics_GCNConv_" \
-                + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
+            if opt['PREDICTION']['USED_OMICS']['CONCAT']:
+                save_omics_dir = {
+                    "radiomics": save_omics_dir + f"/{radiomics_mode}" + f"/radiomics_GCNConv_" \
+                        + opt['RADIOMICS']['AGGREGATED_MODE']['VALUE'],
+                    "pathomics": save_omics_dir + f"/{pathomics_mode}" + f"/pathomics_GCNConv_" \
+                        + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
+                }
+            else:
+                save_omics_dir = save_omics_dir + f"/{radiomics_mode}+{pathomics_mode}" + f"/radiomics_pathomics_GCNConv_" \
+                    + opt['PATHOMICS']['AGGREGATED_MODE']['VALUE']
         # save_omics_dir = opt['PREDICTION']['OMICS_DIR'] + f"/{radiomics_mode}+{pathomics_mode}" + f"/pathomics_GCNConv_SPARRA_heter_vi0.1ae1.0_noDS"
             
         phenotype_classification(

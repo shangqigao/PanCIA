@@ -27,9 +27,10 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 
 
 CONFIG="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"
+OUTCOME="GeneProgrames"
 
 # Common lists
-RADIOMICS_MODES=("pyradiomics" "BiomedParse" "LVMMed")
+RADIOMICS_MODES=("pyradiomics" "FMCIB" "BiomedParse" "LVMMed")
 PATHOMICS_MODES=("UNI" "CONCH" "CHIEF")
 AGG_MODES=("MEAN" "ABMIL" "SPARRA")
 
@@ -40,13 +41,14 @@ USED_OMICS="radiomics"
 
 for R_MODE in "${RADIOMICS_MODES[@]}"; do
 
-  if [[ "$R_MODE" == "pyradiomics" || "$R_MODE" == "BayesBP" ]]; then
+  if [[ "$R_MODE" == "pyradiomics" || "$R_MODE" == "FMCIB" ]]; then
     R_AGG="None"
 
     echo "[radiomics] MODE=$R_MODE AGG=None"
 
     python analysis/a05_outcome_prediction/m_signature_prediction.py \
       --config_files "$CONFIG" \
+      --override OUTCOME.VALUE="$OUTCOME" \
       --override PREDICTION.USED_OMICS.VALUE="$USED_OMICS" \
       --override RADIOMICS.MODE.VALUE="$R_MODE" \
       --override RADIOMICS.AGGREGATED_MODE.VALUE="$R_AGG" \
@@ -59,6 +61,7 @@ for R_MODE in "${RADIOMICS_MODES[@]}"; do
 
       python analysis/a05_outcome_prediction/m_signature_prediction.py \
         --config_files "$CONFIG" \
+        --override OUTCOME.VALUE="$OUTCOME" \
         --override PREDICTION.USED_OMICS.VALUE="$USED_OMICS" \
         --override RADIOMICS.MODE.VALUE="$R_MODE" \
         --override RADIOMICS.AGGREGATED_MODE.VALUE="$R_AGG" \
@@ -81,6 +84,7 @@ for P_MODE in "${PATHOMICS_MODES[@]}"; do
 
     python analysis/a05_outcome_prediction/m_signature_prediction.py \
       --config_files "$CONFIG" \
+      --override OUTCOME.VALUE="$OUTCOME" \
       --override PREDICTION.USED_OMICS.VALUE="$USED_OMICS" \
       --override PATHOMICS.MODE.VALUE="$P_MODE" \
       --override PATHOMICS.AGGREGATED_MODE.VALUE="$P_AGG" \
@@ -97,7 +101,7 @@ USED_OMICS="radiopathomics"
 
 for R_MODE in "${RADIOMICS_MODES[@]}"; do
 
-  if [[ "$R_MODE" == "pyradiomics" || "$R_MODE" == "BayesBP" ]]; then
+  if [[ "$R_MODE" == "pyradiomics" || "$R_MODE" == "FMCIB" ]]; then
     R_AGG="None"
     P_AGG="MEAN"
 
@@ -106,6 +110,7 @@ for R_MODE in "${RADIOMICS_MODES[@]}"; do
 
       python analysis/a05_outcome_prediction/m_signature_prediction.py \
         --config_files "$CONFIG" \
+        --override OUTCOME.VALUE="$OUTCOME" \
         --override PREDICTION.USED_OMICS.VALUE="$USED_OMICS" \
         --override RADIOMICS.MODE.VALUE="$R_MODE" \
         --override RADIOMICS.AGGREGATED_MODE.VALUE="$R_AGG" \
@@ -121,6 +126,7 @@ for R_MODE in "${RADIOMICS_MODES[@]}"; do
 
         python analysis/a05_outcome_prediction/m_signature_prediction.py \
           --config_files "$CONFIG" \
+          --override OUTCOME.VALUE="$OUTCOME" \
           --override PREDICTION.USED_OMICS.VALUE="$USED_OMICS" \
           --override RADIOMICS.MODE.VALUE="$R_MODE" \
           --override RADIOMICS.AGGREGATED_MODE.VALUE="$AGG" \
