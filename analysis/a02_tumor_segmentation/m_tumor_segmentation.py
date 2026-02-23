@@ -37,6 +37,7 @@ from tiatoolbox import logger
 
 def extract_radiology_segmentation(
         dataset,
+        seg_obj,
         img_paths, 
         text_prompts,
         model_mode, 
@@ -46,6 +47,7 @@ def extract_radiology_segmentation(
         meta_list=None,
         img_format='nifti',
         beta_params=None,
+        keep_largest=False,
         prompt_ensemble=False,
         save_radiomics=False,
         zoom_in=False,
@@ -66,6 +68,7 @@ def extract_radiology_segmentation(
     if model_mode == "BiomedParse":
         _ = extract_BiomedParse_segmentation(
             dataset,
+            seg_obj,
             img_paths,
             text_prompts,
             save_dir,
@@ -74,6 +77,7 @@ def extract_radiology_segmentation(
             site=site,
             meta_list=meta_list,
             beta_params=beta_params,
+            keep_largest=keep_largest,
             prompt_ensemble=prompt_ensemble,
             save_radiomics=save_radiomics,
             zoom_in=zoom_in,
@@ -83,9 +87,9 @@ def extract_radiology_segmentation(
         raise ValueError(f"Invalid model mode: {model_mode}")
     return
 
-def extract_BiomedParse_segmentation(dataset, img_paths, text_prompts, save_dir,
+def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, save_dir,
                                   format='nifti', modality='MR', site='breast', 
-                                  meta_list=None, beta_params=None, 
+                                  meta_list=None, beta_params=None, keep_largest=False,
                                   prompt_ensemble=False, save_radiomics=False,
                                   zoom_in=False, device="gpu", skip_exist=False):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
@@ -107,7 +111,12 @@ def extract_BiomedParse_segmentation(dataset, img_paths, text_prompts, save_dir,
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
-    pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/PanCancer_LoRA')
+    if seg_obj == 'tumor':
+        opt['LoRA'] = True
+        pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/PanCancer_LoRA')
+    else:
+        opt['LoRA'] = False
+        pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/biomedparse_v1.pt')
     # pretrained_pth = os.path.join(relative_path, 'checkpoints/Bayes_BiomedParse/Bayes_PanCancer/model_state_dict.pt')
 
     if device == 'gpu':
@@ -143,7 +152,7 @@ def extract_BiomedParse_segmentation(dataset, img_paths, text_prompts, save_dir,
                 img_name = str(img_path).split(f'/{dataset}_NIFTI/')[-1].replace(".nii.gz", "")
             else:
                 img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        save_mask_path = pathlib.Path(f"{save_dir}/{img_name}.nii.gz")
+        save_mask_path = pathlib.Path(f"{save_dir}/{img_name}_{seg_obj}.nii.gz")
         if save_mask_path.exists() and skip_exist:
             logger.info(f"{save_mask_path.name} has existed, skip!")
             continue
@@ -265,11 +274,12 @@ def extract_BiomedParse_segmentation(dataset, img_paths, text_prompts, save_dir,
             mask_3d = np.moveaxis(mask_nib, slice_axis, 0)
 
         if save_radiomics: feat_4d = np.concatenate(feat_4d, axis=0)
+        keep_largest = seg_obj == 'tumor'
         if beta_params is not None:
             prob_3d = np.concatenate(prob_3d, axis=0)
             image_4d = np.stack(image_4d, axis=0)
             logger.info("Post-processing by removing both unconfident predictions and spatially inconsistent objects")
-            mask_3d = remove_inconsistent_objects(mask_3d, prob_3d=prob_3d, image_4d=image_4d, beta_params=beta_params)
+            mask_3d = remove_inconsistent_objects(mask_3d, prob_3d=prob_3d, image_4d=image_4d, beta_params=beta_params, keep_largest=keep_largest)
         else:
             logger.info("Post-processing by removing spatially inconsistent objects")
             if format[idx] == 'dicom':
@@ -278,7 +288,7 @@ def extract_BiomedParse_segmentation(dataset, img_paths, text_prompts, save_dir,
                 voxel_spacing = spacing.tolist()
                 z_spacing = voxel_spacing.pop(slice_axis)
                 voxel_spacing.insert(0, z_spacing)
-            mask_3d = remove_inconsistent_objects(mask_3d, spacing=voxel_spacing)
+            mask_3d = remove_inconsistent_objects(mask_3d, spacing=voxel_spacing, keep_largest=keep_largest)
         final_mask = np.moveaxis(mask_3d, 0, slice_axis)
         logger.info(f"Saving predicted segmentation to {save_mask_path}")
         nifti_img = nib.Nifti1Image(final_mask, affine)
@@ -361,6 +371,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--radiology', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
     parser.add_argument('--dataset', default="MAMAMIA", type=str)
+    parser.add_argument('--seg_obj', default="tumor", choices=["tumor", "organ"], type=str)
+    parser.add_argument("--keep_largest", action="store_true")
     parser.add_argument('--phase', default="single", choices=["single", "multiple"], type=str)
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--meta_info', default=None)
@@ -380,12 +392,14 @@ if __name__ == "__main__":
     elif args.dataset == 'TCGA':
         dataset_info = prepare_TCGA_radiology_info(
             img_json=args.radiology,
-            img_format=args.format
+            img_format=args.format,
+            seg_obj=args.seg_obj
         )
     elif args.dataset == 'CPTAC':
         dataset_info = prepare_TCGA_radiology_info(
             img_json=args.radiology,
-            img_format=args.format
+            img_format=args.format,
+            seg_obj=args.seg_obj
         )
     else:
         raise ValueError(f'Dataset {args.dataset} is currently unsupported')
@@ -395,6 +409,7 @@ if __name__ == "__main__":
     logger.info(f"starting segmentation on {dataset_info['name']}...")
     extract_radiology_segmentation(
         dataset=args.dataset,
+        seg_obj=args.seg_obj,
         img_paths=dataset_info['img_paths'],
         text_prompts=dataset_info['text_prompts'],
         model_mode=args.model,
@@ -404,6 +419,7 @@ if __name__ == "__main__":
         meta_list=dataset_info['meta_list'],
         img_format=dataset_info['img_format'],
         beta_params=None,
+        keep_largest=args.keep_largest,
         prompt_ensemble=False,
         save_radiomics=False,
         zoom_in=False,

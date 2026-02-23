@@ -171,13 +171,13 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
 
 # survival analysis
-# survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
-# python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
+survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
+python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
 
 # phenotype prediction
 # phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
 # python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
 
 # signature prediction
-signature_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"
-python analysis/a05_outcome_prediction/m_signature_prediction.py --config_files $signature_config
+# signature_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"
+# python analysis/a05_outcome_prediction/m_signature_prediction.py --config_files $signature_config

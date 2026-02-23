@@ -70,7 +70,7 @@ def prepare_MAMAMIA_info(img_dir, lab_dir=None, lab_mode=None, img_format='nifti
     }
     return dataset_info
 
-def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti'):
+def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti', seg_obj='tumor'):
     assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
     with open(img_json, 'r') as f:
         data = json.load(f)
@@ -87,8 +87,11 @@ def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_forma
             img_site = PANCIA_PROJECT_SITE[project]
             site.append(img_site)
             modality.append(img_mod)
-            target = PANCIA_PROMPT_TEMPLETES[img_site]
-            prompts.append(f"{target} on {img_mod}")
+            if seg_obj == 'tumor':
+                target = PANCIA_PROMPT_TEMPLETES[img_site]
+                prompts.append(f"{target} on {img_mod}")
+            else:
+                prompts.append(f"{img_site} on {img_mod}")
     
     if lab_dir is not None:
         lab_paths = [str(p).split('/TCGA_NIFTI/')[-1] for p in images]
@@ -109,7 +112,7 @@ def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_forma
 
     return dataset_info
 
-def prepare_CPTAC_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti'):
+def prepare_CPTAC_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti', seg_obj='tumor'):
     assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
     with open(img_json, 'r') as f:
         data = json.load(f)
@@ -126,8 +129,11 @@ def prepare_CPTAC_radiology_info(img_json, lab_dir=None, lab_mode=None, img_form
             img_site = PANCIA_PROJECT_SITE[project]
             site.append(img_site)
             modality.append(img_mod)
-            target = PANCIA_PROMPT_TEMPLETES[img_site]
-            prompts.append(f"{target} on {img_mod}")
+            if seg_obj == 'tumor':
+                target = PANCIA_PROMPT_TEMPLETES[img_site]
+                prompts.append(f"{target} on {img_mod}")
+            else:
+                prompts.append(f"{img_site} on {img_mod}")
     
     if lab_dir is not None:
         lab_paths = [str(p).split('/CPTAC_NIFTI/')[-1] for p in images]

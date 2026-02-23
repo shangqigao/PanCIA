@@ -48,7 +48,7 @@ def keep_largest_components(mask, num_components=1):
     return output_mask
 
 def remove_inconsistent_objects(mask_3d, min_slices=4, min_dice=0.0, spacing=None, new_spacing=(1.0, 1.0, 1.0),
-                                prob_3d=None, image_4d=None, beta_params=None, alpha=0.05):
+                                prob_3d=None, image_4d=None, beta_params=None, alpha=0.05, keep_largest=False):
     """
     Remove 3D objects that are not consistent across slices.
 
@@ -109,7 +109,8 @@ def remove_inconsistent_objects(mask_3d, min_slices=4, min_dice=0.0, spacing=Non
             cleaned[component] = 1
 
     logging.info(f"Removed {num_objects} of {num} objects with spatial inconsistency!")
-    cleaned = keep_largest_components(cleaned)
+    if keep_largest:
+        cleaned = keep_largest_components(cleaned)
     # resample to orginal shape
     if spacing is not None:
         zoom_factors = tuple(os/ns for os, ns in zip(original_shape, new_shape))
