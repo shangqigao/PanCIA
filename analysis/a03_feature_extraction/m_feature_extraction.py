@@ -1923,7 +1923,12 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
-    pretrained_pth = os.path.join(root_dir, 'checkpoints/BiomedParse/MP_heart_LoRA_sqrt')
+    if class_name == 'tumor':
+        opt['LoRA'] = True
+        pretrained_pth = os.path.join(root_dir, 'checkpoints/BiomedParse/PanCancer_LoRA')
+    else:
+        opt['LoRA'] = False
+        pretrained_pth = os.path.join(root_dir, 'checkpoints/BiomedParse/biomedparse_v1.pt')
 
     if device == 'cuda':
         if not opt.get('LoRA', False):
@@ -2078,10 +2083,13 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         if np.sum(final_mask) < 1: continue
 
         # extract radiomic features of tumor regions
-        radiomic_feat = radiomic_feat[final_mask > 0]
-        radiomic_memory = radiomic_feat.nbytes / 1024**2
-        radiomic_coord = np.argwhere(final_mask > 0)
+        if class_name == 'slice':
+            radiomic_coord = np.argwhere(np.ones_like(final_mask, dtype=bool))
+        else:
+            radiomic_feat = radiomic_feat[final_mask > 0]
+            radiomic_coord = np.argwhere(final_mask > 0)
         radiomic_coord[:, slice_axis] += zmin
+        radiomic_memory = radiomic_feat.nbytes / 1024**2
         logging.info(f"Extracted ROI feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}MiB)")
         logging.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, radiomic_feat)
@@ -2633,9 +2641,13 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, class_name,
 
         # extract multi-scale radiomic features of tumor regions  
         for k in radiomic_feat.keys():
-            radio_feat = radiomic_feat[k][radiomic_mask[k] > 0]
+            if class_name == 'slice':
+                radio_feat = radiomic_feat[k]
+                radiomic_coord = np.argwhere(np.ones_like(radiomic_mask[k], dtype=bool)) * np.expand_dims(ds_factors[k], axis=0)
+            else:
+                radio_feat = radiomic_feat[k][radiomic_mask[k] > 0]
+                radiomic_coord = np.argwhere(radiomic_mask[k] > 0) * np.expand_dims(ds_factors[k], axis=0)
             radiomic_memory = radio_feat.nbytes / 1024**2
-            radiomic_coord = np.argwhere(radiomic_mask[k] > 0) * np.expand_dims(ds_factors[k], axis=0)
             radiomic_coord = (radiomic_coord / resize_scales + bbox_min).astype(np.float16)
             logging.info(f"Extracted ROI {k} feature of shape {radio_feat.shape} ({radiomic_memory:.2f}MiB)")
             feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_{k}_radiomics.npy")
