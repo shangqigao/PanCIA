@@ -95,7 +95,7 @@ def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_forma
     
     if lab_dir is not None:
         lab_paths = [str(p).split('/TCGA_NIFTI/')[-1] for p in images]
-        lab_paths = [f"{lab_dir}/{lab_mode}/{p}" for p in lab_paths]
+        lab_paths = [f"{lab_dir}/{lab_mode}/{p}".replace('.nii.gz', f'_{seg_obj}.nii.gz') for p in lab_paths]
     else:
         lab_paths = [None]*len(img_paths)
 
@@ -137,7 +137,7 @@ def prepare_CPTAC_radiology_info(img_json, lab_dir=None, lab_mode=None, img_form
     
     if lab_dir is not None:
         lab_paths = [str(p).split('/CPTAC_NIFTI/')[-1] for p in images]
-        lab_paths = [f"{lab_dir}/{lab_mode}/{p}" for p in lab_paths]
+        lab_paths = [f"{lab_dir}/{lab_mode}/{p}".replace('.nii.gz', f'_{seg_obj}.nii.gz') for p in lab_paths]
     else:
         lab_paths = [None]*len(img_paths)
 
