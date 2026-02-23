@@ -12,7 +12,7 @@ def cluster_radiomic_feature(
         img_paths, 
         feature_mode, 
         save_dir, 
-        class_name,
+        target,
         n_clusters,
         n_jobs=32,
         skip_exist=False
@@ -32,7 +32,7 @@ def cluster_radiomic_feature(
         _ = cluster_Bayes_BiomedParse_radiomics(
             img_paths=img_paths, 
             save_dir=save_dir, 
-            class_name=class_name, 
+            target=target, 
             n_clusters=n_clusters, 
             n_jobs=n_jobs, 
             skip_exist=skip_exist
@@ -97,7 +97,7 @@ def Bayes_radiomics_pooling(feature_path, save_path, n_clusters=3):
 
     return
 
-def cluster_Bayes_BiomedParse_radiomics(img_paths, save_dir, class_name="tumour", n_clusters=3, n_jobs=32, skip_exist=False):
+def cluster_Bayes_BiomedParse_radiomics(img_paths, save_dir, target="tumour", n_clusters=3, n_jobs=32, skip_exist=False):
     """pool layer-wise Bayesian features by clustering
     Args:
         img_paths (list): a list of image paths
@@ -106,12 +106,12 @@ def cluster_Bayes_BiomedParse_radiomics(img_paths, save_dir, class_name="tumour"
     def _feature_clustering(idx, img_path):
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         parent_name = pathlib.Path(img_path).parent.name
-        save_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics_pooled.json")
+        save_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics_pooled.json")
         if save_path.exists() and skip_exist:
             logger.info(f"{save_path.name} has existed, skip!")
             return
 
-        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{class_name}_radiomics.json")
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.json")
         if not feature_path.exists(): 
             logger.info(f"{feature_path.name} doesn't exist, skip!")
             return

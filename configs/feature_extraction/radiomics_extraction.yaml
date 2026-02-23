@@ -8,10 +8,11 @@ N_JOBS: 32
 
 # Define parameters of radiomics
 RADIOMICS:
-  TARGET: "tumor"
+  TARGET: "slice" # "tumor", "organ" or "slice"
   SEGMENTATOR:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
+    OBJECT: "tumor" # or "tumor" or "organ"
   MODE:
     VALUE: "FMCIB"
     CHOICES:

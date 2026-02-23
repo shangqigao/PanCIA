@@ -45,14 +45,16 @@ if __name__ == "__main__":
             img_json=opt['RADIOLOGY'],
             lab_dir=opt['LABEL_DIR'],
             lab_mode=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
-            img_format=opt['DATA_FORMAT']
+            img_format=opt['DATA_FORMAT'],
+            seg_obj=opt['RADIOMICS']['SEGMENTATOR']['OBJECT']
         )
     elif opt['DATASET'] == 'CPTAC':
         dataset_info = prepare_CPTAC_radiology_info(
             img_json=opt['RADIOLOGY'],
             lab_dir=opt['LABEL_DIR'],
             lab_mode=opt['RADIOMICS']['SEGMENTATOR']['VALUE'],
-            img_format=opt['DATA_FORMAT']
+            img_format=opt['DATA_FORMAT'],
+            seg_obj=opt['RADIOMICS']['SEGMENTATOR']['OBJECT']
         )
     else:
         raise NotImplementedError
@@ -73,7 +75,7 @@ if __name__ == "__main__":
             lab_paths=dataset_info['lab_paths'],
             feature_mode=opt['RADIOMICS']['MODE']['VALUE'],
             save_dir=save_feature_dir,
-            class_name=opt['RADIOMICS']['TARGET'],
+            target=opt['RADIOMICS']['TARGET'],
             prompts=dataset_info['text_prompts'],
             format=dataset_info['img_format'],
             modality=dataset_info['modality'],
@@ -94,7 +96,7 @@ if __name__ == "__main__":
             img_paths=dataset_info['img_paths'], 
             feature_mode=opt['RADIOMICS']['MODE']['VALUE'], 
             save_dir=save_feature_dir, 
-            class_name=opt['RADIOMICS']['TARGET'],
+            target=opt['RADIOMICS']['TARGET'],
             n_clusters=6,
             n_jobs=opt['N_JOBS'],
             skip_exist=opt['RADIOMICS']['SKIP_EXITS']
@@ -107,7 +109,7 @@ if __name__ == "__main__":
             img_paths=dataset_info['img_paths'],
             save_dir=save_feature_dir,
             radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
-            class_name=opt['RADIOMICS']['TARGET'],
+            target=opt['RADIOMICS']['TARGET'],
             window_size=24**3,
             lambda_f=opt['RADIOMICS']['TASKS']['GRAPH_CONSTRUCTION']['FEATURE_DIS_WEIGHT'],
             n_jobs=opt['N_JOBS'],
@@ -122,7 +124,7 @@ if __name__ == "__main__":
             img_paths=dataset_info['img_paths'],
             save_dir=save_feature_dir,
             radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
-            class_name=opt['RADIOMICS']['TARGET'],
+            target=opt['RADIOMICS']['TARGET'],
             mode=opt['RADIOMICS']['TASKS']['GRAPH_AGGREGATION']['MODE'],
             n_jobs=opt['N_JOBS'],
             skip_exist=opt['RADIOMICS']['SKIP_EXITS']
@@ -135,7 +137,7 @@ if __name__ == "__main__":
             img_paths=dataset_info['img_paths'],
             save_dir=save_feature_dir,
             radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
-            class_name=opt['RADIOMICS']['TARGET'],
+            target=opt['RADIOMICS']['TARGET'],
             n_jobs=opt['N_JOBS'],
             skip_exist=opt['RADIOMICS']['SKIP_EXITS']
         )
@@ -162,7 +164,7 @@ if __name__ == "__main__":
         radiomic_feature_visualization(
             img_paths=dataset_info['img_paths'][0:10],
             save_feature_dir=save_feature_dir,
-            class_name=opt['RADIOMICS']['TARGET'],
+            target=opt['RADIOMICS']['TARGET'],
             mode="umap",
             graph=True
         )
@@ -174,7 +176,7 @@ if __name__ == "__main__":
             img_path=dataset_info['img_paths'][0],
             lab_path=dataset_info['lab_paths'][0],
             save_graph_dir=save_feature_dir,
-            class_name=opt['RADIOMICS']['TARGET'],
+            target=opt['RADIOMICS']['TARGET'],
             spacing=tuple([opt['RADIOMICS']['RESOLUTION']]*3),
             feature_extractor=opt['RADIOMICS']['MODE']['VALUE'],
             remove_front_corner=False

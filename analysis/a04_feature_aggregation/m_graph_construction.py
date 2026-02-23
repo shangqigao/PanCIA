@@ -203,7 +203,7 @@ def aggregate_wsi_graph(wsi_paths, save_dir, mode='mean', n_jobs=8, skip_exist=F
 def construct_radiomic_graph(
     feature_path, 
     save_path, 
-    class_name="tumour", 
+    target="tumour", 
     window_size=30**3,
     lambda_f=0.1
     ):
@@ -259,7 +259,7 @@ def construct_radiomic_graph(
     with save_path.open("w") as handle:
         json.dump(new_graph_dict, handle, indent=4)
 
-def construct_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumour", window_size=30**3, lambda_f=0.1, n_jobs=32, delete_npy=False, skip_exist=False):
+def construct_img_graph(img_paths, save_dir, radiomics_suffix, target="tumour", window_size=30**3, lambda_f=0.1, n_jobs=32, delete_npy=False, skip_exist=False):
     """construct graph for radiological images
     Args:
         img_paths (list): a list of image paths
@@ -276,21 +276,21 @@ def construct_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumou
         save_feat_dir = f"{save_dir}/{parent_name}"
         for suffix in radiomics_suffix:
             graph_suffix = str(suffix).replace("radiomics.npy", "graph.json")
-            graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_{graph_suffix}")
+            graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{target}_{graph_suffix}")
             if graph_path.exists() and skip_exist:
                 logger.info(f"{graph_path.name} has existed, skip!")
                 return
 
-            feature_path = f"{save_feat_dir}/{img_name}_{class_name}_{suffix}"
+            feature_path = f"{save_feat_dir}/{img_name}_{target}_{suffix}"
             if not pathlib.Path(feature_path).exists(): 
-                logger.info(f"{img_name}_{class_name}_{suffix} doesn't exist, skip!")
+                logger.info(f"{img_name}_{target}_{suffix} doesn't exist, skip!")
                 return
                 
             logger.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
-            construct_radiomic_graph(feature_path, graph_path, class_name, window_size, lambda_f)
+            construct_radiomic_graph(feature_path, graph_path, target, window_size, lambda_f)
 
             if delete_npy:
-                radiomics_npy = f"{img_name}_{class_name}_{suffix}"
+                radiomics_npy = f"{img_name}_{target}_{suffix}"
                 os.remove(f"{save_feat_dir}/{radiomics_npy}")
                 logger.info(f"{radiomics_npy} deleted")
                 coordinates_npy = radiomics_npy.replace("radiomics.npy", "coordinates.npy")
@@ -305,7 +305,7 @@ def construct_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumou
     )
     return 
 
-def aggregate_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumour", mode='mean', n_jobs=32, skip_exist=False):
+def aggregate_img_graph(img_paths, save_dir, radiomics_suffix, target="tumour", mode='mean', n_jobs=32, skip_exist=False):
     """aggreate graphs
     Args:
         img_paths (list): a list of image paths
@@ -319,12 +319,12 @@ def aggregate_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumou
         save_feat_dir = f"{save_dir}/{parent_name}"
         for suffix in radiomics_suffix:
             graph_suffix = str(suffix).replace("radiomics.npy", "graph.json")
-            graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_{graph_suffix}")
+            graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{target}_{graph_suffix}")
             if not graph_path.exists():
                 logger.info(f"{graph_path.name} does not exist, skip!")
                 return
             aggregate_suffix = str(suffix).replace("radiomics.npy", f"graph_aggr_{mode}.npy")
-            aggregate_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_{aggregate_suffix}")
+            aggregate_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{target}_{aggregate_suffix}")
             if aggregate_path.exists() and skip_exist:
                 logger.info(f"{aggregate_path.name} has existed, skip!")
                 return
@@ -352,7 +352,7 @@ def aggregate_img_graph(img_paths, save_dir, radiomics_suffix, class_name="tumou
     )
     return 
 
-def convert_img_graph_to_npz(img_paths, save_dir, radiomics_suffix, class_name="tumour", n_jobs=32, skip_exist=False):
+def convert_img_graph_to_npz(img_paths, save_dir, radiomics_suffix, target="tumour", n_jobs=32, skip_exist=False):
     """convert json to npz for speeding up deep learning
     Args:
         img_paths (list): a list of image paths
@@ -366,12 +366,12 @@ def convert_img_graph_to_npz(img_paths, save_dir, radiomics_suffix, class_name="
         save_feat_dir = f"{save_dir}/{parent_name}"
         for suffix in radiomics_suffix:
             graph_suffix = str(suffix).replace("radiomics.npy", "graph.json")
-            graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_{graph_suffix}")
+            graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{target}_{graph_suffix}")
             if not graph_path.exists():
                 logger.info(f"{graph_path.name} does not exist, skip!")
                 return
             npz_suffix = str(suffix).replace("radiomics.npy", f"graph.npz")
-            npz_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{class_name}_{npz_suffix}")
+            npz_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{target}_{npz_suffix}")
             if npz_path.exists() and skip_exist:
                 logger.info(f"{npz_path.name} has existed, skip!")
                 return
@@ -1033,7 +1033,7 @@ def visualize_radiomic_graph(
         lab_path, 
         save_graph_dir,
         attention=None,
-        class_name="tumour",
+        target="tumour",
         save_name="radiomics",
         feature_extractor="SegVol",
         keys=["image", "label"],
@@ -1075,7 +1075,7 @@ def visualize_radiomic_graph(
 
     img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
     logger.info(f"loading graph of {img_name}")
-    graph_path = pathlib.Path(f"{save_graph_dir}/{img_name}_{class_name}.json")
+    graph_path = pathlib.Path(f"{save_graph_dir}/{img_name}_{target}.json")
     graph_dict = load_json(graph_path)
     cluster_points = graph_dict["cluster_points"]
     graph_dict = {k: v for k, v in graph_dict.items() if k != "cluster_points"}
@@ -1251,7 +1251,7 @@ def pathomic_feature_visualization(wsi_paths, save_feature_dir, mode="tsne", sav
     plt.savefig(f'{relative_path}/figures/plots/{mode}_visualization.jpg')
     print("Visualization done!")
 
-def radiomic_feature_visualization(img_paths, save_feature_dir, class_name="tumour", mode="tsne", graph=True, n_class=None, features=None, colors=None):
+def radiomic_feature_visualization(img_paths, save_feature_dir, target="tumour", mode="tsne", graph=True, n_class=None, features=None, colors=None):
     from tiatoolbox import logger
     from sklearn.decomposition import PCA
 
@@ -1262,11 +1262,11 @@ def radiomic_feature_visualization(img_paths, save_feature_dir, class_name="tumo
             parent_name = pathlib.Path(img_path).parent.name
             logger.info(f"loading feature of {img_name}")
             if graph:
-                feature_path = pathlib.Path(f"{save_feature_dir}/{parent_name}/{img_name}_{class_name}_graph.json")
+                feature_path = pathlib.Path(f"{save_feature_dir}/{parent_name}/{img_name}_{target}_graph.json")
                 graph_dict = load_json(feature_path)
                 feature = np.array(graph_dict["x"])
             else:
-                feature_path = pathlib.Path(f"{save_feature_dir}/{parent_name}/{img_name}_{class_name}_radiomics.npy")
+                feature_path = pathlib.Path(f"{save_feature_dir}/{parent_name}/{img_name}_{target}_radiomics.npy")
                 feature = np.load(feature_path)
             features.append(feature)
             label = np.argmax(softmax(feature, axis=1), axis=1)
