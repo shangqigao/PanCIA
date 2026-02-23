@@ -37,7 +37,7 @@ omics_levels <- c("radiomics", "pathomics", "radiopathomics")
 
 row_order <- c("MEAN", "ABMIL", "SPARRA")
 omics_type_order <- c("radiomics", "pathomics", "radiopathomics")
-radiomics_order  <- c("pyradiomics", "BiomedParse", "LVMMed")
+radiomics_order  <- c("pyradiomics", "FMCIB", "BiomedParse", "LVMMed")
 pathomics_order  <- c("CHIEF", "CONCH", "UNI")
 
 task_palettes <- list(
@@ -68,6 +68,7 @@ parse_one <- function(file, big_task, metric_name) {
   patho_mode <- m2[3]
 
   if (radio_mode == "pyradiomics") radio_agg <- "MEAN"
+  if (radio_mode == "FMCIB") radio_agg <- "MEAN"
 
   agg_mode <- case_when(
     omics_type == "radiomics"      ~ radio_agg,

@@ -50,7 +50,7 @@ big_tasks <- list(
 # 定义顺序和级别
 agg_levels <- c("MEAN", "ABMIL", "SPARRA")
 omics_levels <- c("radiomics", "pathomics", "radiopathomics")
-radiomics_order <- c("pyradiomics", "BiomedParse", "LVMMed")
+radiomics_order <- c("pyradiomics", "FMCIB", "BiomedParse", "LVMMed")
 pathomics_order <- c("CHIEF", "CONCH", "UNI")
 
 # 定义颜色
@@ -145,9 +145,9 @@ parse_json_with_path_structure <- function(file_path) {
   patho_agg <- str_split(patho_part, "\\+", simplify = TRUE)[, 2]
   
   # pyradiomics 特殊处理
-  if (radio_model == "pyradiomics") {
-    radio_agg <- "MEAN"
-  }
+  if (radio_model %in% c("pyradiomics", "FMCIB")) {
+  radio_agg <- "MEAN"
+}
   
   # 根据组学类型确定聚合方法
   agg_mode <- case_when(
@@ -190,7 +190,7 @@ parse_json_with_path_structure <- function(file_path) {
 
     fold_data <- json_data[[fold_name]]
     
-    metric_values <- fold_data[[target_metric]]
+    metric_values <- pmax(fold_data[[target_metric]], -1)
     
     if (is.null(metric_values)) {
       metric_values <- fold_data[[scorer_type]]
@@ -285,9 +285,9 @@ load_all_data <- function() {
     
     file_path <- json_files[i]
 
-    if (str_detect(file_path, "pyradiomics")) {
-      next
-    }
+    # if (str_detect(file_path, "pyradiomics")) {
+    #   next
+    # }
 
     result <- tryCatch({
       parse_json_with_path_structure(file_path)
@@ -324,6 +324,31 @@ load_all_data <- function() {
 # ==============================
 # 准备热图数据
 # ==============================
+normalize_rows_minmax <- function(mat) {
+  t(apply(mat, 1, function(x) {
+    rng <- range(x, na.rm = TRUE)
+    if (diff(rng) == 0) return(rep(0.5, length(x)))  # constant row safeguard
+    (x - rng[1]) / diff(rng)
+  }))
+}
+
+normalize_rows_top3 <- function(mat) {
+  t(apply(mat, 1, function(x) {
+    # Initialize all values to 0
+    res <- rep(0, length(x))
+    
+    # Find indices of top 3 values
+    top_idx <- order(x, decreasing = TRUE)[1:min(3, length(x))]
+    
+    # Assign scores
+    scores <- c(1, 0.7, 0.4)
+    res[top_idx] <- scores[1:length(top_idx)]
+    
+    res
+  }))
+}
+
+
 prepare_heatmap_data <- function(df) {
   cat("\nPreparing heatmap data...\n")
   
@@ -376,6 +401,38 @@ prepare_heatmap_data <- function(df) {
   
   rownames(hm_matrix) <- hm_matrix$row_id
   hm_matrix <- as.matrix(hm_matrix[, -1])
+
+  # hm_matrix <- normalize_rows_minmax(hm_matrix)
+
+  # 更简洁的版本
+  hm_matrix_scored <- t(apply(hm_matrix, 1, function(x) {
+    result <- rep(0, length(x))
+    non_na_idx <- which(!is.na(x))
+    non_na_count <- length(non_na_idx)
+    
+    if(non_na_count > 0) {
+      # 获取排序后的索引
+      sorted_idx <- non_na_idx[order(x[non_na_idx], decreasing = TRUE)]
+      
+      # 赋值向量
+      values <- c(1, 0.8, 0.6, 0.4, 0.2)
+      
+      # 取前min(5, non_na_count)个进行赋值
+      n <- min(5, non_na_count)
+      for(i in 1:n) {
+        result[sorted_idx[i]] <- values[i]
+      }
+    }
+    
+    return(result)
+  }))
+
+  colnames(hm_matrix_scored) <- colnames(hm_matrix)
+  rownames(hm_matrix_scored) <- rownames(hm_matrix)
+
+  # 保持列名
+  colnames(hm_matrix_scored) <- colnames(hm_matrix)
+  rownames(hm_matrix_scored) <- rownames(hm_matrix)
   
   # 创建 SD 矩阵
   sd_matrix <- df_summary %>%
@@ -416,7 +473,7 @@ prepare_heatmap_data <- function(df) {
     )
   
   return(list(
-    matrix = hm_matrix,
+    matrix = hm_matrix_scored,
     sd_matrix = sd_matrix,
     row_anno = row_anno,
     col_anno = col_anno,
