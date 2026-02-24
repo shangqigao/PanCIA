@@ -71,17 +71,18 @@ if __name__ == "__main__":
         from analysis.a03_feature_extraction.m_feature_extraction import extract_radiomic_feature
         print("Number of images", len(dataset_info['img_paths']))
         extract_radiomic_feature(
-            img_paths=dataset_info['img_paths'],
-            lab_paths=dataset_info['lab_paths'],
+            img_paths=dataset_info['img_paths'][2500:],
+            lab_paths=dataset_info['lab_paths'][2500:],
             feature_mode=opt['RADIOMICS']['MODE']['VALUE'],
             save_dir=save_feature_dir,
             target=opt['RADIOMICS']['TARGET'],
-            prompts=dataset_info['text_prompts'],
-            format=dataset_info['img_format'],
-            modality=dataset_info['modality'],
-            site=dataset_info['site'],
+            prompts=dataset_info['text_prompts'][2500:],
+            format=dataset_info['img_format'][2500:],
+            modality=dataset_info['modality'][2500:],
+            site=dataset_info['site'][2500:],
             batch_size=opt['RADIOMICS']['BATCH_SIZE'],
             dilation_mm=opt['RADIOMICS']['DILATION_MM'],
+            sampling_rate=opt['RADIOMICS']['SAMPLING_RATE'],
             layer_method=opt['RADIOMICS']['LAYER_METHOD']['VALUE'],
             resolution=opt['RADIOMICS']['RESOLUTION'],
             units=opt['RADIOMICS']['UNITS'],
@@ -112,6 +113,7 @@ if __name__ == "__main__":
             target=opt['RADIOMICS']['TARGET'],
             window_size=24**3,
             lambda_f=opt['RADIOMICS']['TASKS']['GRAPH_CONSTRUCTION']['FEATURE_DIS_WEIGHT'],
+            save_cluster_points=opt['RADIOMICS']['TASKS']['GRAPH_CONSTRUCTION']['SAVE_CLUSTER_POINTS'],
             n_jobs=opt['N_JOBS'],
             delete_npy=opt['RADIOMICS']['DELETE_NPY'],
             skip_exist=opt['RADIOMICS']['SKIP_EXITS']
@@ -139,7 +141,8 @@ if __name__ == "__main__":
             radiomics_suffix=opt['RADIOMICS']['MODE']['SUFFIX'],
             target=opt['RADIOMICS']['TARGET'],
             n_jobs=opt['N_JOBS'],
-            skip_exist=opt['RADIOMICS']['SKIP_EXITS']
+            skip_exist=opt['RADIOMICS']['SKIP_EXITS'],
+            delete_json=opt['RADIOMICS']['DELETE_JSON'],
         )
 
     # measure graph properties

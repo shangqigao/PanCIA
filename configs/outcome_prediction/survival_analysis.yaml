@@ -61,7 +61,7 @@ PREDICTION:
     VALUE: "cindex"
     CHOICES: ["cindex", "cindex-ipcw", "auc", "ibs"]
   FEATURE_SELECTION:
-    VALUE: True
+    VALUE: False
     VAR_THRESHOLD: 0.0001
     NUM_FEATURES: 256
   N_BOOTSTRAPS: False

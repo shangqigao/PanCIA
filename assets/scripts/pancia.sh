@@ -147,9 +147,9 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --dataset CPTAC \
 #             --save_dir $save_dir
 
-# extract radiomic features
-# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+# extract radiomic features (add srun for BiomedParse)
+radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+srun python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
         
 # extract pathomic features
 # pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
@@ -168,8 +168,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_model_dir $save_model_dir  
 
 # multi-task learning
-multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
-python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
+# multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
+# python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
 
 # survival analysis
 # survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"

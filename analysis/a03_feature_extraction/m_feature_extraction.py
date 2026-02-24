@@ -129,6 +129,7 @@ def extract_radiomic_feature(
         label=1,
         batch_size=1,
         dilation_mm=0,
+        sampling_rate=1,
         layer_method=None,
         resolution=None, 
         units="mm",
@@ -210,6 +211,7 @@ def extract_radiomic_feature(
             format=format,
             modality=modality,
             dilation_mm=dilation_mm,
+            sampling_rate=sampling_rate,
             site=site,
             resolution=resolution,
             units=units,
@@ -246,6 +248,7 @@ def extract_radiomic_feature(
             site=site,
             batch_size=batch_size,
             dilation_mm=dilation_mm,
+            sampling_rate=sampling_rate,
             resolution=resolution,
             units=units,
             device=device,
@@ -1894,7 +1897,8 @@ def create_prompts(meta_data):
 def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, target, 
                                   label=1, format='nifti', modality='CT', site=None,
                                   meta_list=None, prompt_ensemble=False,
-                                  dilation_mm=0, resolution=None, units="mm", device="cuda", skip_exist=False):
+                                  dilation_mm=0, sampling_rate=1,
+                                  resolution=None, units="mm", device="cuda", skip_exist=False):
     """extracting radiomic features slice by slice in a size of (1024, 1024)
         if no label provided, directly use model segmentation, else use give labels
     """
@@ -1929,6 +1933,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     else:
         opt['LoRA'] = False
         pretrained_pth = os.path.join(root_dir, 'checkpoints/BiomedParse/biomedparse_v1.pt')
+    print('Loading model from', pretrained_pth)
 
     if device == 'cuda':
         if not opt.get('LoRA', False):
@@ -2084,10 +2089,20 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
 
         # extract radiomic features of tumor regions
         if target == 'slice':
+            radiomic_feat = radiomic_feat.reshape(-1, radiomic_feat.shape[-1])
             radiomic_coord = np.argwhere(np.ones_like(final_mask, dtype=bool))
         else:
             radiomic_feat = radiomic_feat[final_mask > 0]
             radiomic_coord = np.argwhere(final_mask > 0)
+
+        # random sampling to avoid large npy
+        if sampling_rate < 1:
+            n_samples = int(len(radiomic_feat) * sampling_rate)
+            if n_samples > 0:
+                idx = np.random.choice(len(radiomic_feat), size=n_samples, replace=False)
+                radiomic_feat = radiomic_feat[idx]
+                radiomic_coord = radiomic_coord[idx]
+
         radiomic_coord[:, slice_axis] += zmin
         radiomic_memory = radiomic_feat.nbytes / 1024**2
         logging.info(f"Extracted ROI feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}MiB)")
@@ -2460,7 +2475,8 @@ def extract_Bayes_BiomedParse_radiomics(
 
 def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target, 
                             label=1, format='nifti', modality='CT', site=None, batch_size=256,
-                            dilation_mm=0, resolution=None, units="mm", device="cuda", skip_exist=False):
+                            dilation_mm=0, sampling_rate=1,
+                            resolution=None, units="mm", device="cuda", skip_exist=False):
     """extracting radiomic features slice by slice in a size of (224, 224)
         if no label provided, directly use model segmentation, else use give labels
     """
@@ -2482,6 +2498,7 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target,
 
     # Load model from pretrained weights
     pretrained_pth = os.path.join(root_dir, 'checkpoints/LVMMed/lvmmed_resnet.torch')
+    print('Loading model from', pretrained_pth)
     model = smp.Unet(encoder_name="resnet50", encoder_weights=None, in_channels=3, classes=1)
     state_dict = torch.load(pretrained_pth, map_location='cpu')
     
@@ -2640,13 +2657,22 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target,
             ds_factors[k] = np.array(final_mask.shape) / np.array(resized_mask.shape)
 
         # extract multi-scale radiomic features of tumor regions  
-        for k in radiomic_feat.keys():
+        for i, k in enumerate(radiomic_feat.keys()):
             if target == 'slice':
-                radio_feat = radiomic_feat[k]
+                radio_feat = radiomic_feat[k].reshape(-1, radiomic_feat[k].shape[-1])
                 radiomic_coord = np.argwhere(np.ones_like(radiomic_mask[k], dtype=bool)) * np.expand_dims(ds_factors[k], axis=0)
             else:
                 radio_feat = radiomic_feat[k][radiomic_mask[k] > 0]
                 radiomic_coord = np.argwhere(radiomic_mask[k] > 0) * np.expand_dims(ds_factors[k], axis=0)
+
+            # random sampling to avoid large npy
+            if (sampling_rate * 2**i) < 1:
+                n_samples = int(len(radio_feat) * sampling_rate * 2**i)
+                if n_samples > 0:
+                    idx = np.random.choice(len(radio_feat), size=n_samples, replace=False)
+                    radio_feat = radio_feat[idx]
+                    radiomic_coord = radiomic_coord[idx]
+
             radiomic_memory = radio_feat.nbytes / 1024**2
             radiomic_coord = (radiomic_coord / resize_scales + bbox_min).astype(np.float16)
             logging.info(f"Extracted ROI {k} feature of shape {radio_feat.shape} ({radiomic_memory:.2f}MiB)")

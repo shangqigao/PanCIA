@@ -78,12 +78,13 @@ if __name__ == "__main__":
         )
 
     # construct wsi graph
-    if opt['PATHOMICS']['TASKS']['GRAPH_CONSTRUCTION']:
+    if opt['PATHOMICS']['TASKS']['GRAPH_CONSTRUCTION']['VALUE']:
         from analysis.a04_feature_aggregation.m_graph_construction import construct_wsi_graph
         construct_wsi_graph(
             wsi_paths=wsi_paths,
             save_dir=save_feature_dir,
             n_jobs=opt['N_JOBS'],
+            save_cluster_points=opt['PATHOMICS']['TASKS']['GRAPH_CONSTRUCTION']['SAVE_CLUSTER_POINTS'],
             delete_npy=opt['PATHOMICS']['DELETE_NPY'],
             skip_exist=opt['PATHOMICS']['SKIP_EXITS']
         )
@@ -106,7 +107,8 @@ if __name__ == "__main__":
             wsi_paths=wsi_paths,
             save_dir=save_feature_dir,
             n_jobs=opt['N_JOBS'],
-            skip_exist=opt['PATHOMICS']['SKIP_EXITS']
+            skip_exist=opt['PATHOMICS']['SKIP_EXITS'],
+            skip_exist=opt['PATHOMICS']['DELETE_JSON']
         )
 
     # measure graph properties

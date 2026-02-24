@@ -38,7 +38,8 @@ def construct_pathomic_graph(
         wsi_name, 
         wsi_feature_dir, 
         save_path,
-        window_size=30**3
+        window_size=30**3,
+        save_cluster_points=False
     ):
     """construct whole slide graph
     Args:
@@ -78,7 +79,7 @@ def construct_pathomic_graph(
         for k, v in graph_dict.items():
             if k == "edge_index":
                 new_graph_dict[k] += (v.T + coordinate_shift).tolist()
-            elif k == "cluster_points":
+            elif k == "cluster_points" and save_cluster_points:
                 new_graph_dict[k] += v
             else:
                 new_graph_dict[k] += v.tolist()
@@ -88,7 +89,7 @@ def construct_pathomic_graph(
     with save_path.open("w") as handle:
         json.dump(new_graph_dict, handle, indent=4)
 
-def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_exist=False):
+def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, save_cluster_points=False, delete_npy=False, skip_exist=False):
     """construct graph for wsi
     Args:
         wsi_paths (list): a list of wsi paths
@@ -107,7 +108,7 @@ def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_ex
             return
 
         logger.info("constructing graph: {}/{}...".format(idx + 1, len(wsi_paths)))
-        construct_pathomic_graph(wsi_name, save_dir, graph_path)
+        construct_pathomic_graph(wsi_name, save_dir, graph_path, save_cluster_points)
         if delete_npy:
             pathomics_npy = f"{wsi_name}_pathomics.npy"
             os.remove(f"{save_dir}/{pathomics_npy}")
@@ -124,7 +125,7 @@ def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, delete_npy=False, skip_ex
     )
     return 
 
-def convert_wsi_graph_to_npz(wsi_paths, save_dir, n_jobs=8, skip_exist=False):
+def convert_wsi_graph_to_npz(wsi_paths, save_dir, n_jobs=8, skip_exist=False, delete_json=False):
     """convert wsi graph for speeding up deep learning
     Args:
         wsi_paths (list): a list of wsi paths
@@ -147,6 +148,10 @@ def convert_wsi_graph_to_npz(wsi_paths, save_dir, n_jobs=8, skip_exist=False):
         graph_dict = {k: np.array(v) for k, v in graph_dict.items() if k != "cluster_points"}
         graph_dict["edge_index"] = graph_dict["edge_index"].T
         np.savez_compressed(npz_path, **graph_dict)
+
+        if delete_json:
+            os.remove(f"{graph_path}")
+            logger.info(f"{graph_path} deleted")
         
         return
     
@@ -205,7 +210,8 @@ def construct_radiomic_graph(
     save_path, 
     target="tumour", 
     window_size=30**3,
-    lambda_f=0.1
+    lambda_f=0.1,
+    save_cluster_points=False
     ):
     """construct volumetric radiomic graph
     Args:
@@ -250,7 +256,7 @@ def construct_radiomic_graph(
         for k, v in graph_dict.items():
             if k == "edge_index":
                 new_graph_dict[k] += (v.T + coordinate_shift).tolist()
-            elif k == "cluster_points":
+            elif k == "cluster_points" and save_cluster_points:
                 new_graph_dict[k] += v
             else:
                 new_graph_dict[k] += v.tolist()
@@ -259,7 +265,7 @@ def construct_radiomic_graph(
     with save_path.open("w") as handle:
         json.dump(new_graph_dict, handle, indent=4)
 
-def construct_img_graph(img_paths, save_dir, radiomics_suffix, target="tumour", window_size=30**3, lambda_f=0.1, n_jobs=32, delete_npy=False, skip_exist=False):
+def construct_img_graph(img_paths, save_dir, radiomics_suffix, target="tumour", window_size=30**3, lambda_f=0.1, save_cluster_points=False, n_jobs=32, delete_npy=False, skip_exist=False):
     """construct graph for radiological images
     Args:
         img_paths (list): a list of image paths
@@ -287,7 +293,7 @@ def construct_img_graph(img_paths, save_dir, radiomics_suffix, target="tumour", 
                 return
                 
             logger.info("constructing graph: {}/{}...".format(idx + 1, len(img_paths)))
-            construct_radiomic_graph(feature_path, graph_path, target, window_size, lambda_f)
+            construct_radiomic_graph(feature_path, graph_path, target, window_size, lambda_f, save_cluster_points)
 
             if delete_npy:
                 radiomics_npy = f"{img_name}_{target}_{suffix}"
@@ -352,7 +358,7 @@ def aggregate_img_graph(img_paths, save_dir, radiomics_suffix, target="tumour", 
     )
     return 
 
-def convert_img_graph_to_npz(img_paths, save_dir, radiomics_suffix, target="tumour", n_jobs=32, skip_exist=False):
+def convert_img_graph_to_npz(img_paths, save_dir, radiomics_suffix, target="tumour", n_jobs=32, skip_exist=False, delete_json=False):
     """convert json to npz for speeding up deep learning
     Args:
         img_paths (list): a list of image paths
@@ -380,6 +386,10 @@ def convert_img_graph_to_npz(img_paths, save_dir, radiomics_suffix, target="tumo
             graph_dict = {k: np.array(v) for k, v in graph_dict.items() if k != "cluster_points"}
             graph_dict["edge_index"] = graph_dict["edge_index"].T
             np.savez_compressed(npz_path, **graph_dict)
+
+            if delete_json:
+                os.remove(f"{graph_path}")
+                logger.info(f"{graph_path} deleted")
         return
     
     # convert graphs in parallel

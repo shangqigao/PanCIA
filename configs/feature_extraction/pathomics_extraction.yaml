@@ -15,7 +15,9 @@ PATHOMICS:
   TASKS:
     TISSUE_MASKING: False
     EXTRACTION: False
-    GRAPH_CONSTRUCTION: True
+    GRAPH_CONSTRUCTION: 
+      VALUE: False
+      SAVE_CLUSTER_POINTS: False # only true for visualization purpose, default false to reduce json file size
     GRAPH_AGGREGATION:
       VALUE: True
       MODE: "mean"
@@ -26,4 +28,5 @@ PATHOMICS:
   RESOLUTION: 20
   UNITS: "power"
   SKIP_EXITS: True
-  DELETE_NPY: False
+  DELETE_NPY: True # if true, delete npy after graph construction
+  DELETE_JSON: True # if true, delete json after convert json to npz
