@@ -400,7 +400,7 @@ class SlideGraphConstructor:  # noqa: PIE798
         n_dims   = reduced_points.shape[1]
 
         # ---------- handle degenerate cases ----------
-        if n_points < 2 or n_dims == 0:
+        if n_points < 5 or n_dims == 0:
             # no edges possible
             adjacency_matrix = np.zeros((n_points, n_points), dtype=int)
 
