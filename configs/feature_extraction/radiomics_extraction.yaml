@@ -17,28 +17,28 @@ RADIOMICS:
     VALUE: "LVMMed"
     CHOICES:
       ["pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB"]
-    SUFFIX:
-      - "radiomics.npy"
     # SUFFIX:
-    #   - "layer0_radiomics.npy"
-    #   - "layer1_radiomics.npy"
-    #   - "layer2_radiomics.npy"
-    #   - "layer3_radiomics.npy"
-    #   - "layer4_radiomics.npy"
+    #   - "radiomics.npy"
+    SUFFIX:
+      - "layer0_radiomics.npy"
+      - "layer1_radiomics.npy"
+      - "layer2_radiomics.npy"
+      - "layer3_radiomics.npy"
+      - "layer4_radiomics.npy"
   LAYER_METHOD:
     VALUE: null
     CHOICES: [null, "shells", "peeling"]
   TASKS:
-    EXTRACTION: True
+    EXTRACTION: False
     CLUSTERING: False
     GRAPH_CONSTRUCTION:
-      VALUE: False
-      FEATURE_DIS_WEIGHT: 0.1 # 0.01 for LVMMed else 0.1 due to different feature scales, used for clustering in graph construction
+      VALUE: True
+      FEATURE_DIS_WEIGHT: 0.01 # 0.01 for LVMMed else 0.1 due to different feature scales, used for clustering in graph construction
       SAVE_CLUSTER_POINTS: False # only true for visualization purpose, default false to reduce json file size
     GRAPH_AGGREGATION:
       VALUE: False
       MODE: "mean"
-    CONVERT_JSON2NPZ: False
+    CONVERT_JSON2NPZ: True
     MEASURE_GRAPH_PROPERTIES: False
     VISUALIZE_RADIOMICS: False
     VISUALIZE_GRAPH: False
@@ -47,6 +47,6 @@ RADIOMICS:
   SAMPLING_RATE: 0.01 # set 0.01 to avoid large size npy for whole slice radiomics, 1 for tumor radiomics
   RESOLUTION: 1
   UNITS: "mm"
-  SKIP_EXITS: False
+  SKIP_EXITS: True
   DELETE_NPY: True # if true, delete npy after graph construction
   DELETE_JSON: True # if true, delete json after convert json to npz

@@ -79,8 +79,8 @@ def construct_pathomic_graph(
         for k, v in graph_dict.items():
             if k == "edge_index":
                 new_graph_dict[k] += (v.T + coordinate_shift).tolist()
-            elif k == "cluster_points" and save_cluster_points:
-                new_graph_dict[k] += v
+            elif k == "cluster_points":
+                if save_cluster_points: new_graph_dict[k] += v
             else:
                 new_graph_dict[k] += v.tolist()
     num_nodes = len(new_graph_dict["x"])
@@ -222,7 +222,9 @@ def construct_radiomic_graph(
 
     features = np.load(feature_path)
     positions = np.load(str(feature_path).replace("radiomics.npy", "coordinates.npy"))
-    if (len(features) > 0) and (len(features) <= window_size):
+    if len(features) == 0:
+        raise ValueError(f'{feature_path} is empty!')
+    elif (len(features) > 0) and (len(features) <= window_size):
         num_windows = 1
     else:
         num_windows = len(features) // window_size
@@ -256,8 +258,8 @@ def construct_radiomic_graph(
         for k, v in graph_dict.items():
             if k == "edge_index":
                 new_graph_dict[k] += (v.T + coordinate_shift).tolist()
-            elif k == "cluster_points" and save_cluster_points:
-                new_graph_dict[k] += v
+            elif k == "cluster_points":
+                if save_cluster_points: new_graph_dict[k] += v
             else:
                 new_graph_dict[k] += v.tolist()
     num_nodes = len(new_graph_dict["x"])
