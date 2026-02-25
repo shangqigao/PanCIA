@@ -396,18 +396,31 @@ class SlideGraphConstructor:  # noqa: PIE798
         mask = variation > 1e-12
         reduced_points = point_centroids[:, mask]
 
-        if reduced_points.shape[1] < 2:
-            # Fall back to kNN graph (choose k as you need, e.g., 5)
+        n_points = reduced_points.shape[0]
+        n_dims   = reduced_points.shape[1]
+
+        # ---------- handle degenerate cases ----------
+        if n_points < 2 or n_dims == 0:
+            # no edges possible
+            adjacency_matrix = np.zeros((n_points, n_points), dtype=int)
+
+        elif n_dims < 2:
+            # 1D points → use kNN
+            k = min(2, n_points - 1)
             adjacency_matrix = kneighbors_graph(
-                reduced_points, 
-                n_neighbors=2,           # adjust depending on your use case
-                mode="connectivity"     # adjacency matrix with 0/1 values
+                reduced_points,
+                n_neighbors=k,
+                mode="connectivity",
+                include_self=False
             ).toarray()
+
         else:
+            # normal case → Delaunay triangulation
             adjacency_matrix = delaunay_adjacency(
                 points=reduced_points,
                 dthresh=connectivity_distance,
             )
+
         edge_index = affinity_to_edge_index(adjacency_matrix)
 
         return {
