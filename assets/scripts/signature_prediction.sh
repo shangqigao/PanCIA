@@ -27,10 +27,11 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 
 
 CONFIG="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"
-OUTCOME="GeneProgrames"
+OUTCOME="AGE"
 
 # Common lists
-RADIOMICS_MODES=("pyradiomics" "FMCIB" "BiomedParse" "LVMMed")
+RADIOMICS_MODES=("BiomedParse" "LVMMed")
+# RADIOMICS_MODES=("pyradiomics" "FMCIB" "BiomedParse" "LVMMed")
 PATHOMICS_MODES=("UNI" "CONCH" "CHIEF")
 AGG_MODES=("MEAN" "ABMIL" "SPARRA")
 
@@ -75,23 +76,23 @@ done
 ############################################
 # 2️⃣ USED_OMICS = pathomics
 ############################################
-USED_OMICS="pathomics"
+# USED_OMICS="pathomics"
 
-for P_MODE in "${PATHOMICS_MODES[@]}"; do
-  for P_AGG in "${AGG_MODES[@]}"; do
+# for P_MODE in "${PATHOMICS_MODES[@]}"; do
+#   for P_AGG in "${AGG_MODES[@]}"; do
 
-    echo "[pathomics] MODE=$P_MODE AGG=$P_AGG"
+#     echo "[pathomics] MODE=$P_MODE AGG=$P_AGG"
 
-    python analysis/a05_outcome_prediction/m_signature_prediction.py \
-      --config_files "$CONFIG" \
-      --override OUTCOME.VALUE="$OUTCOME" \
-      --override PREDICTION.USED_OMICS.VALUE="$USED_OMICS" \
-      --override PATHOMICS.MODE.VALUE="$P_MODE" \
-      --override PATHOMICS.AGGREGATED_MODE.VALUE="$P_AGG" \
-      --override RADIOMICS.MODE.VALUE="LVMMed" \
-      --override RADIOMICS.AGGREGATED_MODE.VALUE="None"
-  done
-done
+#     python analysis/a05_outcome_prediction/m_signature_prediction.py \
+#       --config_files "$CONFIG" \
+#       --override OUTCOME.VALUE="$OUTCOME" \
+#       --override PREDICTION.USED_OMICS.VALUE="$USED_OMICS" \
+#       --override PATHOMICS.MODE.VALUE="$P_MODE" \
+#       --override PATHOMICS.AGGREGATED_MODE.VALUE="$P_AGG" \
+#       --override RADIOMICS.MODE.VALUE="LVMMed" \
+#       --override RADIOMICS.AGGREGATED_MODE.VALUE="None"
+#   done
+# done
 
 
 ############################################

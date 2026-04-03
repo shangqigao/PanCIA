@@ -20,7 +20,7 @@
 # from pathlib import Path
 
 # # Set your root folder
-# root_folder = Path("/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg/BiomedParse")
+# root_folder = Path("/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/CPTAC_Seg/BiomedParse")
 
 # for file_path in root_folder.rglob("*.nii.gz"):
 #     # Remove both suffixes
@@ -32,7 +32,7 @@
 
 from pathlib import Path
 
-root = Path("/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/Experiments/radiomics/TCGA_radiomic_features")
+root = Path("/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/radiomics/CPTAC_radiomic_features/LVMMed/segmentator_BiomedParse")
 
 for file in root.rglob("*.json"):
     file.unlink()

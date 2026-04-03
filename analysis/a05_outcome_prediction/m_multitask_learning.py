@@ -830,7 +830,7 @@ def training(
         # if split_idx < 3: continue
         new_split = {
             "train": split["train"],
-            "infer-train": split["train"],
+            # "infer-train": split["train"],
             "infer-valid-A": split["valid"],
             "infer-valid-B": split["test"],
         }
@@ -891,6 +891,7 @@ def inference(
         model_folder = f"{omics_name}_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
         # model_folder = 'pathomics_GCNConv_SPARRA_homo+heter_vi0.1ae10_noDS_x_ref_sample0.1'
     model_dir = pretrained_model_dir / model_folder
+    model_dir = pathlib.Path('/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_multitask/BiomedParse_slice+tumor/radiomics_GCNConv_SPARRA')
 
     predict_results = {}
     save_results = {}

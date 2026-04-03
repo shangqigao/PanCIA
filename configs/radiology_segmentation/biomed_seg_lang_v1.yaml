@@ -8,7 +8,7 @@
 # Define Test/Trainer/Saving
 PIPELINE: XDecoderPipeline
 TRAINER: xdecoder
-SAVE_DIR: "./output_eval"
+SAVE_DIR: "./output_LoRA_endometriosis"
 base_path: "./"
 
 # Resume Logistic
@@ -235,17 +235,17 @@ DATASETS:
   TRAIN:
     # Add your registered training datasets here
     # The second word, e.g., Bladder, cannot be the same
-    - "biomed_Bladder_Tumor_train"
-    - "biomed_Breast_Tumor_train"
-    - "biomed_Cervix_Tumor_train"
-    - "biomed_Colon_Tumor_train"
-    - "biomed_Kidney_Tumor_train"
-    - "biomed_Liver_Tumor_train"
-    - "biomed_Lung_Tumor_train"
-    - "biomed_Ovary_Tumor_train"
-    - "biomed_Pancreas_Tumor_train"
-    - "biomed_Prostate_Tumor_train"
-    - "biomed_Uterus_Tumor_train"
+    # - "biomed_Bladder_Tumor_train"
+    # - "biomed_Breast_Tumor_train"
+    # - "biomed_Cervix_Tumor_train"
+    # - "biomed_Colon_Tumor_train"
+    # - "biomed_Kidney_Tumor_train"
+    # - "biomed_Liver_Tumor_train"
+    # - "biomed_Lung_Tumor_train"
+    # - "biomed_Ovary_Tumor_train"
+    # - "biomed_Pancreas_Tumor_train"
+    # - "biomed_Prostate_Tumor_train"
+    # - "biomed_Uterus_Tumor_train"
     # - "biomed_Multiphase_Breast_Tumor_train"
     # - "biomed_DukeSP_Breast_train"
     # - "biomed_DukeMP_Breast_train"
@@ -254,6 +254,10 @@ DATASETS:
     # - "biomed_ISPY2TumorMP_Breast_train"
     # - "biomed_NACTTumorMP_Breast_train"
     # - "biomed_MMs_Heart_train"
+    - "biomed_CervixMRI_train"
+    - "biomed_EndoMRI_train"
+    - "biomed_OV04CT_train"
+    - "biomed_OV04CT_train"
 
   TEST:
     # Add your registered test datasets here
@@ -289,7 +293,11 @@ DATASETS:
     # - "biomed_MMs_Heart_test"
     # - "biomed_AMOS22CT_Abdomen_test"
     # - "biomed_AMOS22MR_Abdomen_test"
-    - "biomed_Pancreas40CT_Tumor+Background_test"
+    # - "biomed_Pancreas40CT_Tumor+Background_test"
+    - "biomed_CervixMRI_test"
+    - "biomed_EndoMRI_test"
+    - "biomed_OV04CT_test"
+    - "biomed_OV04CT_test"
 
   CLASS_CONCAT: false
   SIZE_DIVISIBILITY: 32

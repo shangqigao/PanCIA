@@ -9,7 +9,7 @@ from scipy.ndimage import label
 # =====================================================
 # CONFIG (your paths preserved)
 # =====================================================
-ROOT_DIR = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation'
+ROOT_DIR = '/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation'
 ROOT_TTA = '/home/sg2162/rds/hpc-work/Experiments/TTA'
 OUT_DIR = '/home/sg2162/rds/hpc-work/Experiments/TTA'
 DATASET = 'Pancreas40CT_Tumor+Background'
@@ -37,7 +37,7 @@ GT_EXT = "_pancreas+tumor.png"
 
 THRESHOLDS = np.linspace(0, 1, 21)
 IOU_THRESHOLD = 0.1
-TOPK = 50
+TOPK = 10
 IMAGE_SIZE = 256
 
 # =====================================================
@@ -320,13 +320,13 @@ for i, model_name in enumerate(MODEL_NAMES):
 
 for x in [1, 3, 5]:
     plt.axvline(x=x, linestyle='--', linewidth=1, color='gray', alpha=0.6)
-    plt.text(x+1, -0.15, f"{x} FP", rotation=90, va='bottom', ha='right')
+    plt.text(x+2, -0.15, f"{x} FP", rotation=90, va='bottom', ha='right', fontsize=16)
 
-plt.xlabel("FP per Scan")
-plt.ylabel("Sensitivity")
-plt.title("FROC Curves")
+plt.xlabel("FP per Scan", fontsize=16)
+plt.ylabel("Sensitivity", fontsize=16)
+plt.title("FROC Curves", fontsize=16)
 plt.grid(True)
-plt.legend()
+plt.legend(fontsize=16)
 plt.tight_layout()
 plt.savefig(os.path.join(OUT_DIR, DATASET, "FROC_multi_model.png"), dpi=300)
 plt.show()

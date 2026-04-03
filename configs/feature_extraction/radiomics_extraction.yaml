@@ -1,30 +1,32 @@
 # Define parameters of radiomics
-DATASET: TCGA
-RADIOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+DATASET: CPTAC
+RADIOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_included_subjects.json"
 DATA_FORMAT: "nifti"
-LABEL_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/TCGA_Seg"
-SAVE_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/radiomics"
+LABEL_DIR: "/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/CPTAC_Seg"
+SAVE_DIR: "/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/Experiments/radiomics"
 N_JOBS: 32
 
 # Define parameters of radiomics
 RADIOMICS:
-  TARGET: "slice" # "tumor", "organ" or "slice"
+  TARGET: "tumor" # "tumor", "organ" or "slice"
+  DILATION_MM: 10 # 10 for tumor else 0 for mask dilation
+  SAMPLING_RATE: 1 # set 0.01 for whole slice radiomics to reduce feature size, 1 for tumor radiomics
   SEGMENTATOR:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
     OBJECT: "tumor" # or "tumor" or "organ"
   MODE:
-    VALUE: "LVMMed"
+    VALUE: "BiomedParse"
     CHOICES:
       ["pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB"]
-    # SUFFIX:
-    #   - "radiomics.npy"
     SUFFIX:
-      - "layer0_radiomics.npy"
-      - "layer1_radiomics.npy"
-      - "layer2_radiomics.npy"
-      - "layer3_radiomics.npy"
-      - "layer4_radiomics.npy"
+      - "radiomics.npy"
+    # SUFFIX:
+    #   - "layer0_radiomics.npy"
+    #   - "layer1_radiomics.npy"
+    #   - "layer2_radiomics.npy"
+    #   - "layer3_radiomics.npy"
+    #   - "layer4_radiomics.npy"
   LAYER_METHOD:
     VALUE: null
     CHOICES: [null, "shells", "peeling"]
@@ -38,15 +40,13 @@ RADIOMICS:
     GRAPH_AGGREGATION:
       VALUE: False
       MODE: "mean"
-    CONVERT_JSON2NPZ: True
+    CONVERT_JSON2NPZ: False
     MEASURE_GRAPH_PROPERTIES: False
     VISUALIZE_RADIOMICS: False
     VISUALIZE_GRAPH: False
   BATCH_SIZE: 256
-  DILATION_MM: 0 # 10 for tumor else 0
-  SAMPLING_RATE: 0.01 # set 0.01 to avoid large size npy for whole slice radiomics, 1 for tumor radiomics
-  RESOLUTION: 1
+  RESOLUTION: 1 # for resampling radiology before feature extraction 
   UNITS: "mm"
-  SKIP_EXITS: True
-  DELETE_NPY: True # if true, delete npy after graph construction
-  DELETE_JSON: True # if true, delete json after convert json to npz
+  SKIP_EXITS: False
+  DELETE_NPY: False # if true, delete npy after graph construction
+  DELETE_JSON: False # if true, delete json after convert json to npz
