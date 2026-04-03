@@ -1,7 +1,7 @@
 # Define parameters of pathomics
 DATASET: CPTAC
 PATHOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_included_subjects.json"
-SAVE_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/pathomics"
+SAVE_DIR: "/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/Experiments/pathomics"
 N_JOBS: 32
 
 # Define parameters of pathomics

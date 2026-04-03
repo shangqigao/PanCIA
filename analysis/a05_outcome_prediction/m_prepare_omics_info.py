@@ -10,9 +10,12 @@ radiomics_dims = {
     "pyradiomics": {'child0': 851},
     "FMCIB": {'child0': 4096},
     "SegVol": {'child0': 768},
-    "BiomedParse": {'child0': 512},
+    # "BiomedParse": {'child0': 512},
+    "BiomedParse": {'child0': 512, 'child1': 512},
     "BayesBP": {'child0': 64},
-    "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 1024, 'child4': 2048}
+    # "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 1024, 'child4': 2048}
+    # "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512}
+    "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 64, 'child4': 256, 'child5': 512}
 }
 
 pathomics_dims = {
@@ -61,44 +64,42 @@ radiomics_suffix = {
         "_tumor_radiomics.npy"
     ],
     "SegVol": [
-        "_tumor_graph_aggr_mean.npy"
+        "_tumor_graph.npz"
     ],
     "BiomedParse": [
-        "_tumor_graph_aggr_mean.npy"
+        "_tumor_graph.npz"
     ],
     "BayesBP": [
-        "_tumor_radiomics_pooled.json"
+        "_tumor_graph.npz"
     ],
     "LVMMed": [
-        "_tumor_layer0_graph_aggr_mean.npy",
-        "_tumor_layer1_graph_aggr_mean.npy",
-        "_tumor_layer2_graph_aggr_mean.npy",
-        "_tumor_layer3_graph_aggr_mean.npy",
-        "_tumor_layer4_graph_aggr_mean.npy",
+        "_tumor_layer0_graph.npz",
+        "_tumor_layer1_graph.npz",
+        "_tumor_layer2_graph.npz"
     ]
 }
 
 pathomics_suffix = {
     "None": [
-        "_graph_aggr_mean.npy"
+        "_graph.npz"
     ],
     "CNN": [
-        "_graph_aggr_mean.npy"
+        "_graph.npz"
     ],
     "HIPT": [
-        "_graph_aggr_mean.npy"
+        "_graph.npz"
     ],
     "UNI": [
-        "_graph_aggr_mean.npy"
+        "_graph.npz"
     ],
     "CONCH": [
-        "_graph_aggr_mean.npy"
+        "_graph.npz"
     ],
     "CHIEF": [
-        "_graph_aggr_mean.npy"
+        "_graph.npz"
     ],
     "UNI2": [
-        "_graph_aggr_mean.npy"
+        "_graph.npz"
     ]
 }
 

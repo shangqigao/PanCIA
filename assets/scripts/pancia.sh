@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-36:00:00
-##SBATCH --time=0-00:10:00
+##SBATCH --time=0-36:00:00
+#SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-##SBATCH --qos=intr
+#SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -27,6 +27,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 
 # python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
 # python analysis/utilities/m_compute_lesion_level_statistics.py
+python analysis/utilities/m_prepare_biomedparse_endometriosis_dataset.py
 
 #---------------MAMA-MIA----------------
 # fit Beta distributions on training data
@@ -72,19 +73,19 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 
 #----------------Pan-Cancer--------------------
 # radiology exclusion and inclusion
-# data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
+# data_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer"
 # save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
 
 # python analysis/a01_data_preprocessiong/m_inclusion_exclusion.py \
 #             --data_dir $data_dir \
-#             --dataset TCGA \
+#             --dataset CPTAC \
 #             --modality radiology \
 #             --save_dir $save_dir
 
 # rtstruct to nifti (save to /parent/to/dataset/dataset_seg/Expert)
-# data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
+# data_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer"
 # meta_dir="/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_Annotation_Metadata"
-# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/CPTAC_Seg/Expert"
+# save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/CPTAC_Seg/Expert"
 
 # python analysis/a01_data_preprocessiong/m_rtstruct2nii.py \
 #             --data_dir $data_dir \
@@ -94,14 +95,14 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # dicom to nifti (save to /parent/to/dataset/dataset_NIFTI)
-# series="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_raw_series.json"
+# series="/home/sg2162/rds/hpc-work/Experiments/radiomics/CPTAC_included_raw_series.json"
 
 # python analysis/a01_data_preprocessiong/m_dicom2nii.py \
 #             --series $series \
-#             --dataset TCGA
+#             --dataset CPTAC
 
 # pathology exclusion and inclusion
-# data_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer"
+# data_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer"
 # save_dir="/home/sg2162/rds/hpc-work/Experiments/pathomics"
 
 # python analysis/a01_data_preprocessiong/m_inclusion_exclusion.py \
@@ -111,45 +112,29 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # subject exclusion and inclusion
-# included_nifti="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_nifti.json"
-# included_wsi="/home/sg2162/rds/hpc-work/Experiments/pathomics/TCGA_included_wsi.json"
-# meta_data="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_pathology_has_radiology.csv"
+# included_nifti="/home/sg2162/rds/hpc-work/Experiments/radiomics/CPTAC_included_nifti.json"
+# included_wsi="/home/sg2162/rds/hpc-work/Experiments/pathomics/CPTAC_included_wsi.json"
+# meta_data="/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_pathology_has_radiology.csv"
 # save_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
 
 # python analysis/a01_data_preprocessiong/m_sortout_subjects.py \
 #             --included_nifti $included_nifti \
 #             --included_wsi $included_wsi \
 #             --meta_data $meta_data \
-#             --dataset TCGA \
+#             --dataset CPTAC \
 #             --save_dir $save_dir
-
-# pre-diagnosis subject exclusion and inclusion
-# included_nifti="/home/sg2162/rds/hpc-work/Experiments/radiomics/TCGA_included_nifti.json"
-# included_wsi="/home/sg2162/rds/hpc-work/Experiments/pathomics/TCGA_included_wsi.json"
-# meta_data="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_pathology_has_radiology.csv"
-# clinical_data="/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/clinical_data/survival_data.csv"
-# save_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
-
-# python analysis/a01_data_preprocessiong/m_sortout_subjects.py \
-#             --included_nifti $included_nifti \
-#             --included_wsi $included_wsi \
-#             --meta_data $meta_data \
-#             --clinical_data $clinical_data \
-#             --dataset TCGA \
-#             --save_dir $save_dir \
-#             --pre_diagnosis
 
 # pan-cancer segmentation
 # radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_included_subjects.json"
-# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/CPTAC_Seg"
+# save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/CPTAC_Seg"
 # srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --radiology $radiology \
 #             --dataset CPTAC \
 #             --save_dir $save_dir
 
 # extract radiomic features (add srun for BiomedParse)
-radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-srun python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+# srun python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
         
 # extract pathomic features
 # pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"

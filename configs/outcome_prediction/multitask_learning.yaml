@@ -1,7 +1,7 @@
 # Define parameters of survival analysis
 DATASET: TCGA
 DATA_INFO: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-OMICS_DIR: "/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments"
+OMICS_DIR: "/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/Experiments"
 SAVE_OUTCOME_DIR: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
@@ -16,28 +16,31 @@ OUTCOME:
       # "ProteinExpression",
     ]
 TASKS:
-  TRAIN: True
-  INFERENCE: False
+  TRAIN: False
+  INFERENCE: True
   TEST: False
 
 # Define parameters of radiomics
 RADIOMICS:
-  TARGET: "tumor"
+  # TARGET: "tumor"
   SEGMENTATOR:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
+    OBJECT: "tumor" # or "tumor" or "organ"
   MODE:
-    VALUE: "LVMMed"
+    VALUE: "BiomedParse"
     CHOICES:
       ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB"]
-    # SUFFIX:
-    #   - "_tumor_graph.npz"
     SUFFIX:
-      - "_tumor_layer0_graph.npz"
-      - "_tumor_layer1_graph.npz"
-      - "_tumor_layer2_graph.npz"
-      - "_tumor_layer3_graph.npz"
-      - "_tumor_layer4_graph.npz"
+      - "_slice_graph.npz"
+      - "_tumor_graph.npz"
+    # SUFFIX:
+    #   - "_slice_layer0_graph.npz"
+    #   - "_slice_layer1_graph.npz"
+    #   - "_slice_layer2_graph.npz"
+    #   - "_tumor_layer0_graph.npz"
+    #   - "_tumor_layer1_graph.npz"
+    #   - "_tumor_layer2_graph.npz"
   RESOLUTION: 1
   UNITS: "mm"
 
@@ -57,7 +60,7 @@ SPLIT:
   TEST_RATIO: 0.2
   VALID_RATIO: 0.1
   TRAIN_RATIO: 0.7
-  FILTER_SUBJECTS: True # discard subjects without outcomes
+  FILTER_SUBJECTS: False # discard subjects without outcomes
 
 ARCH:
   GNN: "GCNConv"
@@ -68,8 +71,8 @@ ARCH:
   POOL_RATIO:
     RAIOMICS: 0.7
     PATHOMICS: 0.7
-  OMICS: ["radiomics", "pathomics"]
-  # OMICS: ["radiomics"]
+  # OMICS: ["radiomics", "pathomics"]
+  OMICS: ["radiomics"]
   # OMICS: ["pathomics"]
   AGGREGATION:
     VALUE: "SPARRA"
@@ -80,7 +83,7 @@ TRAIN:
   EPOCHS: 40
   N_WORKS: 32
   BATCH_SIZE: 16
-  SAMPLING_RATE: 0.1
+  SAMPLING_RATE: 0.01 # pathomics or tumor radiomics: 0.1; slice radiomics: 0.005
   LR: 3e-4
   WIEGHT_DECAY:
     MEAN: 1.0e-5
@@ -94,7 +97,7 @@ TRAIN:
 INFERENCE:
   N_WORKS: 32
   BATCH_SIZE: 4
-  SAMPLING_RATE: 0.1
+  SAMPLING_RATE: 0.01 # pathomics or tumor radiomics: 0.1; slice radiomics: 0.005
   SAVE_OMICS: True
 
 TEST:

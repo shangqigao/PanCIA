@@ -22,6 +22,7 @@ from functools import lru_cache
 from sparsemax import Sparsemax
 from torch_sparse import spmm
 from torch_scatter import scatter_add
+from collections import defaultdict
     
 class MultiTaskGraphDataset(Dataset):
     """loading graph data for multi-task learning
@@ -35,7 +36,7 @@ class MultiTaskGraphDataset(Dataset):
         sampling_rate=1.0,
         max_num_nodes=1e3,
         sampling_k=2,      # <-- new parameter: BFS k-hop neighborhood
-        cache_size=2048,              # bounded LRU cache
+        cache_size=128,              # bounded LRU cache
     ):
         super().__init__()
         self.info_list = info_list
@@ -62,12 +63,17 @@ class MultiTaskGraphDataset(Dataset):
     # Optional k-hop sampling
     # ----------------------------------------------------------------------
     def sample_subgraph(self, x, edge_index, ds):
-        assert x.size(0) > edge_index.max(), "Edge index contains invalid node indices"
+        if edge_index.numel() > 0:
+            assert x.size(0) > edge_index.max(), "Edge index contains invalid node indices"
+        else:
+            edge_index = torch.empty((2,0), dtype=torch.long)
         num_nodes = x.size(0)
 
+        # --- Case 1: small or medium graph ---
         if self.sampling_rate >= 1 or num_nodes <= self.max_num_nodes:
             return x, edge_index
 
+        # --- Case 2: large but not huge graph ---
         num_sampled = int(num_nodes * self.sampling_rate * ds)
         seed_count = max(1, num_sampled // 10)
 

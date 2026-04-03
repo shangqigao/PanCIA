@@ -7,7 +7,9 @@ from create_annotations import *
 
 
 # provide the path to the dataset. There should be train, train_mask, test, test_mask under this folder
-targetpath = '/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/Pancreas40CT_Tumor+Background'
+# project = 'TumorSegmentation' 
+project = 'Endometriosis' 
+targetpath = '/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_Endometriosis/UterusMRI'
 if 'MP_Breast' in targetpath:
     clinical_info_path = 'clinical_and_imaging_info.xlsx'
     df_clinic = pd.read_excel(clinical_info_path, sheet_name='dataset_info')
@@ -159,9 +161,12 @@ def create_prompts(filename, targetname, df_meta=None):
     slice_index = parts[-3]
     modality = parts[-2]
     site = parts[-1].split(".")[0]
-    prompts = structured_pancancer_prompts(targetname)
-    if prompts is None:
-        prompts = ['tumor'] if 'tumor' in targetname else [targetname]
+    if project == 'TumorSegmentation':
+        prompts = structured_pancancer_prompts(targetname)
+        if prompts is None:
+            prompts = ['tumor'] if 'tumor' in targetname else [targetname]
+    else:
+        prompts = [targetname]
 
     basic_prompts = []
     for target in prompts:
@@ -290,8 +295,8 @@ if __name__ == "__main__":
     # Get the standard COCO JSON format
     coco_format = get_coco_json_format()
 
-    # for keyword in ['train', 'test']:
-    for keyword in ['test']:
+    for keyword in ['train', 'test']:
+    # for keyword in ['test']:
         mask_path = os.path.join(targetpath, "{}_mask/".format(keyword))
         
         # Create category section

@@ -34,6 +34,16 @@ from tiatoolbox.utils.misc import imwrite
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
+def is_valid_json(path):
+    if not path.exists() or path.stat().st_size == 0:
+        return False
+    try:
+        with open(path) as f:
+            json.load(f)
+        return True
+    except Exception:
+        return False
+
 def construct_pathomic_graph(
         wsi_name, 
         wsi_feature_dir, 
@@ -99,10 +109,10 @@ def construct_wsi_graph(wsi_paths, save_dir, n_jobs=8, save_cluster_points=False
         from tiatoolbox import logger
         wsi_name = pathlib.Path(wsi_path).stem
         graph_path = pathlib.Path(f"{save_dir}/{wsi_name}_graph.json")
-        if graph_path.exists() and skip_exist:
-            logger.info(f"{graph_path.name} has existed, skip!")
+        if skip_exist and is_valid_json(graph_path):
+            logger.info(f"{graph_path.name} exists and is valid, skipping.")
             return
-        
+              
         if not pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy").exists(): 
             logger.info(f"{wsi_name}_pathomics.npy doesn't exist, skip!")
             return
@@ -285,8 +295,8 @@ def construct_img_graph(img_paths, save_dir, radiomics_suffix, target="tumour", 
         for suffix in radiomics_suffix:
             graph_suffix = str(suffix).replace("radiomics.npy", "graph.json")
             graph_path = pathlib.Path(f"{save_feat_dir}/{img_name}_{target}_{graph_suffix}")
-            if graph_path.exists() and skip_exist:
-                logger.info(f"{graph_path.name} has existed, skip!")
+            if skip_exist and is_valid_json(graph_path):
+                logger.info(f"{graph_path.name} exists and is valid, skipping.")
                 return
 
             feature_path = f"{save_feat_dir}/{img_name}_{target}_{suffix}"
