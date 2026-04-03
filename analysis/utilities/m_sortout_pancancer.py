@@ -12,6 +12,56 @@ import SimpleITK as sitk
 from rt_utils import RTStructBuilder, ds_helper, image_helper
 from dcmrtstruct2nii import dcmrtstruct2nii
 
+def check_empty_nii(folder_path):
+    empty_files = []
+    total_files = 0
+
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            if file.endswith('.nii') or file.endswith('.nii.gz'):
+                total_files += 1
+                file_path = os.path.join(root, file)
+                try:
+                    nii = nib.load(file_path)
+                    data = nii.get_fdata()
+                    if not data.any():  # True if all zeros
+                        empty_files.append(file_path)
+                except Exception as e:
+                    print(f"Failed to read {file_path}: {e}")
+
+    print(f"Total NIfTI files checked: {total_files}")
+    print(f"Empty files found: {len(empty_files)}")
+    if empty_files:
+        print("List of empty files:")
+        for f in empty_files:
+            print(f)
+
+def remove_empty_labels(labels_dir, images_dir):
+    labels_dir = Path(labels_dir)
+    images_dir = Path(images_dir)
+    removed_count = 0
+
+    for label_path in labels_dir.glob("*.nii.gz"):
+        try:
+            label_nii = nib.load(str(label_path))
+            label_data = label_nii.get_fdata()
+
+            if not label_data.any():  # empty label
+                # Construct corresponding image path
+                # e.g., D2-062_T2_seg.nii.gz → D2-062_T2.nii.gz
+                image_name = label_path.stem.replace("_seg.nii", "") + ".nii.gz"
+                image_path = images_dir / image_name
+
+                if image_path.exists():
+                    image_path.unlink()
+                    label_path.unlink()
+                    removed_count += 1
+                    print(f"Removed empty label and image: {label_path.name}, {image_name}")
+        except Exception as e:
+            print(f"Failed to process {label_path}: {e}")
+
+    print(f"Total empty labels removed: {removed_count}")
+
 def process_UMD(input_dir, output_dir):
     img_dir = pathlib.Path(output_dir) / "images"
     if not os.path.exists(img_dir):
@@ -564,7 +614,115 @@ def process_CPTAC(input_meta_dir, input_img_dir, output_dir, json_output="output
     print("\nDone!")
     print(f"JSON index saved to: {json_path}")
 
+CLASS_MAP = {
+    "em": 1,
+    "cy": 2,
+    "ov": 3,
+    "ut": 4,
+    "cds": 5,
+}
 
+# Priority: earlier = stronger
+PRIORITY = ["em", "cy", "ov", "ut", "cds"]
+
+
+def load_nifti(path):
+    nii = nib.load(str(path))
+    return nii.get_fdata(), nii.affine
+
+
+def fuse_raters(volumes):
+    """Majority voting"""
+    vols = np.stack(volumes, axis=0)
+    return (np.sum(vols, axis=0) >= (len(volumes) / 2)).astype(np.uint8)
+
+
+def process_UT_EndoMRI(input_dir, output_dir):
+    from collections import defaultdict
+
+    img_dir = pathlib.Path(output_dir) / "images"
+    lab_dir = pathlib.Path(output_dir) / "labels"
+    img_dir.mkdir(parents=True, exist_ok=True)
+    lab_dir.mkdir(parents=True, exist_ok=True)
+
+    center_paths = list(pathlib.Path(input_dir).glob('D*'))
+    print(f"Found {len(center_paths)} centers")
+
+    for center in center_paths:
+        case_paths = list(center.glob('D*'))
+        print(f"Found {len(case_paths)} cases in {center.name}")
+
+        for case_path in case_paths:
+            nii_paths = list(case_path.glob('*.nii.gz'))
+
+            scans = [p for p in nii_paths if any(t in p.name for t in ['T1', 'T1FS', 'T2', 'T2FS'])]
+            annotations = [p for p in nii_paths if any(t in p.name for t in CLASS_MAP.keys())]
+
+            # Load scans
+            scan_data = {}
+            for scan_path in scans:
+                data, affine = load_nifti(scan_path)
+                scan_data[scan_path] = {
+                    "data": data,
+                    "shape": data.shape,
+                    "affine": affine
+                }
+
+            # Group annotations by class
+            ann_by_class = defaultdict(list)
+            for ann_path in annotations:
+                for cls in CLASS_MAP:
+                    if f"_{cls}_" in ann_path.name:
+                        ann_by_class[cls].append(ann_path)
+
+            # Process each scan
+            for scan_path, scan_info in scan_data.items():
+                shape = scan_info["shape"]
+
+                # Store fused masks per class
+                fused_masks = {}
+
+                for cls, ann_paths in ann_by_class.items():
+                    matched_vols = []
+
+                    for ann_path in ann_paths:
+                        ann_data, _ = load_nifti(ann_path)
+
+                        if ann_data.shape == shape:
+                            matched_vols.append(ann_data > 0)
+
+                    if len(matched_vols) > 0:
+                        fused_masks[cls] = fuse_raters(matched_vols)
+
+                # 🔥 Priority-based label assignment (NO overwrite)
+                label_volume = np.zeros(shape, dtype=np.uint8)
+
+                for cls in PRIORITY:
+                    if cls not in fused_masks:
+                        continue
+
+                    mask = fused_masks[cls] > 0
+
+                    # Only fill empty voxels → prevents overwrite
+                    label_volume[(mask) & (label_volume == 0)] = CLASS_MAP[cls]
+
+                # Save outputs
+                scan_name = scan_path.stem.replace(".nii", "")
+
+                img_save = img_dir / f"{scan_name}.nii.gz"
+                lab_save = lab_dir / f"{scan_name}_seg.nii.gz"
+
+                nib.save(
+                    nib.Nifti1Image(scan_info["data"], scan_info["affine"]),
+                    str(img_save)
+                )
+
+                nib.save(
+                    nib.Nifti1Image(label_volume, scan_info["affine"]),
+                    str(lab_save)
+                )
+
+    print("Done!")
 
 if __name__ == "__main__":
     # UMD_input_dir = "./UMD"
@@ -615,7 +773,20 @@ if __name__ == "__main__":
     # OV04_output_dir = "../TumorSegmentation/Ovary_Tumor_00"
     # process_OV04(OV04_input_dir, OV04_output_dir)
 
-    CPTAC_input_dir = "/Users/sg2162/Datasets/CancerDatasets/CPTAC/Radiology"
-    CPTAC_output_dir = "/Users/sg2162/Datasets/CancerDatasets/CPTAC/Radiology_NIFTI"
-    CPTAC_meta_dir = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/clinical/CPTAC_Annotation_Metadata"
-    process_CPTAC(CPTAC_meta_dir, CPTAC_input_dir, CPTAC_output_dir)
+    # CPTAC_input_dir = "/Users/sg2162/Datasets/CancerDatasets/CPTAC/Radiology"
+    # CPTAC_output_dir = "/Users/sg2162/Datasets/CancerDatasets/CPTAC/Radiology_NIFTI"
+    # CPTAC_meta_dir = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/clinical/CPTAC_Annotation_Metadata"
+    # process_CPTAC(CPTAC_meta_dir, CPTAC_input_dir, CPTAC_output_dir)
+
+    # Endo_input_dir = "/Users/sg2162/Datasets/CancerDatasets/UT-EndoMRI"
+    # Endo_output_dir = "/Users/sg2162/Datasets/CancerDatasets/Endometriosis/EndoMRI"
+    # process_UT_EndoMRI(Endo_input_dir, Endo_output_dir)
+
+    # folder = "/Users/sg2162/Datasets/CancerDatasets/OV04CT/labels"
+    # check_empty_nii(folder)
+
+    # Example usage:
+    labels_folder = "/Users/sg2162/Datasets/CancerDatasets/Endometriosis/EndoMRI/labels"
+    images_folder = "/Users/sg2162/Datasets/CancerDatasets/Endometriosis/EndoMRI/images"
+    remove_empty_labels(labels_folder, images_folder)
+    

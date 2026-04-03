@@ -8,7 +8,7 @@ import matplotlib.patches as mpatches
 from collections import Counter
 
 # ====== CHANGE THESE ======
-root_dir = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/outcomes/TCGA_signature_AGE"
+root_dir = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/outcomes_slice+tumor/TCGA_signature_AGE"
 immune_csv = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/immune_subtype/immune_subtype.csv"  # CSV with SampleID, Subtype_Immune_Model_Based
 output_dir = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/PanCIA/figures/plots/AGE_Radiopathomics_ImmuneSubtype"
 MIN_SAMPLES = 20
@@ -188,8 +188,98 @@ def plot_radiopathomics_grouped(sub_df, metric, output_dir, sort_subtype="IFN-ga
     plt.close()
     print(f"Saved grouped bar plot → {save_path}")
 
+def plot_labels_violin_with_stats(subjects, labels_all, immune_df, output_dir, min_samples=20, alpha=0.05):
+    """
+    Plot violin for all immune subtypes with statistical significance indicated by *.
+
+    Parameters:
+        subjects (list): subject IDs
+        labels_all (np.array): full labels array
+        immune_df (pd.DataFrame): dataframe with ID3 + Subtype
+        output_dir (str): folder to save plot
+        min_samples (int): minimum samples per subtype
+        alpha (float): significance threshold for tests
+    """
+    from itertools import combinations
+    from scipy.stats import mannwhitneyu
+
+    # ===== Match subjects to immune subtype =====
+    subtypes = []
+    valid_labels = []
+
+    for i, s in enumerate(subjects):
+        id3 = "-".join(s.split("-")[:3])
+        row = immune_df.loc[immune_df["ID3"] == id3]
+        if len(row) == 0:
+            continue
+        subtypes.append(row.iloc[0]["Subtype"])
+        valid_labels.append(labels_all[i] * 100)  # keep scaling
+
+    # Convert to DataFrame
+    df = pd.DataFrame({"Subtype": subtypes, "Label": valid_labels})
+
+    # Filter subtypes with enough samples
+    counts = df["Subtype"].value_counts()
+    valid_subtypes = counts[counts >= min_samples].index
+    df = df[df["Subtype"].isin(valid_subtypes)]
+
+    if df.empty:
+        print("No subtypes pass minimum sample threshold.")
+        return
+
+    subtype_order = sorted(valid_subtypes)
+    data = [df[df["Subtype"] == s]["Label"].values for s in subtype_order]
+
+    # ===== Plot violins =====
+    plt.figure(figsize=(1.5*len(subtype_order), 6))
+    parts = plt.violinplot(data, showmeans=True, showmedians=True)
+
+    # Color violins
+    colors = plt.cm.tab10.colors
+    for i, pc in enumerate(parts['bodies']):
+        pc.set_facecolor(colors[i % len(colors)])
+        pc.set_alpha(0.7)
+
+    plt.xticks(range(1, len(subtype_order)+1), subtype_order, rotation=30, ha="right")
+    plt.ylabel("Age")
+    plt.title("Age Distribution by Immune Subtype")
+
+    # ===== Pairwise significance tests =====
+    y_max = max([max(d) for d in data]) * 1.05
+    y_min = min([min(d) for d in data])
+    y_range = y_max - y_min
+    height_increment = y_range * 0.05
+    curr_height = y_max + height_increment
+
+    # Iterate over all pairs
+    for (i, j) in combinations(range(len(subtype_order)), 2):
+        vals1 = data[i]
+        vals2 = data[j]
+        stat, p = mannwhitneyu(vals1, vals2, alternative='two-sided')
+        if p < alpha:
+            # Draw line
+            x1, x2 = i+1, j+1
+            plt.plot([x1, x1, x2, x2], [curr_height]*4, color='k', lw=1.2)
+            plt.text((x1+x2)/2, curr_height + height_increment*0.1, "*", ha='center', va='bottom', fontsize=14)
+            curr_height += height_increment
+
+    plt.tight_layout()
+
+    # Save figure
+    save_path = os.path.join(output_dir, "Label_Violin_All_Subtypes_Stats.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+    print(f"Saved violin plot with significance → {save_path}")
+
 # ====== Generate plots ======
 for metric in ["MAE", "RMSE", "R2"]:
     plot_radiopathomics_grouped(sub_df, metric, output_dir)
+
+file_path = '/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/outcomes_slice/TCGA_signature_AGE/BiomedParse+CHIEF/radiopathomics_radio+ABMIL_patho+ABMIL_model+ElasticNet_scorer+r2_results.json'
+with open(file_path, "r") as f:
+    data = json.load(f)
+subjects = data["subject"]
+labels_all = np.array(data["label"]).flatten()
+plot_labels_violin_with_stats(subjects, labels_all, immune_df, output_dir)
 
 print("\n✅ Done.")

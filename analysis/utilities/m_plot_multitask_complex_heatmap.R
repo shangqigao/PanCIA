@@ -4,7 +4,7 @@
 install.packages(c(
   "ggplot2", "dplyr", "purrr", "stringr", "jsonlite",
   "tidyr", "scales", "patchwork", "circlize", "pheatmap",
-  "RColorBrewer", "viridisLite", "pheatmap", "viridis"
+  "RColorBrewer", "viridisLite", "pheatmap", "viridis", "scico"
 ))
 
 # 加载所有库
@@ -21,9 +21,10 @@ library(RColorBrewer)
 library(viridisLite)
 library(pheatmap)
 library(viridis)
+library(scico)
 
 # 设置目录
-base_dir <- "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/outcomes"
+base_dir <- "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/outcomes_slice+tumor"
 out_dir  <- "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/PanCIA/figures/plots/multitask"
 
 if (!dir.exists(out_dir)) {
@@ -46,6 +47,9 @@ big_tasks <- list(
                      "StemnessScoreDNA", "StemScoreRNA")
   )
 )
+
+# visualize topk or not
+topk <- TRUE
 
 # 定义顺序和级别
 agg_levels <- c("MEAN", "ABMIL", "SPARRA")
@@ -472,8 +476,12 @@ prepare_heatmap_data <- function(df) {
       model = factor(model, levels = unlist(model_order_list))
     )
   
+  if (topk) {
+    hm_matrix <- hm_matrix_scored
+  }
+
   return(list(
-    matrix = hm_matrix_scored,
+    matrix = hm_matrix,
     sd_matrix = sd_matrix,
     row_anno = row_anno,
     col_anno = col_anno,
@@ -665,8 +673,20 @@ create_faceted_heatmaps <- function(heatmap_data) {
       } else if (task == "phenotype") {
         color_palette <- viridis(100, option = "magma")
       } else {
-        color_palette <- viridis(100, option = "plasma")
+        color_palette <- scico(100, palette = "vik")
       }
+
+      if (task == "survival") {
+        breaks = seq(0.5, 0.9, length = 100)
+      } else if (task == "phenotype") {
+        breaks = seq(0, 1, length = 100)
+      } else {
+        breaks = seq(-1, 1, length = 100)
+      }
+
+      if (topk) {
+          breaks = seq(0, 1, length = 100)
+        }
       
       n_rows <- nrow(task_matrix)
       n_cols <- ncol(task_matrix)
@@ -698,7 +718,7 @@ create_faceted_heatmaps <- function(heatmap_data) {
         cluster_cols = FALSE,
         
         color = color_palette,
-        breaks = seq(min(task_matrix, na.rm = TRUE), max(task_matrix, na.rm = TRUE), length = 100),
+        breaks = breaks,
         
         border_color = "white",
         cellwidth = cellwidth,
