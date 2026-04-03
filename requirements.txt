@@ -31,6 +31,7 @@ scikit-survival
 scipy
 seaborn
 segmentation_models_pytorch
+sentence-transformers
 shapely
 SimpleITK
 sparsemax

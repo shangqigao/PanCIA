@@ -254,6 +254,17 @@ def extract_radiomic_feature(
             device=device,
             skip_exist=skip_exist
         )
+    elif feature_mode == "MedPLIB":
+        _ = extract_MedPLIB_features(
+            img_paths=img_paths,
+            lab_paths=lab_paths,
+            save_dir=save_dir,
+            target=target,
+            modality=modality,
+            site=site,
+            resolution=resolution,
+            skip_exist=skip_exist
+        )
     else:
         raise ValueError(f"Invalid feature mode: {feature_mode}")
     return
@@ -2689,6 +2700,183 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target,
         # print(f"Saving predicted segmentation to {save_mask_path}")
         # nifti_img = nib.Nifti1Image(final_mask, affine)
         # nib.save(nifti_img, save_mask_path)
+
+    return
+
+def extract_MedPLIB_features(
+    img_paths,
+    lab_paths,
+    save_dir,
+    target,
+    modality='CT',
+    site=None,
+    resolution=None,
+    device="cuda",
+    top_slices=3,
+    skip_exist=False
+):
+    """
+    Multi-slice MedPLIB feature extraction:
+    - Select top N slices with largest tumor masks
+    - Extract bounding boxes
+    - Run MedPLIB
+    - Aggregate answers and embeddings
+    - Save JSON per scan
+    """
+
+    import os
+    import json
+    import numpy as np
+    import nibabel as nib
+    import pathlib
+    from PIL import Image
+    from scipy.ndimage import zoom
+
+    from inference_utils.processing_utils import read_nifti_inplane, get_orientation
+    from utilities.constants import CT_SITES
+
+    # MedPLIB + embeddings
+    from medplib.model.builder import load_pretrained_model
+    from medplib.mm_utils import tokenizer_image_token
+    from medplib.conversation import conv_templates
+    from sentence_transformers import SentenceTransformer
+
+    # ----------------------
+    # Load MedPLIB and encoder
+    # ----------------------
+    tokenizer, model, processor, _ = load_pretrained_model(
+        model_path="path_to_medplib_checkpoint",
+        model_base=None,
+        model_name="medplib"
+    )
+    model = model.to(device).eval()
+    text_encoder = SentenceTransformer("all-mpnet-base-v2")
+
+    # ----------------------
+    # Prompts
+    # ----------------------
+    PROMPTS = [
+        # 1. Location & anatomy
+        "What can you tell me about the region <region></region>? Provide its anatomical location.",
+        
+        # 2. Morphology
+        "Describe the tumor shape, margin, and size within <region></region>.",
+        
+        # 3. Density / heterogeneity
+        "Describe the internal characteristics (density, heterogeneity) of <region></region>.",
+        
+        # 4. Specific features
+        "Are there any necrosis, calcifications, or hemorrhage in <region></region>?",
+        
+        # 5. Context / surrounding tissue
+        "Describe what is visible around <region></region>, including adjacent structures or tissue involvement.",
+        
+        # 6. Summary interpretation
+        "Provide a concise radiological interpretation of <region></region> based on the visible features."
+    ]
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    # ----------------------
+    # Process each scan
+    # ----------------------
+    for idx, (img_path, lab_path) in enumerate(zip(img_paths, lab_paths)):
+
+        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        parent_name = pathlib.Path(img_path).parent.name
+        save_path = f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.json"
+        if os.path.exists(save_path) and skip_exist:
+            continue
+
+        is_CT = modality == 'CT'
+        ct_site = CT_SITES[site] if site is not None else None
+
+        images, slice_axis, affine = read_nifti_inplane(
+            img_path,
+            is_CT,
+            ct_site,
+            keep_size=True,
+            return_spacing=True,
+            resolution=resolution
+        )
+
+        nii = nib.load(lab_path)
+        labels = nii.get_fdata()
+        affine = nii.affine
+
+        _, _, voxel_spacing = get_orientation(affine)
+        if resolution is not None:
+            new_spacing = (resolution, resolution, resolution)
+            zoom_factors = tuple(os/ns for os, ns in zip(voxel_spacing, new_spacing))
+            labels = zoom(labels, zoom=zoom_factors, order=0)
+        labels = np.moveaxis(labels, slice_axis, 0)
+
+        if np.sum(labels > 0) == 0:
+            continue
+
+        # ----------------------
+        # Select top N slices
+        # ----------------------
+        slice_areas = np.sum(labels > 0, axis=(1,2))
+        top_indices = slice_areas.argsort()[::-1][:top_slices]
+
+        all_answers = []
+        all_embeddings = []
+
+        for i in top_indices:
+            img, _, _ = images[i]
+            mask = labels[i]
+
+            coords = np.argwhere(mask > 0)
+            ymin, xmin = coords.min(axis=0)
+            ymax, xmax = coords.max(axis=0)
+            pad = 10
+            h, w = mask.shape
+            bbox = [
+                max(0, int(xmin - pad)),
+                max(0, int(ymin - pad)),
+                min(w, int(xmax + pad)),
+                min(h, int(ymax + pad))
+            ]
+
+            # normalize image
+            img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
+            img_norm = (img_norm * 255).astype(np.uint8)
+            pil_img = Image.fromarray(img_norm).convert("RGB")
+            image_tensor = processor(pil_img, return_tensors='pt')['pixel_values'][0].to(device)
+            bbox_str = f"[{bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]}]"
+
+            # run MedPLIB
+            for q in PROMPTS:
+                conv = conv_templates["default"].copy()
+                prompt = q.replace("<region></region>", bbox_str)
+                conv.append_message(conv.roles[0], prompt)
+                conv.append_message(conv.roles[1], None)
+
+                input_ids = tokenizer_image_token(conv.get_prompt(), tokenizer, return_tensors='pt').unsqueeze(0).to(device)
+                output_ids = model.generate(input_ids, images=image_tensor.unsqueeze(0), do_sample=False, max_new_tokens=256)
+                answer = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+                all_answers.append(answer)
+
+        # embeddings
+        embeddings = text_encoder.encode(all_answers)
+        all_embeddings = embeddings.tolist()
+
+        # ----------------------
+        # Save JSON
+        # ----------------------
+        output = {
+            "image_name": img_name,
+            "top_slices": top_indices.tolist(),
+            "answers": all_answers,
+            "embeddings": all_embeddings
+        }
+
+        os.makedirs(f"{save_dir}/{parent_name}", exist_ok=True)
+        with open(save_path, "w") as f:
+            json.dump(output, f, indent=2)
+
+        print(f"[{idx+1}/{len(img_paths)}] Saved multi-slice MedPLIB features: {save_path}")
 
     return
 

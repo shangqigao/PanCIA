@@ -18,7 +18,15 @@ RADIOMICS:
   MODE:
     VALUE: "BiomedParse"
     CHOICES:
-      ["pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB"]
+      [
+        "pyradiomics",
+        "SegVol",
+        "BiomedParse",
+        "BayesBP",
+        "LVMMed",
+        "FMCIB",
+        "MedPLIB",
+      ]
     SUFFIX:
       - "radiomics.npy"
     # SUFFIX:
@@ -31,10 +39,10 @@ RADIOMICS:
     VALUE: null
     CHOICES: [null, "shells", "peeling"]
   TASKS:
-    EXTRACTION: False
+    EXTRACTION: True
     CLUSTERING: False
     GRAPH_CONSTRUCTION:
-      VALUE: True
+      VALUE: False
       FEATURE_DIS_WEIGHT: 0.01 # 0.01 for LVMMed else 0.1 due to different feature scales, used for clustering in graph construction
       SAVE_CLUSTER_POINTS: False # only true for visualization purpose, default false to reduce json file size
     GRAPH_AGGREGATION:
@@ -45,7 +53,7 @@ RADIOMICS:
     VISUALIZE_RADIOMICS: False
     VISUALIZE_GRAPH: False
   BATCH_SIZE: 256
-  RESOLUTION: 1 # for resampling radiology before feature extraction 
+  RESOLUTION: 1 # for resampling radiology before feature extraction
   UNITS: "mm"
   SKIP_EXITS: False
   DELETE_NPY: False # if true, delete npy after graph construction
