@@ -2948,6 +2948,178 @@ def extract_MedPLIB_features(
 
     return
 
+def extract_structured_LLaVA_features(
+    img_paths,
+    lab_paths,
+    save_dir,
+    target,
+    format='nifti',
+    modality='CT',
+    dilation_mm=5,
+    site=None,
+    resolution=None,
+    device="cuda",
+    top_slices=3,
+    skip_exist=False
+):
+    import os, json, numpy as np, nibabel as nib, pathlib, cv2
+    from PIL import Image
+    import torch
+    import torch.nn.functional as F
+
+    from inference_utils.processing_utils import read_nifti_inplane, get_orientation
+    from utilities.constants import CT_SITES
+    from transformers import AutoProcessor, AutoModelForCausalLM, AutoTokenizer, AutoModel
+
+    # ======================
+    # LLaVA-Med model
+    # ======================
+    model_path = f"{root_dir}/checkpoints/LLaVA-Med"
+
+    processor = AutoProcessor.from_pretrained(model_path)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        torch_dtype=torch.float16,
+        device_map="auto"
+    ).eval()
+
+    # ======================
+    # Text embeddings
+    # ======================
+    text_model_name = "sentence-transformers/all-mpnet-base-v2"
+    text_tokenizer = AutoTokenizer.from_pretrained(text_model_name)
+    text_model = AutoModel.from_pretrained(text_model_name).to(device).eval()
+
+    @torch.no_grad()
+    def encode_texts(texts, batch_size=32):
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i+batch_size]
+            tokens = text_tokenizer(batch, padding=True, truncation=True, return_tensors="pt").to(device)
+            outputs = text_model(**tokens)
+            emb = outputs.last_hidden_state.mean(dim=1)
+            emb = F.normalize(emb, p=2, dim=1)
+            all_embeddings.append(emb.cpu())
+        return torch.cat(all_embeddings, dim=0)
+
+    # ======================
+    # Mask overlay + dilation
+    # ======================
+    def overlay_mask(image, mask, alpha=0.6):
+        image = np.array(image).astype(np.float32)
+        red = np.zeros_like(image)
+        red[..., 0] = 255
+        mask = mask.astype(bool)
+        overlay = image.copy()
+        overlay[mask] = (1-alpha)*image[mask] + alpha*red[mask]
+        return Image.fromarray(overlay.astype(np.uint8))
+
+    def dilate_mask(mask, k=15):
+        kernel = np.ones((k, k), np.uint8)
+        return cv2.dilate(mask.astype(np.uint8), kernel)
+
+    # ======================
+    # JSON prompt
+    # ======================
+    STRUCTURED_PROMPT = """
+    You are a radiologist. The tumor region is highlighted in red in the image.
+    Provide a structured report in JSON format with the following fields:
+    {
+    "location": "...",
+    "size_shape": "...",
+    "margin": "...",
+    "internal_features": "...",
+    "surroundings": "...",
+    "impression": "..."
+    }
+    Answer concisely and accurately based on the highlighted region.
+    """
+
+    os.makedirs(save_dir, exist_ok=True)
+    if isinstance(format, str): format = [format]*len(img_paths)
+    if isinstance(modality, str): modality = [modality]*len(img_paths)
+    if isinstance(site, str): site = [site]*len(img_paths)
+
+    # ======================
+    # Loop
+    # ======================
+    for idx, (img_path, lab_path) in enumerate(zip(img_paths, lab_paths)):
+        if isinstance(img_path, list):
+            img_name = pathlib.Path(img_path[0]).stem
+            parent_name = pathlib.Path(img_path[0]).parent.name
+        else:
+            img_name = pathlib.Path(img_path).stem
+            parent_name = pathlib.Path(img_path).parent.name
+
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_structured.json")
+        if feature_path.exists() and skip_exist:
+            continue
+        feature_path.parent.mkdir(parents=True, exist_ok=True)
+
+        print(f"[{idx+1}/{len(img_paths)}] Processing {img_name}")
+
+        is_CT = modality[idx] == 'CT'
+        ct_site = CT_SITES[site[idx]]
+
+        images, slice_axis, affine = read_nifti_inplane(
+            img_path, is_CT, ct_site, keep_size=True, return_spacing=True, resolution=resolution
+        )
+        nii = nib.load(lab_path)
+        labels = np.moveaxis(nii.get_fdata(), slice_axis, 0)
+        if np.sum(labels > 0) == 0:
+            continue
+
+        # Top slices
+        slice_areas = np.sum(labels > 0, axis=(1,2))
+        top_indices = slice_areas.argsort()[::-1][:top_slices]
+
+        all_reports = []
+
+        for i in top_indices:
+            img, _, _ = images[i]
+            mask = labels[i]
+            if np.sum(mask) == 0:
+                continue
+            mask = dilate_mask(mask, k=dilation_mm)
+            pil_img = Image.fromarray(img).convert("RGB")
+            overlay_img = overlay_mask(pil_img, mask)
+
+            # Generate structured JSON
+            inputs = processor(
+                images=overlay_img,
+                text=STRUCTURED_PROMPT,
+                return_tensors="pt"
+            ).to(model.device)
+
+            with torch.no_grad():
+                output = model.generate(**inputs, max_new_tokens=256, do_sample=False)
+
+            answer_text = processor.decode(output[0], skip_special_tokens=True)
+
+            # Attempt JSON parsing
+            try:
+                report_json = json.loads(answer_text)
+            except:
+                report_json = {"raw_text": answer_text}
+
+            all_reports.append(report_json)
+
+        # embeddings
+        embeddings = encode_texts([json.dumps(r) if isinstance(r, dict) else r for r in all_reports]).tolist()
+
+        output = {
+            "image_name": img_name,
+            "top_slices": top_indices.tolist(),
+            "structured_reports": all_reports,
+            "embeddings": embeddings
+        }
+
+        with open(feature_path, "w") as f:
+            json.dump(output, f, indent=2)
+        print(f"Saved structured report: {feature_path}")
+
+    return
+
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
