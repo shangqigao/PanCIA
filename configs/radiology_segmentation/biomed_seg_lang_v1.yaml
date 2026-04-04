@@ -257,7 +257,7 @@ DATASETS:
     - "biomed_CervixMRI_train"
     - "biomed_EndoMRI_train"
     - "biomed_OV04CT_train"
-    - "biomed_OV04CT_train"
+    - "biomed_UterusMRI_train"
 
   TEST:
     # Add your registered test datasets here
@@ -297,7 +297,7 @@ DATASETS:
     - "biomed_CervixMRI_test"
     - "biomed_EndoMRI_test"
     - "biomed_OV04CT_test"
-    - "biomed_OV04CT_test"
+    - "biomed_UterusMRI_test"
 
   CLASS_CONCAT: false
   SIZE_DIVISIBILITY: 32

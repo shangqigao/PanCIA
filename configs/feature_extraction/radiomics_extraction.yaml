@@ -1,8 +1,8 @@
 # Define parameters of radiomics
-DATASET: CPTAC
-RADIOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_included_subjects.json"
+DATASET: TCGA
+RADIOLOGY: "/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
 DATA_FORMAT: "nifti"
-LABEL_DIR: "/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/CPTAC_Seg"
+LABEL_DIR: "/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg"
 SAVE_DIR: "/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/Experiments/radiomics"
 N_JOBS: 32
 
@@ -16,7 +16,7 @@ RADIOMICS:
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
     OBJECT: "tumor" # or "tumor" or "organ"
   MODE:
-    VALUE: "BiomedParse"
+    VALUE: "MedPLIB"
     CHOICES:
       [
         "pyradiomics",

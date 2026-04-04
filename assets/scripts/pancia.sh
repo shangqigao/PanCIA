@@ -20,6 +20,10 @@ conda activate PanCIA
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 
+export TMPDIR="/home/sg2162/rds/hpc-work/tmp"
+export TORCHINDUCTOR_CACHE_DIR="/home/sg2162/rds/hpc-work/torch_cache"
+export TRITON_CACHE_DIR="/home/sg2162/rds/hpc-work/triton_cache"
+
 # Force output flushing
 export PYTHONUNBUFFERED=1   # if running Python
 export SLURM_EXPORT_ENV=ALL
@@ -27,7 +31,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 
 # python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
 # python analysis/utilities/m_compute_lesion_level_statistics.py
-python analysis/utilities/m_prepare_biomedparse_endometriosis_dataset.py
+# python analysis/utilities/m_prepare_biomedparse_endometriosis_dataset.py
 
 #---------------MAMA-MIA----------------
 # fit Beta distributions on training data
@@ -133,9 +137,13 @@ python analysis/utilities/m_prepare_biomedparse_endometriosis_dataset.py
 #             --save_dir $save_dir
 
 # extract radiomic features (add srun for BiomedParse)
-# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-# srun python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
-        
+radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+srun python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+
+# srun deepspeed --num_gpus=1 analysis/a03_feature_extraction/m_radiomics_extraction.py \
+#   --config_files $radiomics_config \
+#   --deepspeed /home/sg2162/rds/hpc-work/PanCIA/checkpoints/MedPLIB/config.json
+
 # extract pathomic features
 # pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
 # python analysis/a03_feature_extraction/m_pathomics_extraction.py --config_files $pathomics_config

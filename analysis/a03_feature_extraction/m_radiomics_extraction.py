@@ -21,7 +21,7 @@ if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_files', nargs='+', required=True, help='Path(s) to the config file(s).')
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
     
     from utilities.arguments import load_opt_from_config_files
     opt = load_opt_from_config_files(args.config_files)

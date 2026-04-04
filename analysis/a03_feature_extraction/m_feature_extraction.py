@@ -260,8 +260,10 @@ def extract_radiomic_feature(
             lab_paths=lab_paths,
             save_dir=save_dir,
             target=target,
+            format=format,
             modality=modality,
             site=site,
+            dilation_mm=dilation_mm,
             resolution=resolution,
             skip_exist=skip_exist
         )
@@ -2708,7 +2710,9 @@ def extract_MedPLIB_features(
     lab_paths,
     save_dir,
     target,
+    format='nifti',
     modality='CT',
+    dilation_mm=0,
     site=None,
     resolution=None,
     device="cuda",
@@ -2735,22 +2739,65 @@ def extract_MedPLIB_features(
     from inference_utils.processing_utils import read_nifti_inplane, get_orientation
     from utilities.constants import CT_SITES
 
-    # MedPLIB + embeddings
-    from medplib.model.builder import load_pretrained_model
-    from medplib.mm_utils import tokenizer_image_token
-    from medplib.conversation import conv_templates
-    from sentence_transformers import SentenceTransformer
+    import torch.distributed as dist
+    import deepspeed
 
+    deepspeed.init_distributed() 
+
+    # MedPLIB + embeddings
+    import sys
+    sys.path.append(f"{root_dir}/tiatoolbox/models/architecture/MedPLIB")
+
+    from model.medplib.model.builder import load_pretrained_model
+    from model.medplib.mm_utils import tokenizer_image_token
+    from model.medplib.conversation import conv_templates
     # ----------------------
     # Load MedPLIB and encoder
     # ----------------------
+    pretrained_pth = os.path.join(root_dir, 'checkpoints/MedPLIB')
     tokenizer, model, processor, _ = load_pretrained_model(
-        model_path="path_to_medplib_checkpoint",
+        model_path=pretrained_pth,
         model_base=None,
-        model_name="medplib"
+        model_name="medplib",
+        device_map="cuda:0"
     )
-    model = model.to(device).eval()
-    text_encoder = SentenceTransformer("all-mpnet-base-v2")
+
+    model = model.eval().half().to("cuda:0")
+    # model_engine = deepspeed.init_inference(
+    #     model,
+    #     tensor_parallel={"tp_size": 1},
+    #     dtype=torch.float16,
+    #     replace_with_kernel_inject=False
+    # )
+
+    model_dtype = next(model.parameters()).dtype
+    
+    # ----------------------
+    from transformers import AutoTokenizer, AutoModel
+    import torch.nn.functional as F
+
+    # Initialize model and tokenizer once
+    model_name = "sentence-transformers/all-mpnet-base-v2"
+    text_tokenizer = AutoTokenizer.from_pretrained(model_name)
+    text_model = AutoModel.from_pretrained(model_name).to(device).eval()
+
+    @torch.no_grad()
+    def encode_texts(texts, batch_size=32):
+        """
+        Encode a list of strings into embeddings using mean-pooling.
+        Returns a torch tensor of shape (len(texts), hidden_dim)
+        """
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i+batch_size]
+            tokens = text_tokenizer(batch_texts, padding=True, truncation=True, return_tensors="pt").to(device)
+            outputs = text_model(**tokens)
+            # Mean-pool over tokens
+            embeddings = outputs.last_hidden_state.mean(dim=1)
+            # Normalize
+            embeddings = F.normalize(embeddings, p=2, dim=1)
+            all_embeddings.append(embeddings.cpu())
+        return torch.cat(all_embeddings, dim=0)
 
     # ----------------------
     # Prompts
@@ -2776,29 +2823,45 @@ def extract_MedPLIB_features(
     ]
 
     os.makedirs(save_dir, exist_ok=True)
+    if isinstance(format, str): format = [format] * len(img_paths)
+    if isinstance(modality, str): modality = [modality] * len(img_paths)
+    if isinstance(site, str): site = [site] * len(img_paths)
 
     # ----------------------
     # Process each scan
     # ----------------------
     for idx, (img_path, lab_path) in enumerate(zip(img_paths, lab_paths)):
-
-        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        parent_name = pathlib.Path(img_path).parent.name
-        save_path = f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.json"
-        if os.path.exists(save_path) and skip_exist:
+        if format[idx] == 'dicom':
+            img_name = pathlib.Path(img_path[0]).parent.name
+            parent_name = pathlib.Path(img_path[0]).parent.name
+        elif format[idx] == 'nifti':
+            if isinstance(img_path, list):
+                img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
+                parent_name = pathlib.Path(img_path[0]).parent.name
+            else:
+                img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+                parent_name = pathlib.Path(img_path).parent.name
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.json")
+        if feature_path.exists() and skip_exist:
+            logging.info(f"{feature_path.name} has existed, skip!")
             continue
+        feature_path.parent.mkdir(parents=True, exist_ok=True)
 
-        is_CT = modality == 'CT'
-        ct_site = CT_SITES[site] if site is not None else None
+        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
-        images, slice_axis, affine = read_nifti_inplane(
-            img_path,
-            is_CT,
-            ct_site,
-            keep_size=True,
-            return_spacing=True,
-            resolution=resolution
-        )
+        # read slices from dicom or nifti
+        is_CT = modality[idx] == 'CT'
+        ct_site = CT_SITES[site[idx]]
+        if format[idx] == 'dicom':
+            dicom_dir = pathlib.Path(img_path)
+            assert pathlib.Path(img_path).is_dir()
+            dicom_paths = sorted(dicom_dir.glob('*.dcm'))
+            images = [read_dicom(p, is_CT, ct_site, keep_size=True, return_spacing=True) for p in dicom_paths]
+            slice_axis, affine = 0, np.eye(4)
+        elif format[idx] == 'nifti':
+            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, ct_site, keep_size=True, return_spacing=True, resolution=resolution)
+        else:
+            raise ValueError(f'Only support DICOM or NIFTI, but got {format[idx]}')
 
         nii = nib.load(lab_path)
         labels = nii.get_fdata()
@@ -2830,7 +2893,7 @@ def extract_MedPLIB_features(
             coords = np.argwhere(mask > 0)
             ymin, xmin = coords.min(axis=0)
             ymax, xmax = coords.max(axis=0)
-            pad = 10
+            pad = dilation_mm
             h, w = mask.shape
             bbox = [
                 max(0, int(xmin - pad)),
@@ -2840,26 +2903,31 @@ def extract_MedPLIB_features(
             ]
 
             # normalize image
-            img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
-            img_norm = (img_norm * 255).astype(np.uint8)
-            pil_img = Image.fromarray(img_norm).convert("RGB")
-            image_tensor = processor(pil_img, return_tensors='pt')['pixel_values'][0].to(device)
+            pil_img = Image.fromarray(img).convert("RGB")
+            image_tensor = processor(pil_img, return_tensors='pt')['pixel_values'][0].to(device, dtype=model_dtype)
             bbox_str = f"[{bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]}]"
 
             # run MedPLIB
             for q in PROMPTS:
-                conv = conv_templates["default"].copy()
+                conv = conv_templates["v1_mmtag"].copy()
                 prompt = q.replace("<region></region>", bbox_str)
                 conv.append_message(conv.roles[0], prompt)
                 conv.append_message(conv.roles[1], None)
 
                 input_ids = tokenizer_image_token(conv.get_prompt(), tokenizer, return_tensors='pt').unsqueeze(0).to(device)
-                output_ids = model.generate(input_ids, images=image_tensor.unsqueeze(0), do_sample=False, max_new_tokens=256)
+                with torch.no_grad():
+                    output_ids = model.generate(
+                        input_ids, 
+                        images=image_tensor.unsqueeze(0), 
+                        do_sample=False, 
+                        max_new_tokens=256, 
+                        use_cache=False
+                    )
                 answer = tokenizer.decode(output_ids[0], skip_special_tokens=True)
                 all_answers.append(answer)
 
         # embeddings
-        embeddings = text_encoder.encode(all_answers)
+        embeddings = encode_texts(all_answers)
         all_embeddings = embeddings.tolist()
 
         # ----------------------
@@ -2873,10 +2941,10 @@ def extract_MedPLIB_features(
         }
 
         os.makedirs(f"{save_dir}/{parent_name}", exist_ok=True)
-        with open(save_path, "w") as f:
+        with open(feature_path, "w") as f:
             json.dump(output, f, indent=2)
 
-        print(f"[{idx+1}/{len(img_paths)}] Saved multi-slice MedPLIB features: {save_path}")
+        print(f"[{idx+1}/{len(img_paths)}] Saved multi-slice MedPLIB features: {feature_path}")
 
     return
 

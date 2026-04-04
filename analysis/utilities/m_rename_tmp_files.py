@@ -17,22 +17,22 @@
 #     new_path = pathlib.Path(f"{output_parent_dir}/{input_name}_pathomics.npy")
 #     src_path.rename(new_path)
 
-# from pathlib import Path
-
-# # Set your root folder
-# root_folder = Path("/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/CPTAC_Seg/BiomedParse")
-
-# for file_path in root_folder.rglob("*.nii.gz"):
-#     # Remove both suffixes
-#     base_name = file_path.name[:-7]  # len(".nii.gz") == 7
-#     new_name = file_path.with_name(base_name + "_tumor.nii.gz")
-    
-#     file_path.rename(new_name)
-#     print(f"Renamed: {file_path} -> {new_name}")
-
 from pathlib import Path
 
-root = Path("/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/radiomics/CPTAC_radiomic_features/LVMMed/segmentator_BiomedParse")
+# Set your root folder
+root_folder = Path("/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg/BiomedParse")
 
-for file in root.rglob("*.json"):
-    file.unlink()
+for file_path in root_folder.rglob("*.nii.gz"):
+    # Remove both suffixes
+    base_name = file_path.name[:-7]  # len(".nii.gz") == 7
+    new_name = file_path.with_name(base_name + "_tumor.nii.gz")
+    
+    file_path.rename(new_name)
+    print(f"Renamed: {file_path} -> {new_name}")
+
+# from pathlib import Path
+
+# root = Path("/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/Experiments/radiomics/CPTAC_radiomic_features/LVMMed/segmentator_BiomedParse")
+
+# for file in root.rglob("*.json"):
+#     file.unlink()
