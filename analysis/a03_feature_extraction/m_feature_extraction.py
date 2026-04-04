@@ -267,6 +267,19 @@ def extract_radiomic_feature(
             resolution=resolution,
             skip_exist=skip_exist
         )
+    elif feature_mode == "LLaVA-Med":
+        _ = extract_structured_LLaVA_features(
+            img_paths=img_paths,
+            lab_paths=lab_paths,
+            save_dir=save_dir,
+            target=target,
+            format=format,
+            modality=modality,
+            dilation_mm=dilation_mm,
+            site=site,
+            resolution=resolution,
+            skip_exist=skip_exist
+        )
     else:
         raise ValueError(f"Invalid feature mode: {feature_mode}")
     return
