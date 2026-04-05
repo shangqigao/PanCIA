@@ -2975,26 +2975,47 @@ def extract_structured_LLaVA_features(
     top_slices=3,
     skip_exist=False
 ):
-    import os, json, numpy as np, nibabel as nib, pathlib, cv2
-    from PIL import Image
-    import torch
+    import os
+    import cv2
+    import json
+    import numpy as np
+    import nibabel as nib
+    import pathlib
+    from PIL import Image, ImageDraw
+    from scipy.ndimage import zoom
+
+    from inference_utils.processing_utils import read_nifti_inplane, get_orientation
+    from utilities.constants import CT_SITES
+
     import torch.nn.functional as F
 
     from inference_utils.processing_utils import read_nifti_inplane, get_orientation
     from utilities.constants import CT_SITES
     from transformers import AutoProcessor, AutoModelForCausalLM, AutoTokenizer, AutoModel
 
+    import sys
+    sys.path.append(f"{root_dir}/tiatoolbox/models/architecture/LLaVA-Med")
+
     # ======================
     # LLaVA-Med model
     # ======================
+    from llava.model.builder import load_pretrained_model
+    from llava.mm_utils import process_images, tokenizer_image_token
+    from llava.conversation import conv_templates
+    from llava.constants import DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN, IMAGE_TOKEN_INDEX
+    from llava.mm_utils import KeywordsStoppingCriteria
+
     model_path = f"{root_dir}/checkpoints/LLaVA-Med"
 
-    processor = AutoProcessor.from_pretrained(model_path)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        torch_dtype=torch.float16,
-        device_map="auto"
-    ).eval()
+    tokenizer, model, image_processor, context_len = load_pretrained_model(
+        model_path=model_path,
+        model_base=None,
+        model_name="llava-med-v1.5-mistral-7b"
+    )
+    model.eval()
+
+    if model.config.sliding_window is None:
+        model.config.sliding_window = 4096
 
     # ======================
     # Text embeddings
@@ -3015,18 +3036,6 @@ def extract_structured_LLaVA_features(
             all_embeddings.append(emb.cpu())
         return torch.cat(all_embeddings, dim=0)
 
-    # ======================
-    # Mask overlay + dilation
-    # ======================
-    def overlay_mask(image, mask, alpha=0.6):
-        image = np.array(image).astype(np.float32)
-        red = np.zeros_like(image)
-        red[..., 0] = 255
-        mask = mask.astype(bool)
-        overlay = image.copy()
-        overlay[mask] = (1-alpha)*image[mask] + alpha*red[mask]
-        return Image.fromarray(overlay.astype(np.uint8))
-
     def dilate_mask(mask, k=15):
         kernel = np.ones((k, k), np.uint8)
         return cv2.dilate(mask.astype(np.uint8), kernel)
@@ -3035,17 +3044,7 @@ def extract_structured_LLaVA_features(
     # JSON prompt
     # ======================
     STRUCTURED_PROMPT = """
-    You are a radiologist. The tumor region is highlighted in red in the image.
-    Provide a structured report in JSON format with the following fields:
-    {
-    "location": "...",
-    "size_shape": "...",
-    "margin": "...",
-    "internal_features": "...",
-    "surroundings": "...",
-    "impression": "..."
-    }
-    Answer concisely and accurately based on the highlighted region.
+    where is the tumor located in?
     """
 
     os.makedirs(save_dir, exist_ok=True)
@@ -3053,32 +3052,53 @@ def extract_structured_LLaVA_features(
     if isinstance(modality, str): modality = [modality]*len(img_paths)
     if isinstance(site, str): site = [site]*len(img_paths)
 
-    # ======================
-    # Loop
-    # ======================
+    # ----------------------
+    # Process each scan
+    # ----------------------
     for idx, (img_path, lab_path) in enumerate(zip(img_paths, lab_paths)):
-        if isinstance(img_path, list):
-            img_name = pathlib.Path(img_path[0]).stem
+        if format[idx] == 'dicom':
+            img_name = pathlib.Path(img_path[0]).parent.name
             parent_name = pathlib.Path(img_path[0]).parent.name
-        else:
-            img_name = pathlib.Path(img_path).stem
-            parent_name = pathlib.Path(img_path).parent.name
-
-        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_structured.json")
+        elif format[idx] == 'nifti':
+            if isinstance(img_path, list):
+                img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
+                parent_name = pathlib.Path(img_path[0]).parent.name
+            else:
+                img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+                parent_name = pathlib.Path(img_path).parent.name
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.json")
         if feature_path.exists() and skip_exist:
+            logging.info(f"{feature_path.name} has existed, skip!")
             continue
         feature_path.parent.mkdir(parents=True, exist_ok=True)
 
-        print(f"[{idx+1}/{len(img_paths)}] Processing {img_name}")
+        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
+        # read slices from dicom or nifti
         is_CT = modality[idx] == 'CT'
         ct_site = CT_SITES[site[idx]]
+        if format[idx] == 'dicom':
+            dicom_dir = pathlib.Path(img_path)
+            assert pathlib.Path(img_path).is_dir()
+            dicom_paths = sorted(dicom_dir.glob('*.dcm'))
+            images = [read_dicom(p, is_CT, ct_site, keep_size=True, return_spacing=True) for p in dicom_paths]
+            slice_axis, affine = 0, np.eye(4)
+        elif format[idx] == 'nifti':
+            images, slice_axis, affine = read_nifti_inplane(img_path, is_CT, ct_site, keep_size=True, return_spacing=True, resolution=resolution)
+        else:
+            raise ValueError(f'Only support DICOM or NIFTI, but got {format[idx]}')
 
-        images, slice_axis, affine = read_nifti_inplane(
-            img_path, is_CT, ct_site, keep_size=True, return_spacing=True, resolution=resolution
-        )
         nii = nib.load(lab_path)
-        labels = np.moveaxis(nii.get_fdata(), slice_axis, 0)
+        labels = nii.get_fdata()
+        affine = nii.affine
+
+        _, _, voxel_spacing = get_orientation(affine)
+        if resolution is not None:
+            new_spacing = (resolution, resolution, resolution)
+            zoom_factors = tuple(os/ns for os, ns in zip(voxel_spacing, new_spacing))
+            labels = zoom(labels, zoom=zoom_factors, order=0)
+        labels = np.moveaxis(labels, slice_axis, 0)
+
         if np.sum(labels > 0) == 0:
             continue
 
@@ -3093,21 +3113,82 @@ def extract_structured_LLaVA_features(
             mask = labels[i]
             if np.sum(mask) == 0:
                 continue
+
+            # 假设 mask 已经经过 dilate
             mask = dilate_mask(mask, k=dilation_mm)
-            pil_img = Image.fromarray(img).convert("RGB")
-            overlay_img = overlay_mask(pil_img, mask)
 
-            # Generate structured JSON
-            inputs = processor(
-                images=overlay_img,
-                text=STRUCTURED_PROMPT,
-                return_tensors="pt"
-            ).to(model.device)
+            # 转为 PIL 图像
+            overlay_img = Image.fromarray(img).convert("RGB")
 
+            # 找到 mask 的 bbox
+            coords = np.argwhere(mask > 0)  # 返回非零像素坐标
+            if coords.size > 0:
+                ymin, xmin = coords.min(axis=0)
+                ymax, xmax = coords.max(axis=0)
+
+                # 可选 padding
+                pad = dilation_mm
+                h, w = mask.shape
+                xmin = max(0, xmin - pad)
+                ymin = max(0, ymin - pad)
+                xmax = min(w, xmax + pad)
+                ymax = min(h, ymax + pad)
+
+                # 在图像上画红色 bbox
+                draw = ImageDraw.Draw(overlay_img)
+                draw.rectangle([xmin, ymin, xmax, ymax], outline="red", width=2)
+
+            # 保存带 bbox 的图像
+            # overlay_img_path = '/home/sg2162/rds/hpc-work/overlay_img.png'
+            # overlay_img.save(overlay_img_path)
+
+            # ===== prompt =====
+            qs = STRUCTURED_PROMPT.strip()
+
+            if model.config.mm_use_im_start_end:
+                qs = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN + '\n' + qs
+            else:
+                qs = DEFAULT_IMAGE_TOKEN + '\n' + qs
+
+            conv = conv_templates["vicuna_v1"].copy()
+            conv.append_message(conv.roles[0], qs)
+            conv.append_message(conv.roles[1], None)
+            prompt = conv.get_prompt()
+
+            # ===== tokenize (关键) =====
+            input_ids = tokenizer_image_token(
+                prompt,
+                tokenizer,
+                IMAGE_TOKEN_INDEX,
+                return_tensors='pt'
+            ).unsqueeze(0).to(model.device)
+
+            stop_str = conv.sep if conv.sep_style != 2 else conv.sep2
+            stopping_criteria = KeywordsStoppingCriteria([stop_str], tokenizer, input_ids)
+
+            # ===== image =====
+            image_tensor = process_images([overlay_img], image_processor, model.config)[0]
+            image_tensor = image_tensor.unsqueeze(0).to(model.device, dtype=torch.float16)
+
+            if tokenizer.pad_token_id is None:
+                tokenizer.pad_token_id = tokenizer.eos_token_id
+            model.config.pad_token_id = tokenizer.pad_token_id
+
+            # ===== generate =====
             with torch.no_grad():
-                output = model.generate(**inputs, max_new_tokens=256, do_sample=False)
+                output_ids = model.generate(
+                    input_ids,
+                    images=image_tensor,
+                    do_sample=False,
+                    temperature=0.0,
+                    top_p=0.9,
+                    max_new_tokens=256,
+                    pad_token_id=tokenizer.pad_token_id,
+                    use_cache=False
+                )
 
-            answer_text = processor.decode(output[0], skip_special_tokens=True)
+            # ===== decode =====
+            answer_text = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
 
             # Attempt JSON parsing
             try:

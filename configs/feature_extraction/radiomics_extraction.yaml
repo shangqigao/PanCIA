@@ -16,7 +16,7 @@ RADIOMICS:
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
     OBJECT: "tumor" # or "tumor" or "organ"
   MODE:
-    VALUE: "MedPLIB"
+    VALUE: "LLaVA-Med"
     CHOICES:
       [
         "pyradiomics",
@@ -26,6 +26,7 @@ RADIOMICS:
         "LVMMed",
         "FMCIB",
         "MedPLIB",
+        "LLaVA-Med"
       ]
     SUFFIX:
       - "radiomics.npy"
