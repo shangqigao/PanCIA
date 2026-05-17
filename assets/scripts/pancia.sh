@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-36:00:00
-##SBATCH --time=0-00:10:00
+##SBATCH --time=0-36:00:00
+#SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-##SBATCH --qos=intr
+#SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -32,6 +32,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # python analysis/utilities/m_prepare_biomedparse_TumorSegmentation_dataset.py
 # python analysis/utilities/m_compute_lesion_level_statistics.py
 # python analysis/utilities/m_prepare_biomedparse_endometriosis_dataset.py
+# python analysis/utilities/m_calculate_endometriosis_segmentation_metrics.py
+python analysis/utilities/m_plot_endometriosis_box.py
 
 #---------------MAMA-MIA----------------
 # fit Beta distributions on training data
@@ -137,8 +139,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # extract radiomic features (add srun for BiomedParse)
-radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
 
 # srun deepspeed --num_gpus=1 analysis/a03_feature_extraction/m_radiomics_extraction.py \
 #   --config_files $radiomics_config \
