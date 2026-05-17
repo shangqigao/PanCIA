@@ -90,6 +90,77 @@ def prepare_graph_properties(data_dict, prop_keys=None, subgraphs=False, omics="
                     properties[key] = np.std(prop_dict[k])
     return properties
 
+def get_voted_embedding(data, method="average", return_all=False):
+    """
+    Select the final embedding based on majority voting of structured_reports.raw_text.
+
+    Parameters
+    ----------
+    data : dict
+        Input dictionary with keys:
+        - "structured_reports": list of dicts containing "raw_text"
+        - "embeddings": list of embedding vectors
+    method : str, optional
+        How to combine embeddings for the winning text:
+        - "average": average all embeddings corresponding to the voted text
+        - "first": use the first matching embedding
+    return_all : bool, optional
+        If True, return additional information.
+
+    Returns
+    -------
+    list or dict
+        If return_all=False:
+            Final embedding as a list.
+        If return_all=True:
+            Dictionary containing:
+            - "voted_text"
+            - "matched_indices"
+            - "matched_embeddings"
+            - "final_embedding"
+            - "vote_count"
+    """
+    # Extract texts
+    texts = [report["raw_text"] for report in data["structured_reports"]]
+
+    # Basic validation
+    if len(texts) != len(data["embeddings"]):
+        raise ValueError(
+            "Length of structured_reports and embeddings must be the same."
+        )
+
+    if len(texts) == 0:
+        raise ValueError("No structured reports found.")
+
+    # Majority vote
+    text_counts = Counter(texts)
+    voted_text, vote_count = text_counts.most_common(1)[0]
+
+    # Find all matching indices
+    matched_indices = [i for i, text in enumerate(texts) if text == voted_text]
+
+    # Get corresponding embeddings
+    matched_embeddings = [data["embeddings"][i] for i in matched_indices]
+
+    # Select final embedding
+    if method == "first":
+        final_embedding = matched_embeddings[0]
+    elif method == "average":
+        final_embedding = np.mean(matched_embeddings, axis=0).tolist()
+    else:
+        raise ValueError("method must be either 'average' or 'first'")
+
+    if return_all:
+        return {
+            "voted_text": voted_text,
+            "matched_indices": matched_indices,
+            "matched_embeddings": matched_embeddings,
+            "final_embedding": final_embedding,
+            "vote_count": vote_count,
+        }
+
+    return final_embedding
+
 def load_radiomic_properties(idx, radiomic_paths, prop_keys=None, pooling="mean"):
     properties_list = []
     for path_dict in radiomic_paths:
@@ -111,6 +182,14 @@ def load_radiomic_properties(idx, radiomic_paths, prop_keys=None, pooling="mean"
                     properties = {}
                     for key, value in data_dict.items():
                         properties[f"{radiomic_key}.{key}"] = value
+                    if len(properties) > 0: properties_dict.update(properties)
+                elif "/LLaVA-Med/" in radiomic_path:
+                    data_dict = load_json(radiomic_path)
+                    feature = get_voted_embedding(data_dict)
+                    properties = {}
+                    for i, feat in enumerate(feat_list):
+                        k = f"radiomics.{radiomic_key}.feature{i}"
+                        properties[k] = feat
                     if len(properties) > 0: properties_dict.update(properties)
                 else:
                     raise NotImplementedError
