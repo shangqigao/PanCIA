@@ -28,7 +28,7 @@ RADIOMICS:
   MODE:
     VALUE: "LVMMed"
     CHOICES:
-      ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB"]
+      ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB", "LLaVA-Med"]
   AGGREGATION: False
   AGGREGATED_MODE:
     VALUE: "SPARRA"

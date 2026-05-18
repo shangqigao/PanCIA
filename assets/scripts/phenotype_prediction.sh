@@ -30,7 +30,7 @@ CONFIG="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_pr
 OUTCOME="PrimaryDisease"
 
 # Common lists
-RADIOMICS_MODES=("BiomedParse" "LVMMed")
+RADIOMICS_MODES=("LLaVA-Med")
 # RADIOMICS_MODES=("pyradiomics" "FMCIB" "BiomedParse" "LVMMed")
 PATHOMICS_MODES=("UNI" "CONCH" "CHIEF")
 AGG_MODES=("MEAN" "ABMIL" "SPARRA")
@@ -42,7 +42,7 @@ USED_OMICS="radiomics"
 
 for R_MODE in "${RADIOMICS_MODES[@]}"; do
 
-  if [[ "$R_MODE" == "pyradiomics" || "$R_MODE" == "FMCIB" ]]; then
+  if [[ "$R_MODE" == "pyradiomics" || "$R_MODE" == "FMCIB" || "$R_MODE" == "LLaVA-Med" ]]; then
     R_AGG="None"
 
     echo "[radiomics] MODE=$R_MODE AGG=None"
@@ -102,7 +102,7 @@ USED_OMICS="radiopathomics"
 
 for R_MODE in "${RADIOMICS_MODES[@]}"; do
 
-  if [[ "$R_MODE" == "pyradiomics" || "$R_MODE" == "FMCIB" ]]; then
+  if [[ "$R_MODE" == "pyradiomics" || "$R_MODE" == "FMCIB" || "$R_MODE" == "LLaVA-Med" ]]; then
     R_AGG="None"
     P_AGG="MEAN"
 

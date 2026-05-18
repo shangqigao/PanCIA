@@ -17,12 +17,12 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "LVMMed"
+    VALUE: "LLaVA-Med"
     CHOICES:
-      ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB"]
+      ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB", "LLaVA-Med"]
   AGGREGATION: False
   AGGREGATED_MODE:
-    VALUE: "ABMIL"
+    VALUE: "None"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
   RESOLUTION: 1
   UNITS: "mm"

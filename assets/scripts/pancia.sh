@@ -33,7 +33,7 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # python analysis/utilities/m_compute_lesion_level_statistics.py
 # python analysis/utilities/m_prepare_biomedparse_endometriosis_dataset.py
 # python analysis/utilities/m_calculate_endometriosis_segmentation_metrics.py
-python analysis/utilities/m_plot_endometriosis_box.py
+# python analysis/utilities/m_plot_endometriosis_box.py
 
 #---------------MAMA-MIA----------------
 # fit Beta distributions on training data
@@ -171,8 +171,8 @@ python analysis/utilities/m_plot_endometriosis_box.py
 # python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
 
 # phenotype prediction
-# phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
-# python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
+phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
+python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
 
 # signature prediction
 # signature_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"

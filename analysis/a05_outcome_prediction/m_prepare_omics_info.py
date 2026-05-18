@@ -76,7 +76,10 @@ radiomics_suffix = {
         "_tumor_layer0_graph.npz",
         "_tumor_layer1_graph.npz",
         "_tumor_layer2_graph.npz"
-    ]
+    ],
+    "LLaVA-Med": [
+        "_tumor_radiomics.json"
+    ],
 }
 
 pathomics_suffix = {

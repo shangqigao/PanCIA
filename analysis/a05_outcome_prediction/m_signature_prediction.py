@@ -51,6 +51,7 @@ from lifelines import KaplanMeierFitter
 from lifelines.plotting import add_at_risk_counts
 
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
+from collections import Counter
 
 def prepare_graph_properties(data_dict, prop_keys=None, subgraphs=False, omics="radiomics"):
     if prop_keys == None: 
@@ -191,7 +192,7 @@ def load_radiomic_properties(idx, radiomic_paths, prop_keys=None, pooling="mean"
                     if len(properties) > 0: properties_dict.update(properties)
                 elif "/LLaVA-Med/" in radiomic_path:
                     data_dict = load_json(radiomic_path)
-                    feature = get_voted_embedding(data_dict)
+                    feat_list = get_voted_embedding(data_dict)
                     properties = {}
                     for i, feat in enumerate(feat_list):
                         k = f"radiomics.{radiomic_key}.feature{i}"
