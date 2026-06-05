@@ -1,0 +1,13 @@
+Model,Omics,Subtype,R2,N
+LVMMed (ABMIL),Radiomics,IFN-gamma Dominant,-0.058484515591093134,267
+UNI (SPARRA),Pathomics,IFN-gamma Dominant,0.5352558283801991,267
+BiomedParse+UNI (SPARRA),Radiopathomics,IFN-gamma Dominant,0.5130821944305408,267
+BiomedParse (MEAN),Radiomics,Inflammatory,-0.03733182045457317,311
+CONCH (ABMIL),Pathomics,Inflammatory,0.46213586154497044,311
+BiomedParse+CONCH (ABMIL),Radiopathomics,Inflammatory,0.45586428187723427,311
+LVMMed (SPARRA),Radiomics,Lymphocyte Depleted,-1.2337066050983783,94
+UNI (SPARRA),Pathomics,Lymphocyte Depleted,0.028179273829841422,94
+BiomedParse+UNI (SPARRA),Radiopathomics,Lymphocyte Depleted,0.006824734047205072,94
+BiomedParse (MEAN),Radiomics,Wound Healing,-0.21331850462916768,214
+CONCH (ABMIL),Pathomics,Wound Healing,0.30582111587257177,214
+LVMMed+CONCH (ABMIL),Radiopathomics,Wound Healing,0.28270882238841255,214

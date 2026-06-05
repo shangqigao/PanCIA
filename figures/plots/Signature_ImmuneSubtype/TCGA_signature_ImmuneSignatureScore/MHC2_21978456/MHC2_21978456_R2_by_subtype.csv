@@ -1,0 +1,165 @@
+Model,Omics,Subtype,R2,N
+BiomedParse+CONCH (MEAN),Radiopathomics,IFN-gamma Dominant,0.17307542229819428,267
+BiomedParse+CONCH (MEAN),Radiopathomics,Lymphocyte Depleted,0.15587935648997187,94
+BiomedParse+CONCH (MEAN),Radiopathomics,Wound Healing,0.11855285400694071,214
+BiomedParse+CONCH (MEAN),Radiopathomics,Inflammatory,0.37470654578511053,311
+BiomedParse+CONCH (SPARRA),Radiopathomics,IFN-gamma Dominant,0.2654217702103623,267
+BiomedParse+CONCH (SPARRA),Radiopathomics,Lymphocyte Depleted,0.24334525365227166,94
+BiomedParse+CONCH (SPARRA),Radiopathomics,Wound Healing,0.14837287874023164,214
+BiomedParse+CONCH (SPARRA),Radiopathomics,Inflammatory,0.4228031509834633,311
+BiomedParse+CONCH (ABMIL),Radiopathomics,IFN-gamma Dominant,0.2305460238181185,267
+BiomedParse+CONCH (ABMIL),Radiopathomics,Lymphocyte Depleted,0.3537137287071257,94
+BiomedParse+CONCH (ABMIL),Radiopathomics,Wound Healing,0.11627485802842141,214
+BiomedParse+CONCH (ABMIL),Radiopathomics,Inflammatory,0.45209207210346214,311
+BiomedParse (SPARRA),Radiomics,IFN-gamma Dominant,-0.13357446306505394,267
+BiomedParse (SPARRA),Radiomics,Lymphocyte Depleted,-0.228838198515392,94
+BiomedParse (SPARRA),Radiomics,Wound Healing,-0.3993492372382941,214
+BiomedParse (SPARRA),Radiomics,Inflammatory,0.04543122439478797,311
+BiomedParse (ABMIL),Radiomics,IFN-gamma Dominant,-0.1378926618304781,267
+BiomedParse (ABMIL),Radiomics,Lymphocyte Depleted,-0.15366056427340125,94
+BiomedParse (ABMIL),Radiomics,Wound Healing,-0.46061795246561754,214
+BiomedParse (ABMIL),Radiomics,Inflammatory,0.022126842882270625,311
+BiomedParse+UNI (MEAN),Radiopathomics,IFN-gamma Dominant,0.24419260767644713,267
+BiomedParse+UNI (MEAN),Radiopathomics,Lymphocyte Depleted,0.16586652256248202,94
+BiomedParse+UNI (MEAN),Radiopathomics,Wound Healing,0.16053241005264962,214
+BiomedParse+UNI (MEAN),Radiopathomics,Inflammatory,0.4186553333265567,311
+BiomedParse+UNI (SPARRA),Radiopathomics,IFN-gamma Dominant,0.32108830989465553,267
+BiomedParse+UNI (SPARRA),Radiopathomics,Lymphocyte Depleted,0.18519162577447823,94
+BiomedParse+UNI (SPARRA),Radiopathomics,Wound Healing,0.19019978622096334,214
+BiomedParse+UNI (SPARRA),Radiopathomics,Inflammatory,0.47299929517360817,311
+BiomedParse+UNI (ABMIL),Radiopathomics,IFN-gamma Dominant,0.23934562151532612,267
+BiomedParse+UNI (ABMIL),Radiopathomics,Lymphocyte Depleted,0.17054515769036016,94
+BiomedParse+UNI (ABMIL),Radiopathomics,Wound Healing,0.12931138665212483,214
+BiomedParse+UNI (ABMIL),Radiopathomics,Inflammatory,0.4551745907250634,311
+BiomedParse (MEAN),Radiomics,IFN-gamma Dominant,-0.16114745670323005,267
+BiomedParse (MEAN),Radiomics,Lymphocyte Depleted,-0.1569466363248584,94
+BiomedParse (MEAN),Radiomics,Wound Healing,-0.40922556734723736,214
+BiomedParse (MEAN),Radiomics,Inflammatory,0.06294680013468401,311
+FMCIB (MEAN),Radiomics,IFN-gamma Dominant,-0.5892135814131647,267
+FMCIB (MEAN),Radiomics,Lymphocyte Depleted,-0.5269363299798184,94
+FMCIB (MEAN),Radiomics,Wound Healing,-1.112191710472501,214
+FMCIB (MEAN),Radiomics,Inflammatory,-1.1611522724731325,311
+FMCIB+UNI (MEAN),Radiopathomics,IFN-gamma Dominant,0.16314388616022635,267
+FMCIB+UNI (MEAN),Radiopathomics,Lymphocyte Depleted,0.0012769788057830356,94
+FMCIB+UNI (MEAN),Radiopathomics,Wound Healing,-0.018491769931796576,214
+FMCIB+UNI (MEAN),Radiopathomics,Inflammatory,0.3095407056114111,311
+pyradiomics (MEAN),Radiomics,IFN-gamma Dominant,-0.03211893137728161,267
+pyradiomics (MEAN),Radiomics,Lymphocyte Depleted,-0.4316235590111923,94
+pyradiomics (MEAN),Radiomics,Wound Healing,-0.4574041068908785,214
+pyradiomics (MEAN),Radiomics,Inflammatory,-0.2811136238908267,311
+pyradiomics+UNI (MEAN),Radiopathomics,IFN-gamma Dominant,0.2049075417457199,267
+pyradiomics+UNI (MEAN),Radiopathomics,Lymphocyte Depleted,0.1877472910536645,94
+pyradiomics+UNI (MEAN),Radiopathomics,Wound Healing,0.11267228628802006,214
+pyradiomics+UNI (MEAN),Radiopathomics,Inflammatory,0.4252112807143136,311
+BiomedParse+CHIEF (MEAN),Radiopathomics,IFN-gamma Dominant,0.15590429772086767,267
+BiomedParse+CHIEF (MEAN),Radiopathomics,Lymphocyte Depleted,0.1912697173118404,94
+BiomedParse+CHIEF (MEAN),Radiopathomics,Wound Healing,0.1312512089985528,214
+BiomedParse+CHIEF (MEAN),Radiopathomics,Inflammatory,0.36228317767242424,311
+BiomedParse+CHIEF (SPARRA),Radiopathomics,IFN-gamma Dominant,0.23999471154829954,267
+BiomedParse+CHIEF (SPARRA),Radiopathomics,Lymphocyte Depleted,0.29941661964455457,94
+BiomedParse+CHIEF (SPARRA),Radiopathomics,Wound Healing,0.25334478833034846,214
+BiomedParse+CHIEF (SPARRA),Radiopathomics,Inflammatory,0.4070697706262122,311
+BiomedParse+CHIEF (ABMIL),Radiopathomics,IFN-gamma Dominant,0.22934593885689825,267
+BiomedParse+CHIEF (ABMIL),Radiopathomics,Lymphocyte Depleted,0.07593005614864712,94
+BiomedParse+CHIEF (ABMIL),Radiopathomics,Wound Healing,0.06150732177706475,214
+BiomedParse+CHIEF (ABMIL),Radiopathomics,Inflammatory,0.34110132270123306,311
+LVMMed+CHIEF (MEAN),Radiopathomics,IFN-gamma Dominant,0.13057713816371486,267
+LVMMed+CHIEF (MEAN),Radiopathomics,Lymphocyte Depleted,0.19049462298811692,94
+LVMMed+CHIEF (MEAN),Radiopathomics,Wound Healing,0.11156475466066085,214
+LVMMed+CHIEF (MEAN),Radiopathomics,Inflammatory,0.34226073627250153,311
+CHIEF (SPARRA),Pathomics,IFN-gamma Dominant,0.26630048780722015,267
+CHIEF (SPARRA),Pathomics,Lymphocyte Depleted,0.3037590401024841,94
+CHIEF (SPARRA),Pathomics,Wound Healing,0.24690719867998012,214
+CHIEF (SPARRA),Pathomics,Inflammatory,0.4228298028455115,311
+LVMMed+CHIEF (SPARRA),Radiopathomics,IFN-gamma Dominant,0.2525229310833328,267
+LVMMed+CHIEF (SPARRA),Radiopathomics,Lymphocyte Depleted,0.29298326798688,94
+LVMMed+CHIEF (SPARRA),Radiopathomics,Wound Healing,0.20440834337982539,214
+LVMMed+CHIEF (SPARRA),Radiopathomics,Inflammatory,0.3730397998619299,311
+LVMMed+CHIEF (ABMIL),Radiopathomics,IFN-gamma Dominant,0.2650841887830523,267
+LVMMed+CHIEF (ABMIL),Radiopathomics,Lymphocyte Depleted,0.0991050412078166,94
+LVMMed+CHIEF (ABMIL),Radiopathomics,Wound Healing,0.03000173729227351,214
+LVMMed+CHIEF (ABMIL),Radiopathomics,Inflammatory,0.2634054935556862,311
+CHIEF (MEAN),Pathomics,IFN-gamma Dominant,0.15346084434209672,267
+CHIEF (MEAN),Pathomics,Lymphocyte Depleted,0.12288636281909715,94
+CHIEF (MEAN),Pathomics,Wound Healing,0.16612315885969098,214
+CHIEF (MEAN),Pathomics,Inflammatory,0.3821665325741568,311
+CHIEF (ABMIL),Pathomics,IFN-gamma Dominant,0.25800626168959795,267
+CHIEF (ABMIL),Pathomics,Lymphocyte Depleted,0.19410505832780212,94
+CHIEF (ABMIL),Pathomics,Wound Healing,0.14382179376989368,214
+CHIEF (ABMIL),Pathomics,Inflammatory,0.37394890200882513,311
+LVMMed (SPARRA),Radiomics,IFN-gamma Dominant,-0.0928396714998807,267
+LVMMed (SPARRA),Radiomics,Lymphocyte Depleted,-0.2070350963201868,94
+LVMMed (SPARRA),Radiomics,Wound Healing,-0.34787012490829383,214
+LVMMed (SPARRA),Radiomics,Inflammatory,-0.007265223597456627,311
+LVMMed (ABMIL),Radiomics,IFN-gamma Dominant,-0.05105361250559204,267
+LVMMed (ABMIL),Radiomics,Lymphocyte Depleted,-0.2865074401352308,94
+LVMMed (ABMIL),Radiomics,Wound Healing,-0.4261988674654229,214
+LVMMed (ABMIL),Radiomics,Inflammatory,0.0012929906130263458,311
+LVMMed+UNI (MEAN),Radiopathomics,IFN-gamma Dominant,0.19726169178020703,267
+LVMMed+UNI (MEAN),Radiopathomics,Lymphocyte Depleted,0.10944763584713901,94
+LVMMed+UNI (MEAN),Radiopathomics,Wound Healing,0.0896162112184451,214
+LVMMed+UNI (MEAN),Radiopathomics,Inflammatory,0.3470623966701778,311
+UNI (SPARRA),Pathomics,IFN-gamma Dominant,0.33971606184232406,267
+UNI (SPARRA),Pathomics,Lymphocyte Depleted,0.2188053742518652,94
+UNI (SPARRA),Pathomics,Wound Healing,0.20935990258413872,214
+UNI (SPARRA),Pathomics,Inflammatory,0.4878266237624873,311
+LVMMed+UNI (SPARRA),Radiopathomics,IFN-gamma Dominant,0.3243996156622784,267
+LVMMed+UNI (SPARRA),Radiopathomics,Lymphocyte Depleted,0.14834609335383375,94
+LVMMed+UNI (SPARRA),Radiopathomics,Wound Healing,0.18692490833896513,214
+LVMMed+UNI (SPARRA),Radiopathomics,Inflammatory,0.45522253949302915,311
+LVMMed+UNI (ABMIL),Radiopathomics,IFN-gamma Dominant,0.27850242988109053,267
+LVMMed+UNI (ABMIL),Radiopathomics,Lymphocyte Depleted,0.04935503017525089,94
+LVMMed+UNI (ABMIL),Radiopathomics,Wound Healing,0.06284718213019358,214
+LVMMed+UNI (ABMIL),Radiopathomics,Inflammatory,0.4106188404477775,311
+UNI (MEAN),Pathomics,IFN-gamma Dominant,0.25074781321108763,267
+UNI (MEAN),Pathomics,Lymphocyte Depleted,0.21711796553941676,94
+UNI (MEAN),Pathomics,Wound Healing,0.18707419517898582,214
+UNI (MEAN),Pathomics,Inflammatory,0.4280548120446932,311
+LVMMed (MEAN),Radiomics,IFN-gamma Dominant,-0.1283183505197969,267
+LVMMed (MEAN),Radiomics,Lymphocyte Depleted,-0.2458051766357583,94
+LVMMed (MEAN),Radiomics,Wound Healing,-0.38520685623362794,214
+LVMMed (MEAN),Radiomics,Inflammatory,-0.021952693547963253,311
+UNI (ABMIL),Pathomics,IFN-gamma Dominant,0.2713847037336171,267
+UNI (ABMIL),Pathomics,Lymphocyte Depleted,0.21272266119154282,94
+UNI (ABMIL),Pathomics,Wound Healing,0.17152584489559242,214
+UNI (ABMIL),Pathomics,Inflammatory,0.47144769890908866,311
+FMCIB+CONCH (MEAN),Radiopathomics,IFN-gamma Dominant,0.1331954741131287,267
+FMCIB+CONCH (MEAN),Radiopathomics,Lymphocyte Depleted,0.06104038660777922,94
+FMCIB+CONCH (MEAN),Radiopathomics,Wound Healing,-0.11860539509360213,214
+FMCIB+CONCH (MEAN),Radiopathomics,Inflammatory,0.10916567367560026,311
+LVMMed+CONCH (MEAN),Radiopathomics,IFN-gamma Dominant,0.1609536911087026,267
+LVMMed+CONCH (MEAN),Radiopathomics,Lymphocyte Depleted,0.19723265104359966,94
+LVMMed+CONCH (MEAN),Radiopathomics,Wound Healing,0.10286870883717958,214
+LVMMed+CONCH (MEAN),Radiopathomics,Inflammatory,0.3774330785860679,311
+CONCH (SPARRA),Pathomics,IFN-gamma Dominant,0.28624660255888523,267
+CONCH (SPARRA),Pathomics,Lymphocyte Depleted,0.2947183820590461,94
+CONCH (SPARRA),Pathomics,Wound Healing,0.18611515440351867,214
+CONCH (SPARRA),Pathomics,Inflammatory,0.4400934183330395,311
+LVMMed+CONCH (SPARRA),Radiopathomics,IFN-gamma Dominant,0.27900061995443803,267
+LVMMed+CONCH (SPARRA),Radiopathomics,Lymphocyte Depleted,0.26670995491901817,94
+LVMMed+CONCH (SPARRA),Radiopathomics,Wound Healing,0.11860984620028636,214
+LVMMed+CONCH (SPARRA),Radiopathomics,Inflammatory,0.40778560153325316,311
+LVMMed+CONCH (ABMIL),Radiopathomics,IFN-gamma Dominant,0.29418574517216,267
+LVMMed+CONCH (ABMIL),Radiopathomics,Lymphocyte Depleted,0.315048922111975,94
+LVMMed+CONCH (ABMIL),Radiopathomics,Wound Healing,0.05406603928284637,214
+LVMMed+CONCH (ABMIL),Radiopathomics,Inflammatory,0.42099512726087573,311
+CONCH (MEAN),Pathomics,IFN-gamma Dominant,0.1941718716867189,267
+CONCH (MEAN),Pathomics,Lymphocyte Depleted,0.21691975415280307,94
+CONCH (MEAN),Pathomics,Wound Healing,0.1576143091148159,214
+CONCH (MEAN),Pathomics,Inflammatory,0.3962538289708537,311
+CONCH (ABMIL),Pathomics,IFN-gamma Dominant,0.28464438039090934,267
+CONCH (ABMIL),Pathomics,Lymphocyte Depleted,0.36688038167553816,94
+CONCH (ABMIL),Pathomics,Wound Healing,0.1545083187834293,214
+CONCH (ABMIL),Pathomics,Inflammatory,0.49382854523016506,311
+FMCIB+CHIEF (MEAN),Radiopathomics,IFN-gamma Dominant,0.05455312769656351,267
+FMCIB+CHIEF (MEAN),Radiopathomics,Lymphocyte Depleted,-0.11830050039671813,94
+FMCIB+CHIEF (MEAN),Radiopathomics,Wound Healing,-0.12256037541431453,214
+FMCIB+CHIEF (MEAN),Radiopathomics,Inflammatory,0.11889000664848615,311
+pyradiomics+CONCH (MEAN),Radiopathomics,IFN-gamma Dominant,0.15201928092584072,267
+pyradiomics+CONCH (MEAN),Radiopathomics,Lymphocyte Depleted,0.16238612970516353,94
+pyradiomics+CONCH (MEAN),Radiopathomics,Wound Healing,0.08442010495732644,214
+pyradiomics+CONCH (MEAN),Radiopathomics,Inflammatory,0.35449134157178175,311
+pyradiomics+CHIEF (MEAN),Radiopathomics,IFN-gamma Dominant,0.11129173547330928,267
+pyradiomics+CHIEF (MEAN),Radiopathomics,Lymphocyte Depleted,0.13081372999127816,94
+pyradiomics+CHIEF (MEAN),Radiopathomics,Wound Healing,0.06271382377214252,214
+pyradiomics+CHIEF (MEAN),Radiopathomics,Inflammatory,0.3272803368720044,311
