@@ -280,6 +280,20 @@ def extract_radiomic_feature(
             resolution=resolution,
             skip_exist=skip_exist
         )
+    elif feature_mode == "Qwen-VL":
+        _ = extract_structured_qwen_features(
+            img_paths=img_paths,
+            lab_paths=lab_paths,
+            save_dir=save_dir,
+            target=target,
+            format=format,
+            modality=modality,
+            dilation_mm=dilation_mm,
+            site=site,
+            resolution=resolution,
+            resolution=resolution,
+            skip_exist=skip_exist
+        )
     else:
         raise ValueError(f"Invalid feature mode: {feature_mode}")
     return
@@ -3214,6 +3228,438 @@ def extract_structured_LLaVA_features(
 
     return
 
+
+def extract_structured_qwen_features(
+    img_paths,
+    lab_paths,
+    save_dir,
+    target,
+    format='nifti',
+    modality='CT',
+    dilation_mm=5,
+    site=None,
+    resolution=None,
+    device="cuda",
+    top_slices=3,
+    skip_exist=False
+):
+    import os
+    import cv2
+    import json
+    import re
+    import numpy as np
+    import nibabel as nib
+    import pathlib
+    import torch
+    import torch.nn.functional as F
+    from PIL import Image, ImageDraw
+    from scipy.ndimage import zoom
+    from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer, AutoModel
+    from inference_utils.processing_utils import read_nifti_inplane, get_orientation
+    from utilities.constants import CT_SITES
+    
+    # ======================
+    # Load Qwen2.5-VL Model
+    # ======================
+    print("Loading Qwen2.5-VL model...")
+    model_path = "Qwen/Qwen2.5-VL-7B-Instruct"
+    
+    processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        torch_dtype=torch.float16,
+        device_map="auto",
+        trust_remote_code=True
+    ).eval()
+    print("Model loaded successfully")
+    
+    # ======================
+    # Text Embedding Model
+    # ======================
+    text_model_name = "sentence-transformers/all-mpnet-base-v2"
+    text_tokenizer = AutoTokenizer.from_pretrained(text_model_name)
+    text_model = AutoModel.from_pretrained(text_model_name).to(device).eval()
+    
+    @torch.no_grad()
+    def encode_texts(texts, batch_size=32):
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i+batch_size]
+            tokens = text_tokenizer(batch, padding=True, truncation=True, return_tensors="pt").to(device)
+            outputs = text_model(**tokens)
+            emb = outputs.last_hidden_state.mean(dim=1)
+            emb = F.normalize(emb, p=2, dim=1)
+            all_embeddings.append(emb.cpu())
+        return torch.cat(all_embeddings, dim=0)
+    
+    def dilate_mask(mask, k=15):
+        """Dilate mask for better visualization"""
+        kernel = np.ones((k, k), np.uint8)
+        return cv2.dilate(mask.astype(np.uint8), kernel)
+    
+    def normalize_ct_to_uint8(img_array):
+        """Normalize CT image to 0-255 uint8 for visualization"""
+        img_min = img_array.min()
+        img_max = img_array.max()
+        if img_max - img_min < 1e-8:
+            return np.zeros_like(img_array, dtype=np.uint8)
+        normalized = ((img_array - img_min) / (img_max - img_min) * 255)
+        return normalized.astype(np.uint8)
+    
+    def create_overlayed_slice(img_array, mask, alpha=0.35, color=(255, 50, 50)):
+        """
+        Create overlay image with semi-transparent mask
+        
+        Args:
+            img_array: CT slice (numpy array)
+            mask: Binary tumor mask
+            alpha: Transparency factor (0=invisible, 1=opaque)
+            color: RGB tuple for overlay (default red)
+        """
+        # Normalize CT to 0-255 for RGB conversion
+        img_uint8 = normalize_ct_to_uint8(img_array)
+        
+        # Convert to RGB
+        img_rgb = cv2.cvtColor(img_uint8, cv2.COLOR_GRAY2RGB)
+        
+        # Create colored mask
+        colored_mask = np.zeros_like(img_rgb)
+        colored_mask[mask > 0] = color
+        
+        # Blend with transparency
+        overlayed = cv2.addWeighted(img_rgb, 1 - alpha, colored_mask, alpha, 0)
+        
+        return Image.fromarray(overlayed)
+    
+    def create_patch_with_mask(full_slice_img, mask_array, bbox, patch_size=(224, 224), alpha=0.55):
+        """
+        Extract cropped patch around tumor WITH mask overlay included
+        """
+        xmin, ymin, xmax, ymax = bbox
+        
+        # Crop both image and mask
+        cropped_img = full_slice_img.crop((xmin, ymin, xmax, ymax))
+        
+        # Extract corresponding mask region
+        cropped_mask = mask_array[ymin:ymax, xmin:xmax]
+        
+        # Get grayscale array from cropped PIL image
+        cropped_gray = np.array(cropped_img.convert('L'))
+        
+        # Create overlay for patch (more opaque for detail)
+        patch_overlayed = create_overlayed_slice(
+            cropped_gray, 
+            cropped_mask, 
+            alpha=alpha,
+            color=(255, 80, 80)
+        )
+        
+        return patch_overlayed.resize(patch_size, Image.Resampling.LANCZOS)
+    
+    # ======================
+    # Main processing loop
+    # ======================
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Handle single/multiple inputs
+    if isinstance(format, str): 
+        format = [format] * len(img_paths)
+    if isinstance(modality, str): 
+        modality = [modality] * len(img_paths)
+    if isinstance(site, str): 
+        site = [site] * len(img_paths)
+    if not isinstance(img_paths, list):
+        img_paths = [img_paths]
+        lab_paths = [lab_paths]
+    
+    for idx, (img_path, lab_path) in enumerate(zip(img_paths, lab_paths)):
+        # Extract names for saving
+        if format[idx] == 'dicom':
+            if isinstance(img_path, list):
+                img_name = pathlib.Path(img_path[0]).parent.name
+                parent_name = pathlib.Path(img_path[0]).parent.parent.name
+            else:
+                img_name = pathlib.Path(img_path).parent.name
+                parent_name = pathlib.Path(img_path).parent.parent.name
+        elif format[idx] == 'nifti':
+            if isinstance(img_path, list):
+                img_name = pathlib.Path(img_path[0]).stem.replace(".nii", "")
+                parent_name = pathlib.Path(img_path[0]).parent.name
+            else:
+                img_name = pathlib.Path(img_path).stem.replace(".nii", "")
+                parent_name = pathlib.Path(img_path).parent.name
+        else:
+            img_name = f"scan_{idx}"
+            parent_name = "unknown"
+        
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_qwen_features.json")
+        if feature_path.exists() and skip_exist:
+            print(f"✓ {feature_path.name} exists, skipping...")
+            continue
+        feature_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        print(f"\n[{idx+1}/{len(img_paths)}] Processing: {img_name}")
+
+        # ======================
+        # Structured Prompt with JSON Output
+        # ======================
+        ORGAN_LOCATION_PROMPT = f"""You are a medical imaging AI assistant analyzing {modality[idx]} scans for tumor localization.
+
+        You are given two views of the same tumor:
+        1. [FULL_SLICE] - Complete {modality[idx]} slice with a SEMI-TRANSPARENT RED OVERLAY showing the tumor region. The red overlay allows you to see both the tumor location AND the underlying tissue texture, shape, and margins.
+
+        2. [TUMOR_PATCH] - Zoomed-in view of the tumor with more OPAQUE RED OVERLAY for detailed analysis. The overlay preserves the tumor's shape, margins, and relationship to surrounding tissue.
+
+        Based on these images, identify which organ or anatomical structure contains this tumor. Consider:
+        - Tumor shape and margins visible through the overlay (smooth vs irregular)
+        - Location within the body (upper/lower abdomen, left/right, anterior/posterior)
+        - Relationship to anatomical landmarks visible beneath the overlay
+        - Tissue density and texture characteristics
+
+        Output ONLY a valid JSON object with exactly these fields:
+        {"organ": "organ_name", "confidence": 0.95, "reasoning": "brief explanation"}
+
+        Possible organs: liver, kidney_left, kidney_right, lung_left, lung_right, breast, pancreas, spleen, stomach, colon, small_bowel, bladder, prostate, uterus, ovary, cervix, bone, muscle, lymph_node, adrenal_gland, thyroid, or other
+
+        Example: {"organ": "liver", "confidence": 0.92, "reasoning": "Right upper quadrant location with smooth capsule visible through overlay"}
+        """
+        
+        # ======================
+        # Load image data
+        # ======================
+        is_CT = modality[idx] == 'CT'
+        ct_site = CT_SITES[site[idx]] if site and site[idx] in CT_SITES else None
+        
+        if format[idx] == 'dicom':
+            # DICOM loading - implement based on your existing function
+            from inference_utils.processing_utils import read_dicom_series
+            images, slice_axis, affine = read_dicom_series(img_path, is_CT, ct_site, keep_size=True)
+        elif format[idx] == 'nifti':
+            images, slice_axis, affine = read_nifti_inplane(
+                img_path, is_CT, ct_site, keep_size=True, 
+                return_spacing=True, resolution=resolution
+            )
+        else:
+            raise ValueError(f'Unsupported format: {format[idx]}')
+        
+        # ======================
+        # Load and process labels
+        # ======================
+        nii = nib.load(lab_path)
+        labels = nii.get_fdata()
+        label_affine = nii.affine
+        
+        _, _, voxel_spacing = get_orientation(label_affine)
+        if resolution is not None:
+            new_spacing = (resolution, resolution, resolution)
+            zoom_factors = tuple(os/ns for os, ns in zip(voxel_spacing, new_spacing))
+            labels = zoom(labels, zoom=zoom_factors, order=0)
+        
+        # Align label orientation with images
+        labels = np.moveaxis(labels, slice_axis, 0)
+        
+        if np.sum(labels > 0) == 0:
+            print(f"  ⚠ No tumor labels found, skipping...")
+            continue
+        
+        # ======================
+        # Get top slices by tumor area
+        # ======================
+        slice_areas = np.sum(labels > 0, axis=(1, 2))
+        top_indices = slice_areas.argsort()[::-1][:top_slices]
+        print(f"  Processing {len(top_indices)} slices with largest tumor areas")
+        
+        all_reports = []
+        all_embeddings = []
+        
+        for slice_idx, i in enumerate(top_indices):
+            print(f"    Slice {slice_idx+1}/{len(top_indices)} (index {i})...")
+            
+            img_array, _, _ = images[i]
+            mask = labels[i]
+            
+            if np.sum(mask) == 0:
+                continue
+            
+            # Dilate mask for better visualization
+            mask_dilated = dilate_mask(mask, k=dilation_mm)
+            
+            # Create overlayed full slice (more transparent for context)
+            overlayed_full = create_overlayed_slice(img_array, mask_dilated, alpha=0.3, color=(255, 50, 50))
+            
+            # Get bounding box coordinates for cropping
+            coords = np.argwhere(mask_dilated > 0)
+            if coords.size > 0:
+                ymin, xmin = coords.min(axis=0)
+                ymax, xmax = coords.max(axis=0)
+                
+                # Add padding for context
+                pad = dilation_mm * 2
+                h, w = mask_dilated.shape
+                xmin = max(0, xmin - pad)
+                ymin = max(0, ymin - pad)
+                xmax = min(w, xmax + pad)
+                ymax = min(h, ymax + pad)
+                
+                bbox = (xmin, ymin, xmax, ymax)
+                
+                # Create patch with mask overlay (more detailed)
+                patch_overlayed = create_patch_with_mask(
+                    overlayed_full, mask_dilated, bbox, 
+                    patch_size=(224, 224), alpha=0.6
+                )
+            else:
+                # Fallback if no mask found
+                patch_overlayed = overlayed_full.resize((224, 224))
+                bbox = None
+            
+            # ======================
+            # Multi-view inference with Qwen2.5-VL
+            # ======================
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "image": overlayed_full,
+                        },
+                        {
+                            "type": "text", 
+                            "text": f"[FULL_SLICE] Complete {modality[idx]} slice with semi-transparent red overlay showing tumor location."
+                        },
+                        {
+                            "type": "image",
+                            "image": patch_overlayed,
+                        },
+                        {
+                            "type": "text",
+                            "text": "[TUMOR_PATCH] Zoomed-in view of tumor with detailed overlay.\n\n" + ORGAN_LOCATION_PROMPT
+                        }
+                    ]
+                }
+            ]
+            
+            # Process with Qwen
+            try:
+                inputs = processor.apply_chat_template(
+                    messages,
+                    tokenize=True,
+                    add_generation_prompt=True,
+                    return_tensors="pt"
+                ).to(model.device)
+                
+                with torch.no_grad():
+                    outputs = model.generate(
+                        inputs,
+                        max_new_tokens=256,
+                        temperature=0.0,  # Deterministic for structured output
+                        do_sample=False,
+                        pad_token_id=processor.tokenizer.pad_token_id,
+                        repetition_penalty=1.0
+                    )
+                
+                response = processor.decode(outputs[0], skip_special_tokens=True)
+                
+                # Extract JSON from response
+                json_match = re.search(r'\{[^{}]*"organ"[^{}]*"confidence"[^{}]*"reasoning"[^{}]*\}', response)
+                if json_match:
+                    report_json = json.loads(json_match.group())
+                else:
+                    # Try more lenient parsing
+                    json_match = re.search(r'\{.*?\}', response)
+                    if json_match:
+                        report_json = json.loads(json_match.group())
+                    else:
+                        report_json = {"organ": "unknown", "confidence": 0.0, "reasoning": response[:200]}
+                
+                # Ensure required fields exist
+                if "organ" not in report_json:
+                    report_json["organ"] = "unknown"
+                if "confidence" not in report_json:
+                    report_json["confidence"] = 0.5
+                if "reasoning" not in report_json:
+                    report_json["reasoning"] = ""
+                
+                all_reports.append(report_json)
+                
+            except Exception as e:
+                print(f"      Error in inference: {e}")
+                all_reports.append({
+                    "organ": "error", 
+                    "confidence": 0.0, 
+                    "reasoning": f"Inference failed: {str(e)[:100]}"
+                })
+        
+        # ======================
+        # Generate embeddings and aggregate results
+        # ======================
+        if all_reports:
+            # Extract organ names for embedding
+            organ_texts = [r.get("organ", "unknown") for r in all_reports]
+            embeddings = encode_texts(organ_texts).tolist()
+            
+            # Confidence-weighted majority vote
+            organ_votes = {}
+            for r in all_reports:
+                organ = r.get("organ", "unknown")
+                conf = r.get("confidence", 0.5)
+                # Handle left/right kidney and lung separately
+                if organ == "kidney":
+                    organ_votes["kidney"] = organ_votes.get("kidney", 0) + conf
+                elif organ == "kidney_left":
+                    organ_votes["kidney_left"] = organ_votes.get("kidney_left", 0) + conf
+                elif organ == "kidney_right":
+                    organ_votes["kidney_right"] = organ_votes.get("kidney_right", 0) + conf
+                elif organ == "lung":
+                    organ_votes["lung"] = organ_votes.get("lung", 0) + conf
+                elif organ == "lung_left":
+                    organ_votes["lung_left"] = organ_votes.get("lung_left", 0) + conf
+                elif organ == "lung_right":
+                    organ_votes["lung_right"] = organ_votes.get("lung_right", 0) + conf
+                else:
+                    organ_votes[organ] = organ_votes.get(organ, 0) + conf
+            
+            final_organ = max(organ_votes, key=organ_votes.get) if organ_votes else "unknown"
+            avg_confidence = np.mean([r.get("confidence", 0) for r in all_reports])
+            
+            output = {
+                "image_name": img_name,
+                "parent_name": parent_name,
+                "top_slices": top_indices.tolist(),
+                "num_slices_processed": len(all_reports),
+                "structured_reports": all_reports,
+                "embeddings": embeddings,
+                "final_prediction": {
+                    "organ": final_organ,
+                    "confidence": float(avg_confidence),
+                    "voting_scores": organ_votes
+                },
+                "model": "Qwen2.5-VL-7B-Instruct",
+                "parameters": {
+                    "dilation_mm": dilation_mm,
+                    "top_slices": top_slices,
+                    "resolution": resolution
+                }
+            }
+        else:
+            output = {
+                "image_name": img_name,
+                "error": "No valid slices with tumor detected",
+                "model": "Qwen2.5-VL-7B-Instruct"
+            }
+        
+        # Save results
+        with open(feature_path, "w") as f:
+            json.dump(output, f, indent=2)
+        
+        print(f"  ✓ Saved to: {feature_path}")
+        if all_reports:
+            print(f"  → Final organ: {final_organ} (avg confidence: {avg_confidence:.2f})")
+    
+    print("\n✅ Processing complete!")
+    return
+
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
@@ -3263,6 +3709,9 @@ if __name__ == "__main__":
         )
     else:
         raise ValueError(f"Invalid feature mode: {args.feature_mode}")
+
+
+
 
 
 

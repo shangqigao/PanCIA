@@ -13,10 +13,10 @@ RADIOMICS:
   SAMPLING_RATE: 1 # set 0.01 for whole slice radiomics to reduce feature size, 1 for tumor radiomics
   SEGMENTATOR:
     VALUE: "BiomedParse"
-    CHOICES: ["expert", "nnUNet", "BiomedParse"]
+    CHOICES: ["expert", "nnUNet", "BiomedParse", "VoxTell"]
     OBJECT: "tumor" # or "tumor" or "organ"
   MODE:
-    VALUE: "LLaVA-Med"
+    VALUE: "Qwen-VL"
     CHOICES:
       [
         "pyradiomics",
@@ -26,7 +26,8 @@ RADIOMICS:
         "LVMMed",
         "FMCIB",
         "MedPLIB",
-        "LLaVA-Med"
+        "LLaVA-Med",
+        "Qwen-VL",
       ]
     SUFFIX:
       - "radiomics.npy"
