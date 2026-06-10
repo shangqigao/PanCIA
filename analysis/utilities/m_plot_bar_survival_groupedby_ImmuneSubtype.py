@@ -98,12 +98,54 @@ def parse_model_name(folder_name, file_name):
     name = f"{model} ({aggr})" if aggr else model
     return name, omics_type
 
+def bootstrap_cindex(
+    risk, event, duration,
+    n_boot=1000,
+    seed=42
+):
+    """
+    Bootstrap C-index with patient resampling.
+    Returns mean and CI.
+    """
+
+    rng = np.random.default_rng(seed)
+
+    n = len(risk)
+    scores = []
+
+    risk = np.array(risk)
+    event = np.array(event)
+    duration = np.array(duration)
+
+    for _ in range(n_boot):
+        idx = rng.integers(0, n, n)
+
+        try:
+            c = concordance_index(
+                event_times=duration[idx],
+                predicted_scores=-risk[idx],
+                event_observed=event[idx]
+            )
+            scores.append(c)
+        except Exception:
+            continue
+
+    if len(scores) == 0:
+        return np.nan, np.nan, np.nan
+
+    scores = np.array(scores)
+
+    return (
+        np.mean(scores),
+        np.percentile(scores, 2.5),
+        np.percentile(scores, 97.5)
+    )
 
 # ==============================================================================
 # Compute subtype-specific survival C-index
 # ==============================================================================
 def compute_subtype_cindex(data, immune_df, model_name, omics_type,
-                           min_samples=20, min_events=5):
+                           min_samples=20, min_events=5, n_boot=1000):
     """
     Compute C-index separately for each immune subtype.
 
@@ -194,10 +236,11 @@ def compute_subtype_cindex(data, immune_df, model_name, omics_type,
 
         # Compute subtype-specific C-index
         try:
-            cindex = concordance_index(
-                event_times=sub_duration,
-                predicted_scores=-sub_risk,   # higher risk = shorter survival
-                event_observed=sub_event
+            mean_c, low_c, high_c = bootstrap_cindex(
+                sub_risk,
+                sub_event,
+                sub_duration,
+                n_boot=n_boot
             )
         except Exception:
             continue
@@ -206,183 +249,20 @@ def compute_subtype_cindex(data, immune_df, model_name, omics_type,
             "Model": model_name,
             "Omics": omics_type,
             "Subtype": subtype,
-            "CIndex": cindex,
+            "CIndex_mean": mean_c,
+            "CIndex_low": low_c,
+            "CIndex_high": high_c,
             "N": len(idx),
             "Events": n_events
         })
 
     return subtype_results
 
-
-# ==============================================================================
-# Plot grouped bar chart for Radiopathomics models
-# ==============================================================================
-def plot_omics_grouped(
-    df,
-    metric,
-    output_dir,
-    sort_subtype="IFN-gamma Dominant",
-    omics="Radiomics"
-):
+def plot_best_omics_by_subtype_with_ci(df, metric, output_dir):
     """
-    Plot grouped bar chart for Radiopathomics models across immune subtypes.
-    Models are ordered according to performance in sort_subtype.
-    """
-
-    df = df[df["Omics"] == omics]
-
-    if df.empty:
-        print("No Radiopathomics data found.")
-        return
-
-    # Subset used for sorting
-    df_sub = df[df["Subtype"] == sort_subtype]
-
-    # For C-index, larger is better
-    ascending = False
-
-    # Sort models by performance in the chosen subtype
-    model_order = (
-        df_sub.sort_values(metric, ascending=ascending)["Model"]
-        .tolist()
-    )
-
-    # Append models missing from sort_subtype
-    missing_models = [
-        m for m in df["Model"].unique()
-        if m not in model_order
-    ]
-    model_order.extend(missing_models)
-
-    # Preserve subtype order as they appear
-    subtypes = list(df["Subtype"].unique())
-
-    n_models = len(model_order)
-    n_subtypes = len(subtypes)
-
-    # Colors by subtype
-    cmap = plt.get_cmap("tab10").colors
-    subtype_colors = {
-        subtype: cmap[i % len(cmap)]
-        for i, subtype in enumerate(subtypes)
-    }
-
-    total_width = 0.8
-    bar_width = total_width / n_subtypes
-    x = np.arange(n_models)
-
-    plt.figure(figsize=(max(12, 1.5 * n_models), 10))
-
-    all_vals = []
-
-    for i, subtype in enumerate(subtypes):
-        vals = []
-
-        for model in model_order:
-            row = df[
-                (df["Model"] == model) &
-                (df["Subtype"] == subtype)
-            ]
-
-            if len(row) > 0:
-                vals.append(row[metric].values[0])
-            else:
-                vals.append(np.nan)
-
-        all_vals.extend([v for v in vals if not np.isnan(v)])
-
-        plt.bar(
-            x + i * bar_width,
-            vals,
-            width=bar_width,
-            color=subtype_colors[subtype],
-            label=subtype
-        )
-
-        # Value labels
-        for xi, v in zip(x + i * bar_width, vals):
-            if not np.isnan(v):
-                plt.text(
-                    xi,
-                    v,
-                    f"{v:.3f}",
-                    ha="center",
-                    va="bottom",
-                    fontsize=8,
-                    rotation=90
-                )
-
-    # X axis
-    plt.xticks(
-        x + total_width / 2 - bar_width / 2,
-        model_order,
-        rotation=45,
-        ha="right",
-        fontsize=10
-    )
-
-    # Labels
-    plt.ylabel("Concordance Index (C-index)")
-    plt.title(f"{omics} Models by Immune Subtype")
-
-    # Reference line
-    plt.axhline(0.5, linestyle="--", linewidth=1, alpha=0.6)
-
-    # Dynamic y-axis
-    if len(all_vals) > 0:
-        ymin = min(min(all_vals), 0.4)
-        ymax = max(all_vals)
-        padding = max(0.02, 0.05 * (ymax - ymin + 1e-6))
-        plt.ylim(ymin - padding, min(1.0, ymax + padding))
-
-    # Legend
-    legend_handles = [
-        mpatches.Patch(color=color, label=subtype)
-        for subtype, color in subtype_colors.items()
-    ]
-
-    plt.legend(
-        handles=legend_handles,
-        title="Immune Subtype",
-        bbox_to_anchor=(1.02, 1),
-        loc="upper left"
-    )
-
-    plt.tight_layout()
-
-    save_path = os.path.join(
-        output_dir,
-        f"{omics}_{metric}_grouped.png"
-    )
-    plt.savefig(save_path, dpi=300, bbox_inches="tight")
-    plt.close()
-
-    print(f"Saved grouped bar plot → {save_path}")
-
-def plot_best_omics_by_subtype(df, metric, output_dir):
-    """
-    For each immune subtype:
-        - Select the best Radiomics model
-        - Select the best Pathomics model
-        - Select the best Radiopathomics model
-
-    Plot grouped bars where:
-        - X axis = immune subtypes
-        - Bars = Best Radiomics / Best Pathomics / Best Radiopathomics
-        - Legend = omics type
-        - Each bar is annotated with:
-            1. metric value
-            2. best model name
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Must contain columns:
-            ["Model", "Omics", "Subtype", metric]
-    metric : str
-        Example: "CIndex", "R2", "MAE", "RMSE"
-    output_dir : str
-        Directory to save figure
+    For each subtype:
+        show best Radiomics / Pathomics / Radiopathomics
+        with bootstrap CI error bars
     """
 
     if df.empty:
@@ -424,7 +304,7 @@ def plot_best_omics_by_subtype(df, metric, output_dir):
                 continue
 
             best = (
-                sub.sort_values(metric, ascending=ascending)
+                sub.sort_values(f"{metric}_mean", ascending=ascending)
                    .iloc[0]
             )
 
@@ -444,35 +324,22 @@ def plot_best_omics_by_subtype(df, metric, output_dir):
     best_df.to_csv(csv_path, index=False)
     print(f"Saved best-model table → {csv_path}")
 
-    # ---------------------------------------------------------------------
-    # Plot configuration
-    # ---------------------------------------------------------------------
-    subtypes = sorted(best_df["Subtype"].unique())
-    n_subtypes = len(subtypes)
-    n_omics = len(omics_types)
+    subtypes = sorted(df["Subtype"].unique())
 
-    # Nature-style, colorblind-friendly palette (inspired by common Nature figures)
     color_map = {
-        "Radiomics": "#0072B2",       # deep blue
-        "Pathomics": "#009E73",       # bluish green
-        "Radiopathomics": "#D55E00",  # vermillion / orange-red
+        "Radiomics": "#0072B2",
+        "Pathomics": "#009E73",
+        "Radiopathomics": "#D55E00",
     }
 
-    total_width = 0.8
-    bar_width = total_width / n_omics
-    x = np.arange(n_subtypes)
+    x = np.arange(len(subtypes))
+    bar_width = 0.25
 
-    # Increase figure height to accommodate model names
-    plt.figure(figsize=(max(10, 1.8 * n_subtypes), 10))
+    plt.figure(figsize=(max(10, len(subtypes)*1.5), 8))
 
-    all_vals = []
-
-    # ---------------------------------------------------------------------
-    # Draw bars
-    # ---------------------------------------------------------------------
     for i, omics in enumerate(omics_types):
-        vals = []
-        model_names = []
+
+        means, lows, highs = [], [], []
 
         for subtype in subtypes:
             row = best_df[
@@ -481,110 +348,188 @@ def plot_best_omics_by_subtype(df, metric, output_dir):
             ]
 
             if row.empty:
-                vals.append(np.nan)
-                model_names.append("")
+                means.append(np.nan)
+                lows.append(np.nan)
+                highs.append(np.nan)
             else:
-                vals.append(row.iloc[0][metric])
-                model_names.append(row.iloc[0]["Model"])
+                means.append(row.iloc[0][f"{metric}_mean"])
+                lows.append(row.iloc[0][f"{metric}_low"])
+                highs.append(row.iloc[0][f"{metric}_high"])
 
-        all_vals.extend([v for v in vals if not np.isnan(v)])
+        means = np.array(means)
+        lows = np.array(lows)
+        highs = np.array(highs)
 
-        bars = plt.bar(
+        yerr = np.vstack([
+            means - lows,
+            highs - means
+        ])
+
+        plt.bar(
             x + i * bar_width,
-            vals,
+            means,
             width=bar_width,
             color=color_map[omics],
-            label=f"Best {omics}"
+            label=omics,
+            yerr=yerr,
+            capsize=4
         )
 
-        # Annotate each bar with value + model name
-        for bar, val, model_name in zip(bars, vals, model_names):
-            if np.isnan(val):
-                continue
-
-            x_pos = bar.get_x() + bar.get_width() / 2
-            y_pos = bar.get_height()
-
-            # Optional shortening of very long model names
-            display_name = str(model_name)
-            if len(display_name) > 30:
-                display_name = display_name[:27] + "..."
-
-            plt.text(
-                x_pos,
-                y_pos,
-                f"{val:.3f}\n{display_name}",
-                ha="center",
-                va="bottom",
-                fontsize=7,
-                rotation=90
-            )
-
-    # ---------------------------------------------------------------------
-    # Axis formatting
-    # ---------------------------------------------------------------------
-    plt.xticks(
-        x + total_width / 2 - bar_width / 2,
-        subtypes,
-        rotation=30,
-        ha="right",
-        fontsize=10
-    )
-
-    if metric == "CIndex":
-        plt.ylabel("Concordance Index (C-index)")
-        plt.axhline(0.5, linestyle="--", linewidth=1, alpha=0.6)
-    else:
-        plt.ylabel(metric)
-
-    plt.title(f"Best Model Performance by Immune Subtype ({metric})")
-
-    # ---------------------------------------------------------------------
-    # Dynamic y-axis limits with extra headroom for annotations
-    # ---------------------------------------------------------------------
-    if len(all_vals) > 0:
-        ymin = min(all_vals)
-        ymax = max(all_vals)
-
-        if metric == "CIndex":
-            ymin = min(ymin, 0.4)
-
-        data_range = ymax - ymin
-        padding = max(0.02, 0.05 * (data_range + 1e-6))
-
-        # Extra top room for model-name annotations
-        top_padding = max(0.08, 0.20 * (data_range + 1e-6))
-
-        if metric in ["MAE", "RMSE"]:
-            plt.ylim(ymin - padding, ymax + top_padding)
-        else:
-            upper = ymax + top_padding
-            if metric in ["CIndex", "R2"]:
-                upper = min(1.0, upper)
-            plt.ylim(ymin - padding, upper)
-
-    # ---------------------------------------------------------------------
-    # Legend
-    # ---------------------------------------------------------------------
-    plt.legend(
-        title="Best Model Type",
-        bbox_to_anchor=(1.02, 1),
-        loc="upper left"
-    )
+    plt.xticks(x, subtypes, rotation=30, ha="right")
+    plt.ylabel(f"{metric} (bootstrap mean ± 95% CI)")
+    plt.axhline(0.5, linestyle="--", alpha=0.6)
+    plt.title("Best Models by Immune Subtype (Bootstrap CI)")
+    plt.legend()
 
     plt.tight_layout()
 
-    # ---------------------------------------------------------------------
-    # Save figure
-    # ---------------------------------------------------------------------
-    save_path = os.path.join(
-        output_dir,
-        f"Best_Omics_by_Subtype_{metric}.png"
-    )
+    save_path = os.path.join(output_dir, "Subtype_Best_models_bootstrap_CI.png")
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.close()
 
-    print(f"Saved grouped bar plot → {save_path}")
+    print(f"Saved → {save_path}")
+
+def compute_overall_bootstrap(df_raw, n_boot=1000):
+    """
+    Pool all patients across subtypes.
+    Compute model-level bootstrap C-index.
+    """
+
+    results = []
+
+    for (model, omics), sub in df_raw.groupby(["Model", "Omics"]):
+
+        mean_c, low_c, high_c = bootstrap_cindex(
+            sub["risk"].values,
+            sub["event"].values,
+            sub["duration"].values,
+            n_boot=n_boot
+        )
+
+        results.append({
+            "Model": model,
+            "Omics": omics,
+            "CIndex_mean": mean_c,
+            "CIndex_low": low_c,
+            "CIndex_high": high_c,
+            "N": len(sub)
+        })
+
+    return pd.DataFrame(results)
+
+def plot_best_omics_overall_with_ci(df, metric, output_dir):
+
+    if df.empty:
+        print("Input dataframe is empty.")
+        return
+
+    # ---------------------------------------------------------------------
+    # Determine whether larger or smaller values are better
+    # ---------------------------------------------------------------------
+    if metric in ["MAE", "RMSE"]:
+        ascending = True      # smaller is better
+    else:
+        ascending = False     # larger is better (CIndex, R2)
+
+    # ---------------------------------------------------------------------
+    # Omics categories
+    # ---------------------------------------------------------------------
+    omics_types = ["Radiomics", "Pathomics", "Radiopathomics"]
+
+    df = df[df["Omics"].isin(omics_types)].copy()
+
+    if df.empty:
+        print("No Radiomics/Pathomics/Radiopathomics data found.")
+        return
+
+    # ---------------------------------------------------------------------
+    # Select best model for each omics
+    # ---------------------------------------------------------------------
+    best_rows = []
+
+    for omics in omics_types:
+        sub = df[df["Omics"] == omics]
+
+        if sub.empty:
+            continue
+
+        best = sub.sort_values(f"{metric}_mean", ascending=ascending).iloc[0]
+
+        best_rows.append(best)
+
+    if len(best_rows) == 0:
+        print("No valid results found.")
+        return
+
+    best_df = pd.DataFrame(best_rows)
+
+    # Save table of selected best models
+    csv_path = os.path.join(
+        output_dir,
+        f"Best_Models_{metric}.csv"
+    )
+    best_df.to_csv(csv_path, index=False)
+    print(f"Saved best-model table → {csv_path}")
+
+    omics_types = ["Radiomics", "Pathomics", "Radiopathomics"]
+
+    color_map = {
+        "Radiomics": "#0072B2",
+        "Pathomics": "#009E73",
+        "Radiopathomics": "#D55E00",
+    }
+
+    n_omics = len(omics_types)
+    bar_width = 1
+
+    plt.figure(figsize=(max(4, n_omics*1.5), 8))
+
+    x = np.arange(n_omics)
+
+    means, lows, highs = [], [], []
+    colors, labels, models = [], [], []
+    
+    for omics in omics_types:
+        sub = best_df[best_df["Omics"] == omics]
+
+        if not sub.empty:
+            means.append(sub.iloc[0][f"{metric}_mean"])
+            lows.append(sub.iloc[0][f"{metric}_low"])
+            highs.append(sub.iloc[0][f"{metric}_high"])
+            models.append(sub.iloc[0]["Model"])
+            colors.append(color_map[omics])
+            labels.append(omics)
+
+
+    means = np.array(means)
+    lows = np.array(lows)
+    highs = np.array(highs)
+
+    yerr = np.vstack([means - lows, highs - means])
+
+    plt.bar(
+        x,
+        means,
+        width=bar_width,
+        color=colors,
+        label=labels,
+        yerr=yerr,
+        capsize=3
+    )
+
+    plt.xticks(x, models, rotation=45, ha="right")
+    plt.ylabel(f"{metric} (bootstrap mean ± 95% CI)")
+    plt.axhline(0.5, linestyle="--", alpha=0.6)
+    plt.title("Overall Model Performance (Bootstrap)")
+
+    plt.legend()
+    plt.tight_layout()
+
+    save_path = os.path.join(output_dir, "Overall_best_models_bootstrap.png")
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    print(f"Saved → {save_path}")
 
 # ==============================================================================
 # Find all survival endpoints
@@ -608,6 +553,7 @@ for survival_dir in survival_dirs:
     os.makedirs(output_dir, exist_ok=True)
 
     subtype_results = []
+    overall_rows = []
 
     # Walk all result files
     for root, dirs, files in os.walk(survival_dir):
@@ -646,6 +592,15 @@ for survival_dir in survival_dirs:
 
             subtype_results.extend(results)
 
+            for i in range(len(data["subject"])):
+                overall_rows.append({
+                    "Model": model_name,
+                    "Omics": omics_type,
+                    "risk": float(np.array(data["risk"]).flatten()[i]),
+                    "event": int(np.array(data["event"]).flatten()[i]),
+                    "duration": float(np.array(data["duration"]).flatten()[i]),
+                })
+
     # Skip if nothing valid
     if len(subtype_results) == 0:
         print(f"No valid subtype results for {survival_name}")
@@ -662,18 +617,27 @@ for survival_dir in survival_dirs:
     sub_df.to_csv(csv_path, index=False)
     print(f"Saved table → {csv_path}")
 
-    # Plot grouped Radiopathomics chart
-    plot_omics_grouped(
+    # plot best subtype omics chart with CI
+    plot_best_omics_by_subtype_with_ci(
         sub_df,
         metric="CIndex",
-        output_dir=output_dir,
-        sort_subtype="IFN-gamma Dominant",
-        omics="Radiopathomics"
+        output_dir=output_dir
     )
 
-    # plot best omics chart
-    plot_best_omics_by_subtype(
-        sub_df,
+    overall_df_raw = pd.DataFrame(overall_rows)
+    overall_df = compute_overall_bootstrap(overall_df_raw, n_boot=1000)
+    
+    # Save table
+    csv_path = os.path.join(
+        output_dir,
+        f"{survival_name}_CIndex_overall.csv"
+    )
+    overall_df.to_csv(csv_path, index=False)
+    print(f"Saved table → {csv_path}")
+
+    # plot best overall omics chart with CI
+    plot_best_omics_overall_with_ci(
+        overall_df,
         metric="CIndex",
         output_dir=output_dir
     )
