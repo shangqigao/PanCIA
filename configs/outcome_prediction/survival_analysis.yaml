@@ -19,7 +19,16 @@ RADIOMICS:
   MODE:
     VALUE: "LLaVA-Med"
     CHOICES:
-      ["None", "pyradiomics", "SegVol", "BiomedParse", "BayesBP", "LVMMed", "FMCIB", "LLaVA-Med"]
+      [
+        "None",
+        "pyradiomics",
+        "SegVol",
+        "BiomedParse",
+        "BayesBP",
+        "LVMMed",
+        "FMCIB",
+        "LLaVA-Med",
+      ]
   AGGREGATION: False
   AGGREGATED_MODE:
     VALUE: "None"
@@ -66,3 +75,5 @@ PREDICTION:
     NUM_FEATURES: 256
   N_BOOTSTRAPS: False
   USE_GRAPH_PROPERTIES: False
+  N_PCA_COMPONENTS: null
+  FUSION_METHOD: "weighted"

@@ -46,6 +46,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.utils import resample
+from sklearn.decomposition import PCA
 
 from utilities.m_utils import mkdir, load_json, create_pbar, rm_n_mkdir, reset_logging
 
@@ -1149,6 +1150,7 @@ def load_radiopathomics(
             prop_dict_list = [load_json(p) for p in prop_paths]
             prop_X = [prepare_graph_properties(d, omics="pathomics") for d in prop_dict_list]
             prop_X = pd.DataFrame(prop_X)
+            # radiopathomics_X = [radiopathomics_X, prop_X]
             radiopathomics_X = pd.concat([radiopathomics_X, prop_X], axis=1)
     elif isinstance(save_radiopathomics_dir, dict):
         radiomics_X = load_radiomics(
@@ -1266,6 +1268,1161 @@ def select_multivariate_cox_features(
     return selected_names
 
 
+# def survival(
+#     split_path,
+#     radiomics_keys=None,
+#     pathomics_keys=None,
+#     omics="radiopathomics", 
+#     save_omics_dir=None,
+#     outcome=None,
+#     n_jobs=32,
+#     radiomics_aggregation=False,
+#     radiomics_aggregated_mode=None,
+#     pathomics_aggregation=False,
+#     pathomics_aggregated_mode=None,
+#     model="CoxPH",
+#     scorer="cindex",
+#     feature_selection=True,
+#     feature_var_threshold=1e-4,
+#     n_selected_features=64,
+#     n_bootstraps=100,
+#     use_graph_properties=False,
+#     save_results_dir=None
+#     ):
+#     splits = joblib.load(split_path)
+#     predict_results = {}
+#     survival_results = {
+#         "raw_subject": [], "raw_risk": [], 
+#         "subject": [], "risk": [], 
+#         "event": [], "duration": []
+#     }
+#     ml_model_name = f"{omics}_" + \
+#         f"radio+{radiomics_aggregated_mode}_" + \
+#         f"patho+{pathomics_aggregated_mode}_" + \
+#         f"model+{model}_scorer+{scorer}"
+#     model_dir = os.path.join(save_results_dir, ml_model_name)
+#     os.makedirs(model_dir, exist_ok=True)
+#     for split_idx, split in enumerate(splits):
+#         print(f"Performing cross-validation on fold {split_idx}...")
+#         raw_data_tr, raw_data_va, raw_data_te = split["train"], split["valid"], split["test"]
+#         raw_data_tr = raw_data_tr + raw_data_va
+
+#         data_tr = [p for p in raw_data_tr if p[1] is not None]
+#         data_te = [p for p in raw_data_te if p[1] is not None]
+
+#         tr_y = np.array([p[1] for p in data_tr])
+#         tr_y = pd.DataFrame({'event': tr_y[:, 1].astype(bool), 'duration': np.maximum(tr_y[:, 0], 1e-6)})
+#         tr_y = tr_y.to_records(index=False)
+#         te_y = np.array([p[1] for p in data_te])
+#         te_y = pd.DataFrame({'event': te_y[:, 1].astype(bool), 'duration': np.maximum(te_y[:, 0], 1e-6)})
+#         te_y = te_y.to_records(index=False)
+
+#         # Concatenate multi-omics if required
+#         if omics == "radiopathomics":
+#             tr_X = load_radiopathomics(
+#                 data=data_tr,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiopathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             te_X = load_radiopathomics(
+#                 data=data_te,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiopathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             raw_te_X = load_radiopathomics(
+#                 data=raw_data_te,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiopathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+#         elif omics == "pathomics":
+#             pathomics_tr_X = load_pathomics(
+#                 data=data_tr,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_pathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             pathomics_te_X = load_pathomics(
+#                 data=data_te,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_pathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             tr_X, te_X = pathomics_tr_X, pathomics_te_X
+
+#             raw_te_X = load_pathomics(
+#                 data=raw_data_te,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_pathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+#         elif omics == "radiomics":
+#             radiomics_tr_X = load_radiomics(
+#                 data=data_tr,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             radiomics_te_X = load_radiomics(
+#                 data=data_te,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             tr_X, te_X = radiomics_tr_X, radiomics_te_X
+#             raw_te_X = load_radiomics(
+#                 data=raw_data_te,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+#         else:
+#             raise NotImplementedError
+        
+#         # df_prop = df_prop.apply(zscore)
+#         if hasattr(tr_X,'shape'):
+#             print("Selected training omics:", tr_X.shape)
+#             print(tr_X.head())
+#         if hasattr(te_X,'shape'):
+#             print("Selected testing omics:", te_X.shape)
+#             print(te_X.head())
+#         if hasattr(raw_te_X,'shape'):
+#             print("Selected raw testing omics:", raw_te_X.shape)
+#             print(raw_te_X.head())
+
+#         # -----------------------------
+#         # Feature selection
+#         # -----------------------------
+#         # if feature_selection:
+#         #     print("\n=== Feature Selection ===")
+
+#         #     fs_kwargs = dict(
+#         #         alpha=0.01,
+#         #         l1_ratio=0.7,
+#         #         max_features=n_selected_features,
+#         #         variance_threshold=feature_var_threshold,
+#         #         coef_threshold=1e-6,
+#         #         verbose=True,
+#         #     )
+
+#         #     # --------------------------------------------------
+#         #     # CASE 1️⃣ Multimodal input (list of DataFrames)
+#         #     # --------------------------------------------------
+#         #     if isinstance(tr_X, list):
+
+#         #         selected_modalities = []
+#         #         tr_selected = []
+#         #         te_selected = []
+#         #         raw_te_selected = []
+
+#         #         for i, (m_tr, m_te, m_raw) in enumerate(zip(tr_X, te_X, raw_te_X)):
+#         #             print(f"\nSelecting modality {i+1} features...")
+                    
+#         #             selected = select_multivariate_cox_features(m_tr, tr_y, **fs_kwargs)
+
+#         #             print(f"Modality {i+1}: kept {len(selected)} features")
+
+#         #             tr_selected.append(m_tr[selected])
+#         #             te_selected.append(m_te[selected])
+#         #             raw_te_selected.append(m_raw[selected])
+#         #             selected_modalities.append(selected)
+
+#         #         # concatenate AFTER selection
+#         #         tr_X = pd.concat(tr_selected, axis=1)
+#         #         te_X = pd.concat(te_selected, axis=1)
+#         #         raw_te_X = pd.concat(raw_te_selected, axis=1)
+
+#         #         print("\nFinal concatenated shape:", tr_X.shape)
+#         #         print(tr_X.head())
+
+#         #     # --------------------------------------------------
+#         #     # CASE 2️⃣ Unimodal input (DataFrame)
+#         #     # --------------------------------------------------
+#         #     else:
+#         #         selected = select_multivariate_cox_features(tr_X, tr_y, **fs_kwargs)
+
+#         #         print(f"Selected {len(selected)} features")
+
+#         #         tr_X = tr_X[selected]
+#         #         te_X = te_X[selected]
+#         #         raw_te_X = raw_te_X[selected]
+
+
+#         # feature selection
+#         if feature_selection:
+#             print("Selecting features...")
+#             selector = VarianceThreshold(threshold=1e-4)
+#             selector.fit(tr_X[tr_y["event"]])
+#             selected_names = selector.get_feature_names_out().tolist()
+#             num_removed = len(tr_X.columns) - len(selected_names)
+#             print(f"Removing {num_removed} low-variance features...")
+#             tr_X = tr_X[selected_names]
+#             te_X = te_X[selected_names]
+#             raw_te_X = raw_te_X[selected_names]
+#             print("Selecting univariate feature...")
+#             univariate_results = []
+#             for name in list(tr_X.columns):
+#                 cph = CoxPHFitter()
+#                 df = pd.DataFrame(
+#                     {
+#                         "duration": tr_y["duration"], 
+#                         "event": tr_y["event"],
+#                         name: tr_X[name] 
+#                     }
+#                 )
+#                 try:
+#                     cph.fit(df, "duration", "event")
+#                 except Exception as e:
+#                     print(f"Skipping {name} | Error: {e}")
+#                     continue
+#                 summary = cph.summary
+#                 univariate_results.append({
+#                     'name': name,
+#                     'coef': summary['coef'].values[0],
+#                     'HR': summary['exp(coef)'].values[0],
+#                     'p_value': summary['p'].values[0],
+#                     'CI_low': summary['exp(coef) lower 95%'].values[0],
+#                     'CI_high': summary['exp(coef) upper 95%'].values[0]
+#                 })
+#             results_df = pd.DataFrame(univariate_results)
+#             selected_names = results_df[results_df['p_value'] < 0.2]['name'].tolist()
+#             print(f"Selected features: {len(selected_names)}")
+#             tr_X = tr_X[selected_names]
+#             te_X = te_X[selected_names]
+#             raw_te_X = raw_te_X[selected_names]
+
+#         # model fitting
+#         print("Fitting survival model...")
+#         if model == "Coxnet":
+#             predictor = coxnet(split_idx, tr_X, tr_y, scorer, n_jobs)
+#         elif model == "RSF":
+#             predictor = rsf(split_idx, tr_X, tr_y, scorer, n_jobs)
+#         elif model == "CoxPH":
+#             predictor = coxph(split_idx, tr_X, tr_y, scorer, n_jobs)
+#         elif model == "GradientBoost":
+#             predictor = gradientboosting(split_idx, tr_X, tr_y, scorer, n_jobs)
+#         elif model == "IPCRidge":
+#             predictor = ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs)
+#         elif model == "FastSVM":
+#             predictor = fastsvm(split_idx, tr_X, tr_y, scorer, n_jobs, rank_ratio=1)
+
+#         # bootstrapping
+#         if n_bootstraps > 0:
+#             print("Bootstrapping...")
+#             stable_coefs = np.zeros(len(selected_names))
+#             for _ in range(n_bootstraps):
+#                 tr_x_s, tr_y_s = resample(tr_X, tr_y)
+#                 predictor.fit(tr_x_s, tr_y_s)
+#                 if scorer == "cindex":
+#                     stable_coefs += (predictor.named_steps["model"].coef_ != 0).astype(int)
+#                 else:
+#                     stable_coefs += (predictor.named_steps["model"].estimator_.coef_ != 0).astype(int)
+#             stable_coefs = stable_coefs / n_bootstraps
+#             final_coefs = np.where(stable_coefs > 0.8)[0]
+#             stable_names = [selected_names[i] for i in final_coefs.tolist()]
+#             tr_X = tr_X[stable_names]
+#             te_X = te_X[stable_names]
+#             raw_te_X = raw_te_X[stable_names]
+#             predictor.fit(tr_X, tr_y)
+
+#         # save model and feature names
+#         model_path = os.path.join(model_dir, f"{ml_model_name}_fold{split_idx}.joblib")
+
+#         joblib.dump({
+#             "model": predictor,
+#             "features": list(tr_X.columns)
+#         }, model_path)
+
+#         print(f"Saved model to {model_path}")
+
+#         raw_subject_ids = [p[0][0] for p in raw_data_te]
+#         survival_results["raw_subject"] += raw_subject_ids
+#         raw_risk_scores = predictor.predict(raw_te_X)
+#         survival_results["raw_risk"] += raw_risk_scores.tolist()
+
+#         subject_ids = [p[0][0] for p in data_te]
+#         survival_results["subject"] += subject_ids
+#         risk_scores = predictor.predict(te_X)
+#         survival_results["risk"] += risk_scores.tolist()
+#         survival_results["event"] += te_y["event"].astype(int).tolist()
+#         survival_results["duration"] += te_y["duration"].tolist()
+#         C_index = concordance_index_censored(te_y["event"], te_y["duration"], risk_scores)[0]
+#         C_index_ipcw = concordance_index_ipcw(tr_y, te_y, risk_scores)[0]
+
+#         lower, upper = np.percentile(te_y["duration"], [10, 90])
+#         times = np.arange(lower, upper + 1, 7)
+#         auc, mean_auc = cumulative_dynamic_auc(tr_y, te_y, risk_scores, times)
+#         if hasattr(predictor, "predict_survival_function"):
+#             try:
+#                 survs = predictor.predict_survival_function(te_X)
+#                 preds = np.asarray([[fn(t) for t in times] for fn in survs])
+#                 IBS = integrated_brier_score(tr_y, te_y, preds, times)
+#             except Exception as e:
+#                 IBS = 0
+#         else:
+#             IBS = 0
+#         scores_dict = {
+#             "C-index": C_index,
+#             "C-index-IPCW": C_index_ipcw,
+#             "Mean AUC": mean_auc,
+#             "IBS": IBS
+#         }
+
+#         fig, ax = plt.subplots(figsize=(9, 6))
+#         ax.plot(times, auc)
+#         ax.set_xscale("linear")
+#         ax.set_ylabel("time-dependent AUC")
+#         ax.set_xlabel("days from enrollment")
+#         ax.axhline(mean_auc, linestyle="--")
+#         ax.grid(True)
+#         plt.savefig(f"{relative_path}/figures/plots/AUC_fold{split_idx}.jpg") 
+
+#         print(f"Updating regression results on fold {split_idx}")
+#         predict_results.update({f"Fold {split_idx}": scores_dict})
+#     print(predict_results)
+#     for k in scores_dict.keys():
+#         arr = np.array([v[k] for v in predict_results.values() if v[k] != 0])
+#         print(f"CV {k} mean+std", arr.mean(), arr.std())
+#     # plot survival curve
+#     pd_risk = pd.DataFrame({k: survival_results[k] for k in ["risk", "event", "duration"]})
+#     mean_risk = pd_risk["risk"].mean()
+#     dem = pd_risk["risk"] > mean_risk
+
+#     fig, ax = plt.subplots(figsize=(10, 8))
+#     plt.rcParams.update({'font.size': 12})
+#     kmf1 = KaplanMeierFitter()
+#     kmf1.fit(pd_risk["duration"][dem], event_observed=pd_risk["event"][dem], label="High risk")
+#     kmf1.plot_survival_function(ax=ax)
+
+#     kmf2 = KaplanMeierFitter()
+#     kmf2.fit(pd_risk["duration"][~dem], event_observed=pd_risk["event"][~dem], label="Low risk")
+#     kmf2.plot_survival_function(ax=ax)
+#     add_at_risk_counts(kmf1, kmf2, ax=ax)
+#     plt.tight_layout()
+
+#     # logrank test
+#     test_results = logrank_test(
+#         pd_risk["duration"][dem], pd_risk["duration"][~dem], 
+#         pd_risk["event"][dem], pd_risk["event"][~dem], 
+#         alpha=.99
+#     )
+#     test_results.print_summary()
+#     pvalue = test_results.p_value
+#     print(f"p-value: {pvalue}")
+#     predict_results.update({'p-value': pvalue})
+#     ax.set_ylabel("Survival Probability")
+#     # plt.subplots_adjust(left=0.2, bottom=0.2)
+#     plt.savefig(f"{relative_path}/figures/plots/{omics}_survival_curve.png")
+
+#     #save predicted results
+#     save_path = f"{save_results_dir}/{ml_model_name}_results.json"
+#     with open(save_path, "w") as f:
+#         json.dump(survival_results, f, indent=4)
+
+#     # save metrics
+#     save_path = f"{save_results_dir}/{ml_model_name}_metrics.json"
+#     with open(save_path, "w") as f:
+#         json.dump(predict_results, f, indent=4)
+
+#     return
+
+class SurvivalPipeline:
+    """Unified pipeline that combines preprocessing, PCA, and survival model"""
+    
+    def __init__(self, scaler=None, pca=None, predictor=None, feature_names=None, 
+                 fusion_weights=None, fusion_method='average'):
+        self.scaler = scaler
+        self.pca = pca
+        self.predictor = predictor
+        self.feature_names = feature_names
+        self.fusion_weights = fusion_weights
+        self.fusion_method = fusion_method
+        
+    def transform(self, X):
+        """Apply preprocessing and PCA"""
+        # Scale
+        if self.scaler is not None:
+            X_scaled = self.scaler.transform(X)
+        else:
+            X_scaled = X
+            
+        # Apply PCA if exists
+        if self.pca is not None:
+            X_transformed = self.pca.transform(X_scaled)
+        else:
+            X_transformed = X_scaled
+            
+        return X_transformed
+    
+    def predict(self, X):
+        """Predict risk scores"""
+        X_transformed = self.transform(X)
+        return self.predictor.predict(X_transformed)
+    
+    def predict_single(self, X):
+        """Predict for single patient"""
+        return self.predict(X)[0] if hasattr(self.predict(X), '__len__') else self.predict(X)
+
+class MultiModalPipeline:
+    """Pipeline for multi-modal fusion (Strategy 3 & 4)"""
+    
+    def __init__(self, radio_pipeline=None, patho_pipeline=None, 
+                 fusion_method='average', fusion_weights=None):
+        self.radio_pipeline = radio_pipeline
+        self.patho_pipeline = patho_pipeline
+        self.fusion_method = fusion_method
+        self.fusion_weights = fusion_weights
+        
+    def predict(self, radio_X, patho_X):
+        """Predict using both modalities"""
+        # Get individual predictions
+        radio_risk = self.radio_pipeline.predict(radio_X)
+        patho_risk = self.patho_pipeline.predict(patho_X)
+        
+        # Fuse
+        return (radio_risk * self.fusion_weights['radiomics'] + 
+                patho_risk * self.fusion_weights['pathomics'])
+    
+    def predict_single(self, radio_X, patho_X):
+        """Predict for single patient"""
+        result = self.predict(radio_X, patho_X)
+        return result[0] if hasattr(result, '__len__') else result
+
+class SurvivalAnalyzer:
+    def __init__(self, save_results_dir, relative_path="."):
+        self.save_results_dir = save_results_dir
+        self.relative_path = relative_path
+        
+    def load_data_for_fold(self, split, omics, radiomics_aggregation, radiomics_aggregated_mode,
+                           radiomics_keys, pathomics_aggregation, pathomics_aggregated_mode,
+                           pathomics_keys, use_graph_properties, n_jobs, save_omics_dir, outcome):
+        """Load data for a specific fold based on omics type"""
+        split_idx, split_data = split
+        raw_data_tr, raw_data_va, raw_data_te = split_data["train"], split_data["valid"], split_data["test"]
+        raw_data_tr = raw_data_tr + raw_data_va
+        
+        data_tr = [p for p in raw_data_tr if p[1] is not None]
+        data_te = [p for p in raw_data_te if p[1] is not None]
+        
+        tr_y = np.array([p[1] for p in data_tr])
+        tr_y = pd.DataFrame({'event': tr_y[:, 1].astype(bool), 'duration': np.maximum(tr_y[:, 0], 1e-6)})
+        tr_y = tr_y.to_records(index=False)
+        
+        te_y = np.array([p[1] for p in data_te])
+        te_y = pd.DataFrame({'event': te_y[:, 1].astype(bool), 'duration': np.maximum(te_y[:, 0], 1e-6)})
+        te_y = te_y.to_records(index=False)
+        
+        if omics == "radiopathomics":
+            tr_X = load_radiopathomics(
+                data=data_tr, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                pathomics_aggregation=pathomics_aggregation, pathomics_aggregated_mode=pathomics_aggregated_mode,
+                pathomics_keys=pathomics_keys, use_graph_properties=use_graph_properties,
+                n_jobs=n_jobs, save_radiopathomics_dir=save_omics_dir, outcome=outcome
+            )
+            te_X = load_radiopathomics(
+                data=data_te, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                pathomics_aggregation=pathomics_aggregation, pathomics_aggregated_mode=pathomics_aggregated_mode,
+                pathomics_keys=pathomics_keys, use_graph_properties=use_graph_properties,
+                n_jobs=n_jobs, save_radiopathomics_dir=save_omics_dir, outcome=outcome
+            )
+            raw_te_X = load_radiopathomics(
+                data=raw_data_te, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                pathomics_aggregation=pathomics_aggregation, pathomics_aggregated_mode=pathomics_aggregated_mode,
+                pathomics_keys=pathomics_keys, use_graph_properties=use_graph_properties,
+                n_jobs=n_jobs, save_radiopathomics_dir=save_omics_dir, outcome=outcome
+            )
+        elif omics == "pathomics":
+            tr_X = load_pathomics(
+                data=data_tr, pathomics_aggregation=pathomics_aggregation,
+                pathomics_aggregated_mode=pathomics_aggregated_mode, pathomics_keys=pathomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_pathomics_dir=save_omics_dir, outcome=outcome
+            )
+            te_X = load_pathomics(
+                data=data_te, pathomics_aggregation=pathomics_aggregation,
+                pathomics_aggregated_mode=pathomics_aggregated_mode, pathomics_keys=pathomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_pathomics_dir=save_omics_dir, outcome=outcome
+            )
+            raw_te_X = load_pathomics(
+                data=raw_data_te, pathomics_aggregation=pathomics_aggregation,
+                pathomics_aggregated_mode=pathomics_aggregated_mode, pathomics_keys=pathomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_pathomics_dir=save_omics_dir, outcome=outcome
+            )
+        elif omics == "radiomics":
+            tr_X = load_radiomics(
+                data=data_tr, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_radiomics_dir=save_omics_dir, outcome=outcome
+            )
+            te_X = load_radiomics(
+                data=data_te, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_radiomics_dir=save_omics_dir, outcome=outcome
+            )
+            raw_te_X = load_radiomics(
+                data=raw_data_te, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_radiomics_dir=save_omics_dir, outcome=outcome
+            )
+        else:
+            raise NotImplementedError
+            
+        return data_tr, data_te, raw_data_te, tr_X, te_X, raw_te_X, tr_y, te_y
+    
+    def apply_pca(self, X_train, X_test, X_raw, n_components=None, variance_ratio=0.95):
+        """Apply PCA for dimensionality reduction"""
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        X_raw_scaled = scaler.transform(X_raw)
+        
+        if n_components is None:
+            pca = PCA(n_components=variance_ratio)
+        else:
+            pca = PCA(n_components=n_components)
+            
+        X_train_pca = pca.fit_transform(X_train_scaled)
+        X_test_pca = pca.transform(X_test_scaled)
+        X_raw_pca = pca.transform(X_raw_scaled)
+        
+        # Convert to DataFrame with column names
+        X_train_pca = pd.DataFrame(X_train_pca, columns=[f'PC{i+1}' for i in range(X_train_pca.shape[1])])
+        X_test_pca = pd.DataFrame(X_test_pca, columns=[f'PC{i+1}' for i in range(X_test_pca.shape[1])])
+        X_raw_pca = pd.DataFrame(X_raw_pca, columns=[f'PC{i+1}' for i in range(X_raw_pca.shape[1])])
+        
+        return X_train_pca, X_test_pca, X_raw_pca, pca, scaler
+    
+    def train_model(self, split_idx, tr_X, tr_y, scorer, n_jobs, model_name="CoxPH"):
+        """Train a survival model"""
+        if model_name == "Coxnet":
+            predictor = coxnet(split_idx, tr_X, tr_y, scorer, n_jobs)
+        elif model_name == "RSF":
+            predictor = rsf(split_idx, tr_X, tr_y, scorer, n_jobs)
+        elif model_name == "CoxPH":
+            predictor = coxph(split_idx, tr_X, tr_y, scorer, n_jobs)
+        elif model_name == "GradientBoost":
+            predictor = gradientboosting(split_idx, tr_X, tr_y, scorer, n_jobs)
+        elif model_name == "IPCRidge":
+            predictor = ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs)
+        elif model_name == "FastSVM":
+            predictor = fastsvm(split_idx, tr_X, tr_y, scorer, n_jobs, rank_ratio=1)
+        else:
+            raise ValueError(f"Unknown model: {model_name}")
+        return predictor
+    
+    def feature_selection(self, tr_X, te_X, raw_te_X, tr_y, feature_var_threshold=1e-4, p_threshold=0.2):
+        """Perform feature selection"""
+        print("Selecting features...")
+        selector = VarianceThreshold(threshold=feature_var_threshold)
+        selector.fit(tr_X)
+        selected_names = selector.get_feature_names_out().tolist()
+        num_removed = len(tr_X.columns) - len(selected_names)
+        print(f"Removing {num_removed} low-variance features...")
+        tr_X = tr_X[selected_names]
+        te_X = te_X[selected_names]
+        raw_te_X = raw_te_X[selected_names]
+        
+        print("Selecting univariate features...")
+        univariate_results = []
+        for name in list(tr_X.columns):
+            cph = CoxPHFitter()
+            df = pd.DataFrame({
+                "duration": tr_y["duration"], 
+                "event": tr_y["event"],
+                name: tr_X[name] 
+            })
+            try:
+                cph.fit(df, "duration", "event")
+                summary = cph.summary
+                univariate_results.append({
+                    'name': name,
+                    'coef': summary['coef'].values[0],
+                    'p_value': summary['p'].values[0],
+                })
+            except Exception as e:
+                print(f"Skipping {name} | Error: {e}")
+                continue
+                
+        results_df = pd.DataFrame(univariate_results)
+        selected_names = results_df[results_df['p_value'] < p_threshold]['name'].tolist()
+        print(f"Selected features: {len(selected_names)}")
+        tr_X = tr_X[selected_names]
+        te_X = te_X[selected_names]
+        raw_te_X = raw_te_X[selected_names]
+        
+        return tr_X, te_X, raw_te_X
+    
+    def bootstrap_stabilization(self, tr_X, tr_y, predictor, selected_names, n_bootstraps=100, stability_threshold=0.8):
+        """Perform bootstrap feature stabilization"""
+        if n_bootstraps <= 0:
+            return tr_X, te_X, raw_te_X, predictor
+            
+        print("Bootstrapping...")
+        stable_coefs = np.zeros(len(selected_names))
+        for _ in range(n_bootstraps):
+            tr_x_s, tr_y_s = resample(tr_X, tr_y)
+            temp_predictor = self.train_model(0, tr_x_s, tr_y_s, "cindex", 1, predictor.named_steps["model"].__class__.__name__)
+            if hasattr(temp_predictor.named_steps["model"], "coef_"):
+                stable_coefs += (temp_predictor.named_steps["model"].coef_ != 0).astype(int)
+            else:
+                stable_coefs += (temp_predictor.named_steps["model"].estimator_.coef_ != 0).astype(int)
+                
+        stable_coefs = stable_coefs / n_bootstraps
+        final_coefs = np.where(stable_coefs > stability_threshold)[0]
+        stable_names = [selected_names[i] for i in final_coefs.tolist()]
+        tr_X = tr_X[stable_names]
+        te_X = te_X[stable_names]
+        raw_te_X = raw_te_X[stable_names]
+        predictor.fit(tr_X, tr_y)
+        
+        return tr_X, te_X, raw_te_X, predictor
+    
+    def evaluate_predictions(self, tr_y, te_X, te_y, risk_scores, predictor=None, times=None):
+        """Evaluate survival predictions"""
+        C_index = concordance_index_censored(te_y["event"], te_y["duration"], risk_scores)[0]
+        C_index_ipcw = concordance_index_ipcw(tr_y, te_y, risk_scores)[0]
+        
+        if times is None:
+            lower, upper = np.percentile(te_y["duration"], [10, 90])
+            times = np.arange(lower, upper + 1, 7)
+            
+        auc, mean_auc = cumulative_dynamic_auc(tr_y, te_y, risk_scores, times)
+        
+        if predictor is not None and hasattr(predictor, "predict_survival_function"):
+            try:
+                survs = predictor.predict_survival_function(te_X)
+                preds = np.asarray([[fn(t) for t in times] for fn in survs])
+                IBS = integrated_brier_score(tr_y, te_y, preds, times)
+            except Exception as e:
+                print(f"Error computing IBS: {e}")
+                IBS = 0
+        else:
+            IBS = 0
+            
+        return {
+            "C-index": C_index,
+            "C-index-IPCW": C_index_ipcw,
+            "Mean AUC": mean_auc,
+            "IBS": IBS
+        }, times
+    
+    def strategy_1_direct_concat(self, split, split_idx, omics_params, model_params):
+        """Strategy 1: Direct concatenation of radiomics and pathomics"""
+        print(f"\n=== Strategy 1: Direct Concatenation ===")
+        
+        # Load data
+        data_tr, data_te, raw_data_te, tr_X, te_X, raw_te_X, tr_y, te_y = self.load_data_for_fold(
+            split, **omics_params
+        )
+        
+        # Feature selection
+        if model_params['feature_selection']:
+            tr_X, te_X, raw_te_X = self.feature_selection(
+                tr_X, te_X, raw_te_X, tr_y,
+                model_params['feature_var_threshold'],
+                model_params.get('p_threshold', 0.2)
+            )
+        
+        # Train model
+        predictor = self.train_model(
+            split_idx, tr_X, tr_y, model_params['scorer'],
+            model_params['n_jobs'], model_params['model']
+        )
+
+        # Create pipeline
+        pipeline = SurvivalPipeline(
+            scaler=None,
+            pca=None,
+            predictor=predictor,
+            feature_names=list(tr_X.columns),
+            fusion_method='direct'
+        )
+            
+        # Bootstrap stabilization
+        if model_params['n_bootstraps'] > 0:
+            tr_X, te_X, raw_te_X, predictor = self.bootstrap_stabilization(
+                tr_X, te_X, predictor, list(tr_X.columns),
+                model_params['n_bootstraps']
+            )
+        
+        # Predict and evaluate
+        risk_scores = predictor.predict(te_X)
+        scores_dict, times = self.evaluate_predictions(tr_y, te_X, te_y, risk_scores, predictor)
+        
+        return pipeline, risk_scores, scores_dict
+    
+    def strategy_2_pca_concat(self, split, split_idx, omics_params, model_params, n_pca_components=None):
+        """Strategy 2: PCA on concatenated radiomics and pathomics"""
+        print(f"\n=== Strategy 2: PCA on Concatenated Features ===")
+        
+        # Load data
+        data_tr, data_te, raw_data_te, tr_X, te_X, raw_te_X, tr_y, te_y = self.load_data_for_fold(
+            split, **omics_params
+        )
+        
+        # Apply PCA
+        tr_X_pca, te_X_pca, raw_te_X_pca, pca_model, scaler = self.apply_pca(
+            tr_X, te_X, raw_te_X, n_components=n_pca_components
+        )
+        print(f"PCA reduced dimensions from {tr_X.shape[1]} to {tr_X_pca.shape[1]}")
+        
+        # Train model on PCA features
+        predictor = self.train_model(
+            split_idx, tr_X_pca, tr_y, model_params['scorer'],
+            model_params['n_jobs'], model_params['model']
+        )
+
+        # Create pipeline
+        pipeline = SurvivalPipeline(
+            scaler=scaler,
+            pca=pca_model,
+            predictor=predictor,
+            feature_names=list(tr_X_pca.columns),
+            fusion_method='pca_concat'
+        )
+        
+        # Predict and evaluate
+        risk_scores = predictor.predict(te_X_pca)
+        scores_dict, times = self.evaluate_predictions(tr_y, te_X_pca, te_y, risk_scores, predictor)
+        
+        return pipeline, risk_scores, scores_dict
+    
+    def strategy_3_separate_fusion(self, split, split_idx, omics_params, model_params, fusion_method='average'):
+        """Strategy 3: Separate ML models for radiomics and pathomics with result fusion"""
+        print(f"\n=== Strategy 3: Separate Models with Result Fusion ===")
+        
+        # Load radiomics data
+        radiomics_params = omics_params.copy()
+        radiomics_params['omics'] = 'radiomics'
+        _, _, _, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
+            split, **radiomics_params
+        )
+        
+        # Load pathomics data
+        pathomics_params = omics_params.copy()
+        pathomics_params['omics'] = 'pathomics'
+        _, _, _, tr_X_patho, te_X_patho, raw_te_X_patho, _, _ = self.load_data_for_fold(
+            split, **pathomics_params
+        )
+        
+        # Feature selection for each modality
+        if model_params['feature_selection']:
+            tr_X_radio, te_X_radio, _ = self.feature_selection(
+                tr_X_radio, te_X_radio, raw_te_X_radio, tr_y,
+                model_params['feature_var_threshold']
+            )
+            tr_X_patho, te_X_patho, _ = self.feature_selection(
+                tr_X_patho, te_X_patho, raw_te_X_patho, tr_y,
+                model_params['feature_var_threshold']
+            )
+        
+        # Train separate models
+        predictor_radio = self.train_model(
+            split_idx, tr_X_radio, tr_y, model_params['scorer'],
+            model_params['n_jobs'], model_params['model']
+        )
+        predictor_patho = self.train_model(
+            split_idx, tr_X_patho, tr_y, model_params['scorer'],
+            model_params['n_jobs'], model_params['model']
+        )
+
+        # Create individual pipelines
+        radio_pipeline = SurvivalPipeline(
+            scaler=None, pca=None, predictor=predictor_radio,
+            feature_names=list(tr_X_radio.columns)
+        )
+        patho_pipeline = SurvivalPipeline(
+            scaler=None, pca=None, predictor=predictor_patho,
+            feature_names=list(tr_X_patho.columns)
+        )
+        
+        # Get predictions
+        risk_scores_radio = predictor_radio.predict(te_X_radio)
+        risk_scores_patho = predictor_patho.predict(te_X_patho)
+        
+        # Fuse predictions
+        fusion_weights = {}
+        if fusion_method == 'average':
+            fusion_weights['radiomics'] = 0.5
+            fusion_weights['pathomics'] = 0.5
+            risk_scores = fusion_weights['radiomics'] * risk_scores_radio + fusion_weights['pathomics'] * risk_scores_patho
+        elif fusion_method == 'weighted':
+            # Use C-index as weight
+            tr_risk_scores_radio = predictor_radio.predict(tr_X_radio)
+            tr_risk_scores_patho = predictor_patho.predict(tr_X_patho)
+            c_index_radio = concordance_index_censored(tr_y["event"], tr_y["duration"], tr_risk_scores_radio)[0]
+            c_index_patho = concordance_index_censored(tr_y["event"], tr_y["duration"], tr_risk_scores_patho)[0]
+            total = c_index_radio + c_index_patho
+            fusion_weights['radiomics'] = c_index_radio / total
+            fusion_weights['pathomics'] = c_index_patho / total
+            risk_scores = fusion_weights['radiomics'] * risk_scores_radio + fusion_weights['pathomics'] * risk_scores_patho
+        else:
+            raise ValueError(f"Unknown fusion method: {fusion_method}")
+        
+        # Create multi-modal pipeline
+        multi_pipeline = MultiModalPipeline(
+            radio_pipeline=radio_pipeline,
+            patho_pipeline=patho_pipeline,
+            fusion_method=fusion_method,
+            fusion_weights=fusion_weights
+        )
+        
+        # Evaluate fused predictions
+        scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
+        scores_dict['fusion_method'] = fusion_method
+        
+        return multi_pipeline, risk_scores, scores_dict
+    
+    def strategy_4_pca_separate_fusion(self, split, split_idx, omics_params, model_params, 
+                                        n_pca_components=None, fusion_method='average'):
+        """Strategy 4: PCA on each modality separately, then separate models, then fusion"""
+        print(f"\n=== Strategy 4: Separate PCA + Separate Models + Fusion ===")
+        
+        # Load radiomics data
+        radiomics_params = omics_params.copy()
+        radiomics_params['omics'] = 'radiomics'
+        _, _, _, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
+            split, **radiomics_params
+        )
+        
+        # Load pathomics data
+        pathomics_params = omics_params.copy()
+        pathomics_params['omics'] = 'pathomics'
+        _, _, _, tr_X_patho, te_X_patho, raw_te_X_patho, _, _ = self.load_data_for_fold(
+            split, **pathomics_params
+        )
+        
+        # Apply PCA separately
+        tr_X_radio_pca, te_X_radio_pca, _, pca_radio, scaler_radio = self.apply_pca(
+            tr_X_radio, te_X_radio, raw_te_X_radio, n_components=n_pca_components
+        )
+        tr_X_patho_pca, te_X_patho_pca, _, pca_patho, scaler_patho = self.apply_pca(
+            tr_X_patho, te_X_patho, raw_te_X_patho, n_components=n_pca_components
+        )
+        
+        print(f"Radiomics PCA: {tr_X_radio.shape[1]} -> {tr_X_radio_pca.shape[1]}")
+        print(f"Pathomics PCA: {tr_X_patho.shape[1]} -> {tr_X_patho_pca.shape[1]}")
+        
+        # Train separate models on PCA features
+        predictor_radio = self.train_model(
+            split_idx, tr_X_radio_pca, tr_y, model_params['scorer'],
+            model_params['n_jobs'], model_params['model']
+        )
+        predictor_patho = self.train_model(
+            split_idx, tr_X_patho_pca, tr_y, model_params['scorer'],
+            model_params['n_jobs'], model_params['model']
+        )
+
+        # Create individual pipelines
+        radio_pipeline = SurvivalPipeline(
+            scaler=scaler_radio,
+            pca=pca_radio,
+            predictor=predictor_radio,
+            feature_names=list(tr_X_radio_pca.columns)
+        )
+        patho_pipeline = SurvivalPipeline(
+            scaler=scaler_patho,
+            pca=pca_patho,
+            predictor=predictor_patho,
+            feature_names=list(tr_X_patho_pca.columns)
+        )
+        
+        # Get predictions
+        risk_scores_radio = predictor_radio.predict(te_X_radio_pca)
+        risk_scores_patho = predictor_patho.predict(te_X_patho_pca)
+        
+        # Fuse predictions
+        fusion_weights = {}
+        if fusion_method == 'average':
+            fusion_weights['radiomics'] = 0.5
+            fusion_weights['pathomics'] = 0.5
+            risk_scores = fusion_weights['radiomics'] * risk_scores_radio + fusion_weights['pathomics'] * risk_scores_patho
+        elif fusion_method == 'weighted':
+            # Use C-index as weight
+            tr_risk_scores_radio = predictor_radio.predict(tr_X_radio)
+            tr_risk_scores_patho = predictor_patho.predict(tr_X_patho)
+            c_index_radio = concordance_index_censored(tr_y["event"], tr_y["duration"], tr_risk_scores_radio)[0]
+            c_index_patho = concordance_index_censored(tr_y["event"], tr_y["duration"], tr_risk_scores_patho)[0]
+            total = c_index_radio + c_index_patho
+            fusion_weights['radiomics'] = c_index_radio / total
+            fusion_weights['pathomics'] = c_index_patho / total
+            risk_scores = fusion_weights['radiomics'] * risk_scores_radio + fusion_weights['pathomics'] * risk_scores_patho
+        else:
+            raise ValueError(f"Unknown fusion method: {fusion_method}")
+        
+        # Create multi-modal pipeline
+        multi_pipeline = MultiModalPipeline(
+            radio_pipeline=radio_pipeline,
+            patho_pipeline=patho_pipeline,
+            fusion_method=fusion_method,
+            fusion_weights=fusion_weights
+        )
+        
+        # Evaluate
+        scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
+        scores_dict['fusion_method'] = fusion_method
+        
+        return multi_pipeline, risk_scores, scores_dict
+    
+    def plot_survival_curve(self, survival_results, omics, strategy_name, pvalue):
+        """Plot survival curve"""
+        pd_risk = pd.DataFrame({k: survival_results[k] for k in ["risk", "event", "duration"]})
+        mean_risk = pd_risk["risk"].mean()
+        dem = pd_risk["risk"] > mean_risk
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        plt.rcParams.update({'font.size': 12})
+        
+        kmf1 = KaplanMeierFitter()
+        kmf1.fit(pd_risk["duration"][dem], event_observed=pd_risk["event"][dem], label="High risk")
+        kmf1.plot_survival_function(ax=ax)
+        
+        kmf2 = KaplanMeierFitter()
+        kmf2.fit(pd_risk["duration"][~dem], event_observed=pd_risk["event"][~dem], label="Low risk")
+        kmf2.plot_survival_function(ax=ax)
+        
+        add_at_risk_counts(kmf1, kmf2, ax=ax)
+        plt.tight_layout()
+        ax.set_ylabel("Survival Probability")
+        ax.set_title(f"{omics} - {strategy_name}\np-value: {pvalue:.4f}")
+        plt.savefig(f"{self.relative_path}/figures/plots/{omics}_{strategy_name}_survival_curve.png")
+        plt.close()
+    
+    def run_all_strategies(self, split_path, omics="radiopathomics", save_omics_dir=None,
+                           radiomics_aggregation=False, radiomics_aggregated_mode=None,
+                           radiomics_keys=None, pathomics_aggregation=False,
+                           pathomics_aggregated_mode=None, pathomics_keys=None,
+                           use_graph_properties=False, n_jobs=32, outcome=None,
+                           model="CoxPH", scorer="cindex", feature_selection=True,
+                           feature_var_threshold=1e-4, n_selected_features=64,
+                           n_bootstraps=100, n_pca_components=None, fusion_method='weighted',
+                           save_results_dir=None):
+        """Run all four strategies and save results"""
+        
+        splits = joblib.load(split_path)
+        
+        # Prepare parameters
+        omics_params = {
+            'omics': omics,
+            'radiomics_aggregation': radiomics_aggregation,
+            'radiomics_aggregated_mode': radiomics_aggregated_mode,
+            'radiomics_keys': radiomics_keys,
+            'pathomics_aggregation': pathomics_aggregation,
+            'pathomics_aggregated_mode': pathomics_aggregated_mode,
+            'pathomics_keys': pathomics_keys,
+            'use_graph_properties': use_graph_properties,
+            'n_jobs': n_jobs,
+            'save_omics_dir': save_omics_dir,
+            'outcome': outcome
+        }
+        
+        model_params = {
+            'model': model,
+            'scorer': scorer,
+            'feature_selection': feature_selection,
+            'feature_var_threshold': feature_var_threshold,
+            'n_selected_features': n_selected_features,
+            'n_bootstraps': n_bootstraps,
+            'n_jobs': n_jobs
+        }
+        
+        if omics in ['radiomics', 'pathomics']:
+            strategies = {
+                'Strategy1_DirectConcat': self.strategy_1_direct_concat,
+                'Strategy2_PCA_Concat': lambda s, idx, op, mp: self.strategy_2_pca_concat(s, idx, op, mp, n_pca_components)
+            }
+        elif omics == 'radiopathomics':
+            strategies = {
+                'Strategy1_DirectConcat': self.strategy_1_direct_concat,
+                'Strategy2_PCA_Concat': lambda s, idx, op, mp: self.strategy_2_pca_concat(s, idx, op, mp, n_pca_components),
+                'Strategy3_Separate_Fusion': lambda s, idx, op, mp: self.strategy_3_separate_fusion(s, idx, op, mp, fusion_method),
+                'Strategy4_PCA_Separate_Fusion': lambda s, idx, op, mp: self.strategy_4_pca_separate_fusion(s, idx, op, mp, n_pca_components, fusion_method)
+            }
+        else:
+            raise ValueError(f"{omics} is not supported yet")
+        
+        ml_model_name = f"{omics}_" + \
+            f"radio+{radiomics_aggregated_mode}_" + \
+            f"patho+{pathomics_aggregated_mode}_" + \
+            f"model+{model}_scorer+{scorer}"
+
+        all_results = {}
+        
+        for strategy_name, strategy_func in strategies.items():
+            print(f"\n{'='*60}")
+            print(f"Running {strategy_name}")
+            print(f"{'='*60}")
+            
+            strategy_results = {
+                "predict_results": {},
+                "survival_results": {"raw_subject": [], "raw_risk": [], "subject": [], "risk": [], "event": [], "duration": []},
+                "cv_scores": [],
+                "pvalues": []
+            }
+            
+            model_dir = os.path.join(save_results_dir, f"{ml_model_name}_{strategy_name}")
+            os.makedirs(model_dir, exist_ok=True)
+            
+            for split_idx, split in enumerate(splits):
+                print(f"\n--- Fold {split_idx} ---")
+                
+                # Run strategy
+                try:
+                    pipeline, risk_scores, scores_dict = strategy_func(
+                        (split_idx, split), split_idx, omics_params, model_params
+                    )
+                    
+                    # Store results
+                    data_tr, data_te, raw_data_te, _, _, raw_te_X, tr_y, te_y = self.load_data_for_fold(
+                        (split_idx, split), **omics_params
+                    )
+
+                    raw_risk_scores = pipeline.predict(raw_te_X)
+                    
+                    strategy_results["predict_results"][f"Fold {split_idx}"] = scores_dict
+                    strategy_results["cv_scores"].append(scores_dict)
+                    
+                    # Store survival data
+                    subject_ids = [p[0][0] for p in data_te]
+                    raw_subject_ids = [p[0][0] for p in raw_data_te]
+                    
+                    strategy_results["survival_results"]["raw_subject"] += raw_subject_ids
+                    strategy_results["survival_results"]["raw_risk"] += raw_risk_scores.tolist()
+                    strategy_results["survival_results"]["subject"] += subject_ids
+                    strategy_results["survival_results"]["risk"] += risk_scores.tolist()
+                    strategy_results["survival_results"]["event"] += te_y["event"].astype(int).tolist()
+                    strategy_results["survival_results"]["duration"] += te_y["duration"].tolist()
+                    
+                    # Save model
+                    model_path = os.path.join(model_dir, f"fold{split_idx}_model.joblib")
+                    joblib.dump({"pipeline": pipeline}, model_path)
+                    
+                except Exception as e:
+                    print(f"Error in fold {split_idx}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
+            
+            # Compute cross-validation statistics
+            if strategy_results["cv_scores"]:
+                cv_stats = {}
+                for metric in strategy_results["cv_scores"][0].keys():
+                    values = [score[metric] for score in strategy_results["cv_scores"] if score.get(metric, 0) != 0]
+                    if values:
+                        cv_stats[metric] = {"mean": np.mean(values), "std": np.std(values)}
+                
+                # Log-rank test on aggregated data
+                pd_risk = pd.DataFrame({
+                    k: strategy_results["survival_results"][k] 
+                    for k in ["risk", "event", "duration"]
+                })
+                mean_risk = pd_risk["risk"].mean()
+                dem = pd_risk["risk"] > mean_risk
+                
+                test_results = logrank_test(
+                    pd_risk["duration"][dem], pd_risk["duration"][~dem],
+                    pd_risk["event"][dem], pd_risk["event"][~dem],
+                    alpha=.99
+                )
+                pvalue = test_results.p_value
+                strategy_results["pvalues"].append(pvalue)
+                
+                # Save plot
+                self.plot_survival_curve(strategy_results["survival_results"], omics, strategy_name, pvalue)
+                
+                #save predicted results
+                save_path = f"{save_results_dir}/{ml_model_name}_{strategy_name}_results.json"
+                with open(save_path, "w") as f:
+                    json.dump(strategy_results["survival_results"], f, indent=4)
+
+                # save metrics
+                save_path = f"{save_results_dir}/{ml_model_name}_{strategy_name}_metrics.json"
+                with open(save_path, "w") as f:
+                    json.dump({
+                        "cv_results": strategy_results["predict_results"],
+                        "cv_statistics": cv_stats,
+                        "logrank_pvalue": pvalue
+                    }, f, indent=4)
+                
+                all_results[strategy_name] = {
+                    "cv_statistics": cv_stats,
+                    "logrank_pvalue": pvalue
+                }
+                
+                print(f"\n{strategy_name} Results:")
+                for metric, stats in cv_stats.items():
+                    print(f"  {metric}: {stats['mean']:.4f} ± {stats['std']:.4f}")
+                print(f"  Log-rank p-value: {pvalue:.4f}")
+        
+        # Save comparison summary
+        comparison_path = f"{save_results_dir}/{ml_model_name}_strategies.json"
+        with open(comparison_path, "w") as f:
+            json.dump(all_results, f, indent=4)
+        
+        return all_results
+
+# Modified main function for backward compatibility
 def survival(
     split_path,
     radiomics_keys=None,
@@ -1285,397 +2442,45 @@ def survival(
     n_selected_features=64,
     n_bootstraps=100,
     use_graph_properties=False,
-    save_results_dir=None
+    save_results_dir=None,
+    n_pca_components=None,
+    fusion_method='weighted'
     ):
-    splits = joblib.load(split_path)
-    predict_results = {}
-    survival_results = {
-        "raw_subject": [], "raw_risk": [], 
-        "subject": [], "risk": [], 
-        "event": [], "duration": []
-    }
-    ml_model_name = f"{omics}_" + \
-        f"radio+{radiomics_aggregated_mode}_" + \
-        f"patho+{pathomics_aggregated_mode}_" + \
-        f"model+{model}_scorer+{scorer}"
-    model_dir = os.path.join(save_results_dir, ml_model_name)
-    os.makedirs(model_dir, exist_ok=True)
-    for split_idx, split in enumerate(splits):
-        print(f"Performing cross-validation on fold {split_idx}...")
-        raw_data_tr, raw_data_va, raw_data_te = split["train"], split["valid"], split["test"]
-        raw_data_tr = raw_data_tr + raw_data_va
-
-        data_tr = [p for p in raw_data_tr if p[1] is not None]
-        data_te = [p for p in raw_data_te if p[1] is not None]
-
-        tr_y = np.array([p[1] for p in data_tr])
-        tr_y = pd.DataFrame({'event': tr_y[:, 1].astype(bool), 'duration': np.maximum(tr_y[:, 0], 1e-6)})
-        tr_y = tr_y.to_records(index=False)
-        te_y = np.array([p[1] for p in data_te])
-        te_y = pd.DataFrame({'event': te_y[:, 1].astype(bool), 'duration': np.maximum(te_y[:, 0], 1e-6)})
-        te_y = te_y.to_records(index=False)
-
-        # Concatenate multi-omics if required
-        if omics == "radiopathomics":
-            tr_X = load_radiopathomics(
-                data=data_tr,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            te_X = load_radiopathomics(
-                data=data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            raw_te_X = load_radiopathomics(
-                data=raw_data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-        elif omics == "pathomics":
-            pathomics_tr_X = load_pathomics(
-                data=data_tr,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            pathomics_te_X = load_pathomics(
-                data=data_te,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            tr_X, te_X = pathomics_tr_X, pathomics_te_X
-
-            raw_te_X = load_pathomics(
-                data=raw_data_te,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-        elif omics == "radiomics":
-            radiomics_tr_X = load_radiomics(
-                data=data_tr,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            radiomics_te_X = load_radiomics(
-                data=data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            tr_X, te_X = radiomics_tr_X, radiomics_te_X
-            raw_te_X = load_radiomics(
-                data=raw_data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-        else:
-            raise NotImplementedError
-        
-        # df_prop = df_prop.apply(zscore)
-        if hasattr(tr_X,'shape'):
-            print("Selected training omics:", tr_X.shape)
-            print(tr_X.head())
-        if hasattr(te_X,'shape'):
-            print("Selected testing omics:", te_X.shape)
-            print(te_X.head())
-        if hasattr(raw_te_X,'shape'):
-            print("Selected raw testing omics:", raw_te_X.shape)
-            print(raw_te_X.head())
-
-        # -----------------------------
-        # Feature selection
-        # -----------------------------
-        # if feature_selection:
-        #     print("\n=== Feature Selection ===")
-
-        #     fs_kwargs = dict(
-        #         alpha=0.01,
-        #         l1_ratio=0.7,
-        #         max_features=n_selected_features,
-        #         variance_threshold=feature_var_threshold,
-        #         coef_threshold=1e-6,
-        #         verbose=True,
-        #     )
-
-        #     # --------------------------------------------------
-        #     # CASE 1️⃣ Multimodal input (list of DataFrames)
-        #     # --------------------------------------------------
-        #     if isinstance(tr_X, list):
-
-        #         selected_modalities = []
-        #         tr_selected = []
-        #         te_selected = []
-        #         raw_te_selected = []
-
-        #         for i, (m_tr, m_te, m_raw) in enumerate(zip(tr_X, te_X, raw_te_X)):
-        #             print(f"\nSelecting modality {i+1} features...")
-                    
-        #             selected = select_multivariate_cox_features(m_tr, tr_y, **fs_kwargs)
-
-        #             print(f"Modality {i+1}: kept {len(selected)} features")
-
-        #             tr_selected.append(m_tr[selected])
-        #             te_selected.append(m_te[selected])
-        #             raw_te_selected.append(m_raw[selected])
-        #             selected_modalities.append(selected)
-
-        #         # concatenate AFTER selection
-        #         tr_X = pd.concat(tr_selected, axis=1)
-        #         te_X = pd.concat(te_selected, axis=1)
-        #         raw_te_X = pd.concat(raw_te_selected, axis=1)
-
-        #         print("\nFinal concatenated shape:", tr_X.shape)
-        #         print(tr_X.head())
-
-        #     # --------------------------------------------------
-        #     # CASE 2️⃣ Unimodal input (DataFrame)
-        #     # --------------------------------------------------
-        #     else:
-        #         selected = select_multivariate_cox_features(tr_X, tr_y, **fs_kwargs)
-
-        #         print(f"Selected {len(selected)} features")
-
-        #         tr_X = tr_X[selected]
-        #         te_X = te_X[selected]
-        #         raw_te_X = raw_te_X[selected]
-
-
-        # feature selection
-        if feature_selection:
-            print("Selecting features...")
-            selector = VarianceThreshold(threshold=1e-4)
-            selector.fit(tr_X[tr_y["event"]])
-            selected_names = selector.get_feature_names_out().tolist()
-            num_removed = len(tr_X.columns) - len(selected_names)
-            print(f"Removing {num_removed} low-variance features...")
-            tr_X = tr_X[selected_names]
-            te_X = te_X[selected_names]
-            raw_te_X = raw_te_X[selected_names]
-            print("Selecting univariate feature...")
-            univariate_results = []
-            for name in list(tr_X.columns):
-                cph = CoxPHFitter()
-                df = pd.DataFrame(
-                    {
-                        "duration": tr_y["duration"], 
-                        "event": tr_y["event"],
-                        name: tr_X[name] 
-                    }
-                )
-                try:
-                    cph.fit(df, "duration", "event")
-                except Exception as e:
-                    print(f"Skipping {name} | Error: {e}")
-                    continue
-                summary = cph.summary
-                univariate_results.append({
-                    'name': name,
-                    'coef': summary['coef'].values[0],
-                    'HR': summary['exp(coef)'].values[0],
-                    'p_value': summary['p'].values[0],
-                    'CI_low': summary['exp(coef) lower 95%'].values[0],
-                    'CI_high': summary['exp(coef) upper 95%'].values[0]
-                })
-            results_df = pd.DataFrame(univariate_results)
-            selected_names = results_df[results_df['p_value'] < 0.2]['name'].tolist()
-            print(f"Selected features: {len(selected_names)}")
-            tr_X = tr_X[selected_names]
-            te_X = te_X[selected_names]
-            raw_te_X = raw_te_X[selected_names]
-
-        # model fitting
-        print("Fitting survival model...")
-        if model == "Coxnet":
-            predictor = coxnet(split_idx, tr_X, tr_y, scorer, n_jobs)
-        elif model == "RSF":
-            predictor = rsf(split_idx, tr_X, tr_y, scorer, n_jobs)
-        elif model == "CoxPH":
-            predictor = coxph(split_idx, tr_X, tr_y, scorer, n_jobs)
-        elif model == "GradientBoost":
-            predictor = gradientboosting(split_idx, tr_X, tr_y, scorer, n_jobs)
-        elif model == "IPCRidge":
-            predictor = ipcridge(split_idx, tr_X, tr_y, scorer, n_jobs)
-        elif model == "FastSVM":
-            predictor = fastsvm(split_idx, tr_X, tr_y, scorer, n_jobs, rank_ratio=1)
-
-        # bootstrapping
-        if n_bootstraps > 0:
-            print("Bootstrapping...")
-            stable_coefs = np.zeros(len(selected_names))
-            for _ in range(n_bootstraps):
-                tr_x_s, tr_y_s = resample(tr_X, tr_y)
-                predictor.fit(tr_x_s, tr_y_s)
-                if scorer == "cindex":
-                    stable_coefs += (predictor.named_steps["model"].coef_ != 0).astype(int)
-                else:
-                    stable_coefs += (predictor.named_steps["model"].estimator_.coef_ != 0).astype(int)
-            stable_coefs = stable_coefs / n_bootstraps
-            final_coefs = np.where(stable_coefs > 0.8)[0]
-            stable_names = [selected_names[i] for i in final_coefs.tolist()]
-            tr_X = tr_X[stable_names]
-            te_X = te_X[stable_names]
-            raw_te_X = raw_te_X[stable_names]
-            predictor.fit(tr_X, tr_y)
-
-        # save model and feature names
-        model_path = os.path.join(model_dir, f"{ml_model_name}_fold{split_idx}.joblib")
-
-        joblib.dump({
-            "model": predictor,
-            "features": list(tr_X.columns)
-        }, model_path)
-
-        print(f"Saved model to {model_path}")
-
-        raw_subject_ids = [p[0][0] for p in raw_data_te]
-        survival_results["raw_subject"] += raw_subject_ids
-        raw_risk_scores = predictor.predict(raw_te_X)
-        survival_results["raw_risk"] += raw_risk_scores.tolist()
-
-        subject_ids = [p[0][0] for p in data_te]
-        survival_results["subject"] += subject_ids
-        risk_scores = predictor.predict(te_X)
-        survival_results["risk"] += risk_scores.tolist()
-        survival_results["event"] += te_y["event"].astype(int).tolist()
-        survival_results["duration"] += te_y["duration"].tolist()
-        C_index = concordance_index_censored(te_y["event"], te_y["duration"], risk_scores)[0]
-        C_index_ipcw = concordance_index_ipcw(tr_y, te_y, risk_scores)[0]
-
-        lower, upper = np.percentile(te_y["duration"], [10, 90])
-        times = np.arange(lower, upper + 1, 7)
-        auc, mean_auc = cumulative_dynamic_auc(tr_y, te_y, risk_scores, times)
-        if hasattr(predictor, "predict_survival_function"):
-            try:
-                survs = predictor.predict_survival_function(te_X)
-                preds = np.asarray([[fn(t) for t in times] for fn in survs])
-                IBS = integrated_brier_score(tr_y, te_y, preds, times)
-            except Exception as e:
-                IBS = 0
-        else:
-            IBS = 0
-        scores_dict = {
-            "C-index": C_index,
-            "C-index-IPCW": C_index_ipcw,
-            "Mean AUC": mean_auc,
-            "IBS": IBS
-        }
-
-        fig, ax = plt.subplots(figsize=(9, 6))
-        ax.plot(times, auc)
-        ax.set_xscale("linear")
-        ax.set_ylabel("time-dependent AUC")
-        ax.set_xlabel("days from enrollment")
-        ax.axhline(mean_auc, linestyle="--")
-        ax.grid(True)
-        plt.savefig(f"{relative_path}/figures/plots/AUC_fold{split_idx}.jpg") 
-
-        print(f"Updating regression results on fold {split_idx}")
-        predict_results.update({f"Fold {split_idx}": scores_dict})
-    print(predict_results)
-    for k in scores_dict.keys():
-        arr = np.array([v[k] for v in predict_results.values() if v[k] != 0])
-        print(f"CV {k} mean+std", arr.mean(), arr.std())
-    # plot survival curve
-    pd_risk = pd.DataFrame({k: survival_results[k] for k in ["risk", "event", "duration"]})
-    mean_risk = pd_risk["risk"].mean()
-    dem = pd_risk["risk"] > mean_risk
-
-    fig, ax = plt.subplots(figsize=(10, 8))
-    plt.rcParams.update({'font.size': 12})
-    kmf1 = KaplanMeierFitter()
-    kmf1.fit(pd_risk["duration"][dem], event_observed=pd_risk["event"][dem], label="High risk")
-    kmf1.plot_survival_function(ax=ax)
-
-    kmf2 = KaplanMeierFitter()
-    kmf2.fit(pd_risk["duration"][~dem], event_observed=pd_risk["event"][~dem], label="Low risk")
-    kmf2.plot_survival_function(ax=ax)
-    add_at_risk_counts(kmf1, kmf2, ax=ax)
-    plt.tight_layout()
-
-    # logrank test
-    test_results = logrank_test(
-        pd_risk["duration"][dem], pd_risk["duration"][~dem], 
-        pd_risk["event"][dem], pd_risk["event"][~dem], 
-        alpha=.99
+    """
+    Enhanced survival analysis with four different strategies:
+    1. Direct concatenation of radiomics and pathomics
+    2. PCA on concatenated features
+    3. Separate models with result fusion
+    4. Separate PCA + separate models + result fusion
+    """
+    
+    analyzer = SurvivalAnalyzer(save_results_dir)
+    
+    results = analyzer.run_all_strategies(
+        split_path=split_path,
+        omics=omics,
+        save_omics_dir=save_omics_dir,
+        radiomics_aggregation=radiomics_aggregation,
+        radiomics_aggregated_mode=radiomics_aggregated_mode,
+        radiomics_keys=radiomics_keys,
+        pathomics_aggregation=pathomics_aggregation,
+        pathomics_aggregated_mode=pathomics_aggregated_mode,
+        pathomics_keys=pathomics_keys,
+        use_graph_properties=use_graph_properties,
+        n_jobs=n_jobs,
+        outcome=outcome,
+        model=model,
+        scorer=scorer,
+        feature_selection=feature_selection,
+        feature_var_threshold=feature_var_threshold,
+        n_selected_features=n_selected_features,
+        n_bootstraps=n_bootstraps,
+        n_pca_components=n_pca_components,
+        fusion_method=fusion_method,
+        save_results_dir=save_results_dir
     )
-    test_results.print_summary()
-    pvalue = test_results.p_value
-    print(f"p-value: {pvalue}")
-    predict_results.update({'p-value': pvalue})
-    ax.set_ylabel("Survival Probability")
-    # plt.subplots_adjust(left=0.2, bottom=0.2)
-    plt.savefig(f"{relative_path}/figures/plots/{omics}_survival_curve.png")
-
-    #save predicted results
-    save_path = f"{save_results_dir}/{ml_model_name}_results.json"
-    with open(save_path, "w") as f:
-        json.dump(survival_results, f, indent=4)
-
-    # save metrics
-    save_path = f"{save_results_dir}/{ml_model_name}_metrics.json"
-    with open(save_path, "w") as f:
-        json.dump(predict_results, f, indent=4)
-
-    return
+    
+    return results
 
 def generate_data_split(
         x: list,
@@ -1909,6 +2714,8 @@ if __name__ == "__main__":
             n_selected_features=opt['PREDICTION']['FEATURE_SELECTION']['NUM_FEATURES'],
             n_bootstraps=opt['PREDICTION']['N_BOOTSTRAPS'],
             use_graph_properties=opt['PREDICTION']['USE_GRAPH_PROPERTIES'],
+            n_pca_components=opt['PREDICTION']['N_PCA_COMPONENTS'],
+            fusion_method=opt['PREDICTION']['FUSION_METHOD'],
             save_results_dir=save_model_dir
         )
 
