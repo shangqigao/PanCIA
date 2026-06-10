@@ -4,18 +4,23 @@
 
 ## Dependencies
 
+For pan-cancer image analysis
 - conda create -n PanCIA python=3.9.19
 - conda activate PanCIA
 - conda install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.1 -c pytorch -c nvidia
 - conda install -c conda-forge openslide
 - conda install -c conda-forge gcc_linux-64 gxx_linux-64 (optional)
 - pip install --no-build-isolation git+https://github.com/MaureenZOU/detectron2-xyz.git
-- pip install -r requirements.txt
+- pip install -r requirements-pancia.txt
 - pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
 - pip install torch-sparse  -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
 
 If GCC is too old (need GCC 9 or later):
 - conda install -c conda-forge gcc_linux-64 gxx_linux-64
+
+For MLLM 
+- conda create --prefix /path/to/Qwen python=3.9 -y
+- pip install -r requirements-mllm.txt
 
 ---
 
@@ -109,6 +114,13 @@ python analysis/a03_feature_extraction/m_pathomics_extraction.py --config_files 
 
 ### Step 4: outcome prediction
 #### Multi-omics multi-task learning
+```bash
+multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
+python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
+```
+
+#### Machine learning
+
 
 ---
 

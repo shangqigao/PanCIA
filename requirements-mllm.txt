@@ -1,0 +1,13 @@
+transformers==4.49.0
+torch>=2.0.0
+accelerate
+pillow 
+opencv-python 
+nibabel 
+scikit-image
+scipy
+SimpleITK
+qwen-vl-utils
+sentence-transformers
+pandas
+pydicom

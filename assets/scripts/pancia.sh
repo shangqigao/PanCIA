@@ -15,7 +15,8 @@
 
 ## activate environment
 source ~/.bashrc
-conda activate PanCIA
+# conda activate PanCIA
+conda activate /home/sg2162/rds/hpc-work/miniconda3/Qwen
 
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
@@ -139,8 +140,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # extract radiomic features (add srun for BiomedParse)
-# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
+radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
 
 # srun deepspeed --num_gpus=1 analysis/a03_feature_extraction/m_radiomics_extraction.py \
 #   --config_files $radiomics_config \
@@ -171,8 +172,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
 
 # phenotype prediction
-phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
-python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
+# phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
+# python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
 
 # signature prediction
 # signature_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"

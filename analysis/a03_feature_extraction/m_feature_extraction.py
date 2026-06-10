@@ -19,9 +19,6 @@ import json
 
 import numpy as np
 from utilities.m_utils import rmdir, mkdir
-from tiatoolbox.utils.misc import imwrite
-
-from pprint import pprint
 
 SEED = 5
 random.seed(SEED)
@@ -290,7 +287,6 @@ def extract_radiomic_feature(
             modality=modality,
             dilation_mm=dilation_mm,
             site=site,
-            resolution=resolution,
             resolution=resolution,
             skip_exist=skip_exist
         )
@@ -3254,23 +3250,31 @@ def extract_structured_qwen_features(
     import torch.nn.functional as F
     from PIL import Image, ImageDraw
     from scipy.ndimage import zoom
-    from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer, AutoModel
+    from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+    from transformers import AutoTokenizer, AutoModel
     from inference_utils.processing_utils import read_nifti_inplane, get_orientation
     from utilities.constants import CT_SITES
     
     # ======================
-    # Load Qwen2.5-VL Model
+    # Load Qwen2.5-VL Model - CORRECTED
     # ======================
     print("Loading Qwen2.5-VL model...")
     model_path = "Qwen/Qwen2.5-VL-7B-Instruct"
     
-    processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
+    # Use the specific model class, not AutoModelForCausalLM
+    model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         model_path,
         torch_dtype=torch.float16,
         device_map="auto",
         trust_remote_code=True
     ).eval()
+    
+    # Load processor
+    processor = AutoProcessor.from_pretrained(
+        model_path,
+        trust_remote_code=True
+    )
+    
     print("Model loaded successfully")
     
     # ======================
@@ -3297,30 +3301,18 @@ def extract_structured_qwen_features(
         kernel = np.ones((k, k), np.uint8)
         return cv2.dilate(mask.astype(np.uint8), kernel)
     
-    def normalize_ct_to_uint8(img_array):
-        """Normalize CT image to 0-255 uint8 for visualization"""
-        img_min = img_array.min()
-        img_max = img_array.max()
-        if img_max - img_min < 1e-8:
-            return np.zeros_like(img_array, dtype=np.uint8)
-        normalized = ((img_array - img_min) / (img_max - img_min) * 255)
-        return normalized.astype(np.uint8)
-    
     def create_overlayed_slice(img_array, mask, alpha=0.35, color=(255, 50, 50)):
         """
         Create overlay image with semi-transparent mask
         
         Args:
-            img_array: CT slice (numpy array)
-            mask: Binary tumor mask
+            img_array: RGB uint8 image (H, W, 3) from read_nifti_inplane()
+            mask: Binary tumor mask (H, W)
             alpha: Transparency factor (0=invisible, 1=opaque)
             color: RGB tuple for overlay (default red)
         """
-        # Normalize CT to 0-255 for RGB conversion
-        img_uint8 = normalize_ct_to_uint8(img_array)
-        
-        # Convert to RGB
-        img_rgb = cv2.cvtColor(img_uint8, cv2.COLOR_GRAY2RGB)
+        # img_array is already RGB uint8, use it directly
+        img_rgb = img_array.copy()
         
         # Create colored mask
         colored_mask = np.zeros_like(img_rgb)
@@ -3331,30 +3323,122 @@ def extract_structured_qwen_features(
         
         return Image.fromarray(overlayed)
     
-    def create_patch_with_mask(full_slice_img, mask_array, bbox, patch_size=(224, 224), alpha=0.55):
+    def create_patch_with_mask(full_slice_img, mask_array, bbox, patch_size=(224, 224), alpha=0.55, context_scale=1.5):
         """
         Extract cropped patch around tumor WITH mask overlay included
+        
+        Args:
+            full_slice_img: PIL Image (RGB) already with overlay
+            mask_array: Binary tumor mask (2D numpy array)
+            bbox: (xmin, ymin, xmax, ymax) tuple for cropping
+            patch_size: Target size for the patch
+            alpha: Transparency for overlay (higher = more opaque)
         """
         xmin, ymin, xmax, ymax = bbox
-        
-        # Crop both image and mask
-        cropped_img = full_slice_img.crop((xmin, ymin, xmax, ymax))
+
+        cx = (xmin + xmax) / 2
+        cy = (ymin + ymax) / 2
+
+        bw = xmax - xmin
+        bh = ymax - ymin
+
+        crop_w = bw * context_scale
+        crop_h = bh * context_scale
+
+        img_w, img_h = full_slice_img.size
+
+        xmin2 = int(max(0, cx - crop_w / 2))
+        xmax2 = int(min(img_w, cx + crop_w / 2))
+
+        ymin2 = int(max(0, cy - crop_h / 2))
+        ymax2 = int(min(img_h, cy + crop_h / 2))
+
+        # Crop the already-overlayed image
+        cropped_img = full_slice_img.crop((xmin2, ymin2, xmax2, ymax2))
         
         # Extract corresponding mask region
-        cropped_mask = mask_array[ymin:ymax, xmin:xmax]
+        cropped_mask = mask_array[ymin2:ymax2, xmin2:xmax2]
         
-        # Get grayscale array from cropped PIL image
-        cropped_gray = np.array(cropped_img.convert('L'))
+        # Convert PIL to numpy for overlay enhancement
+        cropped_np = np.array(cropped_img)
         
-        # Create overlay for patch (more opaque for detail)
-        patch_overlayed = create_overlayed_slice(
-            cropped_gray, 
-            cropped_mask, 
-            alpha=alpha,
-            color=(255, 80, 80)
+        # Create enhanced colored mask for the patch (more opaque for detail)
+        colored_mask = np.zeros_like(cropped_np)
+        colored_mask[cropped_mask > 0] = (255, 80, 80)  # Brighter red for patch
+        
+        # Blend with higher opacity for detailed view
+        enhanced_overlay = cv2.addWeighted(cropped_np, 1 - alpha, colored_mask, alpha, 0)
+        
+        # Resize to target size
+        patch = Image.fromarray(enhanced_overlay)
+        patch = patch.resize(patch_size, Image.Resampling.LANCZOS)
+        
+        return patch
+
+    def create_composite_view(
+        full_img,
+        patch_img,
+        title=None,
+        spacing=10,
+    ):
+        """
+        Stack:
+        ------------------
+        Full slice
+        ------------------
+        Tumor patch
+        ------------------
+        """
+
+        full_img = full_img.convert("RGB")
+        patch_img = patch_img.convert("RGB")
+
+        width = max(full_img.width, patch_img.width)
+
+        if full_img.width != width:
+            full_img = full_img.resize(
+                (
+                    width,
+                    int(full_img.height * width / full_img.width)
+                )
+            )
+
+        if patch_img.width != width:
+            patch_img = patch_img.resize(
+                (
+                    width,
+                    int(patch_img.height * width / patch_img.width)
+                )
+            )
+
+        title_height = 30 if title else 0
+
+        canvas = Image.new(
+            "RGB",
+            (
+                width,
+                title_height
+                + full_img.height
+                + spacing
+                + patch_img.height
+            ),
+            color=(255, 255, 255)
         )
-        
-        return patch_overlayed.resize(patch_size, Image.Resampling.LANCZOS)
+
+        y = 0
+
+        if title:
+            draw = ImageDraw.Draw(canvas)
+            draw.text((10, 5), title, fill=(0, 0, 0))
+            y += title_height
+
+        canvas.paste(full_img, (0, y))
+
+        y += full_img.height + spacing
+
+        canvas.paste(patch_img, (0, y))
+
+        return canvas
     
     # ======================
     # Main processing loop
@@ -3383,46 +3467,22 @@ def extract_structured_qwen_features(
                 parent_name = pathlib.Path(img_path).parent.parent.name
         elif format[idx] == 'nifti':
             if isinstance(img_path, list):
-                img_name = pathlib.Path(img_path[0]).stem.replace(".nii", "")
+                img_name = pathlib.Path(img_path[0]).name.replace(".nii.gz", "")
                 parent_name = pathlib.Path(img_path[0]).parent.name
             else:
-                img_name = pathlib.Path(img_path).stem.replace(".nii", "")
+                img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
                 parent_name = pathlib.Path(img_path).parent.name
         else:
             img_name = f"scan_{idx}"
             parent_name = "unknown"
         
-        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_qwen_features.json")
+        feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.json")
         if feature_path.exists() and skip_exist:
             print(f"✓ {feature_path.name} exists, skipping...")
             continue
         feature_path.parent.mkdir(parents=True, exist_ok=True)
         
         print(f"\n[{idx+1}/{len(img_paths)}] Processing: {img_name}")
-
-        # ======================
-        # Structured Prompt with JSON Output
-        # ======================
-        ORGAN_LOCATION_PROMPT = f"""You are a medical imaging AI assistant analyzing {modality[idx]} scans for tumor localization.
-
-        You are given two views of the same tumor:
-        1. [FULL_SLICE] - Complete {modality[idx]} slice with a SEMI-TRANSPARENT RED OVERLAY showing the tumor region. The red overlay allows you to see both the tumor location AND the underlying tissue texture, shape, and margins.
-
-        2. [TUMOR_PATCH] - Zoomed-in view of the tumor with more OPAQUE RED OVERLAY for detailed analysis. The overlay preserves the tumor's shape, margins, and relationship to surrounding tissue.
-
-        Based on these images, identify which organ or anatomical structure contains this tumor. Consider:
-        - Tumor shape and margins visible through the overlay (smooth vs irregular)
-        - Location within the body (upper/lower abdomen, left/right, anterior/posterior)
-        - Relationship to anatomical landmarks visible beneath the overlay
-        - Tissue density and texture characteristics
-
-        Output ONLY a valid JSON object with exactly these fields:
-        {"organ": "organ_name", "confidence": 0.95, "reasoning": "brief explanation"}
-
-        Possible organs: liver, kidney_left, kidney_right, lung_left, lung_right, breast, pancreas, spleen, stomach, colon, small_bowel, bladder, prostate, uterus, ovary, cervix, bone, muscle, lymph_node, adrenal_gland, thyroid, or other
-
-        Example: {"organ": "liver", "confidence": 0.92, "reasoning": "Right upper quadrant location with smooth capsule visible through overlay"}
-        """
         
         # ======================
         # Load image data
@@ -3461,203 +3521,289 @@ def extract_structured_qwen_features(
         if np.sum(labels > 0) == 0:
             print(f"  ⚠ No tumor labels found, skipping...")
             continue
-        
+
         # ======================
-        # Get top slices by tumor area
+        # Get largest tumor slice from each orthogonal view
         # ======================
-        slice_areas = np.sum(labels > 0, axis=(1, 2))
-        top_indices = slice_areas.argsort()[::-1][:top_slices]
-        print(f"  Processing {len(top_indices)} slices with largest tumor areas")
-        
-        all_reports = []
-        all_embeddings = []
-        
-        for slice_idx, i in enumerate(top_indices):
-            print(f"    Slice {slice_idx+1}/{len(top_indices)} (index {i})...")
-            
-            img_array, _, _ = images[i]
-            mask = labels[i]
-            
+
+        # Reconstruct volume
+        volume = np.stack([img[0] for img in images], axis=0)  # (D,H,W)
+
+        tumor_mask = labels > 0
+
+        # Axial: maximize area in z-plane
+        axial_idx = np.sum(tumor_mask, axis=(1, 2)).argmax()
+
+        # Coronal: maximize area in y-plane
+        coronal_idx = np.sum(tumor_mask, axis=(0, 2)).argmax()
+
+        # Sagittal: maximize area in x-plane
+        sagittal_idx = np.sum(tumor_mask, axis=(0, 1)).argmax()
+
+        views = [
+            (
+                "axial",
+                volume[axial_idx],
+                labels[axial_idx],
+                axial_idx
+            ),
+            (
+                "coronal",
+                volume[:, coronal_idx, :],
+                labels[:, coronal_idx, :],
+                coronal_idx
+            ),
+            (
+                "sagittal",
+                volume[:, :, sagittal_idx],
+                labels[:, :, sagittal_idx],
+                sagittal_idx
+            )
+        ]
+
+        print(
+            f"  Using multi-view slices: "
+            f"axial={axial_idx}, "
+            f"coronal={coronal_idx}, "
+            f"sagittal={sagittal_idx}"
+        )
+
+        composite_images = []
+
+        for view_name, img_array, mask, slice_idx in views:
+
             if np.sum(mask) == 0:
                 continue
-            
-            # Dilate mask for better visualization
-            mask_dilated = dilate_mask(mask, k=dilation_mm)
-            
-            # Create overlayed full slice (more transparent for context)
-            overlayed_full = create_overlayed_slice(img_array, mask_dilated, alpha=0.3, color=(255, 50, 50))
-            
-            # Get bounding box coordinates for cropping
+
+            mask_dilated = dilate_mask(
+                mask,
+                k=dilation_mm
+            )
+
+            overlayed_full = create_overlayed_slice(
+                img_array,
+                mask_dilated,
+                alpha=0.3,
+                color=(255, 50, 50)
+            )
+
             coords = np.argwhere(mask_dilated > 0)
-            if coords.size > 0:
-                ymin, xmin = coords.min(axis=0)
-                ymax, xmax = coords.max(axis=0)
-                
-                # Add padding for context
-                pad = dilation_mm * 2
-                h, w = mask_dilated.shape
-                xmin = max(0, xmin - pad)
-                ymin = max(0, ymin - pad)
-                xmax = min(w, xmax + pad)
-                ymax = min(h, ymax + pad)
-                
-                bbox = (xmin, ymin, xmax, ymax)
-                
-                # Create patch with mask overlay (more detailed)
-                patch_overlayed = create_patch_with_mask(
-                    overlayed_full, mask_dilated, bbox, 
-                    patch_size=(224, 224), alpha=0.6
-                )
+
+            if len(coords) == 0:
+                continue
+
+            ymin, xmin = coords.min(axis=0)
+            ymax, xmax = coords.max(axis=0)
+
+            pad = dilation_mm * 2
+
+            h, w = mask_dilated.shape
+
+            xmin = max(0, xmin - pad)
+            ymin = max(0, ymin - pad)
+
+            xmax = min(w, xmax + pad)
+            ymax = min(h, ymax + pad)
+
+            bbox = (
+                xmin,
+                ymin,
+                xmax,
+                ymax
+            )
+
+            patch_overlayed = create_patch_with_mask(
+                overlayed_full,
+                mask_dilated,
+                bbox,
+                patch_size=(224, 224),
+                alpha=0.3
+            )
+
+            composite = create_composite_view(
+                overlayed_full,
+                patch_overlayed,
+                title=f"{view_name.upper()} VIEW"
+            )
+
+            composite_images.append(composite)
+
+        if len(composite_images) == 0:
+            print("No valid tumor views found")
+            continue
+
+        for i, img in enumerate(composite_images):
+            save_path = f"{save_dir}/{parent_name}/{img_name}_view_{i}.png"
+            img.save(save_path)
+            print(f"Saved: {save_path}")
+
+        # ======================
+        # Multi-view inference with Qwen2.5-VL
+        # ======================
+        composite_images = composite_images[2:]
+
+        current_modality = modality[idx]
+
+        messages = [
+            {
+                "role": "user",
+                "content":
+                [
+                    {
+                        "type": "image",
+                        "image": img
+                    }
+                    for img in composite_images
+                ]
+                +
+                [
+                    {
+                        "type": "text",
+                        "text": f"""
+                        Where is the highlighted red tumor region located in?
+
+                        Return ONLY JSON:
+
+                        {{
+                        "body_region": "",
+                        "site": "",
+                        "laterality": "",
+                        "confidence": 0.0,
+                        "visible_structures": [],
+                        "reasoning": ""
+                        }}
+
+                        No markdown.
+                        No additional text.
+                        """
+                    }
+                ]
+            }
+        ]
+
+        # Process with proper chat template
+        text = processor.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+
+        inputs = processor(
+            text=[text],
+            images=composite_images,
+            padding=True,
+            return_tensors="pt"
+        ).to(model.device)
+
+        # Generate with adjusted parameters
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=256,
+                do_sample=False,
+                repetition_penalty=1.05,
+                pad_token_id=processor.tokenizer.pad_token_id,
+                eos_token_id=processor.tokenizer.eos_token_id,
+            )
+
+        generated_ids = outputs[:, inputs.input_ids.shape[1]:]
+        response = processor.batch_decode(
+            generated_ids,
+            skip_special_tokens=True
+        )[0]
+
+        print("=" * 100)
+        print(response)
+        print("=" * 100)
+
+        # ======================
+        # Parse model response
+        # ======================
+
+        try:
+            response = response.strip()
+
+            start = response.find("{")
+            end = response.rfind("}")
+
+            if start >= 0 and end > start:
+                result = json.loads(response[start:end + 1])
             else:
-                # Fallback if no mask found
-                patch_overlayed = overlayed_full.resize((224, 224))
-                bbox = None
-            
-            # ======================
-            # Multi-view inference with Qwen2.5-VL
-            # ======================
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "image": overlayed_full,
-                        },
-                        {
-                            "type": "text", 
-                            "text": f"[FULL_SLICE] Complete {modality[idx]} slice with semi-transparent red overlay showing tumor location."
-                        },
-                        {
-                            "type": "image",
-                            "image": patch_overlayed,
-                        },
-                        {
-                            "type": "text",
-                            "text": "[TUMOR_PATCH] Zoomed-in view of tumor with detailed overlay.\n\n" + ORGAN_LOCATION_PROMPT
-                        }
-                    ]
+                result = {
+                    "body_region": "unknown",
+                    "site": "unknown",
+                    "laterality": "uncertain",
+                    "confidence": 0.0,
+                    "visible_structures": [],
+                    "reasoning": response[:200]
                 }
-            ]
-            
-            # Process with Qwen
-            try:
-                inputs = processor.apply_chat_template(
-                    messages,
-                    tokenize=True,
-                    add_generation_prompt=True,
-                    return_tensors="pt"
-                ).to(model.device)
-                
-                with torch.no_grad():
-                    outputs = model.generate(
-                        inputs,
-                        max_new_tokens=256,
-                        temperature=0.0,  # Deterministic for structured output
-                        do_sample=False,
-                        pad_token_id=processor.tokenizer.pad_token_id,
-                        repetition_penalty=1.0
-                    )
-                
-                response = processor.decode(outputs[0], skip_special_tokens=True)
-                
-                # Extract JSON from response
-                json_match = re.search(r'\{[^{}]*"organ"[^{}]*"confidence"[^{}]*"reasoning"[^{}]*\}', response)
-                if json_match:
-                    report_json = json.loads(json_match.group())
-                else:
-                    # Try more lenient parsing
-                    json_match = re.search(r'\{.*?\}', response)
-                    if json_match:
-                        report_json = json.loads(json_match.group())
-                    else:
-                        report_json = {"organ": "unknown", "confidence": 0.0, "reasoning": response[:200]}
-                
-                # Ensure required fields exist
-                if "organ" not in report_json:
-                    report_json["organ"] = "unknown"
-                if "confidence" not in report_json:
-                    report_json["confidence"] = 0.5
-                if "reasoning" not in report_json:
-                    report_json["reasoning"] = ""
-                
-                all_reports.append(report_json)
-                
-            except Exception as e:
-                print(f"      Error in inference: {e}")
-                all_reports.append({
-                    "organ": "error", 
-                    "confidence": 0.0, 
-                    "reasoning": f"Inference failed: {str(e)[:100]}"
-                })
-        
-        # ======================
-        # Generate embeddings and aggregate results
-        # ======================
-        if all_reports:
-            # Extract organ names for embedding
-            organ_texts = [r.get("organ", "unknown") for r in all_reports]
-            embeddings = encode_texts(organ_texts).tolist()
-            
-            # Confidence-weighted majority vote
-            organ_votes = {}
-            for r in all_reports:
-                organ = r.get("organ", "unknown")
-                conf = r.get("confidence", 0.5)
-                # Handle left/right kidney and lung separately
-                if organ == "kidney":
-                    organ_votes["kidney"] = organ_votes.get("kidney", 0) + conf
-                elif organ == "kidney_left":
-                    organ_votes["kidney_left"] = organ_votes.get("kidney_left", 0) + conf
-                elif organ == "kidney_right":
-                    organ_votes["kidney_right"] = organ_votes.get("kidney_right", 0) + conf
-                elif organ == "lung":
-                    organ_votes["lung"] = organ_votes.get("lung", 0) + conf
-                elif organ == "lung_left":
-                    organ_votes["lung_left"] = organ_votes.get("lung_left", 0) + conf
-                elif organ == "lung_right":
-                    organ_votes["lung_right"] = organ_votes.get("lung_right", 0) + conf
-                else:
-                    organ_votes[organ] = organ_votes.get(organ, 0) + conf
-            
-            final_organ = max(organ_votes, key=organ_votes.get) if organ_votes else "unknown"
-            avg_confidence = np.mean([r.get("confidence", 0) for r in all_reports])
-            
-            output = {
-                "image_name": img_name,
-                "parent_name": parent_name,
-                "top_slices": top_indices.tolist(),
-                "num_slices_processed": len(all_reports),
-                "structured_reports": all_reports,
-                "embeddings": embeddings,
-                "final_prediction": {
-                    "organ": final_organ,
-                    "confidence": float(avg_confidence),
-                    "voting_scores": organ_votes
-                },
-                "model": "Qwen2.5-VL-7B-Instruct",
-                "parameters": {
-                    "dilation_mm": dilation_mm,
-                    "top_slices": top_slices,
-                    "resolution": resolution
-                }
+
+        except Exception as e:
+            result = {
+                "body_region": "parse_error",
+                "site": "parse_error",
+                "laterality": "uncertain",
+                "confidence": 0.0,
+                "visible_structures": [],
+                "reasoning": str(e)[:100]
             }
-        else:
-            output = {
-                "image_name": img_name,
-                "error": "No valid slices with tumor detected",
-                "model": "Qwen2.5-VL-7B-Instruct"
+
+        # ======================
+        # Generate embeddings and outputs
+        # ======================
+
+        site_text = (
+            f"{result.get('body_region', 'unknown')} "
+            f"{result.get('site', 'unknown')} "
+            f"{result.get('laterality', 'uncertain')}"
+        )
+
+        embedding = encode_texts([site_text])[0].tolist()
+
+        output = {
+            "image_name": img_name,
+            "parent_name": parent_name,
+
+            "view_indices": {
+                "axial": int(axial_idx),
+                "coronal": int(coronal_idx),
+                "sagittal": int(sagittal_idx),
+            },
+
+            "structured_reports": result,
+
+            "embedding": embedding,
+
+            "model": "Qwen2.5-VL-7B-Instruct",
+
+            "parameters": {
+                "dilation_mm": dilation_mm,
+                "resolution": resolution,
+                "views": [
+                    "axial",
+                    "coronal",
+                    "sagittal"
+                ]
             }
-        
+        }
+
+        # ======================
         # Save results
+        # ======================
+
         with open(feature_path, "w") as f:
             json.dump(output, f, indent=2)
-        
+
         print(f"  ✓ Saved to: {feature_path}")
-        if all_reports:
-            print(f"  → Final organ: {final_organ} (avg confidence: {avg_confidence:.2f})")
-    
-    print("\n✅ Processing complete!")
+
+        print(
+            f"  → Final prediction: "
+            f"{result['body_region']} | "
+            f"{result['site']} | "
+            f"{result['laterality']} "
+            f"(confidence={result['confidence']:.2f})"
+        )
+
     return
 
 if __name__ == "__main__":
@@ -3674,6 +3820,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     from tiatoolbox.wsicore.wsireader import WSIReader
+    from tiatoolbox.utils.misc import imwrite
+    from pprint import pprint
+
     wsi = WSIReader.open(args.slide_path)
     mask = wsi.tissue_mask(method=args.mask_method, resolution=1.25, units="power")
     pprint(wsi.info.as_dict())

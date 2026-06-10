@@ -7,8 +7,6 @@ import shutil
 from tqdm import tqdm
 from pathlib import Path
 
-from tiatoolbox.wsicore.wsireader import WSIReader 
-
 def mkdir(dir_path: Path):
     """Create a directory if it does not exist."""
     if not dir_path.is_dir():
