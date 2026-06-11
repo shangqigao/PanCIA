@@ -2008,9 +2008,10 @@ class SurvivalAnalyzer:
         
         # Predict and evaluate
         risk_scores = predictor.predict(te_X)
+        raw_risk_scores = predictor.predict(raw_te_X)
         scores_dict, times = self.evaluate_predictions(tr_y, te_X, te_y, risk_scores, predictor)
         
-        return pipeline, risk_scores, scores_dict
+        return pipeline, risk_scores, scores_dict, raw_risk_scores
     
     def strategy_2_pca_concat(self, split, split_idx, omics_params, model_params, n_pca_components=None):
         """Strategy 2: PCA on concatenated radiomics and pathomics"""
@@ -2044,9 +2045,10 @@ class SurvivalAnalyzer:
         
         # Predict and evaluate
         risk_scores = predictor.predict(te_X_pca)
+        raw_risk_scores = predictor.predict(raw_te_X_pca)
         scores_dict, times = self.evaluate_predictions(tr_y, te_X_pca, te_y, risk_scores, predictor)
         
-        return pipeline, risk_scores, scores_dict
+        return pipeline, risk_scores, scores_dict, raw_risk_scores
     
     def strategy_3_separate_fusion(self, split, split_idx, omics_params, model_params, fusion_method='average'):
         """Strategy 3: Separate ML models for radiomics and pathomics with result fusion"""
@@ -2070,11 +2072,11 @@ class SurvivalAnalyzer:
         
         # Feature selection for each modality
         if model_params['feature_selection']:
-            tr_X_radio, te_X_radio, _ = self.feature_selection(
+            tr_X_radio, te_X_radio, raw_te_X_radio = self.feature_selection(
                 tr_X_radio, te_X_radio, raw_te_X_radio, tr_y,
                 model_params['feature_var_threshold']
             )
-            tr_X_patho, te_X_patho, _ = self.feature_selection(
+            tr_X_patho, te_X_patho, raw_te_X_patho = self.feature_selection(
                 tr_X_patho, te_X_patho, raw_te_X_patho, tr_y,
                 model_params['feature_var_threshold']
             )
@@ -2101,14 +2103,16 @@ class SurvivalAnalyzer:
         
         # Get predictions
         risk_scores_radio = predictor_radio.predict(te_X_radio)
+        raw_risk_scores_radio = predictor_radio.predict(raw_te_X_radio)
+
         risk_scores_patho = predictor_patho.predict(te_X_patho)
+        raw_risk_scores_patho = predictor_patho.predict(raw_te_X_patho)
         
         # Fuse predictions
         fusion_weights = {}
         if fusion_method == 'average':
             fusion_weights['radiomics'] = 0.5
             fusion_weights['pathomics'] = 0.5
-            risk_scores = fusion_weights['radiomics'] * risk_scores_radio + fusion_weights['pathomics'] * risk_scores_patho
         elif fusion_method == 'weighted':
             # Use C-index as weight
             tr_risk_scores_radio = predictor_radio.predict(tr_X_radio)
@@ -2118,9 +2122,11 @@ class SurvivalAnalyzer:
             total = c_index_radio + c_index_patho
             fusion_weights['radiomics'] = c_index_radio / total
             fusion_weights['pathomics'] = c_index_patho / total
-            risk_scores = fusion_weights['radiomics'] * risk_scores_radio + fusion_weights['pathomics'] * risk_scores_patho
         else:
             raise ValueError(f"Unknown fusion method: {fusion_method}")
+        
+        risk_scores = fusion_weights['radiomics'] * risk_scores_radio + fusion_weights['pathomics'] * risk_scores_patho
+        raw_risk_scores = fusion_weights['radiomics'] * raw_risk_scores_radio + fusion_weights['pathomics'] * raw_risk_scores_patho
         
         # Create multi-modal pipeline
         multi_pipeline = MultiModalPipeline(
@@ -2134,7 +2140,7 @@ class SurvivalAnalyzer:
         scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
         scores_dict['fusion_method'] = fusion_method
         
-        return multi_pipeline, risk_scores, scores_dict
+        return multi_pipeline, risk_scores, scores_dict, raw_risk_scores
     
     def strategy_4_pca_separate_fusion(self, split, split_idx, omics_params, model_params, 
                                         n_pca_components=None, fusion_method='average'):
@@ -2158,10 +2164,10 @@ class SurvivalAnalyzer:
         )
         
         # Apply PCA separately
-        tr_X_radio_pca, te_X_radio_pca, _, pca_radio, scaler_radio = self.apply_pca(
+        tr_X_radio_pca, te_X_radio_pca, raw_te_X_radio_pca, pca_radio, scaler_radio = self.apply_pca(
             tr_X_radio, te_X_radio, raw_te_X_radio, n_components=n_pca_components
         )
-        tr_X_patho_pca, te_X_patho_pca, _, pca_patho, scaler_patho = self.apply_pca(
+        tr_X_patho_pca, te_X_patho_pca, raw_te_X_patho_pca, pca_patho, scaler_patho = self.apply_pca(
             tr_X_patho, te_X_patho, raw_te_X_patho, n_components=n_pca_components
         )
         
@@ -2194,14 +2200,16 @@ class SurvivalAnalyzer:
         
         # Get predictions
         risk_scores_radio = predictor_radio.predict(te_X_radio_pca)
+        raw_risk_scores_radio = predictor_radio.predict(raw_te_X_radio_pca)
+
         risk_scores_patho = predictor_patho.predict(te_X_patho_pca)
+        raw_risk_scores_patho = predictor_patho.predict(raw_te_X_patho_pca)
         
         # Fuse predictions
         fusion_weights = {}
         if fusion_method == 'average':
             fusion_weights['radiomics'] = 0.5
             fusion_weights['pathomics'] = 0.5
-            risk_scores = fusion_weights['radiomics'] * risk_scores_radio + fusion_weights['pathomics'] * risk_scores_patho
         elif fusion_method == 'weighted':
             # Use C-index as weight
             tr_risk_scores_radio = predictor_radio.predict(tr_X_radio)
@@ -2211,9 +2219,11 @@ class SurvivalAnalyzer:
             total = c_index_radio + c_index_patho
             fusion_weights['radiomics'] = c_index_radio / total
             fusion_weights['pathomics'] = c_index_patho / total
-            risk_scores = fusion_weights['radiomics'] * risk_scores_radio + fusion_weights['pathomics'] * risk_scores_patho
         else:
             raise ValueError(f"Unknown fusion method: {fusion_method}")
+        
+        risk_scores = fusion_weights['radiomics'] * risk_scores_radio + fusion_weights['pathomics'] * risk_scores_patho
+        raw_risk_scores = fusion_weights['radiomics'] * raw_risk_scores_radio + fusion_weights['pathomics'] * raw_risk_scores_patho
         
         # Create multi-modal pipeline
         multi_pipeline = MultiModalPipeline(
@@ -2227,7 +2237,7 @@ class SurvivalAnalyzer:
         scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
         scores_dict['fusion_method'] = fusion_method
         
-        return multi_pipeline, risk_scores, scores_dict
+        return multi_pipeline, risk_scores, scores_dict, raw_risk_scores
     
     def plot_survival_curve(self, survival_results, omics, strategy_name, pvalue):
         """Plot survival curve"""
@@ -2333,16 +2343,14 @@ class SurvivalAnalyzer:
                 
                 # Run strategy
                 try:
-                    pipeline, risk_scores, scores_dict = strategy_func(
+                    pipeline, risk_scores, scores_dict, raw_risk_scores = strategy_func(
                         (split_idx, split), split_idx, omics_params, model_params
                     )
                     
                     # Store results
-                    data_tr, data_te, raw_data_te, _, _, raw_te_X, tr_y, te_y = self.load_data_for_fold(
+                    _, data_te, raw_data_te, _, _, _, _, te_y = self.load_data_for_fold(
                         (split_idx, split), **omics_params
                     )
-
-                    raw_risk_scores = pipeline.predict(raw_te_X)
                     
                     strategy_results["predict_results"][f"Fold {split_idx}"] = scores_dict
                     strategy_results["cv_scores"].append(scores_dict)
