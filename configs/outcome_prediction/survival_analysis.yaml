@@ -17,7 +17,7 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "LLaVA-Med"
+    VALUE: "BiomedParse"
     CHOICES:
       [
         "None",
@@ -31,7 +31,7 @@ RADIOMICS:
       ]
   AGGREGATION: False
   AGGREGATED_MODE:
-    VALUE: "None"
+    VALUE: "MEAN"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
   RESOLUTION: 1
   UNITS: "mm"
@@ -43,7 +43,7 @@ PATHOMICS:
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
   AGGREGATION: False
   AGGREGATED_MODE:
-    VALUE: "None"
+    VALUE: "MEAN"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
   RESOLUTION: 20
   UNITS: "power"
@@ -59,7 +59,7 @@ SPLIT:
 PREDICTION:
   OMICS_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_multitask"
   USED_OMICS:
-    VALUE: "radiomics"
+    VALUE: "radiopathomics"
     CONCAT: True
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32

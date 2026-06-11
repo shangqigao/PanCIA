@@ -2055,6 +2055,7 @@ class SurvivalAnalyzer:
         # Load radiomics data
         radiomics_params = omics_params.copy()
         radiomics_params['omics'] = 'radiomics'
+        radiomics_params['save_omics_dir'] = omics_params['save_omics_dir']['radiomics']
         _, _, _, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
             split, **radiomics_params
         )
@@ -2062,6 +2063,7 @@ class SurvivalAnalyzer:
         # Load pathomics data
         pathomics_params = omics_params.copy()
         pathomics_params['omics'] = 'pathomics'
+        pathomics_params['save_omics_dir'] = omics_params['save_omics_dir']['pathomics']
         _, _, _, tr_X_patho, te_X_patho, raw_te_X_patho, _, _ = self.load_data_for_fold(
             split, **pathomics_params
         )
@@ -2142,6 +2144,7 @@ class SurvivalAnalyzer:
         # Load radiomics data
         radiomics_params = omics_params.copy()
         radiomics_params['omics'] = 'radiomics'
+        radiomics_params['save_omics_dir'] = omics_params['save_omics_dir']['radiomics']
         _, _, _, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
             split, **radiomics_params
         )
@@ -2149,6 +2152,7 @@ class SurvivalAnalyzer:
         # Load pathomics data
         pathomics_params = omics_params.copy()
         pathomics_params['omics'] = 'pathomics'
+        pathomics_params['save_omics_dir'] = omics_params['save_omics_dir']['pathomics']
         _, _, _, tr_X_patho, te_X_patho, raw_te_X_patho, _, _ = self.load_data_for_fold(
             split, **pathomics_params
         )
