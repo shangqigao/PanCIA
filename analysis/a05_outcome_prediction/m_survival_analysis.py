@@ -1599,8 +1599,20 @@ class SurvivalAnalyzer:
         raw_risk_scores = predictor.predict(raw_te_X)
         scores_dict, times = self.evaluate_predictions(tr_y, te_X, te_y, risk_scores, predictor)
         
-        return pipeline, risk_scores, scores_dict, raw_risk_scores
-    
+        # Return as dictionary for consistency
+        return {
+            'pipeline': pipeline,
+            'risk_scores': risk_scores,
+            'raw_risk_scores': raw_risk_scores,
+            'scores': scores_dict,
+            'times': times,
+            'subject_ids': [p[0][0] for p in data_te],
+            'raw_subject_ids': [p[0][0] for p in raw_data_te],
+            'event': te_y["event"].astype(int).tolist(),
+            'duration': te_y["duration"].tolist()
+        }
+
+
     def strategy_2_pca_concat(self, split, split_idx, omics_params, model_params, n_pca_components=None):
         """Strategy 2: PCA on concatenated radiomics and pathomics"""
         print(f"\n=== Strategy 2: PCA on Concatenated Features ===")
@@ -1636,8 +1648,20 @@ class SurvivalAnalyzer:
         raw_risk_scores = predictor.predict(raw_te_X_pca)
         scores_dict, times = self.evaluate_predictions(tr_y, te_X_pca, te_y, risk_scores, predictor)
         
-        return pipeline, risk_scores, scores_dict, raw_risk_scores
-    
+        # Return as dictionary for consistency
+        return {
+            'pipeline': pipeline,
+            'risk_scores': risk_scores,
+            'raw_risk_scores': raw_risk_scores,
+            'scores': scores_dict,
+            'times': times,
+            'subject_ids': [p[0][0] for p in data_te],
+            'raw_subject_ids': [p[0][0] for p in raw_data_te],
+            'event': te_y["event"].astype(int).tolist(),
+            'duration': te_y["duration"].tolist()
+        }
+
+
     def strategy_3_separate_fusion(self, split, split_idx, omics_params, model_params, fusion_method='average'):
         """Strategy 3: Separate ML models for radiomics and pathomics with result fusion"""
         print(f"\n=== Strategy 3: Separate Models with Result Fusion ===")
@@ -1646,7 +1670,7 @@ class SurvivalAnalyzer:
         radiomics_params = omics_params.copy()
         radiomics_params['omics'] = 'radiomics'
         radiomics_params['save_omics_dir'] = omics_params['save_omics_dir']['radiomics']
-        _, _, _, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
+        data_tr, data_te, raw_data_te, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
             split, **radiomics_params
         )
         
@@ -1692,7 +1716,6 @@ class SurvivalAnalyzer:
         # Get predictions
         risk_scores_radio = predictor_radio.predict(te_X_radio)
         raw_risk_scores_radio = predictor_radio.predict(raw_te_X_radio)
-
         risk_scores_patho = predictor_patho.predict(te_X_patho)
         raw_risk_scores_patho = predictor_patho.predict(raw_te_X_patho)
         
@@ -1708,8 +1731,12 @@ class SurvivalAnalyzer:
             c_index_radio = concordance_index_censored(tr_y["event"], tr_y["duration"], tr_risk_scores_radio)[0]
             c_index_patho = concordance_index_censored(tr_y["event"], tr_y["duration"], tr_risk_scores_patho)[0]
             total = c_index_radio + c_index_patho
-            fusion_weights['radiomics'] = c_index_radio / total
-            fusion_weights['pathomics'] = c_index_patho / total
+            if total > 0:
+                fusion_weights['radiomics'] = c_index_radio / total
+                fusion_weights['pathomics'] = c_index_patho / total
+            else:
+                fusion_weights['radiomics'] = 0.5
+                fusion_weights['pathomics'] = 0.5
         else:
             raise ValueError(f"Unknown fusion method: {fusion_method}")
         
@@ -1727,8 +1754,20 @@ class SurvivalAnalyzer:
         # Evaluate fused predictions
         scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
         
-        return multi_pipeline, risk_scores, scores_dict, raw_risk_scores
-    
+        # Return as dictionary for consistency
+        return {
+            'pipeline': multi_pipeline,
+            'risk_scores': risk_scores,
+            'raw_risk_scores': raw_risk_scores,
+            'scores': scores_dict,
+            'times': times,
+            'subject_ids': [p[0][0] for p in data_te],
+            'raw_subject_ids': [p[0][0] for p in raw_data_te],
+            'event': te_y["event"].astype(int).tolist(),
+            'duration': te_y["duration"].tolist()
+        }
+
+
     def strategy_4_pca_separate_fusion(self, split, split_idx, omics_params, model_params, 
                                         n_pca_components=None, fusion_method='average'):
         """Strategy 4: PCA on each modality separately, then separate models, then fusion"""
@@ -1738,7 +1777,7 @@ class SurvivalAnalyzer:
         radiomics_params = omics_params.copy()
         radiomics_params['omics'] = 'radiomics'
         radiomics_params['save_omics_dir'] = omics_params['save_omics_dir']['radiomics']
-        _, _, _, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
+        data_tr, data_te, raw_data_te, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
             split, **radiomics_params
         )
         
@@ -1788,7 +1827,6 @@ class SurvivalAnalyzer:
         # Get predictions
         risk_scores_radio = predictor_radio.predict(te_X_radio_pca)
         raw_risk_scores_radio = predictor_radio.predict(raw_te_X_radio_pca)
-
         risk_scores_patho = predictor_patho.predict(te_X_patho_pca)
         raw_risk_scores_patho = predictor_patho.predict(raw_te_X_patho_pca)
         
@@ -1804,8 +1842,12 @@ class SurvivalAnalyzer:
             c_index_radio = concordance_index_censored(tr_y["event"], tr_y["duration"], tr_risk_scores_radio)[0]
             c_index_patho = concordance_index_censored(tr_y["event"], tr_y["duration"], tr_risk_scores_patho)[0]
             total = c_index_radio + c_index_patho
-            fusion_weights['radiomics'] = c_index_radio / total
-            fusion_weights['pathomics'] = c_index_patho / total
+            if total > 0:
+                fusion_weights['radiomics'] = c_index_radio / total
+                fusion_weights['pathomics'] = c_index_patho / total
+            else:
+                fusion_weights['radiomics'] = 0.5
+                fusion_weights['pathomics'] = 0.5
         else:
             raise ValueError(f"Unknown fusion method: {fusion_method}")
         
@@ -1823,8 +1865,20 @@ class SurvivalAnalyzer:
         # Evaluate
         scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
         
-        return multi_pipeline, risk_scores, scores_dict, raw_risk_scores
-    
+        # Return as dictionary for consistency
+        return {
+            'pipeline': multi_pipeline,
+            'risk_scores': risk_scores,
+            'raw_risk_scores': raw_risk_scores,
+            'scores': scores_dict,
+            'times': times,
+            'subject_ids': [p[0][0] for p in data_te],
+            'raw_subject_ids': [p[0][0] for p in raw_data_te],
+            'event': te_y["event"].astype(int).tolist(),
+            'duration': te_y["duration"].tolist()
+        }
+
+
     def plot_survival_curve(self, survival_results, omics, strategy_name, pvalue):
         """Plot survival curve"""
         pd_risk = pd.DataFrame({k: survival_results[k] for k in ["risk", "event", "duration"]})
@@ -1846,18 +1900,22 @@ class SurvivalAnalyzer:
         plt.tight_layout()
         ax.set_ylabel("Survival Probability")
         ax.set_title(f"{omics} - {strategy_name}\np-value: {pvalue:.4f}")
+        
+        # Create directory if it doesn't exist
+        os.makedirs(f"{self.relative_path}/figures/plots", exist_ok=True)
         plt.savefig(f"{self.relative_path}/figures/plots/{omics}_{strategy_name}_survival_curve.png")
         plt.close()
-    
+
+
     def run_all_strategies(self, split_path, omics="radiopathomics", save_omics_dir=None,
-                           radiomics_aggregation=False, radiomics_aggregated_mode=None,
-                           radiomics_keys=None, pathomics_aggregation=False,
-                           pathomics_aggregated_mode=None, pathomics_keys=None,
-                           use_graph_properties=False, n_jobs=32, outcome=None,
-                           model="CoxPH", scorer="cindex", feature_selection=True,
-                           feature_var_threshold=1e-4, n_selected_features=64,
-                           n_bootstraps=100, n_pca_components=None, fusion_method='weighted',
-                           save_results_dir=None):
+                        radiomics_aggregation=False, radiomics_aggregated_mode=None,
+                        radiomics_keys=None, pathomics_aggregation=False,
+                        pathomics_aggregated_mode=None, pathomics_keys=None,
+                        use_graph_properties=False, n_jobs=32, outcome=None,
+                        model="CoxPH", scorer="cindex", feature_selection=True,
+                        feature_var_threshold=1e-4, n_selected_features=64,
+                        n_bootstraps=100, n_pca_components=None, fusion_method='weighted',
+                        save_results_dir=None):
         """Run all four strategies and save results"""
         
         splits = joblib.load(split_path)
@@ -1884,7 +1942,8 @@ class SurvivalAnalyzer:
             'feature_var_threshold': feature_var_threshold,
             'n_selected_features': n_selected_features,
             'n_bootstraps': n_bootstraps,
-            'n_jobs': n_jobs
+            'n_jobs': n_jobs,
+            'p_threshold': 0.2  # Default p-value threshold for feature selection
         }
         
         if omics in ['radiomics', 'pathomics']:
@@ -1906,7 +1965,10 @@ class SurvivalAnalyzer:
             f"radio+{radiomics_aggregated_mode}_" + \
             f"patho+{pathomics_aggregated_mode}_" + \
             f"model+{model}_scorer+{scorer}"
-
+        
+        # Create save directory if it doesn't exist
+        os.makedirs(save_results_dir, exist_ok=True)
+        
         all_results = {}
         
         for strategy_name, strategy_func in strategies.items():
@@ -1929,32 +1991,25 @@ class SurvivalAnalyzer:
                 
                 # Run strategy
                 try:
-                    pipeline, risk_scores, scores_dict, raw_risk_scores = strategy_func(
+                    results = strategy_func(
                         (split_idx, split), split_idx, omics_params, model_params
                     )
                     
                     # Store results
-                    _, data_te, raw_data_te, _, _, _, _, te_y = self.load_data_for_fold(
-                        (split_idx, split), **omics_params
-                    )
-                    
-                    strategy_results["predict_results"][f"Fold {split_idx}"] = scores_dict
-                    strategy_results["cv_scores"].append(scores_dict)
+                    strategy_results["predict_results"][f"Fold {split_idx}"] = results['scores']
+                    strategy_results["cv_scores"].append(results['scores'])
                     
                     # Store survival data
-                    subject_ids = [p[0][0] for p in data_te]
-                    raw_subject_ids = [p[0][0] for p in raw_data_te]
-                    
-                    strategy_results["survival_results"]["raw_subject"] += raw_subject_ids
-                    strategy_results["survival_results"]["raw_risk"] += raw_risk_scores.tolist()
-                    strategy_results["survival_results"]["subject"] += subject_ids
-                    strategy_results["survival_results"]["risk"] += risk_scores.tolist()
-                    strategy_results["survival_results"]["event"] += te_y["event"].astype(int).tolist()
-                    strategy_results["survival_results"]["duration"] += te_y["duration"].tolist()
+                    strategy_results["survival_results"]["raw_subject"] += results['raw_subject_ids']
+                    strategy_results["survival_results"]["raw_risk"] += results['raw_risk_scores'].tolist()
+                    strategy_results["survival_results"]["subject"] += results['subject_ids']
+                    strategy_results["survival_results"]["risk"] += results['risk_scores'].tolist()
+                    strategy_results["survival_results"]["event"] += results['event']
+                    strategy_results["survival_results"]["duration"] += results['duration']
                     
                     # Save model
                     model_path = os.path.join(model_dir, f"fold{split_idx}_model.joblib")
-                    joblib.dump({"pipeline": pipeline}, model_path)
+                    joblib.dump({"pipeline": results['pipeline']}, model_path)
                     
                 except Exception as e:
                     print(f"Error in fold {split_idx}: {e}")
@@ -2020,6 +2075,7 @@ class SurvivalAnalyzer:
         
         return all_results
 
+
 # Modified main function for backward compatibility
 def survival(
     split_path,
@@ -2043,13 +2099,63 @@ def survival(
     save_results_dir=None,
     n_pca_components=None,
     fusion_method='weighted'
-    ):
+):
     """
     Enhanced survival analysis with four different strategies:
     1. Direct concatenation of radiomics and pathomics
     2. PCA on concatenated features
     3. Separate models with result fusion
     4. Separate PCA + separate models + result fusion
+    
+    Parameters:
+    -----------
+    split_path : str
+        Path to the cross-validation splits file
+    radiomics_keys : list, optional
+        Keys for radiomics features to extract
+    pathomics_keys : list, optional
+        Keys for pathomics features to extract
+    omics : str
+        Type of omics data ('radiomics', 'pathomics', or 'radiopathomics')
+    save_omics_dir : dict or str
+        Directory to save/load omics features
+    outcome : str
+        Outcome variable name
+    n_jobs : int
+        Number of parallel jobs
+    radiomics_aggregation : bool
+        Whether to aggregate radiomics features
+    radiomics_aggregated_mode : str
+        Aggregation mode for radiomics ('mean', 'median', etc.)
+    pathomics_aggregation : bool
+        Whether to aggregate pathomics features
+    pathomics_aggregated_mode : str
+        Aggregation mode for pathomics ('mean', 'median', etc.)
+    model : str
+        Survival model type ('CoxPH', 'Coxnet', 'RSF', 'GradientBoost', 'IPCRidge', 'FastSVM')
+    scorer : str
+        Metric for model selection ('cindex', etc.)
+    feature_selection : bool
+        Whether to perform feature selection
+    feature_var_threshold : float
+        Variance threshold for feature selection
+    n_selected_features : int
+        Maximum number of features to select
+    n_bootstraps : int
+        Number of bootstrap samples for feature stabilization
+    use_graph_properties : bool
+        Whether to use graph properties for pathomics
+    save_results_dir : str
+        Directory to save results
+    n_pca_components : int or None
+        Number of PCA components (None for automatic based on variance)
+    fusion_method : str
+        Fusion method for multi-modal strategies ('average', 'weighted')
+    
+    Returns:
+    --------
+    dict
+        Results for all strategies
     """
     
     analyzer = SurvivalAnalyzer(save_results_dir)
@@ -2079,62 +2185,6 @@ def survival(
     )
     
     return results
-
-def generate_data_split(
-        x: list,
-        y: list,
-        train: float,
-        valid: float,
-        test: float,
-        num_folds: int,
-        seed: int = 42
-):
-    """Helper to generate splits
-    Args:
-        x (list): a list of image paths
-        y (list): a list of annotation paths
-        train (float): ratio of training samples
-        valid (float): ratio of validating samples
-        test (float): ratio of testing samples
-        num_folds (int): number of folds for cross-validation
-        seed (int): random seed
-    Returns:
-        splits (list): a list of folds, each fold consists of train, valid, and test splits
-    """
-    from sklearn.model_selection import train_test_split
-    assert train + valid <= 1.0, "train + valid ratio must be <= 1.0"
-
-    outer_splitter = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
-    splits = []
-
-    for train_valid_idx, test_idx in outer_splitter.split(x):
-        # Split test set
-        test_x = [x[i] for i in test_idx]
-        test_y = [y[i] for i in test_idx]
-
-        train_valid_x = [x[i] for i in train_valid_idx]
-        train_valid_y = [y[i] for i in train_valid_idx]
-
-        # Optional validation split
-        if valid > 0:
-            ratio = valid / (train + valid)
-            train_x, valid_x, train_y, valid_y = train_test_split(
-                train_valid_x, train_valid_y, test_size=ratio, random_state=seed, shuffle=True
-            )
-        else:
-            train_x, train_y = train_valid_x, train_valid_y
-            valid_x, valid_y = None, None
-
-        split_dict = {
-            "train": list(zip(train_x, train_y)),
-            "test": list(zip(test_x, test_y))
-        }
-        if valid > 0:
-            split_dict["valid"] = list(zip(valid_x, valid_y))
-
-        splits.append(split_dict)
-
-    return splits
 
 if __name__ == "__main__":
     ## argument parser

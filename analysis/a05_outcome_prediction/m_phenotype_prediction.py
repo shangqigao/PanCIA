@@ -38,6 +38,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC, LinearSVC
+from sklearn.decomposition import PCA
 from sklearn.metrics import average_precision_score as auprc_scorer
 from sklearn.metrics import roc_auc_score as auroc_scorer
 from sklearn.metrics import balanced_accuracy_score as acc_scorer
@@ -1031,6 +1032,1286 @@ def select_l1_svc_features(
     return selected_names
 
 
+# def phenotype_classification(
+#     split_path,
+#     radiomics_keys=None,
+#     pathomics_keys=None,
+#     omics="radiopathomics",
+#     save_omics_dir=None,
+#     outcome=None,
+#     n_jobs=32,
+#     radiomics_aggregation=False,
+#     radiomics_aggregated_mode=None,
+#     pathomics_aggregation=False,
+#     pathomics_aggregated_mode=None,
+#     model="LR",
+#     refit="roc_auc",
+#     feature_selection=True,
+#     feature_var_threshold=1e-4,
+#     n_selected_features=64,
+#     use_graph_properties=False,
+#     save_results_dir=None
+#     ):
+#     splits = joblib.load(split_path)
+#     predict_results = {}
+#     classification_results = {
+#         "raw_subject": [], "raw_pred": [], "raw_prob": [],
+#         "subject": [], "pred": [],  "prob": [],
+#         "label": [],
+#     }
+#     ml_model_name = f"{omics}_" + \
+#         f"radio+{radiomics_aggregated_mode}_" + \
+#         f"patho+{pathomics_aggregated_mode}_" + \
+#         f"model+{model}_scorer+{refit}"
+#     model_dir = os.path.join(save_results_dir, ml_model_name)
+#     os.makedirs(model_dir, exist_ok=True)
+#     for split_idx, split in enumerate(splits):
+#         print(f"Performing cross-validation on fold {split_idx}...")
+#         raw_data_tr, raw_data_va, raw_data_te = split["train"], split["valid"], split["test"]
+#         raw_data_tr = raw_data_tr + raw_data_va
+
+#         data_tr = [p for p in raw_data_tr if p[1] is not None]
+#         data_te = [p for p in raw_data_te if p[1] is not None]
+
+#         tr_y = np.array([p[1] for p in data_tr])
+#         tr_y = pd.DataFrame({'label': tr_y})
+#         te_y = np.array([p[1] for p in data_te])
+#         te_y = pd.DataFrame({'label': te_y})
+
+#         # Concatenate multi-omics if required
+#         if omics == "radiopathomics":
+#             tr_X = load_radiopathomics(
+#                 data=data_tr,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiopathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             te_X = load_radiopathomics(
+#                 data=data_te,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiopathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             raw_te_X = load_radiopathomics(
+#                 data=raw_data_te,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiopathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+#         elif omics == "pathomics":
+#             pathomics_tr_X = load_pathomics(
+#                 data=data_tr,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_pathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             pathomics_te_X = load_pathomics(
+#                 data=data_te,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_pathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             tr_X, te_X = pathomics_tr_X, pathomics_te_X
+
+#             raw_te_X = load_pathomics(
+#                 data=raw_data_te,
+#                 pathomics_aggregation=pathomics_aggregation,
+#                 pathomics_aggregated_mode=pathomics_aggregated_mode,
+#                 pathomics_keys=pathomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_pathomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+#         elif omics == "radiomics":
+#             radiomics_tr_X = load_radiomics(
+#                 data=data_tr,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             radiomics_te_X = load_radiomics(
+#                 data=data_te,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+
+#             tr_X, te_X = radiomics_tr_X, radiomics_te_X
+#             raw_te_X = load_radiomics(
+#                 data=raw_data_te,
+#                 radiomics_aggregation=radiomics_aggregation,
+#                 radiomics_aggregated_mode=radiomics_aggregated_mode,
+#                 radiomics_keys=radiomics_keys,
+#                 use_graph_properties=use_graph_properties,
+#                 n_jobs=n_jobs,
+#                 save_radiomics_dir=save_omics_dir,
+#                 outcome=outcome
+#             )
+#         else:
+#             raise NotImplementedError
+        
+#         # df_prop = df_prop.apply(zscore)
+#         if hasattr(tr_X,'shape'):
+#             print("Selected training omics:", tr_X.shape)
+#             print(tr_X.head())
+#         if hasattr(te_X,'shape'):
+#             print("Selected testing omics:", te_X.shape)
+#             print(te_X.head())
+#         if hasattr(raw_te_X,'shape'):
+#             print("Selected raw testing omics:", raw_te_X.shape)
+#             print(raw_te_X.head())
+
+#         # -----------------------------
+#         # Feature selection
+#         # -----------------------------
+#         # if feature_selection:
+#         #     print("\n=== Feature Selection ===")
+
+#         #     fs_kwargs = dict(
+#         #         C=0.01,
+#         #         max_features=n_selected_features,
+#         #         variance_threshold=feature_var_threshold,
+#         #         coef_threshold=1e-6,
+#         #         verbose=True,
+#         #     )
+
+#         #     # --------------------------------------------------
+#         #     # CASE 1️⃣ Multimodal input (list of DataFrames)
+#         #     # --------------------------------------------------
+#         #     if isinstance(tr_X, list):
+
+#         #         selected_modalities = []
+#         #         tr_selected = []
+#         #         te_selected = []
+#         #         raw_te_selected = []
+
+#         #         for i, (m_tr, m_te, m_raw) in enumerate(zip(tr_X, te_X, raw_te_X)):
+#         #             print(f"\nSelecting modality {i+1} features...")
+                    
+#         #             selected = select_l1_svc_features(m_tr, tr_y, **fs_kwargs)
+
+#         #             print(f"Modality {i+1}: kept {len(selected)} features")
+
+#         #             tr_selected.append(m_tr[selected])
+#         #             te_selected.append(m_te[selected])
+#         #             raw_te_selected.append(m_raw[selected])
+#         #             selected_modalities.append(selected)
+
+#         #         # concatenate AFTER selection
+#         #         tr_X = pd.concat(tr_selected, axis=1)
+#         #         te_X = pd.concat(te_selected, axis=1)
+#         #         raw_te_X = pd.concat(raw_te_selected, axis=1)
+
+#         #         print("\nFinal concatenated shape:", tr_X.shape)
+#         #         print(tr_X.head())
+
+#         #     # --------------------------------------------------
+#         #     # CASE 2️⃣ Unimodal input (DataFrame)
+#         #     # --------------------------------------------------
+#         #     else:
+#         #         selected = select_l1_svc_features(tr_X, tr_y, **fs_kwargs)
+
+#         #         print(f"Selected {len(selected)} features")
+
+#         #         tr_X = tr_X[selected]
+#         #         te_X = te_X[selected]
+#         #         raw_te_X = raw_te_X[selected]
+
+#         # feature selection
+#         if feature_selection:
+#             print("Selecting features using LinearSVC + L1...")
+
+#             scaler = StandardScaler()
+#             tr_X_scaled = scaler.fit_transform(tr_X)
+
+#             svc_fs = LinearSVC(
+#                 penalty="l1",
+#                 dual=False,
+#                 C=0.01,              # encourages sparsity, smaller is more sparse
+#                 class_weight="balanced",
+#                 max_iter=5000,
+#                 random_state=42,
+#             )
+
+#             svc_fs.fit(tr_X_scaled, tr_y["label"])
+
+#             selector = SelectFromModel(
+#                 svc_fs,
+#                 prefit=True,
+#                 threshold=1e-6,   # keep non-zero weights
+#                 max_features=n_selected_features      # <- maximum number of features to keep
+#             )
+
+#             selected_mask = selector.get_support()
+#             selected_names = tr_X.columns[selected_mask]
+
+#             tr_X = tr_X[selected_names]
+#             te_X = te_X[selected_names]
+#             raw_te_X = raw_te_X[selected_names]
+
+#             print(f"Selected features: {len(selected_names)}")
+
+#         # model selection
+#         print("Selecting classifier...")
+#         if model == "RF":
+#             predictor = randomforest(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+#         elif model == "XG":
+#             predictor = xgboost(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+#         elif model == "LR":
+#             predictor = logisticregression(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+#         elif model == "SVC":
+#             predictor = svc(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+#         else:
+#             raise NotImplementedError
+
+#         # save model and feature names
+#         model_path = os.path.join(model_dir, f"{ml_model_name}_fold{split_idx}.joblib")
+
+#         joblib.dump({
+#             "model": predictor,
+#             "features": list(tr_X.columns)
+#         }, model_path)
+
+#         print(f"Saved model to {model_path}")
+
+#         # Predictions
+#         raw_subject_ids = [p[0][0] for p in raw_data_te]
+#         classification_results["raw_subject"] += raw_subject_ids
+#         raw_pred = predictor.predict(raw_te_X)
+#         classification_results["raw_pred"] += raw_pred.tolist()
+#         raw_prob = predictor.predict_proba(raw_te_X)
+#         classification_results["raw_prob"] += raw_prob.tolist()
+
+#         subject_ids = [p[0][0] for p in data_te]
+#         classification_results["subject"] += subject_ids
+#         pred = predictor.predict(te_X)
+#         classification_results["pred"] += pred.tolist()
+#         prob = predictor.predict_proba(te_X)
+#         classification_results["prob"] += prob.tolist()
+#         num_class = prob.shape[1]
+
+#         # True labels
+#         label = te_y["label"].to_numpy(dtype=int)
+#         classification_results["label"] += label.tolist()
+
+#         # Initialize lists to store metrics per class
+#         acc_list, f1_list, auroc_list, auprc_list = [], [], [], []
+
+#         for cls in range(num_class):
+#             # Binary one-vs-rest labels
+#             y_true_cls = (label == cls).astype(int)
+#             y_pred_cls = (pred == cls).astype(int)
+#             y_prob_cls = prob[:, cls]
+
+#             # Accuracy & F1 always safe
+#             acc_list.append(acc_scorer(y_true_cls, y_pred_cls))
+#             f1_list.append(f1_scorer(y_true_cls, y_pred_cls))
+
+#             # ---- AUROC ----
+#             try:
+#                 if len(np.unique(y_true_cls)) < 2:
+#                     raise ValueError("single class")
+#                 auroc = auroc_scorer(y_true_cls, y_prob_cls)
+#             except Exception:
+#                 auroc = np.nan
+#             auroc_list.append(auroc)
+
+#             # ---- AUPRC ----
+#             try:
+#                 if len(np.unique(y_true_cls)) < 2:
+#                     raise ValueError("single class")
+#                 auprc = auprc_scorer(y_true_cls, y_prob_cls)
+#             except Exception:
+#                 auprc = np.nan
+#             auprc_list.append(auprc)
+
+
+#         # Optional: organize as dictionary
+#         scores_dict = {
+#             "acc": acc_list,
+#             "f1": f1_list,
+#             "auroc": auroc_list,
+#             "auprc": auprc_list
+#         }
+
+#         predict_results.update({f"Fold {split_idx}": scores_dict})
+
+#     # print average results across folds per class
+#     print(predict_results)
+#     for metric in scores_dict.keys():
+#         arr = np.array([v[metric] for v in predict_results.values()])
+
+#         mean_val = np.nanmean(arr, axis=0)
+#         std_val = np.nanstd(arr, axis=0)
+
+#         print(f"CV {metric} mean ± std:", mean_val, std_val)
+    
+#     #save predicted results
+#     save_path = f"{save_results_dir}/{ml_model_name}_results.json"
+#     classification_results = make_json_safe(classification_results)
+#     with open(save_path, "w") as f:
+#         json.dump(classification_results, f, indent=4)
+
+#     # save metrics
+#     save_path = f"{save_results_dir}/{ml_model_name}_metrics.json"
+#     predict_results = make_json_safe(predict_results)
+#     with open(save_path, "w") as f:
+#         json.dump(predict_results, f, indent=4)
+        
+#     return
+
+def make_json_safe(obj):
+    """Convert numpy types to Python native types for JSON serialization"""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {key: make_json_safe(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [make_json_safe(item) for item in obj]
+    else:
+        return obj
+
+class ClassificationPipeline:
+    """Unified pipeline that combines preprocessing, PCA, and classification model"""
+    
+    def __init__(self, scaler=None, pca=None, predictor=None, feature_names=None,
+                 fusion_weights=None, fusion_method='average'):
+        self.scaler = scaler
+        self.pca = pca
+        self.predictor = predictor
+        self.feature_names = feature_names
+        self.fusion_weights = fusion_weights
+        self.fusion_method = fusion_method
+        
+    def transform(self, X):
+        """Apply preprocessing and PCA"""
+        # Scale
+        if self.scaler is not None:
+            X_scaled = self.scaler.transform(X)
+        else:
+            X_scaled = X
+            
+        # Apply PCA if exists
+        if self.pca is not None:
+            X_transformed = self.pca.transform(X_scaled)
+        else:
+            X_transformed = X_scaled
+            
+        return X_transformed
+    
+    def predict(self, X):
+        """Predict class labels"""
+        X_transformed = self.transform(X)
+        return self.predictor.predict(X_transformed)
+    
+    def predict_proba(self, X):
+        """Predict class probabilities"""
+        X_transformed = self.transform(X)
+        return self.predictor.predict_proba(X_transformed)
+    
+    def predict_single(self, X):
+        """Predict for single patient"""
+        return self.predict(X)[0] if hasattr(self.predict(X), '__len__') else self.predict(X)
+
+
+class MultiModalClassificationPipeline:
+    """Pipeline for multi-modal fusion (Strategy 3 & 4) for classification"""
+    
+    def __init__(self, radio_pipeline=None, patho_pipeline=None,
+                 fusion_method='average', fusion_weights=None):
+        self.radio_pipeline = radio_pipeline
+        self.patho_pipeline = patho_pipeline
+        self.fusion_method = fusion_method
+        self.fusion_weights = fusion_weights
+        
+    def predict(self, radio_X, patho_X):
+        """Predict using both modalities"""
+        # Get individual predictions
+        radio_pred = self.radio_pipeline.predict(radio_X)
+        patho_pred = self.patho_pipeline.predict(patho_X)
+        
+        # Fuse predictions (for hard voting)
+        if self.fusion_method == 'voting':
+            # Hard voting
+            combined = np.stack([radio_pred, patho_pred], axis=1)
+            from scipy.stats import mode
+            return mode(combined, axis=1)[0].flatten()
+        else:
+            # Weighted or average - use probabilities
+            radio_proba = self.radio_pipeline.predict_proba(radio_X)
+            patho_proba = self.patho_pipeline.predict_proba(patho_X)
+            fused_proba = (self.fusion_weights['radiomics'] * radio_proba + 
+                          self.fusion_weights['pathomics'] * patho_proba)
+            return np.argmax(fused_proba, axis=1)
+    
+    def predict_proba(self, radio_X, patho_X):
+        """Predict class probabilities using both modalities"""
+        radio_proba = self.radio_pipeline.predict_proba(radio_X)
+        patho_proba = self.patho_pipeline.predict_proba(patho_X)
+        
+        return (self.fusion_weights['radiomics'] * radio_proba + 
+                self.fusion_weights['pathomics'] * patho_proba)
+    
+    def predict_single(self, radio_X, patho_X):
+        """Predict for single patient"""
+        result = self.predict(radio_X, patho_X)
+        return result[0] if hasattr(result, '__len__') else result
+
+
+class ClassificationAnalyzer:
+    def __init__(self, save_results_dir, relative_path="."):
+        self.save_results_dir = save_results_dir
+        self.relative_path = relative_path
+        
+    def load_data_for_fold(self, split, omics, radiomics_aggregation, radiomics_aggregated_mode,
+                           radiomics_keys, pathomics_aggregation, pathomics_aggregated_mode,
+                           pathomics_keys, use_graph_properties, n_jobs, save_omics_dir, outcome):
+        """Load data for a specific fold based on omics type"""
+        split_idx, split_data = split
+        raw_data_tr, raw_data_va, raw_data_te = split_data["train"], split_data["valid"], split_data["test"]
+        raw_data_tr = raw_data_tr + raw_data_va
+        
+        data_tr = [p for p in raw_data_tr if p[1] is not None]
+        data_te = [p for p in raw_data_te if p[1] is not None]
+        
+        tr_y = np.array([p[1] for p in data_tr])
+        tr_y = pd.DataFrame({'label': tr_y})
+        
+        te_y = np.array([p[1] for p in data_te])
+        te_y = pd.DataFrame({'label': te_y})
+        
+        if omics == "radiopathomics":
+            tr_X = load_radiopathomics(
+                data=data_tr, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                pathomics_aggregation=pathomics_aggregation, pathomics_aggregated_mode=pathomics_aggregated_mode,
+                pathomics_keys=pathomics_keys, use_graph_properties=use_graph_properties,
+                n_jobs=n_jobs, save_radiopathomics_dir=save_omics_dir, outcome=outcome
+            )
+            te_X = load_radiopathomics(
+                data=data_te, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                pathomics_aggregation=pathomics_aggregation, pathomics_aggregated_mode=pathomics_aggregated_mode,
+                pathomics_keys=pathomics_keys, use_graph_properties=use_graph_properties,
+                n_jobs=n_jobs, save_radiopathomics_dir=save_omics_dir, outcome=outcome
+            )
+            raw_te_X = load_radiopathomics(
+                data=raw_data_te, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                pathomics_aggregation=pathomics_aggregation, pathomics_aggregated_mode=pathomics_aggregated_mode,
+                pathomics_keys=pathomics_keys, use_graph_properties=use_graph_properties,
+                n_jobs=n_jobs, save_radiopathomics_dir=save_omics_dir, outcome=outcome
+            )
+        elif omics == "pathomics":
+            tr_X = load_pathomics(
+                data=data_tr, pathomics_aggregation=pathomics_aggregation,
+                pathomics_aggregated_mode=pathomics_aggregated_mode, pathomics_keys=pathomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_pathomics_dir=save_omics_dir, outcome=outcome
+            )
+            te_X = load_pathomics(
+                data=data_te, pathomics_aggregation=pathomics_aggregation,
+                pathomics_aggregated_mode=pathomics_aggregated_mode, pathomics_keys=pathomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_pathomics_dir=save_omics_dir, outcome=outcome
+            )
+            raw_te_X = load_pathomics(
+                data=raw_data_te, pathomics_aggregation=pathomics_aggregation,
+                pathomics_aggregated_mode=pathomics_aggregated_mode, pathomics_keys=pathomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_pathomics_dir=save_omics_dir, outcome=outcome
+            )
+        elif omics == "radiomics":
+            tr_X = load_radiomics(
+                data=data_tr, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_radiomics_dir=save_omics_dir, outcome=outcome
+            )
+            te_X = load_radiomics(
+                data=data_te, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_radiomics_dir=save_omics_dir, outcome=outcome
+            )
+            raw_te_X = load_radiomics(
+                data=raw_data_te, radiomics_aggregation=radiomics_aggregation,
+                radiomics_aggregated_mode=radiomics_aggregated_mode, radiomics_keys=radiomics_keys,
+                use_graph_properties=use_graph_properties, n_jobs=n_jobs,
+                save_radiomics_dir=save_omics_dir, outcome=outcome
+            )
+        else:
+            raise NotImplementedError
+            
+        return data_tr, data_te, raw_data_te, tr_X, te_X, raw_te_X, tr_y, te_y
+    
+    def apply_pca(self, X_train, X_test, X_raw, n_components=None, variance_ratio=0.95):
+        """Apply PCA for dimensionality reduction"""
+        scaler = StandardScaler()
+        X_train_scaled = scaler.fit_transform(X_train)
+        X_test_scaled = scaler.transform(X_test)
+        X_raw_scaled = scaler.transform(X_raw)
+        
+        if n_components is None:
+            pca = PCA(n_components=variance_ratio)
+        else:
+            pca = PCA(n_components=n_components)
+            
+        X_train_pca = pca.fit_transform(X_train_scaled)
+        X_test_pca = pca.transform(X_test_scaled)
+        X_raw_pca = pca.transform(X_raw_scaled)
+        
+        # Convert to DataFrame with column names
+        X_train_pca = pd.DataFrame(X_train_pca, columns=[f'PC{i+1}' for i in range(X_train_pca.shape[1])])
+        X_test_pca = pd.DataFrame(X_test_pca, columns=[f'PC{i+1}' for i in range(X_test_pca.shape[1])])
+        X_raw_pca = pd.DataFrame(X_raw_pca, columns=[f'PC{i+1}' for i in range(X_raw_pca.shape[1])])
+        
+        return X_train_pca, X_test_pca, X_raw_pca, pca, scaler
+    
+    def train_model(self, split_idx, tr_X, tr_y, refit, n_jobs, model_name="LR"):
+        """Train a classification model"""
+        if model_name == "RF":
+            predictor = randomforest(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+        elif model_name == "XG":
+            predictor = xgboost(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+        elif model_name == "LR":
+            predictor = logisticregression(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+        elif model_name == "SVC":
+            predictor = svc(split_idx, tr_X, tr_y['label'], refit, n_jobs)
+        else:
+            raise ValueError(f"Unknown model: {model_name}")
+        return predictor
+    
+    def feature_selection(self, tr_X, te_X, raw_te_X, tr_y, feature_var_threshold=1e-4, 
+                         n_selected_features=64, C=0.01, coef_threshold=1e-6):
+        """Perform feature selection using LinearSVC with L1 penalty"""
+        print("Selecting features using LinearSVC + L1...")
+        
+        # Scale features
+        scaler = StandardScaler()
+        tr_X_scaled = scaler.fit_transform(tr_X)
+        
+        # Train L1-regularized LinearSVC
+        svc_fs = LinearSVC(
+            penalty="l1",
+            dual=False,
+            C=C,
+            class_weight="balanced",
+            max_iter=5000,
+            random_state=42,
+        )
+        
+        svc_fs.fit(tr_X_scaled, tr_y["label"])
+        
+        # Select features with non-zero coefficients, limited to max_features
+        selector = SelectFromModel(
+            svc_fs,
+            prefit=True,
+            threshold=coef_threshold,
+            max_features=n_selected_features
+        )
+        
+        selected_mask = selector.get_support()
+        selected_names = tr_X.columns[selected_mask].tolist()
+        
+        print(f"Selected {len(selected_names)} features (from {len(tr_X.columns)})")
+        
+        tr_X = tr_X[selected_names]
+        te_X = te_X[selected_names]
+        raw_te_X = raw_te_X[selected_names]
+        
+        return tr_X, te_X, raw_te_X, scaler, selected_names
+    
+    def evaluate_predictions(self, te_y, pred, prob):
+        """Evaluate classification predictions"""
+        label = te_y["label"].to_numpy(dtype=int)
+        num_class = prob.shape[1]
+        
+        # Initialize lists to store metrics per class
+        acc_list, f1_list, auroc_list, auprc_list = [], [], [], []
+        
+        for cls in range(num_class):
+            # Binary one-vs-rest labels
+            y_true_cls = (label == cls).astype(int)
+            y_pred_cls = (pred == cls).astype(int)
+            y_prob_cls = prob[:, cls]
+            
+            # Accuracy & F1
+            acc_list.append(acc_scorer(y_true_cls, y_pred_cls))
+            f1_list.append(f1_scorer(y_true_cls, y_pred_cls))
+            
+            # AUROC
+            try:
+                if len(np.unique(y_true_cls)) < 2:
+                    raise ValueError("single class")
+                auroc = auroc_scorer(y_true_cls, y_prob_cls)
+            except Exception:
+                auroc = np.nan
+            auroc_list.append(auroc)
+            
+            # AUPRC
+            try:
+                if len(np.unique(y_true_cls)) < 2:
+                    raise ValueError("single class")
+                auprc = auprc_scorer(y_true_cls, y_prob_cls)
+            except Exception:
+                auprc = np.nan
+            auprc_list.append(auprc)
+        
+        return {
+            "acc": acc_list,
+            "f1": f1_list,
+            "auroc": auroc_list,
+            "auprc": auprc_list
+        }
+    
+    def get_class_specific_weights(tr_labels, proba):
+        """
+        Calculate AUROC for each class separately (one-vs-rest) using vectorized operations
+        
+        Parameters:
+        -----------
+        tr_labels : array-like
+            True labels
+        proba : array-like
+            Probability predictions (n_samples x n_classes)
+        
+        Returns:
+        --------
+        np.ndarray: Class-specific AUROC scores (shape: n_classes,)
+        """
+        n_classes = proba.shape[1]
+        class_aurocs = np.zeros(n_classes)
+        
+        for cls in range(n_classes):
+            y_true_binary = (tr_labels == cls).astype(int)
+            y_prob_binary = proba[:, cls]
+            
+            try:
+                if len(np.unique(y_true_binary)) >= 2:
+                    auroc = auroc_scorer(y_true_binary, y_prob_binary)
+                else:
+                    auroc = 0.5
+            except Exception:
+                auroc = 0.5
+            
+            class_aurocs[cls] = auroc
+        
+        return class_aurocs
+    
+    def strategy_1_direct_concat(self, split, split_idx, omics_params, model_params):
+        """Strategy 1: Direct concatenation of radiomics and pathomics"""
+        print(f"\n=== Strategy 1: Direct Concatenation ===")
+        
+        # Load data
+        _, data_te, raw_data_te, tr_X, te_X, raw_te_X, tr_y, te_y = self.load_data_for_fold(
+            split, **omics_params
+        )
+        
+        # Feature selection
+        if model_params['feature_selection']:
+            tr_X, te_X, raw_te_X, _, _ = self.feature_selection(
+                tr_X, te_X, raw_te_X, tr_y,
+                model_params['feature_var_threshold'],
+                model_params['n_selected_features'],
+                model_params.get('C', 0.01),
+                model_params.get('coef_threshold', 1e-6)
+            )
+        
+        # Train model
+        predictor = self.train_model(
+            split_idx, tr_X, tr_y, model_params['refit'],
+            model_params['n_jobs'], model_params['model']
+        )
+        
+        # Create pipeline
+        pipeline = ClassificationPipeline(
+            scaler=None,
+            pca=None,
+            predictor=predictor,
+            feature_names=list(tr_X.columns),
+            fusion_method='direct'
+        )
+        
+        # Predict and evaluate
+        pred = predictor.predict(te_X)
+        prob = predictor.predict_proba(te_X)
+        raw_pred = predictor.predict(raw_te_X)
+        raw_prob = predictor.predict_proba(raw_te_X)
+        scores_dict = self.evaluate_predictions(te_y, pred, prob)
+        
+        # Collect results
+        results = {
+            'pipeline': pipeline,
+            'pred': pred,
+            'prob': prob,
+            'raw_pred': raw_pred,
+            'raw_prob': raw_prob,
+            'scores': scores_dict,
+            'subject_ids': [p[0][0] for p in data_te],
+            'raw_subject_ids': [p[0][0] for p in raw_data_te],
+            'labels': te_y["label"].to_numpy(dtype=int).tolist()
+        }
+        
+        return results
+    
+    def strategy_2_pca_concat(self, split, split_idx, omics_params, model_params, n_pca_components=None):
+        """Strategy 2: PCA on concatenated radiomics and pathomics"""
+        print(f"\n=== Strategy 2: PCA on Concatenated Features ===")
+        
+        # Load data
+        _, data_te, raw_data_te, tr_X, te_X, raw_te_X, tr_y, te_y = self.load_data_for_fold(
+            split, **omics_params
+        )
+        
+        # Apply PCA
+        tr_X_pca, te_X_pca, raw_te_X_pca, pca_model, scaler = self.apply_pca(
+            tr_X, te_X, raw_te_X, n_components=n_pca_components
+        )
+        print(f"PCA reduced dimensions from {tr_X.shape[1]} to {tr_X_pca.shape[1]}")
+        
+        # Train model on PCA features
+        predictor = self.train_model(
+            split_idx, tr_X_pca, tr_y, model_params['refit'],
+            model_params['n_jobs'], model_params['model']
+        )
+        
+        # Create pipeline
+        pipeline = ClassificationPipeline(
+            scaler=scaler,
+            pca=pca_model,
+            predictor=predictor,
+            feature_names=list(tr_X_pca.columns),
+            fusion_method='pca_concat'
+        )
+        
+        # Predict and evaluate
+        pred = predictor.predict(te_X_pca)
+        prob = predictor.predict_proba(te_X_pca)
+        raw_pred = predictor.predict(raw_te_X_pca)
+        raw_prob = predictor.predict_proba(raw_te_X_pca)
+        scores_dict = self.evaluate_predictions(te_y, pred, prob)
+        
+        # Collect results
+        results = {
+            'pipeline': pipeline,
+            'pred': pred,
+            'prob': prob,
+            'raw_pred': raw_pred,
+            'raw_prob': raw_prob,
+            'scores': scores_dict,
+            'subject_ids': [p[0][0] for p in data_te],
+            'raw_subject_ids': [p[0][0] for p in raw_data_te],
+            'labels': te_y["label"].to_numpy(dtype=int).tolist()
+        }
+        
+        return results
+    
+    def strategy_3_separate_fusion(self, split, split_idx, omics_params, model_params, fusion_method='weighted'):
+        """Strategy 3: Separate ML models for radiomics and pathomics with result fusion"""
+        print(f"\n=== Strategy 3: Separate Models with Result Fusion ===")
+        
+        # Load radiomics data
+        radiomics_params = omics_params.copy()
+        radiomics_params['omics'] = 'radiomics'
+        radiomics_params['save_omics_dir'] = omics_params['save_omics_dir']['radiomics']
+        _, data_te, raw_data_te, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
+            split, **radiomics_params
+        )
+        
+        # Load pathomics data
+        pathomics_params = omics_params.copy()
+        pathomics_params['omics'] = 'pathomics'
+        pathomics_params['save_omics_dir'] = omics_params['save_omics_dir']['pathomics']
+        _, _, _, tr_X_patho, te_X_patho, raw_te_X_patho, _, _ = self.load_data_for_fold(
+            split, **pathomics_params
+        )
+        
+        # Feature selection for each modality
+        if model_params['feature_selection']:
+            tr_X_radio, te_X_radio, raw_te_X_radio, _, _ = self.feature_selection(
+                tr_X_radio, te_X_radio, raw_te_X_radio, tr_y,
+                model_params['feature_var_threshold'],
+                model_params['n_selected_features']
+            )
+            tr_X_patho, te_X_patho, raw_te_X_patho, _, _ = self.feature_selection(
+                tr_X_patho, te_X_patho, raw_te_X_patho, tr_y,
+                model_params['feature_var_threshold'],
+                model_params['n_selected_features']
+            )
+        
+        # Train separate models
+        predictor_radio = self.train_model(
+            split_idx, tr_X_radio, tr_y, model_params['refit'],
+            model_params['n_jobs'], model_params['model']
+        )
+        predictor_patho = self.train_model(
+            split_idx, tr_X_patho, tr_y, model_params['refit'],
+            model_params['n_jobs'], model_params['model']
+        )
+        
+        # Create individual pipelines
+        radio_pipeline = ClassificationPipeline(
+            scaler=None, pca=None, predictor=predictor_radio,
+            feature_names=list(tr_X_radio.columns)
+        )
+        patho_pipeline = ClassificationPipeline(
+            scaler=None, pca=None, predictor=predictor_patho,
+            feature_names=list(tr_X_patho.columns)
+        )
+        
+        # Get predictions
+        radio_proba = predictor_radio.predict_proba(te_X_radio)
+        patho_proba = predictor_patho.predict_proba(te_X_patho)
+        radio_pred = predictor_radio.predict(te_X_radio)
+        patho_pred = predictor_patho.predict(te_X_patho)
+        
+        raw_radio_proba = predictor_radio.predict_proba(raw_te_X_radio)
+        raw_patho_proba = predictor_patho.predict_proba(raw_te_X_patho)
+        raw_radio_pred = predictor_radio.predict(raw_te_X_radio)
+        raw_patho_pred = predictor_patho.predict(raw_te_X_patho)
+        
+        # Calculate fusion weights based on validation performance
+        fusion_weights = {}
+        if fusion_method == 'average':
+            fusion_weights['radiomics'] = 0.5
+            fusion_weights['pathomics'] = 0.5
+        elif fusion_method == 'weighted':
+            # Use AUROC on training data as weight
+            tr_radio_proba = predictor_radio.predict_proba(tr_X_radio)
+            tr_patho_proba = predictor_patho.predict_proba(tr_X_patho)
+            
+            tr_labels = tr_y["label"].to_numpy(dtype=int)
+            
+            # Calculate AUROC for each modality
+            auroc_radio = self.get_class_specific_weights(tr_labels, tr_radio_proba)
+            auroc_patho = self.get_class_specific_weights(tr_labels, tr_patho_proba)
+            
+            total = auroc_radio + auroc_patho
+            total = np.where(total == 0, 1, total) 
+
+            fusion_weights['radiomics'] = (auroc_radio / total).flatten().tolist()
+            fusion_weights['pathomics'] = (auroc_patho / total).flatten().tolist()
+        elif fusion_method == 'voting':
+            fusion_weights['radiomics'] = 0.5
+            fusion_weights['pathomics'] = 0.5
+        else:
+            raise ValueError(f"Unknown fusion method: {fusion_method}")
+        
+        # Fuse predictions
+        if fusion_method == 'voting':
+            # Hard voting
+            from scipy.stats import mode
+            combined = np.stack([radio_pred, patho_pred], axis=1)
+            pred = mode(combined, axis=1)[0].flatten()
+            prob = (radio_proba + patho_proba) / 2
+            
+            raw_combined = np.stack([raw_radio_pred, raw_patho_pred], axis=1)
+            raw_pred = mode(raw_combined, axis=1)[0].flatten()
+            raw_prob = (raw_radio_proba + raw_patho_proba) / 2
+        elif fusion_method == 'weighted':
+            # Weighted use probabilities
+            radio_weight = np.array(fusion_weights['radiomics']).reshape(1, -1)
+            patho_weight = np.array(fusion_weights['pathomics']).reshape(1, -1)
+
+            prob = radio_weight * radio_proba + patho_weight * patho_proba
+            prob = prob / prob.sum(axis=1, keepdims=True)
+            pred = np.argmax(prob, axis=1)
+            
+            raw_prob = radio_weight * raw_radio_proba + patho_weight * raw_patho_proba
+            raw_prob = raw_prob / raw_prob.sum(axis=1, keepdims=True)
+            raw_pred = np.argmax(raw_prob, axis=1)
+        else:
+            prob = fusion_weights['radiomics'] * radio_proba + fusion_weights['pathomics'] * patho_proba
+            pred = np.argmax(prob, axis=1)
+            
+            raw_prob = fusion_weights['radiomics'] * raw_radio_proba + fusion_weights['pathomics'] * raw_patho_proba
+            raw_pred = np.argmax(raw_prob, axis=1)
+        
+        # Evaluate
+        scores_dict = self.evaluate_predictions(te_y, pred, prob)
+        
+        # Create multi-modal pipeline
+        multi_pipeline = MultiModalClassificationPipeline(
+            radio_pipeline=radio_pipeline,
+            patho_pipeline=patho_pipeline,
+            fusion_method=fusion_method,
+            fusion_weights=fusion_weights
+        )
+        
+        # Collect results
+        results = {
+            'pipeline': multi_pipeline,
+            'pred': pred,
+            'prob': prob,
+            'raw_pred': raw_pred,
+            'raw_prob': raw_prob,
+            'scores': scores_dict,
+            'subject_ids': [p[0][0] for p in data_te],
+            'raw_subject_ids': [p[0][0] for p in raw_data_te],
+            'labels': te_y["label"].to_numpy(dtype=int).tolist()
+        }
+        
+        return results
+    
+    def strategy_4_pca_separate_fusion(self, split, split_idx, omics_params, model_params,
+                                        n_pca_components=None, fusion_method='weighted'):
+        """Strategy 4: PCA on each modality separately, then separate models, then fusion"""
+        print(f"\n=== Strategy 4: Separate PCA + Separate Models + Fusion ===")
+        
+        # Load radiomics data
+        radiomics_params = omics_params.copy()
+        radiomics_params['omics'] = 'radiomics'
+        radiomics_params['save_omics_dir'] = omics_params['save_omics_dir']['radiomics']
+        _, data_te, raw_data_te, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
+            split, **radiomics_params
+        )
+        
+        # Load pathomics data
+        pathomics_params = omics_params.copy()
+        pathomics_params['omics'] = 'pathomics'
+        pathomics_params['save_omics_dir'] = omics_params['save_omics_dir']['pathomics']
+        _, _, _, tr_X_patho, te_X_patho, raw_te_X_patho, _, _ = self.load_data_for_fold(
+            split, **pathomics_params
+        )
+        
+        # Apply PCA separately
+        tr_X_radio_pca, te_X_radio_pca, raw_te_X_radio_pca, pca_radio, scaler_radio = self.apply_pca(
+            tr_X_radio, te_X_radio, raw_te_X_radio, n_components=n_pca_components
+        )
+        tr_X_patho_pca, te_X_patho_pca, raw_te_X_patho_pca, pca_patho, scaler_patho = self.apply_pca(
+            tr_X_patho, te_X_patho, raw_te_X_patho, n_components=n_pca_components
+        )
+        
+        print(f"Radiomics PCA: {tr_X_radio.shape[1]} -> {tr_X_radio_pca.shape[1]}")
+        print(f"Pathomics PCA: {tr_X_patho.shape[1]} -> {tr_X_patho_pca.shape[1]}")
+        
+        # Train separate models on PCA features
+        predictor_radio = self.train_model(
+            split_idx, tr_X_radio_pca, tr_y, model_params['refit'],
+            model_params['n_jobs'], model_params['model']
+        )
+        predictor_patho = self.train_model(
+            split_idx, tr_X_patho_pca, tr_y, model_params['refit'],
+            model_params['n_jobs'], model_params['model']
+        )
+        
+        # Create individual pipelines
+        radio_pipeline = ClassificationPipeline(
+            scaler=scaler_radio, pca=pca_radio, predictor=predictor_radio,
+            feature_names=list(tr_X_radio_pca.columns)
+        )
+        patho_pipeline = ClassificationPipeline(
+            scaler=scaler_patho, pca=pca_patho, predictor=predictor_patho,
+            feature_names=list(tr_X_patho_pca.columns)
+        )
+        
+        # Get predictions
+        radio_proba = predictor_radio.predict_proba(te_X_radio_pca)
+        patho_proba = predictor_patho.predict_proba(te_X_patho_pca)
+        radio_pred = predictor_radio.predict(te_X_radio_pca)
+        patho_pred = predictor_patho.predict(te_X_patho_pca)
+        
+        raw_radio_proba = predictor_radio.predict_proba(raw_te_X_radio_pca)
+        raw_patho_proba = predictor_patho.predict_proba(raw_te_X_patho_pca)
+        raw_radio_pred = predictor_radio.predict(raw_te_X_radio_pca)
+        raw_patho_pred = predictor_patho.predict(raw_te_X_patho_pca)
+        
+        # Calculate fusion weights
+        fusion_weights = {}
+        if fusion_method == 'average':
+            fusion_weights['radiomics'] = 0.5
+            fusion_weights['pathomics'] = 0.5
+        elif fusion_method == 'weighted':
+            # Use AUROC on training data as weight
+            tr_radio_proba = predictor_radio.predict_proba(tr_X_radio_pca)
+            tr_patho_proba = predictor_patho.predict_proba(tr_X_patho_pca)
+            
+            tr_labels = tr_y["label"].to_numpy(dtype=int)
+            
+            # Calculate AUROC for each modality
+            auroc_radio = self.get_class_specific_weights(tr_labels, tr_radio_proba)
+            auroc_patho = self.get_class_specific_weights(tr_labels, tr_patho_proba)
+            
+            total = auroc_radio + auroc_patho
+            total = np.where(total == 0, 1, total) 
+
+            fusion_weights['radiomics'] = (auroc_radio / total).flatten().tolist()
+            fusion_weights['pathomics'] = (auroc_patho / total).flatten().tolist()
+        elif fusion_method == 'voting':
+            fusion_weights['radiomics'] = 0.5
+            fusion_weights['pathomics'] = 0.5
+        else:
+            raise ValueError(f"Unknown fusion method: {fusion_method}")
+        
+        # Fuse predictions
+        if fusion_method == 'voting':
+            # Hard voting
+            from scipy.stats import mode
+            combined = np.stack([radio_pred, patho_pred], axis=1)
+            pred = mode(combined, axis=1)[0].flatten()
+            prob = (radio_proba + patho_proba) / 2
+            
+            raw_combined = np.stack([raw_radio_pred, raw_patho_pred], axis=1)
+            raw_pred = mode(raw_combined, axis=1)[0].flatten()
+            raw_prob = (raw_radio_proba + raw_patho_proba) / 2
+        elif fusion_method == 'weighted':
+            # Weighted use probabilities
+            radio_weight = np.array(fusion_weights['radiomics']).reshape(1, -1)
+            patho_weight = np.array(fusion_weights['pathomics']).reshape(1, -1)
+
+            prob = radio_weight * radio_proba + patho_weight * patho_proba
+            prob = prob / prob.sum(axis=1, keepdims=True)
+            pred = np.argmax(prob, axis=1)
+            
+            raw_prob = radio_weight * raw_radio_proba + patho_weight * raw_patho_proba
+            raw_prob = raw_prob / raw_prob.sum(axis=1, keepdims=True)
+            raw_pred = np.argmax(raw_prob, axis=1)
+        else:
+            prob = fusion_weights['radiomics'] * radio_proba + fusion_weights['pathomics'] * patho_proba
+            pred = np.argmax(prob, axis=1)
+            
+            raw_prob = fusion_weights['radiomics'] * raw_radio_proba + fusion_weights['pathomics'] * raw_patho_proba
+            raw_pred = np.argmax(raw_prob, axis=1)
+        
+        # Evaluate
+        scores_dict = self.evaluate_predictions(te_y, pred, prob)
+        
+        # Create multi-modal pipeline
+        multi_pipeline = MultiModalClassificationPipeline(
+            radio_pipeline=radio_pipeline,
+            patho_pipeline=patho_pipeline,
+            fusion_method=fusion_method,
+            fusion_weights=fusion_weights
+        )
+        
+        # Collect results
+        results = {
+            'pipeline': multi_pipeline,
+            'pred': pred,
+            'prob': prob,
+            'raw_pred': raw_pred,
+            'raw_prob': raw_prob,
+            'scores': scores_dict,
+            'subject_ids': [p[0][0] for p in data_te],
+            'raw_subject_ids': [p[0][0] for p in raw_data_te],
+            'labels': te_y["label"].to_numpy(dtype=int).tolist()
+        }
+        
+        return results
+    
+    def run_all_strategies(self, split_path, omics="radiopathomics", save_omics_dir=None,
+                           radiomics_aggregation=False, radiomics_aggregated_mode=None,
+                           radiomics_keys=None, pathomics_aggregation=False,
+                           pathomics_aggregated_mode=None, pathomics_keys=None,
+                           use_graph_properties=False, n_jobs=32, outcome=None,
+                           model="LR", refit="roc_auc", feature_selection=True,
+                           feature_var_threshold=1e-4, n_selected_features=64,
+                           n_pca_components=None, fusion_method='weighted',
+                           save_results_dir=None):
+        """Run all four strategies and save results"""
+        
+        splits = joblib.load(split_path)
+        
+        # Prepare parameters
+        omics_params = {
+            'omics': omics,
+            'radiomics_aggregation': radiomics_aggregation,
+            'radiomics_aggregated_mode': radiomics_aggregated_mode,
+            'radiomics_keys': radiomics_keys,
+            'pathomics_aggregation': pathomics_aggregation,
+            'pathomics_aggregated_mode': pathomics_aggregated_mode,
+            'pathomics_keys': pathomics_keys,
+            'use_graph_properties': use_graph_properties,
+            'n_jobs': n_jobs,
+            'save_omics_dir': save_omics_dir,
+            'outcome': outcome
+        }
+        
+        model_params = {
+            'model': model,
+            'refit': refit,
+            'feature_selection': feature_selection,
+            'feature_var_threshold': feature_var_threshold,
+            'n_selected_features': n_selected_features,
+            'n_jobs': n_jobs,
+        }
+        
+        if omics in ['radiomics', 'pathomics']:
+            strategies = {
+                'Strategy1_DirectConcat': self.strategy_1_direct_concat,
+                'Strategy2_PCA_Concat': lambda s, idx, op, mp: self.strategy_2_pca_concat(s, idx, op, mp, n_pca_components)
+            }
+        elif omics == 'radiopathomics':
+            strategies = {
+                'Strategy1_DirectConcat': self.strategy_1_direct_concat,
+                'Strategy2_PCA_Concat': lambda s, idx, op, mp: self.strategy_2_pca_concat(s, idx, op, mp, n_pca_components),
+                'Strategy3_Separate_Fusion': lambda s, idx, op, mp: self.strategy_3_separate_fusion(s, idx, op, mp, fusion_method),
+                'Strategy4_PCA_Separate_Fusion': lambda s, idx, op, mp: self.strategy_4_pca_separate_fusion(s, idx, op, mp, n_pca_components, fusion_method)
+            }
+        else:
+            raise ValueError(f"{omics} is not supported yet")
+        
+        ml_model_name = f"{omics}_" + \
+            f"radio+{radiomics_aggregated_mode}_" + \
+            f"patho+{pathomics_aggregated_mode}_" + \
+            f"model+{model}_scorer+{refit}"
+        
+        all_results = {}
+        
+        for strategy_name, strategy_func in strategies.items():
+            print(f"\n{'='*60}")
+            print(f"Running {strategy_name}")
+            print(f"{'='*60}")
+            
+            strategy_results = {
+                "predict_results": {},
+                "classification_results": {
+                    "raw_subject": [], "raw_pred": [], "raw_prob": [],
+                    "subject": [], "pred": [], "prob": [],
+                    "label": []
+                },
+                "cv_scores": []
+            }
+            
+            model_dir = os.path.join(save_results_dir, f"{ml_model_name}_{strategy_name}")
+            os.makedirs(model_dir, exist_ok=True)
+            
+            for split_idx, split in enumerate(splits):
+                print(f"\n--- Fold {split_idx} ---")
+                
+                # Run strategy
+                try:
+                    results = strategy_func(
+                        (split_idx, split), split_idx, omics_params, model_params
+                    )
+                    
+                    # Store results
+                    strategy_results["predict_results"][f"Fold {split_idx}"] = results['scores']
+                    strategy_results["cv_scores"].append(results['scores'])
+                    
+                    # Store classification data
+                    strategy_results["classification_results"]["raw_subject"] += results['raw_subject_ids']
+                    strategy_results["classification_results"]["raw_pred"] += results['raw_pred'].tolist()
+                    strategy_results["classification_results"]["raw_prob"] += results['raw_prob'].tolist()
+                    strategy_results["classification_results"]["subject"] += results['subject_ids']
+                    strategy_results["classification_results"]["pred"] += results['pred'].tolist()
+                    strategy_results["classification_results"]["prob"] += results['prob'].tolist()
+                    strategy_results["classification_results"]["label"] += results['labels']
+                    
+                    # Save model
+                    model_path = os.path.join(model_dir, f"fold{split_idx}_model.joblib")
+                    joblib.dump({"pipeline": results['pipeline']}, model_path)
+                    
+                except Exception as e:
+                    print(f"Error in fold {split_idx}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
+            
+            # Compute cross-validation statistics
+            if strategy_results["cv_scores"]:
+                cv_stats = {}
+                # Get all metrics from the first fold
+                for metric in strategy_results["cv_scores"][0].keys():
+                    # For each metric, we have a list of values per class
+                    n_classes = len(strategy_results["cv_scores"][0][metric])
+                    metric_values_per_class = [[] for _ in range(n_classes)]
+                    
+                    for fold_score in strategy_results["cv_scores"]:
+                        for class_idx in range(n_classes):
+                            metric_values_per_class[class_idx].append(fold_score[metric][class_idx])
+                    
+                    cv_stats[metric] = {
+                        "per_class_mean": [np.nanmean(values) for values in metric_values_per_class],
+                        "per_class_std": [np.nanstd(values) for values in metric_values_per_class],
+                        "mean_across_classes": np.nanmean([np.nanmean(values) for values in metric_values_per_class]),
+                        "std_across_classes": np.nanstd([np.nanmean(values) for values in metric_values_per_class])
+                    }
+                    
+                    print(f"\n{metric} per class (mean ± std):")
+                    for class_idx, (mean_val, std_val) in enumerate(zip(cv_stats[metric]["per_class_mean"], cv_stats[metric]["per_class_std"])):
+                        print(f"  Class {class_idx}: {mean_val:.4f} ± {std_val:.4f}")
+                    print(f"  Mean across classes: {cv_stats[metric]['mean_across_classes']:.4f} ± {cv_stats[metric]['std_across_classes']:.4f}")
+                
+                # Save classification results
+                save_path = f"{save_results_dir}/{ml_model_name}_{strategy_name}_results.json"
+                classification_results = make_json_safe(strategy_results["classification_results"])
+                with open(save_path, "w") as f:
+                    json.dump(classification_results, f, indent=4)
+                
+                # Save metrics
+                save_path = f"{save_results_dir}/{ml_model_name}_{strategy_name}_metrics.json"
+                predict_results = make_json_safe({
+                    "cv_results": strategy_results["predict_results"],
+                    "cv_statistics": cv_stats
+                })
+                with open(save_path, "w") as f:
+                    json.dump(predict_results, f, indent=4)
+                
+                all_results[strategy_name] = {
+                    "cv_statistics": cv_stats,
+                }
+                
+                print(f"\n{strategy_name} Results Summary:")
+                for metric, stats in cv_stats.items():
+                    print(f"  {metric}: {stats['mean_across_classes']:.4f} ± {stats['std_across_classes']:.4f}")
+        
+        # Save comparison summary
+        comparison_path = f"{save_results_dir}/{ml_model_name}_strategies.json"
+        with open(comparison_path, "w") as f:
+            json.dump(make_json_safe(all_results), f, indent=4)
+        
+        return all_results
+
+
 def phenotype_classification(
     split_path,
     radiomics_keys=None,
@@ -1049,358 +2330,98 @@ def phenotype_classification(
     feature_var_threshold=1e-4,
     n_selected_features=64,
     use_graph_properties=False,
-    save_results_dir=None
-    ):
-    splits = joblib.load(split_path)
-    predict_results = {}
-    classification_results = {
-        "raw_subject": [], "raw_pred": [], "raw_prob": [],
-        "subject": [], "pred": [],  "prob": [],
-        "label": [],
-    }
-    ml_model_name = f"{omics}_" + \
-        f"radio+{radiomics_aggregated_mode}_" + \
-        f"patho+{pathomics_aggregated_mode}_" + \
-        f"model+{model}_scorer+{refit}"
-    model_dir = os.path.join(save_results_dir, ml_model_name)
-    os.makedirs(model_dir, exist_ok=True)
-    for split_idx, split in enumerate(splits):
-        print(f"Performing cross-validation on fold {split_idx}...")
-        raw_data_tr, raw_data_va, raw_data_te = split["train"], split["valid"], split["test"]
-        raw_data_tr = raw_data_tr + raw_data_va
-
-        data_tr = [p for p in raw_data_tr if p[1] is not None]
-        data_te = [p for p in raw_data_te if p[1] is not None]
-
-        tr_y = np.array([p[1] for p in data_tr])
-        tr_y = pd.DataFrame({'label': tr_y})
-        te_y = np.array([p[1] for p in data_te])
-        te_y = pd.DataFrame({'label': te_y})
-
-        # Concatenate multi-omics if required
-        if omics == "radiopathomics":
-            tr_X = load_radiopathomics(
-                data=data_tr,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            te_X = load_radiopathomics(
-                data=data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            raw_te_X = load_radiopathomics(
-                data=raw_data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiopathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-        elif omics == "pathomics":
-            pathomics_tr_X = load_pathomics(
-                data=data_tr,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            pathomics_te_X = load_pathomics(
-                data=data_te,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            tr_X, te_X = pathomics_tr_X, pathomics_te_X
-
-            raw_te_X = load_pathomics(
-                data=raw_data_te,
-                pathomics_aggregation=pathomics_aggregation,
-                pathomics_aggregated_mode=pathomics_aggregated_mode,
-                pathomics_keys=pathomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_pathomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-        elif omics == "radiomics":
-            radiomics_tr_X = load_radiomics(
-                data=data_tr,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            radiomics_te_X = load_radiomics(
-                data=data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-
-            tr_X, te_X = radiomics_tr_X, radiomics_te_X
-            raw_te_X = load_radiomics(
-                data=raw_data_te,
-                radiomics_aggregation=radiomics_aggregation,
-                radiomics_aggregated_mode=radiomics_aggregated_mode,
-                radiomics_keys=radiomics_keys,
-                use_graph_properties=use_graph_properties,
-                n_jobs=n_jobs,
-                save_radiomics_dir=save_omics_dir,
-                outcome=outcome
-            )
-        else:
-            raise NotImplementedError
-        
-        # df_prop = df_prop.apply(zscore)
-        if hasattr(tr_X,'shape'):
-            print("Selected training omics:", tr_X.shape)
-            print(tr_X.head())
-        if hasattr(te_X,'shape'):
-            print("Selected testing omics:", te_X.shape)
-            print(te_X.head())
-        if hasattr(raw_te_X,'shape'):
-            print("Selected raw testing omics:", raw_te_X.shape)
-            print(raw_te_X.head())
-
-        # -----------------------------
-        # Feature selection
-        # -----------------------------
-        # if feature_selection:
-        #     print("\n=== Feature Selection ===")
-
-        #     fs_kwargs = dict(
-        #         C=0.01,
-        #         max_features=n_selected_features,
-        #         variance_threshold=feature_var_threshold,
-        #         coef_threshold=1e-6,
-        #         verbose=True,
-        #     )
-
-        #     # --------------------------------------------------
-        #     # CASE 1️⃣ Multimodal input (list of DataFrames)
-        #     # --------------------------------------------------
-        #     if isinstance(tr_X, list):
-
-        #         selected_modalities = []
-        #         tr_selected = []
-        #         te_selected = []
-        #         raw_te_selected = []
-
-        #         for i, (m_tr, m_te, m_raw) in enumerate(zip(tr_X, te_X, raw_te_X)):
-        #             print(f"\nSelecting modality {i+1} features...")
-                    
-        #             selected = select_l1_svc_features(m_tr, tr_y, **fs_kwargs)
-
-        #             print(f"Modality {i+1}: kept {len(selected)} features")
-
-        #             tr_selected.append(m_tr[selected])
-        #             te_selected.append(m_te[selected])
-        #             raw_te_selected.append(m_raw[selected])
-        #             selected_modalities.append(selected)
-
-        #         # concatenate AFTER selection
-        #         tr_X = pd.concat(tr_selected, axis=1)
-        #         te_X = pd.concat(te_selected, axis=1)
-        #         raw_te_X = pd.concat(raw_te_selected, axis=1)
-
-        #         print("\nFinal concatenated shape:", tr_X.shape)
-        #         print(tr_X.head())
-
-        #     # --------------------------------------------------
-        #     # CASE 2️⃣ Unimodal input (DataFrame)
-        #     # --------------------------------------------------
-        #     else:
-        #         selected = select_l1_svc_features(tr_X, tr_y, **fs_kwargs)
-
-        #         print(f"Selected {len(selected)} features")
-
-        #         tr_X = tr_X[selected]
-        #         te_X = te_X[selected]
-        #         raw_te_X = raw_te_X[selected]
-
-        # feature selection
-        if feature_selection:
-            print("Selecting features using LinearSVC + L1...")
-
-            scaler = StandardScaler()
-            tr_X_scaled = scaler.fit_transform(tr_X)
-
-            svc_fs = LinearSVC(
-                penalty="l1",
-                dual=False,
-                C=0.01,              # encourages sparsity, smaller is more sparse
-                class_weight="balanced",
-                max_iter=5000,
-                random_state=42,
-            )
-
-            svc_fs.fit(tr_X_scaled, tr_y["label"])
-
-            selector = SelectFromModel(
-                svc_fs,
-                prefit=True,
-                threshold=1e-6,   # keep non-zero weights
-                max_features=n_selected_features      # <- maximum number of features to keep
-            )
-
-            selected_mask = selector.get_support()
-            selected_names = tr_X.columns[selected_mask]
-
-            tr_X = tr_X[selected_names]
-            te_X = te_X[selected_names]
-            raw_te_X = raw_te_X[selected_names]
-
-            print(f"Selected features: {len(selected_names)}")
-
-        # model selection
-        print("Selecting classifier...")
-        if model == "RF":
-            predictor = randomforest(split_idx, tr_X, tr_y['label'], refit, n_jobs)
-        elif model == "XG":
-            predictor = xgboost(split_idx, tr_X, tr_y['label'], refit, n_jobs)
-        elif model == "LR":
-            predictor = logisticregression(split_idx, tr_X, tr_y['label'], refit, n_jobs)
-        elif model == "SVC":
-            predictor = svc(split_idx, tr_X, tr_y['label'], refit, n_jobs)
-        else:
-            raise NotImplementedError
-
-        # save model and feature names
-        model_path = os.path.join(model_dir, f"{ml_model_name}_fold{split_idx}.joblib")
-
-        joblib.dump({
-            "model": predictor,
-            "features": list(tr_X.columns)
-        }, model_path)
-
-        print(f"Saved model to {model_path}")
-
-        # Predictions
-        raw_subject_ids = [p[0][0] for p in raw_data_te]
-        classification_results["raw_subject"] += raw_subject_ids
-        raw_pred = predictor.predict(raw_te_X)
-        classification_results["raw_pred"] += raw_pred.tolist()
-        raw_prob = predictor.predict_proba(raw_te_X)
-        classification_results["raw_prob"] += raw_prob.tolist()
-
-        subject_ids = [p[0][0] for p in data_te]
-        classification_results["subject"] += subject_ids
-        pred = predictor.predict(te_X)
-        classification_results["pred"] += pred.tolist()
-        prob = predictor.predict_proba(te_X)
-        classification_results["prob"] += prob.tolist()
-        num_class = prob.shape[1]
-
-        # True labels
-        label = te_y["label"].to_numpy(dtype=int)
-        classification_results["label"] += label.tolist()
-
-        # Initialize lists to store metrics per class
-        acc_list, f1_list, auroc_list, auprc_list = [], [], [], []
-
-        for cls in range(num_class):
-            # Binary one-vs-rest labels
-            y_true_cls = (label == cls).astype(int)
-            y_pred_cls = (pred == cls).astype(int)
-            y_prob_cls = prob[:, cls]
-
-            # Accuracy & F1 always safe
-            acc_list.append(acc_scorer(y_true_cls, y_pred_cls))
-            f1_list.append(f1_scorer(y_true_cls, y_pred_cls))
-
-            # ---- AUROC ----
-            try:
-                if len(np.unique(y_true_cls)) < 2:
-                    raise ValueError("single class")
-                auroc = auroc_scorer(y_true_cls, y_prob_cls)
-            except Exception:
-                auroc = np.nan
-            auroc_list.append(auroc)
-
-            # ---- AUPRC ----
-            try:
-                if len(np.unique(y_true_cls)) < 2:
-                    raise ValueError("single class")
-                auprc = auprc_scorer(y_true_cls, y_prob_cls)
-            except Exception:
-                auprc = np.nan
-            auprc_list.append(auprc)
-
-
-        # Optional: organize as dictionary
-        scores_dict = {
-            "acc": acc_list,
-            "f1": f1_list,
-            "auroc": auroc_list,
-            "auprc": auprc_list
-        }
-
-        predict_results.update({f"Fold {split_idx}": scores_dict})
-
-    # print average results across folds per class
-    print(predict_results)
-    for metric in scores_dict.keys():
-        arr = np.array([v[metric] for v in predict_results.values()])
-
-        mean_val = np.nanmean(arr, axis=0)
-        std_val = np.nanstd(arr, axis=0)
-
-        print(f"CV {metric} mean ± std:", mean_val, std_val)
+    save_results_dir=None,
+    n_pca_components=None,
+    fusion_method='weighted'
+):
+    """
+    Enhanced phenotype classification with four different strategies:
+    1. Direct concatenation of radiomics and pathomics
+    2. PCA on concatenated features
+    3. Separate models with result fusion (for radiopathomics only)
+    4. Separate PCA + separate models + result fusion (for radiopathomics only)
     
-    #save predicted results
-    save_path = f"{save_results_dir}/{ml_model_name}_results.json"
-    classification_results = make_json_safe(classification_results)
-    with open(save_path, "w") as f:
-        json.dump(classification_results, f, indent=4)
-
-    # save metrics
-    save_path = f"{save_results_dir}/{ml_model_name}_metrics.json"
-    predict_results = make_json_safe(predict_results)
-    with open(save_path, "w") as f:
-        json.dump(predict_results, f, indent=4)
-        
-    return
+    Parameters:
+    -----------
+    split_path : str
+        Path to the cross-validation splits file
+    radiomics_keys : list, optional
+        Keys for radiomics features to extract
+    pathomics_keys : list, optional
+        Keys for pathomics features to extract
+    omics : str
+        Type of omics data ('radiomics', 'pathomics', or 'radiopathomics')
+    save_omics_dir : dict or str
+        Directory to save/load omics features
+    outcome : str
+        Outcome variable name
+    n_jobs : int
+        Number of parallel jobs
+    radiomics_aggregation : bool
+        Whether to aggregate radiomics features
+    radiomics_aggregated_mode : str
+        Aggregation mode for radiomics ('mean', 'median', etc.)
+    pathomics_aggregation : bool
+        Whether to aggregate pathomics features
+    pathomics_aggregated_mode : str
+        Aggregation mode for pathomics ('mean', 'median', etc.)
+    model : str
+        Classifier type ('LR', 'RF', 'XG', 'SVC')
+    refit : str
+        Metric for model selection ('roc_auc', 'accuracy', etc.)
+    feature_selection : bool
+        Whether to perform feature selection
+    feature_var_threshold : float
+        Variance threshold for feature selection
+    n_selected_features : int
+        Maximum number of features to select
+    use_graph_properties : bool
+        Whether to use graph properties for pathomics
+    save_results_dir : str
+        Directory to save results
+    n_pca_components : int or None
+        Number of PCA components (None for automatic based on variance)
+    fusion_method : str
+        Fusion method for multi-modal strategies ('average', 'weighted', 'voting')
+    C : float
+        Regularization strength for L1 feature selection
+    coef_threshold : float
+        Coefficient threshold for feature selection
+    
+    Returns:
+    --------
+    dict
+        Results for all strategies
+    """
+    
+    analyzer = ClassificationAnalyzer(save_results_dir)
+    
+    results = analyzer.run_all_strategies(
+        split_path=split_path,
+        omics=omics,
+        save_omics_dir=save_omics_dir,
+        radiomics_aggregation=radiomics_aggregation,
+        radiomics_aggregated_mode=radiomics_aggregated_mode,
+        radiomics_keys=radiomics_keys,
+        pathomics_aggregation=pathomics_aggregation,
+        pathomics_aggregated_mode=pathomics_aggregated_mode,
+        pathomics_keys=pathomics_keys,
+        use_graph_properties=use_graph_properties,
+        n_jobs=n_jobs,
+        outcome=outcome,
+        model=model,
+        refit=refit,
+        feature_selection=feature_selection,
+        feature_var_threshold=feature_var_threshold,
+        n_selected_features=n_selected_features,
+        n_pca_components=n_pca_components,
+        fusion_method=fusion_method,
+        C=C,
+        coef_threshold=coef_threshold,
+        save_results_dir=save_results_dir
+    )
+    
+    return results
 
 def generate_data_split(
         x: list,
@@ -1622,6 +2643,8 @@ if __name__ == "__main__":
             feature_var_threshold=opt['PREDICTION']['FEATURE_SELECTION']['VAR_THRESHOLD'],
             n_selected_features=opt['PREDICTION']['FEATURE_SELECTION']['NUM_FEATURES'],
             use_graph_properties=opt['PREDICTION']['USE_GRAPH_PROPERTIES'],
+            n_pca_components=opt['PREDICTION']['N_PCA_COMPONENTS'],
+            fusion_method=opt['PREDICTION']['FUSION_METHOD'],
             save_results_dir=save_model_dir
         )
 
