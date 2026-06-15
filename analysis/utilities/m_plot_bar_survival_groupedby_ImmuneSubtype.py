@@ -137,8 +137,8 @@ def bootstrap_cindex(
 
     return (
         np.mean(scores),
-        np.percentile(scores, 2.5),
-        np.percentile(scores, 97.5)
+        np.percentile(scores, 5),
+        np.percentile(scores, 95)
     )
 
 # ==============================================================================
@@ -339,7 +339,7 @@ def plot_best_omics_by_subtype_with_ci(df, metric, output_dir):
 
     for i, omics in enumerate(omics_types):
 
-        means, lows, highs = [], [], []
+        means, lows, highs, models = [], [], [], []
 
         for subtype in subtypes:
             row = best_df[
@@ -351,10 +351,12 @@ def plot_best_omics_by_subtype_with_ci(df, metric, output_dir):
                 means.append(np.nan)
                 lows.append(np.nan)
                 highs.append(np.nan)
+                models.append("")
             else:
                 means.append(row.iloc[0][f"{metric}_mean"])
                 lows.append(row.iloc[0][f"{metric}_low"])
                 highs.append(row.iloc[0][f"{metric}_high"])
+                models.append(row.iloc[0]["Model"])
 
         means = np.array(means)
         lows = np.array(lows)
@@ -365,7 +367,7 @@ def plot_best_omics_by_subtype_with_ci(df, metric, output_dir):
             highs - means
         ])
 
-        plt.bar(
+        bars = plt.bar(
             x + i * bar_width,
             means,
             width=bar_width,
@@ -375,7 +377,26 @@ def plot_best_omics_by_subtype_with_ci(df, metric, output_dir):
             capsize=4
         )
 
-    plt.xticks(x, subtypes, rotation=30, ha="right")
+        # Add mean+CI and model name on top of each bar (two columns, vertical text, bottom-aligned)
+        for j, (bar, mean_val, low_val, high_val, model_name) in enumerate(zip(bars, means, lows, highs, models)):
+            if not np.isnan(mean_val):
+                height = bar.get_height()
+                bar_center_x = bar.get_x() + bar.get_width() / 2
+                
+                # Left column: Mean + CI (vertical)
+                ci_text = f'Mean: {mean_val:.3f}; CI: [{low_val:.3f}, {high_val:.3f}]\n {model_name}'
+                plt.text(
+                    bar_center_x,  # Left side of bar
+                    0.02,  # Bottom of bar
+                    ci_text,
+                    ha='center',
+                    va='bottom',
+                    fontsize=10,
+                    color='black',
+                    rotation=90  # Vertical text
+                )
+
+    plt.xticks(x + bar_width, subtypes, rotation=30, ha="right")
     plt.ylabel(f"{metric} (bootstrap mean ± 95% CI)")
     plt.axhline(0.5, linestyle="--", alpha=0.6)
     plt.title("Best Models by Immune Subtype (Bootstrap CI)")
@@ -480,7 +501,7 @@ def plot_best_omics_overall_with_ci(df, metric, output_dir):
     }
 
     n_omics = len(omics_types)
-    bar_width = 1
+    bar_width = 0.6
 
     plt.figure(figsize=(max(4, n_omics*1.5), 8))
 
@@ -500,14 +521,13 @@ def plot_best_omics_overall_with_ci(df, metric, output_dir):
             colors.append(color_map[omics])
             labels.append(omics)
 
-
     means = np.array(means)
     lows = np.array(lows)
     highs = np.array(highs)
 
     yerr = np.vstack([means - lows, highs - means])
 
-    plt.bar(
+    bars = plt.bar(
         x,
         means,
         width=bar_width,
@@ -517,12 +537,33 @@ def plot_best_omics_overall_with_ci(df, metric, output_dir):
         capsize=3
     )
 
+    # Add mean and CI on top of each bar
+    for bar, mean_val, low_val, high_val in zip(bars, means, lows, highs):
+        if not np.isnan(mean_val):
+            height = bar.get_height()
+            bar_center_x = bar.get_x() + bar.get_width() / 2
+            
+            # Format the text with mean and CI on two lines
+            text = f'Mean: {mean_val:.3f}\n CI: [{low_val:.3f}, {high_val:.3f}]'
+            
+            # Add text at the top of the bar
+            plt.text(
+                bar_center_x,
+                0.02,  # Small offset above the bar
+                text,
+                ha='center',
+                va='bottom',
+                fontsize=10,
+                color='black',
+                rotation=90
+            )
+
     plt.xticks(x, models, rotation=45, ha="right")
     plt.ylabel(f"{metric} (bootstrap mean ± 95% CI)")
-    plt.axhline(0.5, linestyle="--", alpha=0.6)
+    plt.axhline(0.5, linestyle="--", alpha=0.6, color='gray')
     plt.title("Overall Model Performance (Bootstrap)")
 
-    plt.legend()
+    plt.legend(loc='upper left')
     plt.tight_layout()
 
     save_path = os.path.join(output_dir, "Overall_best_models_bootstrap.png")
