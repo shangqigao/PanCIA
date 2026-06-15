@@ -1712,7 +1712,7 @@ class ClassificationAnalyzer:
             "auprc": auprc_list
         }
     
-    def get_class_specific_weights(tr_labels, proba):
+    def get_class_specific_weights(self, tr_labels, proba):
         """
         Calculate AUROC for each class separately (one-vs-rest) using vectorized operations
         
@@ -2186,14 +2186,14 @@ class ClassificationAnalyzer:
         
         if omics in ['radiomics', 'pathomics']:
             strategies = {
-                'Strategy1_DirectConcat': self.strategy_1_direct_concat,
+                # 'Strategy1_DirectConcat': self.strategy_1_direct_concat,
                 'Strategy2_PCA_Concat': lambda s, idx, op, mp: self.strategy_2_pca_concat(s, idx, op, mp, n_pca_components)
             }
         elif omics == 'radiopathomics':
             strategies = {
-                'Strategy1_DirectConcat': self.strategy_1_direct_concat,
+                # 'Strategy1_DirectConcat': self.strategy_1_direct_concat,
                 'Strategy2_PCA_Concat': lambda s, idx, op, mp: self.strategy_2_pca_concat(s, idx, op, mp, n_pca_components),
-                'Strategy3_Separate_Fusion': lambda s, idx, op, mp: self.strategy_3_separate_fusion(s, idx, op, mp, fusion_method),
+                # 'Strategy3_Separate_Fusion': lambda s, idx, op, mp: self.strategy_3_separate_fusion(s, idx, op, mp, fusion_method),
                 'Strategy4_PCA_Separate_Fusion': lambda s, idx, op, mp: self.strategy_4_pca_separate_fusion(s, idx, op, mp, n_pca_components, fusion_method)
             }
         else:
@@ -2416,8 +2416,6 @@ def phenotype_classification(
         n_selected_features=n_selected_features,
         n_pca_components=n_pca_components,
         fusion_method=fusion_method,
-        C=C,
-        coef_threshold=coef_threshold,
         save_results_dir=save_results_dir
     )
     

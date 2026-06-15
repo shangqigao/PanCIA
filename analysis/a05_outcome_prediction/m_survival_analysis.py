@@ -2737,6 +2737,62 @@ def survival(
     
     return results
 
+def generate_data_split(
+        x: list,
+        y: list,
+        train: float,
+        valid: float,
+        test: float,
+        num_folds: int,
+        seed: int = 42
+):
+    """Helper to generate splits
+    Args:
+        x (list): a list of image paths
+        y (list): a list of annotation paths
+        train (float): ratio of training samples
+        valid (float): ratio of validating samples
+        test (float): ratio of testing samples
+        num_folds (int): number of folds for cross-validation
+        seed (int): random seed
+    Returns:
+        splits (list): a list of folds, each fold consists of train, valid, and test splits
+    """
+    from sklearn.model_selection import train_test_split
+    assert train + valid <= 1.0, "train + valid ratio must be <= 1.0"
+
+    outer_splitter = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
+    splits = []
+
+    for train_valid_idx, test_idx in outer_splitter.split(x):
+        # Split test set
+        test_x = [x[i] for i in test_idx]
+        test_y = [y[i] for i in test_idx]
+
+        train_valid_x = [x[i] for i in train_valid_idx]
+        train_valid_y = [y[i] for i in train_valid_idx]
+
+        # Optional validation split
+        if valid > 0:
+            ratio = valid / (train + valid)
+            train_x, valid_x, train_y, valid_y = train_test_split(
+                train_valid_x, train_valid_y, test_size=ratio, random_state=seed, shuffle=True
+            )
+        else:
+            train_x, train_y = train_valid_x, train_valid_y
+            valid_x, valid_y = None, None
+
+        split_dict = {
+            "train": list(zip(train_x, train_y)),
+            "test": list(zip(test_x, test_y))
+        }
+        if valid > 0:
+            split_dict["valid"] = list(zip(valid_x, valid_y))
+
+        splits.append(split_dict)
+
+    return splits
+
 if __name__ == "__main__":
     ## argument parser
     parser = argparse.ArgumentParser()
