@@ -1279,22 +1279,22 @@ class DomainAdaptationVAE(nn.Module):
         # Encoders for each domain
         self.radiomics_encoder = nn.Sequential(
             nn.Linear(radiomics_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
             nn.Dropout(0.2),
             nn.Linear(hidden_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU()
+            nn.LayerNorm(hidden_dim),
+            nn.GELU()
         )
         
         self.pathomics_encoder = nn.Sequential(
             nn.Linear(pathomics_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
             nn.Dropout(0.2),
             nn.Linear(hidden_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU()
+            nn.LayerNorm(hidden_dim),
+            nn.GELU()
         )
         
         # Mean and variance layers for latent space
@@ -1307,21 +1307,21 @@ class DomainAdaptationVAE(nn.Module):
         # Separate decoders for each modality
         self.radiomics_decoder = nn.Sequential(
             nn.Linear(latent_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
             nn.Linear(hidden_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
             nn.Linear(hidden_dim, radiomics_dim)
         )
         
         self.pathomics_decoder = nn.Sequential(
             nn.Linear(latent_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
             nn.Linear(hidden_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
             nn.Linear(hidden_dim, pathomics_dim)
         )
         
@@ -2343,7 +2343,7 @@ class SurvivalAnalyzer:
     def strategy_5_domain_adaptation_fusion(self, split, split_idx, omics_params, model_params, 
                                             embedding_type='bayesian'):
         """Strategy 5 with domain adaptation using separate decoders"""
-        print(f"\n=== Strategy 3: Domain Adaptation with Separate Decoders ===")
+        print(f"\n=== Strategy 5: Domain Adaptation with Separate Decoders ===")
         
         # Load radiomics data
         radiomics_params = omics_params.copy()
@@ -2367,15 +2367,15 @@ class SurvivalAnalyzer:
         domain_adaptor = DomainAdaptationTransformer(
             radiomics_dim=tr_X_radio.shape[1],
             pathomics_dim=tr_X_patho.shape[1],
-            hidden_dim=model_params.get('vae_hidden_dim', 256),
+            hidden_dim=model_params.get('vae_hidden_dim', 512),
             latent_dim=model_params.get('vae_latent_dim', 128),
-            epochs=model_params.get('vae_epochs', 100),
+            epochs=model_params.get('vae_epochs', 30),
             batch_size=model_params.get('vae_batch_size', 64),
             learning_rate=model_params.get('vae_learning_rate', 1e-3),
-            beta_kl=model_params.get('vae_beta_kl', 1.0),
-            beta_domain=model_params.get('vae_beta_domain', 1.0),
+            beta_kl=model_params.get('vae_beta_kl', 1e-2),
+            beta_domain=model_params.get('vae_beta_domain', 1e-2),
             beta_recon=model_params.get('vae_beta_recon', 1.0),
-            beta_cross=model_params.get('vae_beta_cross', 0.5),
+            beta_cross=model_params.get('vae_beta_cross', 1.0),
             device=model_params.get('device', 'cuda')
         )
         
