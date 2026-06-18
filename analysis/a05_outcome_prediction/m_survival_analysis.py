@@ -1410,6 +1410,76 @@ class DomainAdaptationTransformer(BaseEstimator, TransformerMixin):
         ).mean()
         return kl
     
+    def mmd_between_distributions(self, z1, z2, sigma=None):
+        """
+        Maximum Mean Discrepancy between two sets of hidden representations.
+        
+        Args:
+            z1: Source domain features [batch_size, feature_dim]
+            z2: Target domain features [batch_size, feature_dim]
+            sigma: Bandwidth for RBF kernel (if None, use median heuristic)
+        
+        Returns:
+            MMD loss (scalar)
+        """
+        batch_size = z1.size(0)
+        features = torch.cat([z1, z2], dim=0)
+        
+        # Compute pairwise distances
+        xx = torch.mm(z1, z1.t())
+        xy = torch.mm(z1, z2.t())
+        yy = torch.mm(z2, z2.t())
+        
+        # Squared L2 distances
+        diag_xx = torch.diag(xx).unsqueeze(1).expand_as(xx)
+        diag_yy = torch.diag(yy).unsqueeze(1).expand_as(yy)
+        
+        dist_xx = diag_xx + diag_xx.t() - 2 * xx
+        dist_xy = diag_xx + diag_yy.t() - 2 * xy
+        dist_yy = diag_yy + diag_yy.t() - 2 * yy
+        
+        # Clamp for numerical stability
+        dist_xx = torch.clamp(dist_xx, min=0)
+        dist_xy = torch.clamp(dist_xy, min=0)
+        dist_yy = torch.clamp(dist_yy, min=0)
+        
+        # Median heuristic for bandwidth (if not provided)
+        if sigma is None:
+            with torch.no_grad():
+                all_dists = torch.cat([
+                    dist_xx.flatten(), 
+                    dist_xy.flatten(), 
+                    dist_yy.flatten()
+                ])
+                sigma = torch.median(all_dists[all_dists > 0]).sqrt()
+                sigma = sigma.clamp(min=1e-5)
+        
+        # RBF kernel: K(x,y) = exp(-||x-y||^2 / (2*sigma^2))
+        gamma = 1.0 / (2 * sigma**2 + 1e-8)
+        
+        k_xx = torch.exp(-gamma * dist_xx)
+        k_xy = torch.exp(-gamma * dist_xy)
+        k_yy = torch.exp(-gamma * dist_yy)
+        
+        # MMD: E[K(x,x')] + E[K(y,y')] - 2E[K(x,y)]
+        mmd = k_xx.mean() + k_yy.mean() - 2 * k_xy.mean()
+        
+        return mmd
+
+    def mmd_multi_kernel(self, z1, z2, sigmas=None):
+        """
+        Multi-Kernel MMD with multiple bandwidths.
+        """
+        if sigmas is None:
+            # Common practice: use multiple scales
+            sigmas = [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+        
+        mmd_total = 0
+        for sigma in sigmas:
+            mmd_total += self.mmd_between_distributions(z1, z2, sigma)
+        
+        return mmd_total / len(sigmas)
+    
     def reconstruction_loss(self, recon_x, x):
         """MSE reconstruction loss"""
         return nn.MSELoss()(recon_x, x)
@@ -1443,7 +1513,7 @@ class DomainAdaptationTransformer(BaseEstimator, TransformerMixin):
             total_recon_loss = 0
             total_cross_recon_loss = 0
             total_kl_loss = 0
-            total_domain_kl_loss = 0
+            total_domain_loss = 0
             
             for batch_radio, batch_patho in dataloader:
                 batch_radio = batch_radio.to(self.device)
@@ -1478,16 +1548,20 @@ class DomainAdaptationTransformer(BaseEstimator, TransformerMixin):
                 kl_loss = (kl_radio + kl_patho) / 2
                 
                 # KL divergence between the two distributions (domain adaptation)
-                domain_kl_loss = self.kl_divergence_between_distributions(
-                    outputs['radio_mu'], outputs['radio_logvar'],
-                    outputs['patho_mu'], outputs['patho_logvar']
+                # domain_loss = self.kl_divergence_between_distributions(
+                #     outputs['radio_mu'], outputs['radio_logvar'],
+                #     outputs['patho_mu'], outputs['patho_logvar']
+                # )
+
+                domain_loss = self.mmd_multi_kernel(
+                    outputs['radio_z'], outputs['patho_z']
                 )
                 
                 # Total loss with separate weights for self and cross reconstruction
                 loss = (self.beta_recon * recon_loss + 
                        self.beta_cross * cross_recon_loss +
                        self.beta_kl * kl_loss + 
-                       self.beta_domain * domain_kl_loss)
+                       self.beta_domain * domain_loss)
                 
                 loss.backward()
                 optimizer.step()
@@ -1496,7 +1570,7 @@ class DomainAdaptationTransformer(BaseEstimator, TransformerMixin):
                 total_recon_loss += recon_loss.item()
                 total_cross_recon_loss += cross_recon_loss.item()
                 total_kl_loss += kl_loss.item()
-                total_domain_kl_loss += domain_kl_loss.item()
+                total_domain_loss += domain_loss.item()
             
             if verbose and (epoch + 1) % 10 == 0:
                 print(f"Epoch {epoch+1}/{self.epochs} - "
@@ -1504,7 +1578,7 @@ class DomainAdaptationTransformer(BaseEstimator, TransformerMixin):
                       f"Recon: {total_recon_loss/len(dataloader):.4f}, "
                       f"CrossRecon: {total_cross_recon_loss/len(dataloader):.4f}, "
                       f"KL: {total_kl_loss/len(dataloader):.4f}, "
-                      f"DomainKL: {total_domain_kl_loss/len(dataloader):.4f}")
+                      f"DomainLoss: {total_domain_loss/len(dataloader):.4f}")
         
         return self
     

@@ -265,9 +265,9 @@ class CrossValidatedSurvivalModels:
         
         rsf_param_grid = {
             'n_estimators': [100],
-            'min_samples_split': [10],
-            'min_samples_leaf': [5],
-            'max_depth': [3, 5, 7, None]
+            'min_samples_split': [30, 50, 70],
+            'min_samples_leaf': [15, 25, 35],
+            'max_depth': [2]
         }
         
         # Store results
@@ -481,6 +481,7 @@ class CrossValidatedSurvivalModels:
             min_samples_split=best_params['min_samples_split'],
             min_samples_leaf=best_params['min_samples_leaf'],
             max_depth=best_params['max_depth'],
+            
             random_state=self.random_state,
             n_jobs=-1
         )
@@ -1797,7 +1798,7 @@ def plot_km_risk_groups_4groups_simple(ax, predictions, events, durations, title
 
 def main():
     parser = argparse.ArgumentParser(description='Compare two models with cross-validated CoxPH and RSF using KFold')
-    parser.add_argument('--model1', type=str, default="Radiomics: BiomedParse (SPARRA)",
+    parser.add_argument('--model1', type=str, default="Radiomics: LVMMed (SPARRA)",
                        help='First model key')
     parser.add_argument('--model2', type=str, default="Pathomics: CONCH (ABMIL)",
                        help='Second model key')
@@ -1813,7 +1814,7 @@ def main():
     args = parser.parse_args()
     
     # Set paths
-    task = "TCGA_survival_PFI"
+    task = "TCGA_survival_OS"
     root_parent = f"/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/outcomes_slice+tumor/{task}"
     immune_csv = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/immune_subtype/immune_subtype.csv"
     output_root = f"/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/PanCIA/figures/plots/Survival_ImmuneSubtype/{task}"

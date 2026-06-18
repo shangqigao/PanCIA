@@ -30,7 +30,7 @@ import matplotlib.patches as mpatches
 from lifelines.utils import concordance_index
 
 # ====== CHANGE THESE ==========================================================
-root_parent = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/outcomes_slice+tumor"
+root_parent = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/outcomes_strategies"
 immune_csv = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/immune_subtype/immune_subtype.csv"
 output_root = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/PanCIA/figures/plots/Survival_ImmuneSubtype"
 
@@ -572,6 +572,8 @@ def plot_best_omics_overall_with_ci(df, metric, output_dir):
 
     print(f"Saved → {save_path}")
 
+    return models
+
 # ==============================================================================
 # Find all survival endpoints
 # ==============================================================================
@@ -600,6 +602,15 @@ for survival_dir in survival_dirs:
     for root, dirs, files in os.walk(survival_dir):
         for file in files:
             if not file.endswith("_results.json"):
+                continue
+
+            if file.startswith("radiomics_") and "_Strategy1_" not in str(file):
+                continue
+
+            if file.startswith("pathomics_") and "_Strategy1_" not in str(file):
+                continue
+            
+            if file.startswith("radiopathomics_") and "_Strategy5_" not in str(file):
                 continue
 
             file_path = os.path.join(root, file)
@@ -642,6 +653,24 @@ for survival_dir in survival_dirs:
                     "duration": float(np.array(data["duration"]).flatten()[i]),
                 })
 
+    overall_df_raw = pd.DataFrame(overall_rows)
+    overall_df = compute_overall_bootstrap(overall_df_raw, n_boot=1000)
+
+    # Save table
+    csv_path = os.path.join(
+        output_dir,
+        f"{survival_name}_CIndex_overall.csv"
+    )
+    overall_df.to_csv(csv_path, index=False)
+    print(f"Saved table → {csv_path}")
+
+    # plot best overall omics chart with CI
+    best_models = plot_best_omics_overall_with_ci(
+        overall_df,
+        metric="CIndex",
+        output_dir=output_dir
+    )
+
     # Skip if nothing valid
     if len(subtype_results) == 0:
         print(f"No valid subtype results for {survival_name}")
@@ -649,6 +678,9 @@ for survival_dir in survival_dirs:
 
     # Create DataFrame
     sub_df = pd.DataFrame(subtype_results)
+
+    # Keep best models
+    sub_df = sub_df[sub_df["Model"].isin(best_models)]
 
     # Save table
     csv_path = os.path.join(
@@ -661,24 +693,6 @@ for survival_dir in survival_dirs:
     # plot best subtype omics chart with CI
     plot_best_omics_by_subtype_with_ci(
         sub_df,
-        metric="CIndex",
-        output_dir=output_dir
-    )
-
-    overall_df_raw = pd.DataFrame(overall_rows)
-    overall_df = compute_overall_bootstrap(overall_df_raw, n_boot=1000)
-    
-    # Save table
-    csv_path = os.path.join(
-        output_dir,
-        f"{survival_name}_CIndex_overall.csv"
-    )
-    overall_df.to_csv(csv_path, index=False)
-    print(f"Saved table → {csv_path}")
-
-    # plot best overall omics chart with CI
-    plot_best_omics_overall_with_ci(
-        overall_df,
         metric="CIndex",
         output_dir=output_dir
     )
