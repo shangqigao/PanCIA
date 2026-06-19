@@ -1376,7 +1376,8 @@ class DomainAdaptationTransformer(BaseEstimator, TransformerMixin):
     
     def __init__(self, radiomics_dim, pathomics_dim, hidden_dim=128, latent_dim=32,
                  epochs=100, batch_size=64, learning_rate=1e-3, beta_kl=1.0,
-                 beta_domain=1.0, beta_recon=1.0, beta_cross=0.5, device='cuda'):
+                 beta_domain=1.0, beta_recon=1.0, beta_cross=0.5, kl_annealing_steps=50,
+                 device='cuda'):
         self.radiomics_dim = radiomics_dim
         self.pathomics_dim = pathomics_dim
         self.hidden_dim = hidden_dim
@@ -1388,6 +1389,7 @@ class DomainAdaptationTransformer(BaseEstimator, TransformerMixin):
         self.beta_domain = beta_domain
         self.beta_recon = beta_recon
         self.beta_cross = beta_cross
+        self.kl_annealing_steps = kl_annealing_steps
         self.device = device if torch.cuda.is_available() else 'cpu'
         
         self.model = None
@@ -1514,6 +1516,9 @@ class DomainAdaptationTransformer(BaseEstimator, TransformerMixin):
             total_cross_recon_loss = 0
             total_kl_loss = 0
             total_domain_loss = 0
+
+            progress = epoch / self.kl_annealing_steps
+            kl_weight = 1 / (1 + np.exp(-10 * (progress - 0.5)))
             
             for batch_radio, batch_patho in dataloader:
                 batch_radio = batch_radio.to(self.device)
@@ -1560,7 +1565,7 @@ class DomainAdaptationTransformer(BaseEstimator, TransformerMixin):
                 # Total loss with separate weights for self and cross reconstruction
                 loss = (self.beta_recon * recon_loss + 
                        self.beta_cross * cross_recon_loss +
-                       self.beta_kl * kl_loss + 
+                       self.beta_kl * kl_weight * kl_loss + 
                        self.beta_domain * domain_loss)
                 
                 loss.backward()
@@ -2443,13 +2448,14 @@ class SurvivalAnalyzer:
             pathomics_dim=tr_X_patho.shape[1],
             hidden_dim=model_params.get('vae_hidden_dim', 512),
             latent_dim=model_params.get('vae_latent_dim', 128),
-            epochs=model_params.get('vae_epochs', 30),
+            epochs=model_params.get('vae_epochs', 200),
             batch_size=model_params.get('vae_batch_size', 64),
             learning_rate=model_params.get('vae_learning_rate', 1e-3),
-            beta_kl=model_params.get('vae_beta_kl', 1e-2),
-            beta_domain=model_params.get('vae_beta_domain', 1e-2),
+            beta_kl=model_params.get('vae_beta_kl', 1e-3),
+            beta_domain=model_params.get('vae_beta_domain', 10),
             beta_recon=model_params.get('vae_beta_recon', 1.0),
             beta_cross=model_params.get('vae_beta_cross', 1.0),
+            kl_annealing_steps=model_params.get('kl_annealing_steps', 100),
             device=model_params.get('device', 'cuda')
         )
         

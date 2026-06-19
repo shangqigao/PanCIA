@@ -5,7 +5,7 @@ OMICS_DIR: "/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/Experimen
 SAVE_OUTCOME_FILE: "/home/sg2162/rds/hpc-work/Experiments/TCGA_Pan-Cancer_outcomes/phenotypes/clinical_data/survival_data.csv"
 SAVE_MODEL_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes"
 OUTCOME:
-  VALUE: "PFI"
+  VALUE: "DFI"
   CHOICES: ["OS", "DSS", "DFI", "PFI"]
 TASKS:
   PREDICTION: True
@@ -31,7 +31,7 @@ RADIOMICS:
       ]
   AGGREGATION: False
   AGGREGATED_MODE:
-    VALUE: "MEAN"
+    VALUE: "SPARRA"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
   RESOLUTION: 1
   UNITS: "mm"
@@ -43,7 +43,7 @@ PATHOMICS:
     CHOICES: ["None", "CNN", "HIPT", "UNI", "CONCH", "CHIEF", "UNI2"]
   AGGREGATION: False
   AGGREGATED_MODE:
-    VALUE: "MEAN"
+    VALUE: "SPARRA"
     CHOICES: ["None", "MEAN", "ABMIL", "SPARRA"]
   RESOLUTION: 20
   UNITS: "power"
