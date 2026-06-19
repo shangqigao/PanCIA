@@ -1869,6 +1869,854 @@ class MultiModalPipeline:
         """Predict for single patient"""
         result = self.predict(radio_X, patho_X)
         return result[0] if hasattr(result, '__len__') else result
+    
+import numpy as np
+import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+from lifelines import CoxPHFitter
+from lifelines.utils import concordance_index
+from sklearn.model_selection import train_test_split
+import warnings
+warnings.filterwarnings('ignore')
+
+
+class PolicyNetwork(nn.Module):
+    """
+    Neural network policy that outputs probabilities for each action.
+    
+    Input: State vector [R, P, |R-P|] normalized
+    Output: Softmax probabilities for actions [Rad, Path, RP]
+    """
+    
+    def __init__(self, input_dim=3, hidden_dim=16, output_dim=3, dropout_rate=0.1):
+        super(PolicyNetwork, self).__init__()
+        
+        self.network = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_dim, output_dim)
+        )
+        
+        # Initialize weights
+        self._initialize_weights()
+    
+    def _initialize_weights(self):
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+    
+    def forward(self, x):
+        logits = self.network(x)
+        return torch.softmax(logits, dim=1)
+    
+    def get_logits(self, x):
+        """Get raw logits for gradient computation."""
+        return self.network(x)
+
+
+class WeightedCoxPLLoss(nn.Module):
+    """
+    Negative Weighted Cox Partial Likelihood Loss.
+    
+    This loss function directly optimizes the policy network to maximize
+    the weighted Cox partial likelihood.
+    """
+    
+    def __init__(self):
+        super(WeightedCoxPLLoss, self).__init__()
+    
+    def forward(self, probs, R, P, RP, E, T):
+        """
+        Compute negative weighted Cox partial likelihood.
+        
+        Parameters
+        ----------
+        probs : torch.Tensor
+            Policy probabilities for each action (n_samples, 3)
+        R, P, RP : torch.Tensor
+            Risk scores from each modality (n_samples,)
+        E : torch.Tensor
+            Event indicators (n_samples,)
+        T : torch.Tensor
+            Survival times (n_samples,)
+            
+        Returns
+        -------
+        loss : torch.Tensor
+            Negative weighted Cox partial likelihood (scalar)
+        """
+        # Compute weighted risk scores
+        # h_i = sum_a pi(a|S_i) * risk_i(a)
+        h_weighted = (probs[:, 0] * R + 
+                      probs[:, 1] * P + 
+                      probs[:, 2] * RP)
+        
+        # Sort by time (descending)
+        idx = torch.argsort(T, descending=True)
+        h_sorted = h_weighted[idx]
+        E_sorted = E[idx]
+        
+        # Compute Cox partial likelihood
+        # Subtract max for numerical stability
+        h_max = torch.max(h_sorted)
+        exp_h = torch.exp(h_sorted - h_max)
+        cumsum = torch.cumsum(exp_h, dim=0)
+        
+        # Cox partial likelihood
+        loglik = torch.sum(E_sorted * (h_sorted - torch.log(cumsum + 1e-8)))
+        
+        # Return negative for minimization
+        return -loglik
+
+
+class ContextualBandit:
+    """
+    Contextual Bandit with PyTorch policy network.
+    
+    Implements the EM framework with direct policy optimization:
+    - E-Step: Update policy network by minimizing negative weighted Cox PL
+    - M-Step: Update subgroup-specific Cox models with sample weights
+    
+    Parameters
+    ----------
+    alpha_range : list, default=[0.001, 0.01, 0.1, 1.0, 10.0]
+        Regularization parameter range for Cox models (L2 penalty)
+    max_iterations : int, default=10
+        Maximum number of EM iterations
+    convergence_threshold : float, default=0.001
+        Minimum improvement in C-index for convergence
+    hidden_dim : int, default=16
+        Hidden layer dimension for policy network
+    learning_rate : float, default=0.01
+        Learning rate for policy network
+    batch_size : int, default=32
+        Batch size for policy training
+    policy_epochs : int, default=50
+        Number of epochs for policy training per EM iteration
+    cv_folds : int, default=5
+        Number of cross-validation folds for Cox model selection
+    device : str, default='cuda'
+        Device for PyTorch ('cuda' or 'cpu')
+    random_state : int, default=None
+        Random seed for reproducibility
+    """
+    
+    def __init__(self, 
+                 alpha_range=[0.001, 0.01, 0.1, 1.0, 10.0],
+                 max_iterations=10,
+                 convergence_threshold=0.001,
+                 hidden_dim=16,
+                 learning_rate=0.01,
+                 batch_size=32,
+                 policy_epochs=50,
+                 cv_folds=5,
+                 device='cuda',
+                 random_state=None):
+        
+        self.alpha_range = alpha_range
+        self.max_iterations = max_iterations
+        self.convergence_threshold = convergence_threshold
+        self.hidden_dim = hidden_dim
+        self.learning_rate = learning_rate
+        self.batch_size = batch_size
+        self.policy_epochs = policy_epochs
+        self.cv_folds = cv_folds
+        self.device = device if torch.cuda.is_available() else 'cpu'
+        self.random_state = random_state
+        
+        # Set random seeds
+        if random_state is not None:
+            np.random.seed(random_state)
+            torch.manual_seed(random_state)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(random_state)
+        
+        # Initialize models
+        self.cox_rad = None
+        self.cox_path = None
+        self.cox_rp = None
+        self.policy_network = None
+        self.policy_optimizer = None
+        self.policy_loss_fn = None
+        
+        # Store history
+        self.cindex_history = []
+        self.objective_history = []
+        self.models_rad = []
+        self.models_path = []
+        self.models_rp = []
+        self.policies = []
+        
+        # Store state statistics for normalization
+        self.state_stats = None
+        
+        # Store final outputs
+        self.R_curr = None
+        self.P_curr = None
+        self.RP_curr = None
+        self.w_rad = None
+        self.w_path = None
+        self.w_rp = None
+        
+        # Store feature names for CoxPHFitter
+        self.feature_names_rad = None
+        self.feature_names_path = None
+        self.feature_names_rp = None
+    
+    def _normalize_state(self, R, P, delta):
+        """
+        Normalize state features to [0, 1] for stable training.
+        
+        Parameters
+        ----------
+        R : array-like
+            Radiomic risk scores
+        P : array-like
+            Pathomic risk scores
+        delta : array-like
+            Absolute difference |R - P|
+            
+        Returns
+        -------
+        S : ndarray
+            Normalized state matrix of shape (n_samples, 3)
+        """
+        if self.state_stats is None:
+            # Compute min/max for normalization
+            self.state_stats = {
+                'R_min': np.min(R),
+                'R_max': np.max(R),
+                'P_min': np.min(P),
+                'P_max': np.max(P),
+                'delta_min': np.min(delta),
+                'delta_max': np.max(delta)
+            }
+        
+        stats = self.state_stats
+        R_norm = (R - stats['R_min']) / (stats['R_max'] - stats['R_min'] + 1e-8)
+        P_norm = (P - stats['P_min']) / (stats['P_max'] - stats['P_min'] + 1e-8)
+        delta_norm = (delta - stats['delta_min']) / (stats['delta_max'] - stats['delta_min'] + 1e-8)
+        
+        return np.column_stack([R_norm, P_norm, delta_norm])
+    
+    def _prepare_dataframe(self, X, T, E, weights=None):
+        """
+        Prepare DataFrame for CoxPHFitter.
+        
+        Parameters
+        ----------
+        X : ndarray
+            Feature matrix
+        T : ndarray
+            Survival times
+        E : ndarray
+            Event indicators
+        weights : ndarray, optional
+            Sample weights
+            
+        Returns
+        -------
+        df : pd.DataFrame
+            DataFrame with features, duration, event, and optional weights
+        """
+        n_features = X.shape[1]
+        feature_names = [f'f{i}' for i in range(n_features)]
+        
+        df = pd.DataFrame(X, columns=feature_names)
+        df['duration'] = T
+        df['event'] = E.astype(int)
+        
+        if weights is not None:
+            df['weights'] = weights
+        
+        return df, feature_names
+    
+    def train_survival_model(self, X, T, E, weights=None, alpha_range=None):
+        """
+        Train a CoxPH model with cross-validation for regularization parameter selection.
+        
+        Parameters
+        ----------
+        X : ndarray
+            Feature matrix
+        T : ndarray
+            Survival times
+        E : ndarray
+            Event indicators (1=event, 0=censored)
+        weights : ndarray, optional
+            Sample weights
+        alpha_range : list, optional
+            Regularization parameter range
+            
+        Returns
+        -------
+        model : CoxPHFitter
+            Fitted CoxPH model with best regularization parameter
+        best_alpha : float
+            Best regularization parameter
+        """
+        if alpha_range is None:
+            alpha_range = self.alpha_range
+        
+        # Prepare DataFrame
+        df, feature_names = self._prepare_dataframe(X, T, E, weights)
+        
+        has_weights = weights is not None
+        weights_col = 'weights' if has_weights else None
+        
+        # Cross-validation to select best alpha
+        best_alpha = None
+        best_concordance = -1
+        best_model = None
+        
+        # Split data for CV
+        n_samples = len(df)
+        indices = np.arange(n_samples)
+        
+        for alpha in alpha_range:
+            try:
+                cv_scores = []
+                
+                # Manual CV since CoxPHFitter doesn't have built-in CV
+                for fold in range(self.cv_folds):
+                    # Split indices
+                    fold_size = n_samples // self.cv_folds
+                    start = fold * fold_size
+                    end = start + fold_size if fold < self.cv_folds - 1 else n_samples
+                    
+                    val_idx = indices[start:end]
+                    train_idx = np.concatenate([indices[:start], indices[end:]])
+                    
+                    # Train on fold
+                    df_train = df.iloc[train_idx]
+                    model = CoxPHFitter(penalizer=alpha, l1_ratio=0.9)
+                    
+                    if has_weights:
+                        model.fit(df_train, duration_col='duration', event_col='event',
+                                 weights_col='weights', robust=True)
+                    else:
+                        model.fit(df_train, duration_col='duration', event_col='event', robust=True)
+                    
+                    # Validate
+                    df_val = df.iloc[val_idx]
+                    try:
+                        risk_scores = model.predict_log_partial_hazard(df_val).values
+                        c_index = concordance_index(
+                            df_val['duration'].values,
+                            -risk_scores,
+                            df_val['event'].values.astype(bool)
+                        )
+                        cv_scores.append(c_index)
+                    except:
+                        cv_scores.append(0.0)
+                
+                mean_cv_score = np.mean(cv_scores)
+                
+                if mean_cv_score > best_concordance:
+                    best_concordance = mean_cv_score
+                    best_alpha = alpha
+                    
+            except Exception as e:
+                print(f"  Alpha={alpha} failed: {e}")
+                continue
+        
+        # Fit final model with best alpha on full data
+        if best_alpha is None:
+            print(f"  All alphas failed, fitting with default alpha=0.01")
+            best_alpha = 0.01
+        
+        model = CoxPHFitter(penalizer=best_alpha, l1_ratio=0.9)
+        if has_weights:
+            model.fit(df, duration_col='duration', event_col='event',
+                     weights_col='weights', robust=True)
+        else:
+            model.fit(df, duration_col='duration', event_col='event', robust=True)
+        
+        return model, best_alpha
+    
+    def _predict_risk(self, model, X):
+        """
+        Predict risk scores using CoxPHFitter.
+        
+        Returns log partial hazard (higher = higher risk).
+        """
+        n_features = X.shape[1]
+        feature_names = [f'f{i}' for i in range(n_features)]
+        df = pd.DataFrame(X, columns=feature_names)
+        risk_scores = model.predict_log_partial_hazard(df).values
+        return risk_scores
+    
+    def _get_policy_probs(self, S):
+        """
+        Get policy probabilities for state vectors.
+        
+        Parameters
+        ----------
+        S : ndarray
+            State matrix (n_samples, 3)
+            
+        Returns
+        -------
+        probs : ndarray
+            Policy probabilities (n_samples, 3)
+        """
+        self.policy_network.eval()
+        with torch.no_grad():
+            S_tensor = torch.FloatTensor(S).to(self.device)
+            probs = self.policy_network(S_tensor)
+            return probs.cpu().numpy()
+    
+    def _train_policy_epoch(self, S, R, P, RP, E, T):
+        """
+        Train policy network for one epoch.
+        
+        Returns
+        -------
+        loss : float
+            Average loss for this epoch
+        """
+        # Convert to tensors
+        S_tensor = torch.FloatTensor(S).to(self.device)
+        R_tensor = torch.FloatTensor(R).to(self.device)
+        P_tensor = torch.FloatTensor(P).to(self.device)
+        RP_tensor = torch.FloatTensor(RP).to(self.device)
+        E_tensor = torch.FloatTensor(E).to(self.device)
+        T_tensor = torch.FloatTensor(T).to(self.device)
+        
+        # Create dataset and dataloader
+        dataset = TensorDataset(S_tensor, R_tensor, P_tensor, RP_tensor, E_tensor, T_tensor)
+        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        
+        self.policy_network.train()
+        total_loss = 0.0
+        num_batches = 0
+        
+        for batch in dataloader:
+            S_batch, R_batch, P_batch, RP_batch, E_batch, T_batch = batch
+            
+            # Forward pass
+            probs = self.policy_network(S_batch)
+            
+            # Compute weighted Cox PL loss
+            loss = self.policy_loss_fn(probs, R_batch, P_batch, RP_batch, E_batch, T_batch)
+            
+            # Backward pass
+            self.policy_optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.policy_network.parameters(), max_norm=1.0)
+            self.policy_optimizer.step()
+            
+            total_loss += loss.item()
+            num_batches += 1
+        
+        return total_loss / num_batches if num_batches > 0 else 0.0
+    
+    def _init_policy_network(self):
+        """Initialize the policy network and optimizer."""
+        self.policy_network = PolicyNetwork(
+            input_dim=3,
+            hidden_dim=self.hidden_dim,
+            output_dim=3,
+            dropout_rate=0.1
+        ).to(self.device)
+        
+        self.policy_optimizer = optim.Adam(
+            self.policy_network.parameters(),
+            lr=self.learning_rate,
+            weight_decay=1e-5
+        )
+        
+        self.policy_loss_fn = WeightedCoxPLLoss()
+    
+    def fit(self, X_rad, X_path, y):
+        """
+        Fit the Contextual Bandit with EM algorithm.
+        
+        Parameters
+        ----------
+        X_rad : ndarray
+            Radiomic features
+        X_path : ndarray
+            Pathomic features
+        y : structured array or DataFrame
+            Survival data with fields 'event' and 'duration'
+            
+        Returns
+        -------
+        self : ContextualBandit
+            Fitted instance
+        """
+        # Extract survival data
+        if isinstance(y, pd.DataFrame):
+            T_train = y["duration"].values
+            E_train = y["event"].values.astype(bool)
+        else:
+            T_train = y["duration"]
+            E_train = y["event"].astype(bool)
+        
+        N_train = len(T_train)
+        
+        # ============================================================
+        # STEP 1: INITIALIZATION - Train Global Cox Models
+        # ============================================================
+        
+        print("Initializing global Cox models...")
+        print(f"Training Radiomic model...")
+        self.cox_rad, _ = self.train_survival_model(
+            X_rad, T_train, E_train, alpha_range=self.alpha_range
+        )
+        R_train = self._predict_risk(self.cox_rad, X_rad)
+        
+        print(f"Training Pathomic model...")
+        self.cox_path, _ = self.train_survival_model(
+            X_path, T_train, E_train, alpha_range=self.alpha_range
+        )
+        P_train = self._predict_risk(self.cox_path, X_path)
+        
+        print(f"Training Fusion (RP) model...")
+        X_rp = np.concatenate([X_rad, X_path], axis=1)
+        self.cox_rp, _ = self.train_survival_model(
+            X_rp, T_train, E_train, alpha_range=self.alpha_range
+        )
+        RP_train = self._predict_risk(self.cox_rp, X_rp)
+        
+        # Store initial models
+        self.models_rad = [self.cox_rad]
+        self.models_path = [self.cox_path]
+        self.models_rp = [self.cox_rp]
+        
+        # Current risk scores
+        self.R_curr = R_train.copy()
+        self.P_curr = P_train.copy()
+        self.RP_curr = RP_train.copy()
+        
+        # Initialize state statistics
+        delta_train = np.abs(self.R_curr - self.P_curr)
+        self.state_stats = None
+        S_train = self._normalize_state(self.R_curr, self.P_curr, delta_train)
+        
+        # Initialize policy network
+        self._init_policy_network()
+        
+        # ============================================================
+        # STEP 2: EM LOOP
+        # ============================================================
+        
+        print("\nStarting EM iterations...")
+        
+        for iteration in range(self.max_iterations):
+            print(f"\n--- EM Iteration {iteration + 1} ---")
+            
+            # ============================================================
+            # E-STEP: Train Policy Network (Direct Optimization)
+            # ============================================================
+            
+            print(f"Training policy network for {self.policy_epochs} epochs...")
+            
+            # Create validation split for early stopping
+            S_train_np = S_train
+            indices = np.arange(len(S_train_np))
+            train_idx, val_idx = train_test_split(
+                indices, test_size=0.2, random_state=self.random_state
+            )
+            
+            best_val_loss = float('inf')
+            best_policy_state = None
+            patience_counter = 0
+            patience = 10
+            
+            for epoch in range(self.policy_epochs):
+                # Train epoch
+                train_loss = self._train_policy_epoch(
+                    S_train_np[train_idx],
+                    self.R_curr[train_idx],
+                    self.P_curr[train_idx],
+                    self.RP_curr[train_idx],
+                    E_train[train_idx],
+                    T_train[train_idx]
+                )
+                
+                # Validation loss
+                self.policy_network.eval()
+                with torch.no_grad():
+                    S_val_tensor = torch.FloatTensor(S_train_np[val_idx]).to(self.device)
+                    R_val_tensor = torch.FloatTensor(self.R_curr[val_idx]).to(self.device)
+                    P_val_tensor = torch.FloatTensor(self.P_curr[val_idx]).to(self.device)
+                    RP_val_tensor = torch.FloatTensor(self.RP_curr[val_idx]).to(self.device)
+                    E_val_tensor = torch.FloatTensor(E_train[val_idx]).to(self.device)
+                    T_val_tensor = torch.FloatTensor(T_train[val_idx]).to(self.device)
+                    
+                    probs_val = self.policy_network(S_val_tensor)
+                    val_loss = self.policy_loss_fn(
+                        probs_val, R_val_tensor, P_val_tensor, RP_val_tensor,
+                        E_val_tensor, T_val_tensor
+                    ).item()
+                
+                # Early stopping
+                if val_loss < best_val_loss:
+                    best_val_loss = val_loss
+                    best_policy_state = {
+                        k: v.cpu().clone() for k, v in self.policy_network.state_dict().items()
+                    }
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+                
+                if (epoch + 1) % 10 == 0 or epoch == 0:
+                    print(f"  Epoch {epoch+1}/{self.policy_epochs}: "
+                          f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}")
+                
+                if patience_counter >= patience:
+                    print(f"  Early stopping at epoch {epoch+1}")
+                    break
+            
+            # Restore best policy
+            if best_policy_state is not None:
+                self.policy_network.load_state_dict(best_policy_state)
+            
+            # Get policy probabilities
+            self.policy_network.eval()
+            with torch.no_grad():
+                S_tensor = torch.FloatTensor(S_train).to(self.device)
+                probs = self.policy_network(S_tensor)
+                policy_probs = probs.cpu().numpy()
+            
+            self.w_rad = policy_probs[:, 0]
+            self.w_path = policy_probs[:, 1]
+            self.w_rp = policy_probs[:, 2]
+            
+            # Compute objective for history
+            with torch.no_grad():
+                S_tensor = torch.FloatTensor(S_train).to(self.device)
+                R_tensor = torch.FloatTensor(self.R_curr).to(self.device)
+                P_tensor = torch.FloatTensor(self.P_curr).to(self.device)
+                RP_tensor = torch.FloatTensor(self.RP_curr).to(self.device)
+                E_tensor = torch.FloatTensor(E_train).to(self.device)
+                T_tensor = torch.FloatTensor(T_train).to(self.device)
+                
+                probs = self.policy_network(S_tensor)
+                objective = -self.policy_loss_fn(
+                    probs, R_tensor, P_tensor, RP_tensor, E_tensor, T_tensor
+                ).item()
+                self.objective_history.append(objective)
+                print(f"Policy objective (Weighted Cox PL): {objective:.4f}")
+            
+            # ============================================================
+            # M-STEP: Train Weighted Cox Models
+            # ============================================================
+            
+            print(f"Training weighted Cox models...")
+            
+            # Radiomic model with weights
+            print(f"  Weighted Radiomic model...")
+            self.cox_rad, _ = self.train_survival_model(
+                X_rad, T_train, E_train, weights=self.w_rad,
+                alpha_range=self.alpha_range
+            )
+            R_new = self._predict_risk(self.cox_rad, X_rad)
+            
+            # Pathomic model with weights
+            print(f"  Weighted Pathomic model...")
+            self.cox_path, _ = self.train_survival_model(
+                X_path, T_train, E_train, weights=self.w_path,
+                alpha_range=self.alpha_range
+            )
+            P_new = self._predict_risk(self.cox_path, X_path)
+            
+            # Fusion model with weights
+            print(f"  Weighted Fusion (RP) model...")
+            self.cox_rp, _ = self.train_survival_model(
+                X_rp, T_train, E_train, weights=self.w_rp,
+                alpha_range=self.alpha_range
+            )
+            RP_new = self._predict_risk(self.cox_rp, X_rp)
+            
+            # ============================================================
+            # UPDATE RISK SCORES
+            # ============================================================
+            
+            self.R_curr = R_new
+            self.P_curr = P_new
+            self.RP_curr = RP_new
+            
+            # Update state
+            delta_train = np.abs(self.R_curr - self.P_curr)
+            S_train = self._normalize_state(self.R_curr, self.P_curr, delta_train)
+            
+            # ============================================================
+            # EVALUATE AND CHECK CONVERGENCE
+            # ============================================================
+            
+            # Compute weighted risk scores
+            h_weighted = (self.w_rad * self.R_curr + 
+                          self.w_path * self.P_curr + 
+                          self.w_rp * self.RP_curr)
+            
+            c_index = concordance_index(T_train, -h_weighted, E_train)
+            self.cindex_history.append(c_index)
+            print(f"Training C-index (weighted): {c_index:.4f}")
+            
+            # Store models
+            self.models_rad.append(self.cox_rad)
+            self.models_path.append(self.cox_path)
+            self.models_rp.append(self.cox_rp)
+            
+            # Save policy state
+            policy_state = {k: v.cpu().clone() for k, v in self.policy_network.state_dict().items()}
+            self.policies.append(policy_state)
+            
+            # Print subgroup sizes
+            print(f"Subgroup sizes - Rad: {np.sum(self.w_rad > 0.5):.0f}, "
+                  f"Path: {np.sum(self.w_path > 0.5):.0f}, "
+                  f"RP: {np.sum(self.w_rp > 0.5):.0f}")
+            
+            # Check convergence
+            if len(self.cindex_history) > 1:
+                improvement = self.cindex_history[-1] - self.cindex_history[-2]
+                if improvement < self.convergence_threshold and improvement >= 0:
+                    print(f"Convergence reached (improvement: {improvement:.4f} < {self.convergence_threshold})")
+                    break
+        
+        # Use final iteration models
+        self.cox_rad = self.models_rad[-1]
+        self.cox_path = self.models_path[-1]
+        self.cox_rp = self.models_rp[-1]
+        
+        # Restore final policy
+        if self.policies:
+            self.policy_network.load_state_dict(self.policies[-1])
+        
+        print(f"\nEM completed. Final C-index: {self.cindex_history[-1]:.4f}")
+        print(f"Total iterations: {len(self.cindex_history)}")
+        
+        return self
+    
+    def predict_risk(self, X_rad, X_path):
+        """
+        Predict risk scores for new patients using the learned policy.
+        
+        Parameters
+        ----------
+        X_rad : ndarray
+            Radiomic features
+        X_path : ndarray
+            Pathomic features
+            
+        Returns
+        -------
+        risk_scores : ndarray
+            Fused risk scores based on policy decisions
+        actions : ndarray
+            Selected actions for each patient
+        probs : ndarray
+            Policy probabilities for each action
+        """
+        # Get risk scores from each model
+        R = self._predict_risk(self.cox_rad, X_rad)
+        P = self._predict_risk(self.cox_path, X_path)
+        X_rp = np.concatenate([X_rad, X_path], axis=1)
+        RP = self._predict_risk(self.cox_rp, X_rp)
+        
+        # Construct state
+        delta = np.abs(R - P)
+        S = self._normalize_state(R, P, delta)
+        
+        # Get policy probabilities
+        probs = self._get_policy_probs(S)
+        actions = np.argmax(probs, axis=1)
+        
+        # Compute final risk scores
+        N = len(R)
+        risk_scores = np.zeros(N)
+        for i in range(N):
+            if actions[i] == 0:
+                risk_scores[i] = R[i]
+            elif actions[i] == 1:
+                risk_scores[i] = P[i]
+            else:
+                risk_scores[i] = RP[i]
+        
+        return risk_scores, actions, probs
+    
+    def get_subgroup_probabilities(self, X_rad, X_path):
+        """
+        Get soft subgroup assignment probabilities for new patients.
+        """
+        R = self._predict_risk(self.cox_rad, X_rad)
+        P = self._predict_risk(self.cox_path, X_path)
+        delta = np.abs(R - P)
+        S = self._normalize_state(R, P, delta)
+        return self._get_policy_probs(S)
+    
+    def get_weighted_risk(self, X_rad, X_path):
+        """
+        Get weighted risk scores using policy probabilities directly (soft ensemble).
+        """
+        R = self._predict_risk(self.cox_rad, X_rad)
+        P = self._predict_risk(self.cox_path, X_path)
+        X_rp = np.concatenate([X_rad, X_path], axis=1)
+        RP = self._predict_risk(self.cox_rp, X_rp)
+        
+        delta = np.abs(R - P)
+        S = self._normalize_state(R, P, delta)
+        probs = self._get_policy_probs(S)
+        
+        # Weighted risk = sum(prob * risk)
+        risk_scores = probs[:, 0] * R + probs[:, 1] * P + probs[:, 2] * RP
+        
+        return risk_scores, probs
+
+
+class ContextualBanditPipeline:
+    """
+    Pipeline wrapper for Contextual Bandit with survival prediction.
+    """
+    
+    def __init__(self, bandit, use_soft_ensemble=False):
+        self.bandit = bandit
+        self.use_soft_ensemble = use_soft_ensemble
+        self.risk_scores_ = None
+        self.actions_ = None
+        self.probs_ = None
+    
+    def fit(self, X_rad, X_path, y):
+        self.bandit.fit(X_rad, X_path, y)
+        return self
+    
+    def transform(self, X_rad, X_path):
+        if self.use_soft_ensemble:
+            risk_scores, probs = self.bandit.get_weighted_risk(X_rad, X_path)
+            self.probs_ = probs
+            self.actions_ = None
+        else:
+            risk_scores, actions, probs = self.bandit.predict_risk(X_rad, X_path)
+            self.actions_ = actions
+            self.probs_ = probs
+        
+        self.risk_scores_ = risk_scores
+        return risk_scores
+    
+    def fit_transform(self, X_rad, X_path, y):
+        self.fit(X_rad, X_path, y)
+        return self.transform(X_rad, X_path)
+    
+    def get_subgroup_probs(self, X_rad, X_path):
+        return self.bandit.get_subgroup_probabilities(X_rad, X_path)
+    
+    def get_cindex_history(self):
+        return self.bandit.cindex_history
+    
+    def get_objective_history(self):
+        return self.bandit.objective_history
 
 class SurvivalAnalyzer:
     def __init__(self, save_results_dir, relative_path="."):
@@ -2508,6 +3356,123 @@ class SurvivalAnalyzer:
             'duration': te_y["duration"].tolist(),
             'latent_embeddings': train_latent  # For analysis
         }
+    
+    def strategy_6_EM_Contextual_Bandit(self, split, split_idx, omics_params, model_params):
+        """
+        Strategy 6: EM + Contextual Bandit for Dynamic Subgroup Discovery and Fusion.
+        
+        This strategy implements the iterative EM framework with a contextual bandit policy
+        to learn soft subgroup assignments (Radiomics-Best, Pathomics-Best, Fusion-Best)
+        and train specialized weighted Cox models for each subgroup.
+        
+        Parameters
+        ----------
+        split : object
+            Data split object
+        split_idx : int
+            Split index for reproducibility
+        omics_params : dict
+            Parameters for loading omics data
+        model_params : dict
+            Model parameters including:
+            - alpha : float, regularization for Cox models
+            - em_max_iterations : int, maximum EM iterations
+            - convergence_threshold : float, convergence tolerance
+            - feature_selection : bool, whether to apply feature selection
+            - feature_var_threshold : float, variance threshold
+        fusion_method : str, default='average'
+            Fusion method (unused, kept for compatibility)
+            
+        Returns
+        -------
+        dict : Results containing predictions, scores, and metadata
+        """
+        print(f"\n=== Strategy 6: EM + Contextual Bandit ===")
+        
+        # ============================================================
+        # STEP 1: LOAD DATA
+        # ============================================================
+        
+        # Load radiomics data
+        radiomics_params = omics_params.copy()
+        radiomics_params['omics'] = 'radiomics'
+        radiomics_params['save_omics_dir'] = omics_params['save_omics_dir']['radiomics']
+        data_tr, data_te, raw_data_te, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
+            split, **radiomics_params
+        )
+        
+        # Load pathomics data
+        pathomics_params = omics_params.copy()
+        pathomics_params['omics'] = 'pathomics'
+        pathomics_params['save_omics_dir'] = omics_params['save_omics_dir']['pathomics']
+        _, _, _, tr_X_patho, te_X_patho, raw_te_X_patho, _, _ = self.load_data_for_fold(
+            split, **pathomics_params
+        )
+        
+        X_rad_train = tr_X_radio.values if hasattr(tr_X_radio, 'values') else tr_X_radio
+        X_path_train = tr_X_patho.values if hasattr(tr_X_patho, 'values') else tr_X_patho
+        X_rad_test = te_X_radio.values if hasattr(te_X_radio, 'values') else te_X_radio
+        X_path_test = te_X_patho.values if hasattr(te_X_patho, 'values') else te_X_patho
+        X_rad_raw = raw_te_X_radio.values if hasattr(raw_te_X_radio, 'values') else raw_te_X_radio
+        X_path_raw = raw_te_X_patho.values if hasattr(raw_te_X_patho, 'values') else raw_te_X_patho
+        
+        # Initialize bandit
+        bandit = ContextualBandit(
+            alpha_range=[0.001, 0.01, 0.1, 1.0],
+            max_iterations=10,
+            hidden_dim=8,
+            learning_rate=0.01,
+            batch_size=64,
+            policy_epochs=50,
+            device='cuda'
+        )
+
+        # Create pipeline
+        pipeline = ContextualBanditPipeline(bandit, use_soft_ensemble=False)
+
+        # Fit
+        pipeline.fit(X_rad_train, X_path_train, tr_y)
+
+        # Test set predictions
+        risk_scores = pipeline.transform(X_rad_test, X_path_test)
+        actions = pipeline.actions_
+        probs = pipeline.probs_
+        
+        # Raw test set predictions
+        raw_risk_scores = bandit.predict_risk(X_rad_raw, X_path_raw)[0]
+        
+        scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
+        
+        print(f"\nFinal Results:")
+        print(f"  C-index: {scores_dict.get('c_index', 0):.4f}")
+        print(f"  Policy action distribution: "
+            f"Rad: {np.sum(actions == 0)}, "
+            f"Path: {np.sum(actions == 1)}, "
+            f"RP: {np.sum(actions == 2)}")
+        print(f"  EM iterations: {len(bandit.cindex_history)}")
+        
+        return {
+            'pipeline': pipeline,
+            'risk_scores': risk_scores,
+            'raw_risk_scores': raw_risk_scores,
+            'scores': scores_dict,
+            'times': times,
+            'subject_ids': [p[0][0] for p in data_te],
+            'raw_subject_ids': [p[0][0] for p in raw_data_te],
+            'event': te_y["event"].astype(int).tolist(),
+            'duration': te_y["duration"].tolist(),
+            'cindex_history': bandit.cindex_history,
+            'actions': actions.tolist(),
+            'policy_probs': probs.tolist(),
+            'subgroup_weights': {
+                'radiomics': np.mean(probs[:, 0]) if probs.shape[1] >= 1 else 0,
+                'pathomics': np.mean(probs[:, 1]) if probs.shape[1] >= 2 else 0,
+                'rp': np.mean(probs[:, 2]) if probs.shape[1] >= 3 else 0
+            },
+            'w_rad': bandit.w_rad.tolist() if bandit.w_rad is not None else None,
+            'w_path': bandit.w_path.tolist() if bandit.w_path is not None else None,
+            'w_rp': bandit.w_rp.tolist() if bandit.w_rp is not None else None
+        }
 
     def plot_survival_curve(self, survival_results, omics, strategy_name, pvalue):
         """Plot survival curve"""
@@ -2588,6 +3553,7 @@ class SurvivalAnalyzer:
                 'Strategy3_Separate_Fusion': lambda s, idx, op, mp: self.strategy_3_separate_fusion(s, idx, op, mp, fusion_method),
                 'Strategy4_PCA_Separate_Fusion': lambda s, idx, op, mp: self.strategy_4_pca_separate_fusion(s, idx, op, mp, n_pca_components, fusion_method),
                 'Strategy5_Domain_Adaptation_Fusion': lambda s, idx, op, mp: self.strategy_5_domain_adaptation_fusion(s, idx, op, mp),
+                'Strategy6_Contextual_Bandit_Fusion': lambda s, idx, op, mp: self.strategy_6_EM_Contextual_Bandit(s, idx, op, mp),
             }
         else:
             raise ValueError(f"{omics} is not supported yet")
