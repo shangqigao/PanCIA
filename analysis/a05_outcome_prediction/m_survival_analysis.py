@@ -25,9 +25,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.base import BaseEstimator, TransformerMixin
 
+from lifelines.utils import concordance_index
+from sklearn.model_selection import train_test_split
+
 from torch_geometric.loader import DataLoader
 from tiatoolbox import logger
-from tiatoolbox.utils.misc import save_as_json
 
 from lifelines import CoxPHFitter, KaplanMeierFitter
 from lifelines.statistics import logrank_test
@@ -43,11 +45,10 @@ from sksurv.metrics import (
 )
 from sklearn.exceptions import FitFailedWarning
 from sklearn.model_selection import GridSearchCV, KFold
-from sklearn.feature_selection import VarianceThreshold, SelectFromModel
+from sklearn.feature_selection import VarianceThreshold
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
-from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.utils import resample
 from sklearn.decomposition import PCA
 
@@ -1869,19 +1870,6 @@ class MultiModalPipeline:
         """Predict for single patient"""
         result = self.predict(radio_X, patho_X)
         return result[0] if hasattr(result, '__len__') else result
-    
-import numpy as np
-import pandas as pd
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-from lifelines import CoxPHFitter
-from lifelines.utils import concordance_index
-from sklearn.model_selection import train_test_split
-import warnings
-warnings.filterwarnings('ignore')
-
 
 class PolicyNetwork(nn.Module):
     """
@@ -1925,18 +1913,109 @@ class PolicyNetwork(nn.Module):
 
 class WeightedCoxPLLoss(nn.Module):
     """
-    Negative Weighted Cox Partial Likelihood Loss.
+    Negative Weighted Cox Partial Likelihood Loss with Exploration Mechanisms.
     
-    This loss function directly optimizes the policy network to maximize
-    the weighted Cox partial likelihood.
+    This loss function combines:
+    1. Weighted Cox PL (exploitation - maximize survival ranking)
+    2. Entropy bonus (exploration - encourage action diversity)
+    3. Uncertainty bonus (exploration - reward high-variance decisions)
+    4. Temperature annealing (gradual shift from exploration to exploitation)
     """
     
-    def __init__(self):
-        super(WeightedCoxPLLoss, self).__init__()
-    
-    def forward(self, probs, R, P, RP, E, T):
+    def __init__(self, 
+                 entropy_weight=0.1,
+                 uncertainty_weight=0.05,
+                 min_entropy_weight=0.01,
+                 max_entropy_weight=0.5,
+                 temperature=1.0,
+                 min_temperature=0.1,
+                 annealing_rate=0.95):
         """
-        Compute negative weighted Cox partial likelihood.
+        Parameters
+        ----------
+        entropy_weight : float
+            Initial weight for entropy bonus (higher = more exploration)
+        uncertainty_weight : float
+            Weight for uncertainty bonus (higher = explore uncertain actions)
+        min_entropy_weight : float
+            Minimum entropy weight (prevents complete exploitation)
+        max_entropy_weight : float
+            Maximum entropy weight (caps exploration)
+        temperature : float
+            Initial softmax temperature (higher = more uniform exploration)
+        min_temperature : float
+            Minimum temperature (sharpens policy over time)
+        annealing_rate : float
+            Rate at which temperature and entropy weight decrease
+        """
+        super(WeightedCoxPLLoss, self).__init__()
+        
+        self.entropy_weight = entropy_weight
+        self.uncertainty_weight = uncertainty_weight
+        self.min_entropy_weight = min_entropy_weight
+        self.max_entropy_weight = max_entropy_weight
+        self.temperature = temperature
+        self.min_temperature = min_temperature
+        self.annealing_rate = annealing_rate
+        
+        # Store for adaptive adjustment
+        self.step_count = 0
+        self.best_loss = float('inf')
+        self.patience_counter = 0
+        
+    def update_parameters(self, step_count=None):
+        """
+        Update temperature and entropy weight based on training progress.
+        This implements exploration annealing.
+        """
+        if step_count is not None:
+            self.step_count = step_count
+        
+        # Anneal temperature (gradually sharpen policy)
+        self.temperature = max(
+            self.min_temperature,
+            self.temperature * self.annealing_rate
+        )
+        
+        # Anneal entropy weight (gradually reduce exploration)
+        self.entropy_weight = max(
+            self.min_entropy_weight,
+            self.entropy_weight * self.annealing_rate
+        )
+        
+        return self.temperature, self.entropy_weight
+    
+    def compute_entropy(self, probs):
+        """
+        Compute entropy of policy distribution.
+        Higher entropy = more uniform action selection (exploration).
+        """
+        # Add small epsilon to avoid log(0)
+        log_probs = torch.log(probs + 1e-8)
+        entropy = -torch.sum(probs * log_probs, dim=1)
+        return entropy.mean()
+    
+    def compute_uncertainty(self, probs, R, P, RP):
+        """
+        Compute uncertainty based on variance of risk scores across actions.
+        Higher variance = policy is uncertain about which action is best.
+        """
+        # Weighted risk scores per action
+        risk_all = torch.stack([R, P, RP], dim=1)  # (n_samples, 3)
+        
+        # Expected risk (already computed in weighted Cox PL)
+        expected_risk = (probs * risk_all).sum(dim=1, keepdim=True)
+        
+        # Variance of risk across actions
+        variance = torch.sum(probs * (risk_all - expected_risk)**2, dim=1)
+        
+        # Encourage exploration when variance is high (uncertainty bonus)
+        return variance.mean()
+    
+    def forward(self, probs, R, P, RP, E, T, 
+                return_components=False):
+        """
+        Compute loss with exploration bonuses.
         
         Parameters
         ----------
@@ -1948,34 +2027,491 @@ class WeightedCoxPLLoss(nn.Module):
             Event indicators (n_samples,)
         T : torch.Tensor
             Survival times (n_samples,)
+        return_components : bool
+            If True, return individual loss components for monitoring
             
         Returns
         -------
         loss : torch.Tensor
-            Negative weighted Cox partial likelihood (scalar)
+            Total loss (negative weighted Cox PL + exploration bonuses)
         """
+        # ============================================================
+        # COMPONENT 1: WEIGHTED COX PARTIAL LIKELIHOOD (Exploitation)
+        # ============================================================
+        
         # Compute weighted risk scores
-        # h_i = sum_a pi(a|S_i) * risk_i(a)
         h_weighted = (probs[:, 0] * R + 
                       probs[:, 1] * P + 
                       probs[:, 2] * RP)
+        
+        # Apply temperature scaling for sharper/softer decisions
+        # Higher temperature = softer (more exploration)
+        # Lower temperature = sharper (more exploitation)
+        h_weighted = h_weighted / self.temperature
         
         # Sort by time (descending)
         idx = torch.argsort(T, descending=True)
         h_sorted = h_weighted[idx]
         E_sorted = E[idx]
         
-        # Compute Cox partial likelihood
-        # Subtract max for numerical stability
+        # Compute Cox partial likelihood with numerical stability
         h_max = torch.max(h_sorted)
         exp_h = torch.exp(h_sorted - h_max)
         cumsum = torch.cumsum(exp_h, dim=0)
         
-        # Cox partial likelihood
+        # Cox partial likelihood (negative for minimization)
         loglik = torch.sum(E_sorted * (h_sorted - torch.log(cumsum + 1e-8)))
+        cox_loss = -loglik  # Minimize negative likelihood
         
-        # Return negative for minimization
-        return -loglik
+        # ============================================================
+        # COMPONENT 2: ENTROPY BONUS (Exploration)
+        # ============================================================
+        
+        # Compute entropy of policy distribution
+        entropy = self.compute_entropy(probs)
+        
+        # Entropy bonus: encourage exploration when entropy is low
+        # We want to maximize entropy (minimize -entropy)
+        entropy_bonus = -self.entropy_weight * entropy
+        
+        # ============================================================
+        # COMPONENT 3: UNCERTAINTY BONUS (Exploration)
+        # ============================================================
+        
+        # Encourage exploration when uncertainty is high
+        uncertainty = self.compute_uncertainty(probs, R, P, RP)
+        uncertainty_bonus = self.uncertainty_weight * uncertainty
+        
+        # ============================================================
+        # COMPONENT 4: ACTION DIVERSITY REGULARIZATION (Exploration)
+        # ============================================================
+        
+        # Penalize if policy assigns near-zero probability to any action
+        # This ensures all actions remain possible
+        min_prob = torch.min(probs, dim=1)[0]
+        diversity_penalty = -torch.log(min_prob + 1e-8).mean()
+        diversity_weight = 0.01  # Small weight to avoid over-regularization
+        
+        # ============================================================
+        # COMBINE LOSS COMPONENTS
+        # ============================================================
+        
+        total_loss = (cox_loss + 
+                      entropy_bonus + 
+                      uncertainty_bonus + 
+                      diversity_weight * diversity_penalty)
+        
+        if return_components:
+            return {
+                'total_loss': total_loss,
+                'cox_loss': cox_loss,
+                'entropy_bonus': entropy_bonus,
+                'entropy_value': entropy,
+                'uncertainty_bonus': uncertainty_bonus,
+                'uncertainty_value': uncertainty,
+                'diversity_penalty': diversity_penalty,
+                'temperature': self.temperature,
+                'entropy_weight': self.entropy_weight
+            }
+        
+        return total_loss
+
+
+class BayesianWeightedCoxPLLoss(nn.Module):
+    """
+    Bayesian-inspired loss with Thompson sampling style exploration.
+    
+    This loss adds noise to the risk scores based on policy uncertainty,
+    encouraging the policy to explore actions with high epistemic uncertainty.
+    """
+    
+    def __init__(self, 
+                 noise_scale=0.1,
+                 min_noise_scale=0.01,
+                 exploration_bonus_weight=0.1,
+                 annealing_rate=0.95):
+        """
+        Parameters
+        ----------
+        noise_scale : float
+            Initial noise scale for risk scores
+        min_noise_scale : float
+            Minimum noise scale (prevents complete exploitation)
+        exploration_bonus_weight : float
+            Weight for exploration bonus based on uncertainty
+        annealing_rate : float
+            Rate at which noise scale decreases
+        """
+        super(BayesianWeightedCoxPLLoss, self).__init__()
+        
+        self.noise_scale = noise_scale
+        self.min_noise_scale = min_noise_scale
+        self.exploration_bonus_weight = exploration_bonus_weight
+        self.annealing_rate = annealing_rate
+        
+        self.step_count = 0
+        
+    def update_parameters(self, step_count=None):
+        """Annealing: gradually reduce exploration noise."""
+        if step_count is not None:
+            self.step_count = step_count
+        
+        self.noise_scale = max(
+            self.min_noise_scale,
+            self.noise_scale * self.annealing_rate
+        )
+        
+        return self.noise_scale
+    
+    def compute_epistemic_uncertainty(self, probs, R, P, RP):
+        """
+        Compute epistemic uncertainty using dropout-like variance.
+        Higher uncertainty = encourage more exploration.
+        """
+        # Standard deviation of risk scores across actions
+        risk_all = torch.stack([R, P, RP], dim=1)
+        std_risk = torch.std(risk_all, dim=1)
+        return std_risk.mean()
+    
+    def forward(self, probs, R, P, RP, E, T, 
+                return_components=False):
+        """
+        Forward pass with Bayesian exploration.
+        """
+        # ============================================================
+        # COMPONENT 1: BAYESIAN RISK SCORES (Exploration via noise)
+        # ============================================================
+        
+        # Add noise to risk scores proportional to uncertainty
+        # This implements a simple form of Thompson sampling
+        noise = torch.randn_like(R) * self.noise_scale
+        R_noisy = R + noise * (probs[:, 0] * 0.1 + 0.1)  # More noise when action prob is low
+        
+        noise = torch.randn_like(P) * self.noise_scale
+        P_noisy = P + noise * (probs[:, 1] * 0.1 + 0.1)
+        
+        noise = torch.randn_like(RP) * self.noise_scale
+        RP_noisy = RP + noise * (probs[:, 2] * 0.1 + 0.1)
+        
+        # Weighted risk with noisy scores
+        h_weighted = (probs[:, 0] * R_noisy + 
+                      probs[:, 1] * P_noisy + 
+                      probs[:, 2] * RP_noisy)
+        
+        # Sort by time
+        idx = torch.argsort(T, descending=True)
+        h_sorted = h_weighted[idx]
+        E_sorted = E[idx]
+        
+        # Cox PL
+        h_max = torch.max(h_sorted)
+        exp_h = torch.exp(h_sorted - h_max)
+        cumsum = torch.cumsum(exp_h, dim=0)
+        
+        loglik = torch.sum(E_sorted * (h_sorted - torch.log(cumsum + 1e-8)))
+        cox_loss = -loglik
+        
+        # ============================================================
+        # COMPONENT 2: EXPLORATION BONUS (epistemic uncertainty)
+        # ============================================================
+        
+        # Encourage exploration when epistemic uncertainty is high
+        epistemic_uncertainty = self.compute_epistemic_uncertainty(probs, R, P, RP)
+        exploration_bonus = -self.exploration_bonus_weight * epistemic_uncertainty
+        
+        # ============================================================
+        # COMPONENT 3: STANDARD ENTROPY BONUS
+        # ============================================================
+        
+        entropy = -torch.sum(probs * torch.log(probs + 1e-8), dim=1).mean()
+        entropy_bonus = -0.05 * entropy
+        
+        # ============================================================
+        # COMBINE
+        # ============================================================
+        
+        total_loss = cox_loss + exploration_bonus + entropy_bonus
+        
+        if return_components:
+            return {
+                'total_loss': total_loss,
+                'cox_loss': cox_loss,
+                'exploration_bonus': exploration_bonus,
+                'epistemic_uncertainty': epistemic_uncertainty,
+                'entropy_bonus': entropy_bonus,
+                'entropy_value': entropy,
+                'noise_scale': self.noise_scale
+            }
+        
+        return total_loss
+
+
+class AdaptiveWeightedCoxPLLoss(nn.Module):
+    """
+    Adaptive loss with automatic exploration-exploitation balancing.
+    
+    This loss adaptively adjusts the exploration weight based on:
+    1. Training progress (more exploration early, more exploitation late)
+    2. Performance plateaus (increase exploration when stuck)
+    3. Action diversity (ensure all actions are explored)
+    """
+    
+    def __init__(self,
+                 initial_exploration_weight=0.3,
+                 min_exploration_weight=0.01,
+                 max_exploration_weight=0.5,
+                 plateau_threshold=0.001,
+                 plateau_patience=5):
+        """
+        Parameters
+        ----------
+        initial_exploration_weight : float
+            Initial weight for exploration bonuses
+        min_exploration_weight : float
+            Minimum exploration weight
+        max_exploration_weight : float
+            Maximum exploration weight
+        plateau_threshold : float
+            Minimum loss improvement to detect plateau
+        plateau_patience : int
+            Number of steps before considering plateau
+        """
+        super(AdaptiveWeightedCoxPLLoss, self).__init__()
+        
+        self.exploration_weight = initial_exploration_weight
+        self.min_exploration_weight = min_exploration_weight
+        self.max_exploration_weight = max_exploration_weight
+        self.plateau_threshold = plateau_threshold
+        self.plateau_patience = plateau_patience
+        
+        # Tracking for adaptive adjustment
+        self.loss_history = []
+        self.plateau_counter = 0
+        self.step_count = 0
+        self.best_loss = float('inf')
+        
+    def update_exploration_weight(self, loss_value):
+        """
+        Adaptive adjustment of exploration weight.
+        - Increase exploration if performance plateaus
+        - Decrease exploration if performance improves
+        """
+        self.step_count += 1
+        self.loss_history.append(loss_value.item() if torch.is_tensor(loss_value) else loss_value)
+        
+        if len(self.loss_history) > 1:
+            improvement = self.loss_history[-2] - self.loss_history[-1]
+            
+            # Check for plateau
+            if abs(improvement) < self.plateau_threshold:
+                self.plateau_counter += 1
+            else:
+                self.plateau_counter = 0
+            
+            # If plateau detected, increase exploration
+            if self.plateau_counter >= self.plateau_patience:
+                self.exploration_weight = min(
+                    self.max_exploration_weight,
+                    self.exploration_weight * 1.2
+                )
+                self.plateau_counter = 0
+            else:
+                # Gradual decrease of exploration
+                self.exploration_weight = max(
+                    self.min_exploration_weight,
+                    self.exploration_weight * 0.99
+                )
+        
+        return self.exploration_weight
+    
+    def compute_action_diversity(self, probs):
+        """
+        Compute diversity metric: how evenly distributed are actions?
+        """
+        # Average probability per action across batch
+        avg_probs = probs.mean(dim=0)
+        
+        # Uniform distribution
+        uniform = torch.ones_like(avg_probs) / avg_probs.shape[0]
+        
+        # KL divergence between average and uniform
+        # Higher KL = more focused (less exploration)
+        # Lower KL = more uniform (more exploration)
+        kl_div = torch.sum(avg_probs * (torch.log(avg_probs + 1e-8) - 
+                                        torch.log(uniform + 1e-8)))
+        
+        return kl_div
+    
+    def forward(self, probs, R, P, RP, E, T, 
+                return_components=False):
+        """
+        Forward pass with adaptive exploration.
+        """
+        # ============================================================
+        # COMPONENT 1: WEIGHTED COX PL (Exploitation)
+        # ============================================================
+        
+        h_weighted = (probs[:, 0] * R + 
+                      probs[:, 1] * P + 
+                      probs[:, 2] * RP)
+        
+        idx = torch.argsort(T, descending=True)
+        h_sorted = h_weighted[idx]
+        E_sorted = E[idx]
+        
+        h_max = torch.max(h_sorted)
+        exp_h = torch.exp(h_sorted - h_max)
+        cumsum = torch.cumsum(exp_h, dim=0)
+        
+        loglik = torch.sum(E_sorted * (h_sorted - torch.log(cumsum + 1e-8)))
+        cox_loss = -loglik
+        
+        # ============================================================
+        # COMPONENT 2: EXPLORATION BONUS (Adaptive)
+        # ============================================================
+        
+        # Entropy bonus
+        entropy = -torch.sum(probs * torch.log(probs + 1e-8), dim=1).mean()
+        entropy_bonus = -self.exploration_weight * entropy
+        
+        # Diversity bonus: encourage exploration when actions are imbalanced
+        diversity = self.compute_action_diversity(probs)
+        diversity_bonus = self.exploration_weight * 0.1 * diversity
+        
+        # Uncertainty bonus
+        risk_all = torch.stack([R, P, RP], dim=1)
+        expected_risk = (probs * risk_all).sum(dim=1, keepdim=True)
+        variance = torch.sum(probs * (risk_all - expected_risk)**2, dim=1)
+        uncertainty_bonus = self.exploration_weight * 0.1 * variance.mean()
+        
+        # ============================================================
+        # COMBINE
+        # ============================================================
+        
+        total_loss = cox_loss + entropy_bonus + diversity_bonus + uncertainty_bonus
+        
+        # Update exploration weight adaptively
+        self.update_exploration_weight(total_loss)
+        
+        if return_components:
+            return {
+                'total_loss': total_loss,
+                'cox_loss': cox_loss,
+                'entropy_bonus': entropy_bonus,
+                'entropy_value': entropy,
+                'diversity_bonus': diversity_bonus,
+                'diversity_value': diversity,
+                'uncertainty_bonus': uncertainty_bonus,
+                'uncertainty_value': variance.mean(),
+                'exploration_weight': self.exploration_weight
+            }
+        
+        return total_loss
+
+
+class EnsembleWeightedCoxPLLoss(nn.Module):
+    """
+    Ensemble-based loss with exploration via multiple hypotheses.
+    
+    Maintains multiple risk estimates and encourages the policy to
+    explore actions that are favored by different ensemble members.
+    """
+    
+    def __init__(self, 
+                 ensemble_size=5,
+                 exploration_weight=0.1,
+                 ensemble_noise_scale=0.05):
+        """
+        Parameters
+        ----------
+        ensemble_size : int
+            Number of ensemble members (different risk estimates)
+        exploration_weight : float
+            Weight for exploration bonus
+        ensemble_noise_scale : float
+            Noise scale for ensemble diversity
+        """
+        super(EnsembleWeightedCoxPLLoss, self).__init__()
+        
+        self.ensemble_size = ensemble_size
+        self.exploration_weight = exploration_weight
+        self.ensemble_noise_scale = ensemble_noise_scale
+        
+    def forward(self, probs, R, P, RP, E, T, 
+                return_components=False):
+        """
+        Forward pass with ensemble exploration.
+        """
+        # ============================================================
+        # COMPONENT 1: ENSEMBLE RISK ESTIMATES
+        # ============================================================
+        
+        # Create ensemble of perturbed risk scores
+        ensemble_losses = []
+        
+        for e in range(self.ensemble_size):
+            # Add noise to risk scores (different for each ensemble member)
+            noise_scale = self.ensemble_noise_scale * (1 + 0.1 * e / self.ensemble_size)
+            
+            R_e = R + torch.randn_like(R) * noise_scale
+            P_e = P + torch.randn_like(P) * noise_scale
+            RP_e = RP + torch.randn_like(RP) * noise_scale
+            
+            # Compute weighted risk
+            h_e = (probs[:, 0] * R_e + 
+                   probs[:, 1] * P_e + 
+                   probs[:, 2] * RP_e)
+            
+            # Cox PL for this ensemble member
+            idx = torch.argsort(T, descending=True)
+            h_sorted = h_e[idx]
+            E_sorted = E[idx]
+            
+            h_max = torch.max(h_sorted)
+            exp_h = torch.exp(h_sorted - h_max)
+            cumsum = torch.cumsum(exp_h, dim=0)
+            
+            loglik = torch.sum(E_sorted * (h_sorted - torch.log(cumsum + 1e-8)))
+            ensemble_losses.append(-loglik)
+        
+        # Average over ensemble
+        cox_loss = torch.stack(ensemble_losses).mean()
+        
+        # ============================================================
+        # COMPONENT 2: ENSEMBLE UNCERTAINTY (Exploration)
+        # ============================================================
+        
+        # Variance across ensemble members
+        ensemble_losses_tensor = torch.stack(ensemble_losses)
+        ensemble_variance = torch.var(ensemble_losses_tensor)
+        
+        # Encourage exploration when ensemble members disagree
+        exploration_bonus = -self.exploration_weight * ensemble_variance
+        
+        # ============================================================
+        # COMPONENT 3: STANDARD ENTROPY BONUS
+        # ============================================================
+        
+        entropy = -torch.sum(probs * torch.log(probs + 1e-8), dim=1).mean()
+        entropy_bonus = -0.05 * entropy
+        
+        # ============================================================
+        # COMBINE
+        # ============================================================
+        
+        total_loss = cox_loss + exploration_bonus + entropy_bonus
+        
+        if return_components:
+            return {
+                'total_loss': total_loss,
+                'cox_loss': cox_loss,
+                'exploration_bonus': exploration_bonus,
+                'ensemble_variance': ensemble_variance,
+                'entropy_bonus': entropy_bonus,
+                'entropy_value': entropy
+            }
+        
+        return total_loss
 
 
 class ContextualBandit:
@@ -2019,6 +2555,11 @@ class ContextualBandit:
                  batch_size=32,
                  policy_epochs=50,
                  cv_folds=5,
+                 loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
+                 exploration_weight=0.1,
+                 entropy_weight=0.05,
+                 uncertainty_weight=0.05,
+                 temperature=1.0,
                  device='cuda',
                  random_state=None):
         
@@ -2030,47 +2571,42 @@ class ContextualBandit:
         self.batch_size = batch_size
         self.policy_epochs = policy_epochs
         self.cv_folds = cv_folds
+        self.loss_type = loss_type
+        self.exploration_weight = exploration_weight
+        self.entropy_weight = entropy_weight
+        self.uncertainty_weight = uncertainty_weight
+        self.temperature = temperature
         self.device = device if torch.cuda.is_available() else 'cpu'
         self.random_state = random_state
         
-        # Set random seeds
-        if random_state is not None:
-            np.random.seed(random_state)
-            torch.manual_seed(random_state)
-            if torch.cuda.is_available():
-                torch.cuda.manual_seed_all(random_state)
-        
-        # Initialize models
-        self.cox_rad = None
-        self.cox_path = None
-        self.cox_rp = None
-        self.policy_network = None
-        self.policy_optimizer = None
-        self.policy_loss_fn = None
-        
-        # Store history
-        self.cindex_history = []
-        self.objective_history = []
-        self.models_rad = []
-        self.models_path = []
-        self.models_rp = []
-        self.policies = []
-        
-        # Store state statistics for normalization
-        self.state_stats = None
-        
-        # Store final outputs
-        self.R_curr = None
-        self.P_curr = None
-        self.RP_curr = None
-        self.w_rad = None
-        self.w_path = None
-        self.w_rp = None
-        
-        # Store feature names for CoxPHFitter
-        self.feature_names_rad = None
-        self.feature_names_path = None
-        self.feature_names_rp = None
+    def _init_loss_function(self):
+        """Initialize the appropriate loss function."""
+        if self.loss_type == 'weighted':
+            # Original weighted Cox PL with entropy bonus
+            self.policy_loss_fn = WeightedCoxPLLoss(
+                entropy_weight=self.entropy_weight,
+                uncertainty_weight=self.uncertainty_weight,
+                temperature=self.temperature
+            )
+        elif self.loss_type == 'bayesian':
+            # Bayesian exploration with noise
+            self.policy_loss_fn = BayesianWeightedCoxPLLoss(
+                noise_scale=0.1,
+                exploration_bonus_weight=self.exploration_weight
+            )
+        elif self.loss_type == 'ensemble':
+            # Ensemble-based exploration
+            self.policy_loss_fn = EnsembleWeightedCoxPLLoss(
+                ensemble_size=5,
+                exploration_weight=self.exploration_weight
+            )
+        else:  # 'adaptive' (default)
+            # Fully adaptive exploration-exploitation balancing
+            self.policy_loss_fn = AdaptiveWeightedCoxPLLoss(
+                initial_exploration_weight=self.exploration_weight,
+                min_exploration_weight=0.01,
+                max_exploration_weight=0.5
+            )
     
     def _normalize_state(self, R, P, delta):
         """
@@ -2277,12 +2813,7 @@ class ContextualBandit:
     
     def _train_policy_epoch(self, S, R, P, RP, E, T):
         """
-        Train policy network for one epoch.
-        
-        Returns
-        -------
-        loss : float
-            Average loss for this epoch
+        Train policy network for one epoch with exploration.
         """
         # Convert to tensors
         S_tensor = torch.FloatTensor(S).to(self.device)
@@ -2306,8 +2837,10 @@ class ContextualBandit:
             # Forward pass
             probs = self.policy_network(S_batch)
             
-            # Compute weighted Cox PL loss
-            loss = self.policy_loss_fn(probs, R_batch, P_batch, RP_batch, E_batch, T_batch)
+            # Compute loss with exploration components
+            loss = self.policy_loss_fn(
+                probs, R_batch, P_batch, RP_batch, E_batch, T_batch
+            )
             
             # Backward pass
             self.policy_optimizer.zero_grad()
@@ -2317,6 +2850,10 @@ class ContextualBandit:
             
             total_loss += loss.item()
             num_batches += 1
+        
+        # Update loss function parameters (annealing)
+        if hasattr(self.policy_loss_fn, 'update_parameters'):
+            self.policy_loss_fn.update_parameters()
         
         return total_loss / num_batches if num_batches > 0 else 0.0
     
@@ -2456,10 +2993,13 @@ class ContextualBandit:
                     T_val_tensor = torch.FloatTensor(T_train[val_idx]).to(self.device)
                     
                     probs_val = self.policy_network(S_val_tensor)
-                    val_loss = self.policy_loss_fn(
+                    val_loss_CPs = self.policy_loss_fn(
                         probs_val, R_val_tensor, P_val_tensor, RP_val_tensor,
-                        E_val_tensor, T_val_tensor
-                    ).item()
+                        E_val_tensor, T_val_tensor, return_components=True
+                    )
+                    val_loss = val_loss_CPs['total_loss'].item()
+                    exploitation_loss = val_loss_CPs['cox_loss'].item()
+                    exploration_loss = val_loss - exploitation_loss
                 
                 # Early stopping
                 if val_loss < best_val_loss:
@@ -2473,7 +3013,8 @@ class ContextualBandit:
                 
                 if (epoch + 1) % 10 == 0 or epoch == 0:
                     print(f"  Epoch {epoch+1}/{self.policy_epochs}: "
-                          f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}")
+                          f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}"
+                          f"Exploitation Loss = {exploitation_loss:.4f}, Exploration Loss = {exploration_loss:.4f}")
                 
                 if patience_counter >= patience:
                     print(f"  Early stopping at epoch {epoch+1}")
@@ -3424,6 +3965,10 @@ class SurvivalAnalyzer:
             learning_rate=0.01,
             batch_size=64,
             policy_epochs=50,
+            loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
+            exploration_weight=0.2,
+            entropy_weight=0.05,
+            temperature=1.0,
             device='cuda'
         )
 
@@ -3548,11 +4093,11 @@ class SurvivalAnalyzer:
             }
         elif omics == 'radiopathomics':
             strategies = {
-                'Strategy1_DirectConcat': self.strategy_1_direct_concat,
-                'Strategy2_PCA_Concat': lambda s, idx, op, mp: self.strategy_2_pca_concat(s, idx, op, mp, n_pca_components),
-                'Strategy3_Separate_Fusion': lambda s, idx, op, mp: self.strategy_3_separate_fusion(s, idx, op, mp, fusion_method),
-                'Strategy4_PCA_Separate_Fusion': lambda s, idx, op, mp: self.strategy_4_pca_separate_fusion(s, idx, op, mp, n_pca_components, fusion_method),
-                'Strategy5_Domain_Adaptation_Fusion': lambda s, idx, op, mp: self.strategy_5_domain_adaptation_fusion(s, idx, op, mp),
+                # 'Strategy1_DirectConcat': self.strategy_1_direct_concat,
+                # 'Strategy2_PCA_Concat': lambda s, idx, op, mp: self.strategy_2_pca_concat(s, idx, op, mp, n_pca_components),
+                # 'Strategy3_Separate_Fusion': lambda s, idx, op, mp: self.strategy_3_separate_fusion(s, idx, op, mp, fusion_method),
+                # 'Strategy4_PCA_Separate_Fusion': lambda s, idx, op, mp: self.strategy_4_pca_separate_fusion(s, idx, op, mp, n_pca_components, fusion_method),
+                # 'Strategy5_Domain_Adaptation_Fusion': lambda s, idx, op, mp: self.strategy_5_domain_adaptation_fusion(s, idx, op, mp),
                 'Strategy6_Contextual_Bandit_Fusion': lambda s, idx, op, mp: self.strategy_6_EM_Contextual_Bandit(s, idx, op, mp),
             }
         else:
