@@ -86,7 +86,7 @@ python analysis/a01_data_preprocessiong/m_sortout_subjects.py \
             --save_dir $save_dir
 ```
 
-### Step 2: tumor segmentation
+### Step 2: radiology tumor segmentation
 
 ```bash
 radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/CPTAC_included_subjects.json"
@@ -106,21 +106,80 @@ radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/ra
 python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
 ```
 
+- Whole slice features
+    - TARGET: "slice"
+    - DILATION_MM: 0 # only select slices with tumors, no dilation applied to tumor mask
+    - SAMPLING_RATE: 0.01 # randomly sample spatial features to reduce feature size
+    - MODE: choose one from ["BiomedParse", "LVMMed"], both can extract volumetric features (4D tensor), and LVMMed (ResNet architecture) can extract multi-scale volumetric features.
+- Intra-tumor features
+    - TARGET: "tumor"
+    - DILATION_MM: 10 # dialate tumor mask to include marginal information
+    - SAMPLING_RATE: 1 # no sampling required since tumor size is small in general
+    - MODE: choose one from ["pyradiomics", "FMCIB", "BiomedParse", "LVMMed"], the former two can only extract scan-level embeddings, while the latter two can extract volumetric features (4D tensor)
+- Graph construction
+    - VALUE: True
+    - FEATURE_DIS_WEIGHT: 0.01 # 0.01 for LVMMed else 0.1, since LVMMed has larger feature scales, used for feature clustering in graph construction. If you want to use other feature extractors, this should be adjusted.
+    - SAVE_CLUSTER_POINTS: False # only true for visualization purpose, default false to reduce json file size
+
 #### Pathomic feature extraction
 ```bash
 pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
 python analysis/a03_feature_extraction/m_pathomics_extraction.py --config_files $pathomics_config
 ```
 
+- Whole slide features
+    - MODE: choose one from ["UNI", "CONCH", "CHIEF"], all extract features patch-by-patch
+- Graph construction
+    - VALUE: True
+    - SAVE_CLUSTER_POINTS: False # only true for visualization purpose, default false to reduce json file size
+
 ### Step 4: outcome prediction
-#### Multi-omics multi-task learning
+#### Multimodal multi-scale multi-task learning
+
+This aims to aggreagte multiple graphs of each patient by multi-task learning and obtain universal patient-level embedding.
+
 ```bash
 multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
 python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
 ```
 
-#### Machine learning
+#### Task-specific Machine learning
+#### Survival prediction
 
+```bash
+survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
+python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
+```
+
+- Overall survival (OS):
+- Disease specfic survival (DSS):
+- Disease free interval (DFI):
+- Progression free interval (PFI):
+
+#### Phenotype prediction 
+
+```bash
+phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
+python analysis/a05_outcome_prediction/m_phenotype_prediction.py --config_files $phenotype_config
+```
+
+- Immune subtype classification
+- Molecular subtype classification
+- Primary disease classification
+
+#### Signature prediction
+
+```bash
+signature_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/signature_prediction.yaml"
+python analysis/a05_outcome_prediction/m_signature_prediction.py --config_files $signature_config
+```
+
+- Gene programes regression
+- HRD score regression
+- Immune signature score regression
+- Stemness score (DNA) regression
+- Stem score (RNA) regression
+- AGE regression
 
 ---
 
