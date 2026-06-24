@@ -14,11 +14,12 @@ import pathlib
 import joblib
 import argparse
 import pathlib
-import logging
 import json
 
 import numpy as np
 from utilities.m_utils import rmdir, mkdir
+
+from tiatoolbox import logger
 
 SEED = 5
 random.seed(SEED)
@@ -333,7 +334,7 @@ def extract_cnn_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
             wsi_name = pathlib.Path(wsi_path).name
             feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
             if feature_path.exists() and skip_exist:
-                logging.info(f"{feature_path.name} has existed, skip!")
+                logger.info(f"{feature_path.name} has existed, skip!")
             else:
                 new_wsi_paths.append(wsi_path)
                 new_msk_paths.append(msk_path)
@@ -433,7 +434,7 @@ def extract_vit_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
             wsi_name = pathlib.Path(wsi_path).name
             feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
             if feature_path.exists() and skip_exist:
-                logging.info(f"{feature_path.name} has existed, skip!")
+                logger.info(f"{feature_path.name} has existed, skip!")
             else:
                 new_wsi_paths.append(wsi_path)
                 new_msk_paths.append(msk_path)
@@ -542,7 +543,7 @@ def extract_uni_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5, 
             wsi_name = pathlib.Path(wsi_path).name
             feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
             if feature_path.exists() and skip_exist:
-                logging.info(f"{feature_path.name} has existed, skip!")
+                logger.info(f"{feature_path.name} has existed, skip!")
             else:
                 new_wsi_paths.append(wsi_path)
                 new_msk_paths.append(msk_path)
@@ -660,7 +661,7 @@ def extract_uni2_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5,
             wsi_name = pathlib.Path(wsi_path).name
             feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
             if feature_path.exists() and skip_exist:
-                logging.info(f"{feature_path.name} has existed, skip!")
+                logger.info(f"{feature_path.name} has existed, skip!")
             else:
                 new_wsi_paths.append(wsi_path)
                 new_msk_paths.append(msk_path)
@@ -759,7 +760,7 @@ def extract_conch_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
             wsi_name = pathlib.Path(wsi_path).name
             feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
             if feature_path.exists() and skip_exist:
-                logging.info(f"{feature_path.name} has existed, skip!")
+                logger.info(f"{feature_path.name} has existed, skip!")
             else:
                 new_wsi_paths.append(wsi_path)
                 new_msk_paths.append(msk_path)
@@ -868,7 +869,7 @@ def extract_chief_pathomics(wsi_paths, msk_paths, save_dir, mode, resolution=0.5
             wsi_name = pathlib.Path(wsi_path).name
             feature_path = pathlib.Path(f"{save_dir}/{wsi_name}_pathomics.npy")
             if feature_path.exists() and skip_exist:
-                logging.info(f"{feature_path.name} has existed, skip!")
+                logger.info(f"{feature_path.name} has existed, skip!")
             else:
                 new_wsi_paths.append(wsi_path)
                 new_msk_paths.append(msk_path)
@@ -929,7 +930,7 @@ def extract_chief_wsi_level_features(patch_feature_paths, anatomic=13, on_gpu=Tr
             wsi_feature_emb = result['WSI_feature'].squeeze().cpu().numpy()
         save_path = f"{path}".replace("_pathomics.npy", "_WSI_pathomics.npy")
         save_name = save_path.split("/")[-1]
-        logging.info(f"Saving [{i+1}/{len(patch_feature_paths)}] WSI-level features as {save_name} ...")
+        logger.info(f"Saving [{i+1}/{len(patch_feature_paths)}] WSI-level features as {save_name} ...")
         np.save(save_path, wsi_feature_emb)
     return
 
@@ -1240,11 +1241,11 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, target, label=1,
         parent_name = pathlib.Path(img_path).parent.name
         feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.npy")
         if feature_path.exists() and skip_exist:
-            logging.info(f"{feature_path.name} has existed, skip!")
+            logger.info(f"{feature_path.name} has existed, skip!")
             continue
         feature_path.parent.mkdir(parents=True, exist_ok=True)
 
-        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+        logger.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
         case_dict = {"image": img_path, "label": lab_path}
         data = transform(case_dict)
         image = data["image"].squeeze()
@@ -1254,7 +1255,7 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, target, label=1,
         # skip empty mask
         if np.sum(label > 0) < 1: 
             lab_name = pathlib.Path(lab_path).name
-            logging.info(f"Skip case {lab_name}, because no foreground found!")
+            logger.info(f"Skip case {lab_name}, because no foreground found!")
             continue
 
         # get scanning phase and move slice axis to the first 
@@ -1286,11 +1287,11 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, target, label=1,
         feature = np.moveaxis(feature, 0, slice_axis)
         feat_shape = feature.shape
         feat_memory = feature.nbytes / 1024**3
-        logging.info(f"Got image of shape {img_shape}, image feature of shape {feat_shape} ({feat_memory:.2f}GiB)")
+        logger.info(f"Got image of shape {img_shape}, image feature of shape {feat_shape} ({feat_memory:.2f}GiB)")
 
         # dilate label
         if dilation_mm > 0:
-            logging.info(f"Dilating mask by {int(dilation_mm)}mm")
+            logger.info(f"Dilating mask by {int(dilation_mm)}mm")
             radius_voxels = int(dilation_mm / resolution)
             kernel = skimage.morphology.ball(radius_voxels)
             label = binary_dilation(label, structure=kernel).astype(np.uint8)
@@ -1313,13 +1314,13 @@ def extract_SegVolViT_radiomics(img_paths, lab_paths, save_dir, target, label=1,
         feat_memory = feature.nbytes / 1024**2
         coordinates = np.argwhere(ds_label > 0) * np.array(new_patch_size).reshape(1, 3)
         coordinates += np.array(new_patch_size).reshape(1, 3) // 2
-        logging.info(f"Extracted ROI feature of shape {feature.shape} ({feat_memory:.2f}MiB)")
+        logger.info(f"Extracted ROI feature of shape {feature.shape} ({feat_memory:.2f}MiB)")
         assert len(feature) == len(coordinates)
-        logging.info(f"Saving radiomics in the resolution of {spacing}...")
-        logging.info(f"Saving radiomic features to {feature_path}")
+        logger.info(f"Saving radiomics in the resolution of {spacing}...")
+        logger.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, feature)
         coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{target}_coordinates.npy"
-        logging.info(f"Saving feature coordinates to {coordinates_path}")
+        logger.info(f"Saving feature coordinates to {coordinates_path}")
         np.save(coordinates_path, coordinates)
     return
 
@@ -1682,7 +1683,7 @@ class LoadModel(torch.nn.Module):
         if "trunk_state_dict" in pretrained_model:  # Loading ViSSL pretrained model
             trained_trunk = pretrained_model["trunk_state_dict"]
             msg = self.trunk.load_state_dict(trained_trunk, strict=False)
-            logging.warning(f"Model Trunk - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
+            logger.warning(f"Model Trunk - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
 
         # Load trained heads
         if "head_state_dict" in pretrained_model:
@@ -1691,8 +1692,8 @@ class LoadModel(torch.nn.Module):
             try:
                 msg = self.heads.load_state_dict(trained_heads, strict=False)
             except Exception as e:
-                logging.error(f"Failed to load trained heads with error {e}. This is expected if the models do not match!")
-            logging.warning(f"Model Head - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
+                logger.error(f"Failed to load trained heads with error {e}. This is expected if the models do not match!")
+            logger.warning(f"Model Head - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
 
         # Loading Lighter and other pretrained model
         if "state_dict" in pretrained_model:
@@ -1702,15 +1703,15 @@ class LoadModel(torch.nn.Module):
             weights = {key.replace("module.", ""): value for key, value in trained_model.items()}
             weights = {key.replace("model.trunk.", ""): value for key, value in trained_model.items()}
             msg = self.trunk.load_state_dict(weights, strict=False)
-            logging.warning(f"Model Trunk - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
+            logger.warning(f"Model Trunk - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
 
             weights = {
                 key.replace("model.heads.", ""): value for key, value in trained_model.items() if key.startswith("model.heads")
             }
             msg = self.heads.load_state_dict(weights, strict=False)
-            logging.warning(f"Model Head - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
+            logger.warning(f"Model Head - Missing keys: {msg[0]} and unexpected keys: {msg[1]}")
 
-        logging.info(f"Loaded pretrained model weights \n")
+        logger.info(f"Loaded pretrained model weights \n")
 
 def extract_FMCIB_radiomics(img_paths, lab_paths, save_dir, target, label=1, dilation_mm=0, resolution=1, units="mm", device="cuda", skip_exist=False):
     import nibabel as nib
@@ -1741,19 +1742,19 @@ def extract_FMCIB_radiomics(img_paths, lab_paths, save_dir, target, label=1, dil
 
         # skip empty masks
         if not np.any(label > 0):
-            logging.info(f"Skip case {lab_name}, no foreground found.")
+            logger.info(f"Skip case {lab_name}, no foreground found.")
             continue
 
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         parent_name = pathlib.Path(img_path).parent.name
         feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.npy")
         if feature_path.exists() and skip_exist:
-            logging.info(f"{feature_path.name} has existed, skip!")
+            logger.info(f"{feature_path.name} has existed, skip!")
             continue
         feature_path.parent.mkdir(parents=True, exist_ok=True)
 
         modality = 'CT' if '/CT/' in str(img_path) else 'MR'
-        logging.info(f"extracting {modality} radiomics: {idx + 1}/{len(img_paths)}...")
+        logger.info(f"extracting {modality} radiomics: {idx + 1}/{len(img_paths)}...")
         case_dict = {"image": img_path, "label": lab_path, "modality": modality}
         data = transform(case_dict)
         image = data["image"][0]
@@ -1765,9 +1766,9 @@ def extract_FMCIB_radiomics(img_paths, lab_paths, save_dir, target, label=1, dil
 
         feat_shape = feature.shape
         feat_memory = feature.nbytes / 1024**2
-        logging.info(f"Got image of shape {img_shape}, image feature of shape {feat_shape} ({feat_memory:.2f}MiB)")
+        logger.info(f"Got image of shape {img_shape}, image feature of shape {feat_shape} ({feat_memory:.2f}MiB)")
 
-        logging.info(f"Saving radiomic features to {feature_path}")
+        logger.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, feature)
 
     return
@@ -1863,11 +1864,11 @@ def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, target, label=1, r
         parent_name = pathlib.Path(case["image"]).parent.name
         feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.npy")
         if feature_path.exists() and skip_exist:
-            logging.info(f"{feature_path.name} has existed, skip!")
+            logger.info(f"{feature_path.name} has existed, skip!")
             continue
         feature_path.parent.mkdir(parents=True, exist_ok=True)
         
-        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(case_dicts)))
+        logger.info("extracting radiomics: {}/{}...".format(idx + 1, len(case_dicts)))
         image = data["image"].squeeze().numpy()
         label = data["label"].squeeze().numpy()
         voi, bbox = extract_VOI(image, label, None, padding, roi_size)
@@ -1876,9 +1877,9 @@ def extract_M3DCLIP_radiomics(img_paths, lab_paths, save_dir, target, label=1, r
         with torch.inference_mode():
             feature = model.encode_image(voi)[:, 0]
         feat_shape = feature.shape
-        logging.info(f"Got image of shape {img_shape}, VOI of shape {voi_shape}, feature of shape {feat_shape}")
+        logger.info(f"Got image of shape {img_shape}, VOI of shape {voi_shape}, feature of shape {feat_shape}")
         feature = feature.squeeze().cpu().numpy()
-        logging.info(f"Saving radiomics...")
+        logger.info(f"Saving radiomics...")
         np.save(feature_path, feature)
         coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{target}_coordinates.npy"
         np.save(coordinates_path, np.array(bbox))
@@ -1941,10 +1942,12 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
     from PIL import Image
     import nibabel as nib
     import skimage
+    import logging
     from skimage.morphology import disk
     from scipy.ndimage import binary_dilation
     from scipy.ndimage import zoom
 
+    import logging
     logging.getLogger("modeling").setLevel(logging.ERROR)
     from modeling.BaseModel import BaseModel
     from modeling import build_model
@@ -2006,11 +2009,11 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
                 parent_name = pathlib.Path(img_path).parent.name
         feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.npy")
         if feature_path.exists() and skip_exist:
-            logging.info(f"{feature_path.name} has existed, skip!")
+            logger.info(f"{feature_path.name} has existed, skip!")
             continue
         feature_path.parent.mkdir(parents=True, exist_ok=True)
 
-        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+        logger.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
         # read slices from dicom or nifti
         is_CT = modality[idx] == 'CT'
@@ -2048,7 +2051,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         if labels is not None:
             if np.sum(labels > 0) < 1: 
                 lab_name = pathlib.Path(lab_path).name
-                logging.info(f"Skip case {lab_name}, because no foreground found!")
+                logger.info(f"Skip case {lab_name}, because no foreground found!")
                 continue
             coords = np.array(np.where(labels))
             zmin, _, _ = coords.min(axis=1)
@@ -2058,7 +2061,7 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
             assert len(images) == len(labels)
             images = images[zmin:zmax+1]
             labels = labels[zmin:zmax+1, ...]
-            logging.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
+            logger.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
 
         radiomic_feat, masks = [], []
         meta_data = {} if meta_list is None else meta_list[idx]
@@ -2109,11 +2112,11 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
         masks = np.stack(masks, axis=0)
         radiomic_feat = np.concatenate(radiomic_feat, axis=0)
         radiomic_memory = radiomic_feat.nbytes / 1024**3
-        logging.info(f"Got image of shape {masks.shape}, image feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}GiB)")
+        logger.info(f"Got image of shape {masks.shape}, image feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}GiB)")
         final_mask = np.moveaxis(masks, 0, slice_axis)
         # mask dilation based on physical size
         if dilation_mm > 0:
-            logging.info(f"Dilating mask by {int(dilation_mm)}mm")
+            logger.info(f"Dilating mask by {int(dilation_mm)}mm")
             mean_spacing = np.mean(spacing)
             radius_voxels = int(dilation_mm / mean_spacing)
             kernel = skimage.morphology.ball(radius_voxels)
@@ -2141,11 +2144,11 @@ def extract_BiomedParse_radiomics(img_paths, lab_paths, text_prompts, save_dir, 
 
         radiomic_coord[:, slice_axis] += zmin
         radiomic_memory = radiomic_feat.nbytes / 1024**2
-        logging.info(f"Extracted ROI feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}MiB)")
-        logging.info(f"Saving radiomic features to {feature_path}")
+        logger.info(f"Extracted ROI feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}MiB)")
+        logger.info(f"Saving radiomic features to {feature_path}")
         np.save(feature_path, radiomic_feat)
         coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{target}_coordinates.npy"
-        logging.info(f"Saving feature coordinates to {coordinates_path}")
+        logger.info(f"Saving feature coordinates to {coordinates_path}")
         np.save(coordinates_path, radiomic_coord)
 
         # save final mask
@@ -2301,6 +2304,7 @@ def extract_Bayes_BiomedParse_radiomics(
     from scipy.ndimage import binary_dilation
     from scipy.ndimage import zoom
 
+    import logging
     logging.getLogger("modeling").setLevel(logging.ERROR)
     from modeling.BaseModel import BaseModel
     from modeling import build_model
@@ -2359,11 +2363,11 @@ def extract_Bayes_BiomedParse_radiomics(
         else:
             feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.json")
         if feature_path.exists() and skip_exist:
-            logging.info(f"{feature_path.name} has existed, skip!")
+            logger.info(f"{feature_path.name} has existed, skip!")
             continue
         feature_path.parent.mkdir(parents=True, exist_ok=True)
 
-        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+        logger.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
         # read slices from dicom or nifti
         is_CT = modality[idx] == 'CT'
@@ -2401,7 +2405,7 @@ def extract_Bayes_BiomedParse_radiomics(
         if labels is not None:
             if np.sum(labels > 0) < 1: 
                 lab_name = pathlib.Path(lab_path).name
-                logging.info(f"Skip case {lab_name}, because no foreground found!")
+                logger.info(f"Skip case {lab_name}, because no foreground found!")
                 continue
             coords = np.array(np.where(labels))
             zmin, _, _ = coords.min(axis=1)
@@ -2411,7 +2415,7 @@ def extract_Bayes_BiomedParse_radiomics(
             assert len(images) == len(labels)
             images = images[zmin:zmax+1]
             labels = labels[zmin:zmax+1, ...]
-            logging.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
+            logger.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
 
         radiomic_feat, masks = [], []
         meta_data = {} if meta_list is None else meta_list[idx]
@@ -2465,11 +2469,11 @@ def extract_Bayes_BiomedParse_radiomics(
         masks = np.stack(masks, axis=0)
         radiomic_feat = np.concatenate(radiomic_feat, axis=0)
         radiomic_memory = radiomic_feat.nbytes / 1024**3
-        logging.info(f"Got image of shape {masks.shape}, image feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}GiB)")
+        logger.info(f"Got image of shape {masks.shape}, image feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}GiB)")
         final_mask = np.moveaxis(masks, 0, slice_axis)
         # mask dilation based on physical size
         if dilation_mm > 0:
-            logging.info(f"Dilating mask by {int(dilation_mm)}mm")
+            logger.info(f"Dilating mask by {int(dilation_mm)}mm")
             mean_spacing = np.mean(spacing)
             radius_voxels = int(dilation_mm / mean_spacing)
             kernel = skimage.morphology.ball(radius_voxels)
@@ -2486,18 +2490,18 @@ def extract_Bayes_BiomedParse_radiomics(
             radiomic_memory = radiomic_feat.nbytes / 1024**2
             radiomic_coord = np.argwhere(final_mask > 0)
             radiomic_coord[:, slice_axis] += zmin
-            logging.info(f"Extracted ROI feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}MiB)")
-            logging.info(f"Saving radiomic features to {feature_path}")
+            logger.info(f"Extracted ROI feature of shape {radiomic_feat.shape} ({radiomic_memory:.2f}MiB)")
+            logger.info(f"Saving radiomic features to {feature_path}")
             np.save(feature_path, radiomic_feat)
             coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{target}_coordinates.npy"
-            logging.info(f"Saving feature coordinates to {coordinates_path}")
+            logger.info(f"Saving feature coordinates to {coordinates_path}")
             np.save(coordinates_path, radiomic_coord)
         else:
             radiomic_feat = extract_layer_by_layer_radiomics(
                 radiomic_feat, final_mask, shell_thickness_mm, new_spacing, layer_method
             )
-            logging.info(f"Extracted ROI features from {len(radiomic_feat['radiomics'])} layers")
-            logging.info(f"Saving radiomic features to {feature_path}")
+            logger.info(f"Extracted ROI features from {len(radiomic_feat['radiomics'])} layers")
+            logger.info(f"Saving radiomic features to {feature_path}")
             with open(feature_path, "w") as f:
                 json.dump(radiomic_feat, f, indent=4)
 
@@ -2571,10 +2575,10 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target,
 
         feature_dir = pathlib.Path(f"{save_dir}/{parent_name}")
         if len(list(feature_dir.glob(f"{img_name}_{target}_*_radiomics.npy"))) == 5 and skip_exist:
-            logging.info(f"All {img_name}_{target}_*_radiomics.npy have existed, skip!")
+            logger.info(f"All {img_name}_{target}_*_radiomics.npy have existed, skip!")
             continue
 
-        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+        logger.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
         # read slices from dicom or nifti
         is_CT = modality[idx] == 'CT'
@@ -2611,7 +2615,7 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target,
         # select slice range of interest
         if np.sum(labels > 0) < 1: 
             lab_name = pathlib.Path(lab_path).name
-            logging.info(f"Skip case {lab_name}, because no foreground found!")
+            logger.info(f"Skip case {lab_name}, because no foreground found!")
             continue
         coords = np.array(np.where(labels))
         zmin, xmin, ymin = coords.min(axis=1)
@@ -2625,7 +2629,7 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target,
         assert len(images) == len(labels)
         images = images[zmin:zmax+1]
         labels = labels[zmin:zmax+1, ...]
-        logging.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
+        logger.info(f"Selected {zmax - zmin + 1} slices from index {zmin} to {zmax} for feature extraction")
 
         masks = []
         batches = []
@@ -2658,7 +2662,7 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target,
             v = v.cpu().detach().numpy().astype(np.float16)
             radiomic_feat[k] = np.moveaxis(v, 0, slice_axis)
             radiomic_memory += radiomic_feat[k].nbytes / 1024**3
-        logging.info(f"Got image of shape {masks.shape}, image feature of size {radiomic_memory:.2f}GiB")
+        logger.info(f"Got image of shape {masks.shape}, image feature of size {radiomic_memory:.2f}GiB")
         final_mask = np.moveaxis(masks, 0, slice_axis)
 
         # reorder scales and bbox
@@ -2672,7 +2676,7 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target,
 
         # mask dilation based on physical size
         if dilation_mm > 0:
-            logging.info(f"Dilating mask by {int(dilation_mm)}mm")
+            logger.info(f"Dilating mask by {int(dilation_mm)}mm")
             mean_spacing = np.mean(spacing)
             radius_voxels = int(dilation_mm / mean_spacing)
             kernel = morphology.ball(radius_voxels)
@@ -2711,13 +2715,13 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target,
 
             radiomic_memory = radio_feat.nbytes / 1024**2
             radiomic_coord = (radiomic_coord / resize_scales + bbox_min).astype(np.float16)
-            logging.info(f"Extracted ROI {k} feature of shape {radio_feat.shape} ({radiomic_memory:.2f}MiB)")
+            logger.info(f"Extracted ROI {k} feature of shape {radio_feat.shape} ({radiomic_memory:.2f}MiB)")
             feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_{k}_radiomics.npy")
             feature_path.parent.mkdir(parents=True, exist_ok=True)
-            logging.info(f"Saving radiomic features to {feature_path}")
+            logger.info(f"Saving radiomic features to {feature_path}")
             np.save(feature_path, radio_feat)
             coordinates_path = f"{save_dir}/{parent_name}/{img_name}_{target}_{k}_coordinates.npy"
-            logging.info(f"Saving feature coordinates to {coordinates_path}")
+            logger.info(f"Saving feature coordinates to {coordinates_path}")
             np.save(coordinates_path, radiomic_coord)
 
         # save final mask
@@ -2866,11 +2870,11 @@ def extract_MedPLIB_features(
                 parent_name = pathlib.Path(img_path).parent.name
         feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.json")
         if feature_path.exists() and skip_exist:
-            logging.info(f"{feature_path.name} has existed, skip!")
+            logger.info(f"{feature_path.name} has existed, skip!")
             continue
         feature_path.parent.mkdir(parents=True, exist_ok=True)
 
-        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+        logger.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
         # read slices from dicom or nifti
         is_CT = modality[idx] == 'CT'
@@ -3078,11 +3082,11 @@ def extract_structured_LLaVA_features(
                 parent_name = pathlib.Path(img_path).parent.name
         feature_path = pathlib.Path(f"{save_dir}/{parent_name}/{img_name}_{target}_radiomics.json")
         if feature_path.exists() and skip_exist:
-            logging.info(f"{feature_path.name} has existed, skip!")
+            logger.info(f"{feature_path.name} has existed, skip!")
             continue
         feature_path.parent.mkdir(parents=True, exist_ok=True)
 
-        logging.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
+        logger.info("extracting radiomics: {}/{}...".format(idx + 1, len(img_paths)))
 
         # read slices from dicom or nifti
         is_CT = modality[idx] == 'CT'
