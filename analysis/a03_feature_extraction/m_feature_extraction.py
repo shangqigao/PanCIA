@@ -2622,10 +2622,16 @@ def extract_LVMMed_radiomics(img_paths, lab_paths, save_dir, target,
         zmax, xmax, ymax = coords.max(axis=1)
         zmin = max(zmin - int(dilation_mm), 0)
         zmax = min(zmax + int(dilation_mm), labels.shape[0] - 1)
-        xmin = max(xmin - int(dilation_mm), 0)
-        xmax = min(xmax + int(dilation_mm), labels.shape[1] - 1)
-        ymin = max(ymin - int(dilation_mm), 0)
-        ymax = min(ymax + int(dilation_mm), labels.shape[2] - 1)
+
+        if target == 'slice':
+            xmin, xmax = 0, labels.shape[1] - 1
+            ymin, ymax = 0, labels.shape[2] - 1
+        else:
+            xmin = max(xmin - int(dilation_mm), 0)
+            xmax = min(xmax + int(dilation_mm), labels.shape[1] - 1)
+            ymin = max(ymin - int(dilation_mm), 0)
+            ymax = min(ymax + int(dilation_mm), labels.shape[2] - 1)
+            
         assert len(images) == len(labels)
         images = images[zmin:zmax+1]
         labels = labels[zmin:zmax+1, ...]

@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-#SBATCH --time=0-36:00:00
-##SBATCH --time=0-00:10:00
+##SBATCH --time=0-36:00:00
+#SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-##SBATCH --qos=intr
+#SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -35,48 +35,6 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # python analysis/utilities/m_prepare_biomedparse_endometriosis_dataset.py
 # python analysis/utilities/m_calculate_endometriosis_segmentation_metrics.py
 # python analysis/utilities/m_plot_endometriosis_box.py
-
-#---------------MAMA-MIA----------------
-# fit Beta distributions on training data
-# img_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Multiphase_Breast_Tumor/train"
-# save_dir="/home/sg2162/rds/hpc-work/PanCIA/analysis/tumor_segmentation"
-# srun --mpi=pmi2 python analysis/a02_tumor_segmentation/m_fit_beta_distribution.py \
-#             --img_dir $img_dir \
-#             --save_dir $save_dir
-
-# tumor segmentation sanity test
-# img_dir="/home/sg2162/rds/hpc-work/sanity-check/images"
-# save_dir="/home/sg2162/rds/hpc-work/sanity-check/predictions"
-# beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
-# meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
-# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-#             --img_dir $img_dir \
-#             --save_dir $save_dir \
-#             --beta_params $beta_params \
-#             --meta_info $meta_info
-
-# tumor segmentation MAMA-MIA
-# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
-# save_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations/BiomedParse"
-# beta_params="/home/sg2162/rds/hpc-work/BCIA/CIA/analysis/tumor_segmentation/Beta_params.json"
-# meta_info="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/clinical_and_imaging_info.xlsx"
-# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-#             --img_dir $img_dir \
-#             --save_dir $save_dir \
-#             --beta_params $beta_params \
-#             --meta_info $meta_info
-
-# extract radiomic features
-# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
-# lab_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/segmentations"
-# save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
-# meta_info="/home/sg2162/rds/hpc-work/Experiments/clinical/MAMA-MIA_clinical_and_imaging_info.xlsx"
-
-# python analysis/a03_feature_extraction/m_radiomics_extraction.py \
-#             --img_dir $img_dir \
-#             --lab_dir $lab_dir \
-#             --save_dir $save_dir \
-#             --meta_info $meta_info 
 
 #----------------Pan-Cancer--------------------
 # radiology exclusion and inclusion
@@ -128,32 +86,16 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # extract radiomic features (add srun for BiomedParse)
-radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
-python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
-
-# srun deepspeed --num_gpus=1 analysis/a03_feature_extraction/m_radiomics_extraction.py \
-#   --config_files $radiomics_config \
-#   --deepspeed /home/sg2162/rds/hpc-work/PanCIA/checkpoints/MedPLIB/config.json
+# radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
+# python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
 
 # extract pathomic features
 # pathomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/pathomics_extraction.yaml"
 # python analysis/a03_feature_extraction/m_pathomics_extraction.py --config_files $pathomics_config
 
-# classification
-# img_dir="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/MAMA-MIA/images"
-# save_radiomics_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
-# save_clinical_dir="/home/sg2162/rds/hpc-work/Experiments/clinical"
-# save_model_dir="/home/sg2162/rds/hpc-work/Experiments/outcomes"
-
-# python analysis/a05_outcome_prediction/m_therapy_response.py \
-#             --img_dir $img_dir \
-#             --save_radiomics_dir $save_radiomics_dir \
-#             --save_clinical_dir $save_clinical_dir \
-#             --save_model_dir $save_model_dir  
-
 # multi-task learning
-# multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
-# python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
+multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
+python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
 
 # survival analysis
 # survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"

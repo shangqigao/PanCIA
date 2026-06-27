@@ -891,7 +891,7 @@ def inference(
         model_folder = f"{omics_name}_{arch_opt['GNN']}_{arch_opt['AGGREGATION']['VALUE']}"
         # model_folder = 'pathomics_GCNConv_SPARRA_homo+heter_vi0.1ae10_noDS_x_ref_sample0.1'
     model_dir = pretrained_model_dir / model_folder
-    model_dir = pathlib.Path('/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_multitask/BiomedParse_slice+tumor/radiomics_GCNConv_SPARRA')
+    # model_dir = pathlib.Path('/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_multitask/BiomedParse_slice+tumor/radiomics_GCNConv_SPARRA')
 
     predict_results = {}
     save_results = {}
@@ -1029,6 +1029,7 @@ if __name__ == "__main__":
     opt = load_opt_from_config_files(args.config_files)
     radiomics_mode = opt['RADIOMICS']['MODE']['VALUE']
     pathomics_mode = opt['PATHOMICS']['MODE']['VALUE']
+    radiomics_target = opt['RADIOMICS']['MODE']['TARGET']
 
     if opt['DATASET'] == "MAMAMIA":
         from analysis.a05_outcome_prediction.m_prepare_omics_info import prepare_MAMAMIA_omics_info
@@ -1226,7 +1227,11 @@ if __name__ == "__main__":
     from analysis.a05_outcome_prediction.m_prepare_omics_info import pathomics_dims
     from analysis.a05_outcome_prediction.m_prepare_omics_info import radiomics_pool_ratio
     from analysis.a05_outcome_prediction.m_prepare_omics_info import pathomics_pool_ratio
-    omics_dims = {"radiomics": radiomics_dims[radiomics_mode], "pathomics": pathomics_dims[pathomics_mode]}
+    
+    omics_dims = {
+        "radiomics": radiomics_dims[radiomics_mode][radiomics_target], 
+        "pathomics": pathomics_dims[pathomics_mode]
+    }
     omics_pool_ratio = {"radiomics": radiomics_pool_ratio[radiomics_mode], "pathomics": pathomics_pool_ratio[pathomics_mode]}
     omics_keys = opt['ARCH']['OMICS']
     omics_dims = {k: omics_dims[k] for k in omics_keys}

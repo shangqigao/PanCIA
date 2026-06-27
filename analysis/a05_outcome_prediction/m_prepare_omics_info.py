@@ -7,15 +7,28 @@ from utilities.constants import PANCIA_PROJECT_SITE
 
 radiomics_dims = {
     "None": None,
-    "pyradiomics": {'child0': 851},
-    "FMCIB": {'child0': 4096},
-    "SegVol": {'child0': 768},
-    # "BiomedParse": {'child0': 512},
-    "BiomedParse": {'child0': 512, 'child1': 512},
-    "BayesBP": {'child0': 64},
-    # "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 1024, 'child4': 2048}
-    # "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512}
-    "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 64, 'child4': 256, 'child5': 512}
+    "pyradiomics": {
+        "tumor": {'child0': 851}
+    },
+    "FMCIB": {
+        "tumor": {'child0': 4096}
+    },
+    "SegVol": {
+        "tumor": {'child0': 768}
+    },
+    "BayesBP": {
+        "tumor": {'child0': 64}
+    },
+    "BiomedParse": {
+        "tumor": {'child0': 512},
+        "slice": {'child0': 512},
+        "tumor+slice": {'child0': 512, 'child1': 512},
+    },
+    "LVMMed": {
+        "tumor": {'child0': 64, 'child1': 256, 'child2': 512}, # {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 1024, 'child4': 2048}
+        "slice": {'child0': 64, 'child1': 256, 'child2': 512},
+        "tumor+slice": {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 64, 'child4': 256, 'child5': 512}
+    }
 }
 
 pathomics_dims = {

@@ -106,20 +106,35 @@ radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/ra
 python analysis/a03_feature_extraction/m_radiomics_extraction.py --config_files $radiomics_config
 ```
 
-- Whole slice features
+Exact whole slice features
     - TARGET: "slice"
     - DILATION_MM: 0 # only select slices with tumors, no dilation applied to tumor mask
     - SAMPLING_RATE: 0.01 # randomly sample spatial features to reduce feature size
     - MODE: choose one from ["BiomedParse", "LVMMed"], both can extract volumetric features (4D tensor), and LVMMed (ResNet architecture) can extract multi-scale volumetric features.
-- Intra-tumor features
+
+Extract intra-tumor features
     - TARGET: "tumor"
     - DILATION_MM: 10 # dialate tumor mask to include marginal information
     - SAMPLING_RATE: 1 # no sampling required since tumor size is small in general
     - MODE: choose one from ["pyradiomics", "FMCIB", "BiomedParse", "LVMMed"], the former two can only extract scan-level embeddings, while the latter two can extract volumetric features (4D tensor)
-- Graph construction
+
+Suffix used to save radiomic features
+    - BiomedParse extract single scale features, and its SUFFIX is
+        - "radiomics.npy"
+    - LVMMed extracts multi-scale features, and its SUFFIX is
+        - "layer0_radiomics.npy"
+        - "layer1_radiomics.npy"
+        - "layer2_radiomics.npy"
+        - "layer3_radiomics.npy"
+        - "layer4_radiomics.npy"
+
+Graph construction
     - VALUE: True
-    - FEATURE_DIS_WEIGHT: 0.01 # 0.01 for LVMMed else 0.1, since LVMMed has larger feature scales, used for feature clustering in graph construction. If you want to use other feature extractors, this should be adjusted.
+    - FEATURE_DIS_WEIGHT: 0.01 # 0.01 for LVMMed else 0.1, since LVMMed (ResNet backbone) has larger feature scales, used for feature clustering in graph construction. If you want to use other feature extractors, this should be adjusted. In general, if backbone is ViT, use 0.1.
     - SAVE_CLUSTER_POINTS: False # only true for visualization purpose, default false to reduce json file size
+
+Convert json to npz for accelerating data loading
+    - CONVERT_JSON2NPZ: True
 
 #### Pathomic feature extraction
 ```bash
@@ -142,6 +157,39 @@ This aims to aggreagte multiple graphs of each patient by multi-task learning an
 multitask_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/multitask_learning.yaml"
 python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
 ```
+
+The setting of RADIOMICS SUFFIX directly dertermines what kinds of radiomics will be used.
+
+For BiomedParse, "_slice_graph.npz" only includes slice radiomics, "_tumor_graph.npz" only includes tumor radiomics, while both would include slice and tumor radiomics
+
+For LVMMed, the first setting would only include multi-scale slice radiomics;
+SUFFIX:
+    - "_slice_layer0_graph.npz"
+    - "_slice_layer1_graph.npz"
+    - "_slice_layer2_graph.npz"
+Raiomics feature dimensions should be set as "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512} in 'analysis/a05_outcome_prediction/m_prepare_omics_info.py'
+
+The seond setting would only include multi-scale tumor radiomics.
+SUFFIX:
+    - "_tumor_layer0_graph.npz"
+    - "_tumor_layer1_graph.npz"
+    - "_tumor_layer2_graph.npz"
+Raiomics feature dimensions should be set as "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512} in 'analysis/a05_outcome_prediction/m_prepare_omics_info.py'
+    
+And the third setting would include both multi-scale slice and tumor radiomics
+SUFFIX:
+    - "_slice_layer0_graph.npz"
+    - "_slice_layer1_graph.npz"
+    - "_slice_layer2_graph.npz"
+    - "_tumor_layer0_graph.npz"
+    - "_tumor_layer1_graph.npz"
+    - "_tumor_layer2_graph.npz"
+Raiomics feature dimensions should be set as "LVMMed": {'child0': 64, 'child1': 256, 'child2': 512, 'child3': 64, 'child4': 256, 'child5': 512} in 'analysis/a05_outcome_prediction/m_prepare_omics_info.py'
+
+TRAIN
+    - SAMPLING_RATE: 0.1 # propertly set this if graph is very large, we used 0.1 for pathological graph, 0.01 for BiomedParse slice graph, 0.1 BiomedParse tumor graph and LVMMed tumor graph, 1 for LVMMed slice graph
+INFERENCE
+    - SAMPLING_RATE: 0.01 # this keep the same as the TRAIN SAMPLING_RATE
 
 #### Task-specific Machine learning
 #### Survival prediction
