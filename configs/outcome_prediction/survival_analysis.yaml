@@ -8,7 +8,8 @@ OUTCOME:
   VALUE: "OS"
   CHOICES: ["OS", "DSS", "DFI", "PFI"]
 TASKS:
-  PREDICTION: True
+  TRAIN: True
+  TEST: False
 
 # Define parameters of radiomics
 RADIOMICS:
@@ -17,7 +18,7 @@ RADIOMICS:
     VALUE: "BiomedParse"
     CHOICES: ["expert", "nnUNet", "BiomedParse"]
   MODE:
-    VALUE: "LVMMed"
+    VALUE: "BiomedParse"
     CHOICES:
       [
         "None",
@@ -59,7 +60,7 @@ SPLIT:
 PREDICTION:
   OMICS_DIR: "/home/sg2162/rds/hpc-work/Experiments/outcomes/TCGA_multitask"
   USED_OMICS:
-    VALUE: "radiomics"
+    VALUE: "radiopathomics"
     CONCAT: True
     CHOICES: ["radiomics", "pathomics", "radiopathomics"]
   N_JOBS: 32

@@ -2919,7 +2919,7 @@ class ContextualBandit:
         )
         P_train = self._predict_risk(self.cox_path, X_path)
         
-        print(f"Training Fusion (RP) model...")
+        print(f"Training Radiopathomics model...")
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         self.cox_rp, _ = self.train_survival_model(
             X_rp, T_train, E_train, alpha_range=self.alpha_range
@@ -4511,7 +4511,7 @@ if __name__ == "__main__":
     num_test = len(splits[0]["test"])
     logging.info(f"Number of testing samples: {num_test}.")
 
-    if opt['TASKS']['PREDICTION']:
+    if opt['TASKS']['TRAIN']:
         # survival analysis from the splits
         if opt['RADIOMICS'].get('KEYS', False):
             radiomics_keys = opt['RADIOMICS']['KEYS']
