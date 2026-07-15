@@ -807,6 +807,8 @@ def process_UT_EndoMRI(input_dir, output_dir):
     center_paths = list(pathlib.Path(input_dir).glob('D*'))
     logging.info(f"Found {len(center_paths)} centers")
 
+    class_presence_rows = []
+
     for center in center_paths:
         case_paths = list(center.glob('D*'))
         logging.info(f"Found {len(case_paths)} cases in {center.name}")
@@ -831,7 +833,7 @@ def process_UT_EndoMRI(input_dir, output_dir):
             ann_by_class = defaultdict(list)
             for ann_path in annotations:
                 for cls in CLASS_MAP:
-                    if f"_{cls}_" in ann_path.name:
+                    if f"_{cls}." in ann_path.name or f"_{cls}_" in ann_path.name:
                         ann_by_class[cls].append(ann_path)
 
             # Process each scan
@@ -881,6 +883,21 @@ def process_UT_EndoMRI(input_dir, output_dir):
                     str(lab_save)
                 )
 
+                class_presence_rows.append({
+                    "center": center.name,
+                    "case_id": case_path.name,
+                    "scan_name": scan_name,
+                    "image": str(img_save),
+                    "label": str(lab_save),
+                    **{
+                        cls: int(np.any(label_volume == label_id))
+                        for cls, label_id in CLASS_MAP.items()
+                    }
+                })
+
+    csv_path = pathlib.Path(output_dir) / "class_presence.csv"
+    pd.DataFrame(class_presence_rows).to_csv(csv_path, index=False)
+    logging.info(f"Class presence CSV saved to: {csv_path}")
     logging.info("Done!")
 
 
@@ -1661,14 +1678,14 @@ if __name__ == "__main__":
     # CPTAC_meta_dir = "/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/clinical/CPTAC_Annotation_Metadata_1"
     # process_CPTAC(CPTAC_meta_dir, CPTAC_input_dir, CPTAC_output_dir)
 
-    EAY131_input_dir = "/Users/sg2162/Datasets/CancerDatasets/EAY131/Radiology"
-    EAY131_output_dir = "/Users/sg2162/Datasets/CancerDatasets/EAY131/Radiology_NIFTI"
-    EAY131_meta_dir = "/Users/sg2162/Datasets/CancerDatasets/EAY131/Radiology/Metadata"
-    process_EAY131(EAY131_meta_dir, EAY131_input_dir, EAY131_output_dir)
+    # EAY131_input_dir = "/Users/sg2162/Datasets/CancerDatasets/EAY131/Radiology"
+    # EAY131_output_dir = "/Users/sg2162/Datasets/CancerDatasets/EAY131/Radiology_NIFTI"
+    # EAY131_meta_dir = "/Users/sg2162/Datasets/CancerDatasets/EAY131/Radiology/Metadata"
+    # process_EAY131(EAY131_meta_dir, EAY131_input_dir, EAY131_output_dir)
 
-    # Endo_input_dir = "/Users/sg2162/Datasets/CancerDatasets/UT-EndoMRI"
-    # Endo_output_dir = "/Users/sg2162/Datasets/CancerDatasets/Endometriosis/EndoMRI"
-    # process_UT_EndoMRI(Endo_input_dir, Endo_output_dir)
+    Endo_input_dir = "/Users/sg2162/Datasets/CancerDatasets/UT-EndoMRI"
+    Endo_output_dir = "/Users/sg2162/Datasets/CancerDatasets/Endometriosis/EndoMRI_All"
+    process_UT_EndoMRI(Endo_input_dir, Endo_output_dir)
 
     # folder = "/Users/sg2162/Datasets/CancerDatasets/OV04CT/labels"
     # check_empty_nii(folder)

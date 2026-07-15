@@ -48,8 +48,9 @@ big_tasks <- list(
   )
 )
 
-# visualize topk or not
-topk <- TRUE
+# visualize topk, ranking or raw score
+topk <- FALSE
+ranking <- TRUE
 
 # 定义顺序和级别
 agg_levels <- c("MEAN", "ABMIL", "SPARRA")
@@ -74,6 +75,172 @@ big_task_colors <- c(
   survival = "#1b9e77",
   phenotype = "#d95f02",
   signature = "#7570b3"
+)
+
+class_name_map <- list(
+  GeneProgrames = c(
+    `0` = "GP1_Proliferation/DNA_repair",
+    `1` = "GP2_Immune-Tcell/Bcell",
+    `2` = "GP3_Tumor_suppressing_miRNA_targets",
+    `3` = "GP4_MES/ECM",
+    `4` = "GP5_MYC_targets/TERT",
+    `5` = "GP6_Squamous_differentiation/development",
+    `6` = "GP7_Estrogen_signaling",
+    `7` = "GP8_FOXO/stemness",
+    `8` = "GP9_Cell-cell_adhesion",
+    `9` = "GP10_Fatty_acid_oxidation",
+    `10` = "GP11_Immune-IFN_GP12_Hypoxia/glycolosis",
+    `11` = "GP13_Neural_signailng",
+    `12` = "GP14_Plasma_membrane_cell-cell_signaling",
+    `13` = "GP15_EGF_signailng",
+    `14` = "GP16_Protein_kinase_signailng_(MAPKs)",
+    `15` = "GP17_Basal_signaling",
+    `16` = "GP18_Vesicle/EPR_membrane_coat",
+    `17` = "GP19_1Q_amplicon",
+    `18` = "GP20_TAL1-Leukemia/erythropoiesis",
+    `19` = "GP21_Anti-apoptosis/DNA_stability",
+    `20` = "GP22_16Q22-24_amplicon",
+    `21` = "AKT_PATHWAY",
+    `22` = "ALK_PATHWAY",
+    `23` = "BRCA_ATR_PATHWAY",
+    `24` = "CASPASE_CASCADE_(APOPTOSIS)",
+    `25` = "CTLA4_PATHWAY",
+    `26` = "HDAC_TARGETS_DN",
+    `27` = "HER2_AMPLIFIED",
+    `28` = "IGF1R_PATHWAY",
+    `29` = "MTOR_PATHWAY",
+    `30` = "MYC_amplified",
+    `31` = "PD1_SIGNALING",
+    `32` = "PI3K_CASCADE",
+    `33` = "PTEN_PATHWAY",
+    `34` = "RAS_PATHWAY",
+    `35` = "RB_PATHWAY",
+    `36` = "RESPONSE_TO_ANDROGEN",
+    `37` = "RETINOL_METABOLISM",
+    `38` = "VEGF_PATHWAY"
+  ),
+  HRDscore = c(
+    `0` = "ai1",
+    `1` = "lst1",
+    `2` = "hrd-loh",
+    `3` = "HRD"
+  ),
+  ImmuneSignatureScore = c(
+    `0` = "ICS5_score",
+    `1` = "LIexpression_score",
+    `2` = "Chemokine12_score",
+    `3` = "NHI_5gene_score",
+    `4` = "CD68",
+    `5` = "CD8A",
+    `6` = "PD1_data",
+    `7` = "PDL1_data",
+    `8` = "PD1_PDL1_score",
+    `9` = "CTLA4_data",
+    `10` = "Bcell_mg_IGJ",
+    `11` = "Bcell_receptors_score",
+    `12` = "STAT1_score",
+    `13` = "CSF1_response",
+    `14` = "TcClassII_score",
+    `15` = "IL12_score_21050467",
+    `16` = "IL4_score_21050467",
+    `17` = "IL2_score_21050467",
+    `18` = "IL13_score_21050467",
+    `19` = "IFNG_score_21050467",
+    `20` = "TGFB_score_21050467",
+    `21` = "TREM1_data",
+    `22` = "DAP12_data",
+    `23` = "Tcell_receptors_score",
+    `24` = "IL8_21978456",
+    `25` = "IFN_21978456",
+    `26` = "MHC1_21978456",
+    `27` = "MHC2_21978456",
+    `28` = "Bcell_21978456",
+    `29` = "Tcell_21978456",
+    `30` = "CD103pos_mean_25446897",
+    `31` = "CD103neg_mean_25446897",
+    `32` = "IgG_19272155",
+    `33` = "Interferon_19272155",
+    `34` = "LCK_19272155",
+    `35` = "MHC.I_19272155",
+    `36` = "MHC.II_19272155",
+    `37` = "STAT1_19272155",
+    `38` = "Troester_WoundSig_19887484",
+    `39` = "MDACC.FNA.1_20805453",
+    `40` = "IGG_Cluster_21214954",
+    `41` = "Minterferon_Cluster_21214954",
+    `42` = "Immune_cell_Cluster_21214954",
+    `43` = "MCD3_CD8_21214954",
+    `44` = "Interferon_Cluster_21214954",
+    `45` = "B_cell_PCA_16704732",
+    `46` = "CD8_PCA_16704732",
+    `47` = "GRANS_PCA_16704732",
+    `48` = "LYMPHS_PCA_16704732",
+    `49` = "T_cell_PCA_16704732",
+    `50` = "TGFB_PCA_17349583",
+    `51` = "Rotterdam_ERneg_PCA_15721472",
+    `52` = "HER2_Immune_PCA_18006808",
+    `53` = "IR7_score",
+    `54` = "Buck14_score",
+    `55` = "TAMsurr_score",
+    `56` = "Immune_NSCLC_score",
+    `57` = "Module3_IFN_score",
+    `58` = "Module4_TcellBcell_score",
+    `59` = "Module5_TcellBcell_score",
+    `60` = "Module11_Prolif_score",
+    `61` = "GP11_Immune_IFN",
+    `62` = "GP2_ImmuneTcellBcell_score",
+    `63` = "CD8_CD68_ratio",
+    `64` = "TAMsurr_TcClassII_ratio",
+    `65` = "CHANG_CORE_SERUM_RESPONSE_UP",
+    `66` = "CSR_Activated_15701700",
+    `67` = "CD103pos_CD103neg_ratio_25446897"
+  ),
+  ImmuneSubtype = c(
+    `0` = "IFN-gamma Dominant (Immune C2)",
+    `1` = "Inflammatory (Immune C3)",
+    `2` = "Wound Healing (Immune C1)",
+    `3` = "Lymphocyte Depleted (Immune C4)"
+  ),
+  MolecularSubtype = c(
+    `0` = "BRCA.LumA",
+    `1` = "BRCA.LumB",
+    `2` = "BRCA.Basal",
+    `3` = "BRCA.Normal",
+    `4` = "GI.CIN",
+    `5` = "KIRC.1",
+    `6` = "KIRC.2",
+    `7` = "KIRC.3",
+    `8` = "KIRC.4",
+    `9` = "LIHC.iCluster:3",
+    `10` = "LIHC.iCluster:1",
+    `11` = "LIHC.iCluster:2",
+    `12` = "OVCA.Proliferative",
+    `13` = "OVCA.Differentiated",
+    `14` = "OVCA.Mesenchymal",
+    `15` = "UCEC.CN_HIGH"
+  ),
+  PrimaryDisease = c(
+    `0` = "breast invasive carcinoma",
+    `1` = "bladder urothelial carcinoma",
+    `2` = "ovarian serous cystadenocarcinoma",
+    `3` = "lung adenocarcinoma",
+    `4` = "stomach adenocarcinoma",
+    `5` = "lung squamous cell carcinoma",
+    `6` = "liver hepatocellular carcinoma",
+    `7` = "kidney clear cell carcinoma",
+    `8` = "uterine corpus endometrioid carcinoma",
+    `9` = "cervical & endocervical cancer"
+  ),
+  StemnessScoreDNA = c(
+    `0` = "DNAss",
+    `1` = "EREG-METHss",
+    `2` = "DMPss",
+    `3` = "ENHss"
+  ),
+  StemnessScoreRNA = c(
+    `0` = "RNAss",
+    `1` = "EREG.EXPss"
+  )
 )
 
 # 生成 radiopathomics 组合
@@ -406,33 +573,65 @@ prepare_heatmap_data <- function(df) {
   rownames(hm_matrix) <- hm_matrix$row_id
   hm_matrix <- as.matrix(hm_matrix[, -1])
 
-  # hm_matrix <- normalize_rows_minmax(hm_matrix)
-
-  # 更简洁的版本
-  hm_matrix_scored <- t(apply(hm_matrix, 1, function(x) {
-    result <- rep(0, length(x))
-    non_na_idx <- which(!is.na(x))
-    non_na_count <- length(non_na_idx)
-    
-    if(non_na_count > 0) {
-      # 获取排序后的索引
-      sorted_idx <- non_na_idx[order(x[non_na_idx], decreasing = TRUE)]
+  # 根据参数选择矩阵处理方式
+  if (ranking) {
+    # 排名分数：归一化到 [0, 1]，higher score = better performance
+    cat("Computing normalized ranking scores [0, 1]...\n")
+    hm_matrix_scored <- t(apply(hm_matrix, 1, function(x) {
+      result <- rep(0, length(x))
+      non_na_idx <- which(!is.na(x))
+      non_na_count <- length(non_na_idx)
       
-      # 赋值向量
-      values <- c(1, 0.8, 0.6, 0.4, 0.2)
-      
-      # 取前min(5, non_na_count)个进行赋值
-      n <- min(5, non_na_count)
-      for(i in 1:n) {
-        result[sorted_idx[i]] <- values[i]
+      if (non_na_count > 0) {
+        # 按值降序排序
+        sorted_idx <- non_na_idx[order(x[non_na_idx], decreasing = TRUE)]
+        
+        # 排名分数：最高值 = non_na_count，最低值 = 1
+        raw_scores <- rep(0, length(x))
+        for (i in 1:non_na_count) {
+          raw_scores[sorted_idx[i]] <- non_na_count - i + 1
+        }
+        
+        # 归一化到 [0, 1]
+        if (non_na_count > 1) {
+          result <- (raw_scores - 1) / (non_na_count - 1)
+        } else {
+          # 只有一个非NA值时，设为1
+          result[non_na_idx] <- 1
+        }
       }
-    }
-    
-    return(result)
-  }))
-
-  colnames(hm_matrix_scored) <- colnames(hm_matrix)
-  rownames(hm_matrix_scored) <- rownames(hm_matrix)
+      
+      return(result)
+    })) 
+  } else if (topk) {
+    # 原始 topk 逻辑：只给前5名赋值 1, 0.8, 0.6, 0.4, 0.2
+    cat("Computing top-k scores (top 5 models)...\n")
+    hm_matrix_scored <- t(apply(hm_matrix, 1, function(x) {
+      result <- rep(0, length(x))
+      non_na_idx <- which(!is.na(x))
+      non_na_count <- length(non_na_idx)
+      
+      if (non_na_count > 0) {
+        # 获取排序后的索引
+        sorted_idx <- non_na_idx[order(x[non_na_idx], decreasing = TRUE)]
+        
+        # 赋值向量
+        values <- c(1, 0.8, 0.6, 0.4, 0.2)
+        
+        # 取前 min(5, non_na_count) 个进行赋值
+        n <- min(5, non_na_count)
+        for (i in 1:n) {
+          result[sorted_idx[i]] <- values[i]
+        }
+      }
+      
+      return(result)
+    }))
+  } else {
+    # 默认：使用原始均值
+    hm_matrix_scored <- hm_matrix
+    cat("Using raw mean values...\n")
+  }
 
   # 保持列名
   colnames(hm_matrix_scored) <- colnames(hm_matrix)
@@ -476,12 +675,8 @@ prepare_heatmap_data <- function(df) {
       model = factor(model, levels = unlist(model_order_list))
     )
   
-  if (topk) {
-    hm_matrix <- hm_matrix_scored
-  }
-
   return(list(
-    matrix = hm_matrix,
+    matrix = hm_matrix_scored,
     sd_matrix = sd_matrix,
     row_anno = row_anno,
     col_anno = col_anno,
@@ -684,9 +879,9 @@ create_faceted_heatmaps <- function(heatmap_data) {
         breaks = seq(-1, 1, length = 100)
       }
 
-      if (topk) {
+      if (topk || ranking) {
           breaks = seq(0, 1, length = 100)
-        }
+      }
       
       n_rows <- nrow(task_matrix)
       n_cols <- ncol(task_matrix)
@@ -737,585 +932,433 @@ create_faceted_heatmaps <- function(heatmap_data) {
 # ==============================
 # 3. 汇总热图（按组平均）
 # ==============================
-
-create_summary_heatmap <- function(heatmap_data) {
+create_summary_boxplots <- function(heatmap_data) {
   
-  hm_matrix <- heatmap_data$matrix
-  row_anno <- heatmap_data$row_anno
-  col_anno <- heatmap_data$col_anno
-  
-  # 按 Task 和 Subtask 分组平均
-  summary_by_task <- heatmap_data$raw_data %>%
-    group_by(big_task, omics_type, agg_mode) %>%
-    summarise(
-      mean_performance = mean(mean_value, na.rm = TRUE),
-      sd_performance = sd(mean_value, na.rm = TRUE),
-      n_models = n(),
-      .groups = "drop"
-    )
-  
-  # 创建矩阵
-  summary_matrix <- summary_by_task %>%
-    mutate(
-      row_id = paste(big_task, sep = " | "),
-      col_id = paste(omics_type, agg_mode, sep = " | ")
-    ) %>%
-    select(row_id, col_id, mean_performance) %>%
-    pivot_wider(names_from = col_id, values_from = mean_performance) %>%
-    as.data.frame()
-  
-  rownames(summary_matrix) <- summary_matrix$row_id
-  summary_matrix <- as.matrix(summary_matrix[, -1])
-  
-  # 准备注释
-  row_annotation <- data.frame(
-    Task = str_extract(rownames(summary_matrix), "^[^|]+"),
-    row.names = rownames(summary_matrix)
-  )
-  
-  col_annotation <- data.frame(
-    Omics = str_extract(colnames(summary_matrix), "^[^|]+"),
-    Aggregation = str_extract(colnames(summary_matrix), "[^|]+$"),
-    row.names = colnames(summary_matrix)
-  )
-
-  n_rows <- nrow(summary_matrix)
-  n_cols <- ncol(summary_matrix)
-
-  cellheight <- 25
-  cellwidth  <- 25
-
-  plot_width  <- n_cols * cellwidth / 72 + 6
-  plot_height <- n_rows * cellheight / 72 + 6
-
-  plot_width  <- max(5, plot_width)
-  plot_height <- max(5, plot_height)
-  
-  # 创建热图
-  pheatmap(
-    summary_matrix,
-    main = "Summary: Average Performance by Configuration",
-    
-    annotation_row = row_annotation,
-    annotation_col = col_annotation,
-    annotation_colors = list(
-      Task = big_task_colors,
-      Omics = omics_colors,
-      Aggregation = agg_colors
-    ),
-    
-    show_rownames = TRUE,
-    show_colnames = TRUE,
-    fontsize = 11,
-    
-    cluster_rows = FALSE,
-    cluster_cols = FALSE,
-    
-    color = viridis(100),
-    border_color = "white",
-    cellwidth = cellwidth,
-    cellheight = cellheight,
-    
-    display_numbers = TRUE,
-    number_format = "%.3f",
-    number_color = "black",
-    fontsize_number = 9,
-    
-    filename = file.path(out_dir, "summary_heatmap.png"),
-    width = plot_width,
-    height = plot_height
-  )
-  
-  cat("Saved: summary_heatmap.png\n")
-}
-
-# ==============================
-# 4. 紧凑型热图（优化显示）
-# ==============================
-
-create_compact_heatmap <- function(heatmap_data) {
+  cat("\nCreating summary box plots...\n")
   
   hm_matrix <- heatmap_data$matrix
   
-  # 如果矩阵太大，进行采样或聚合
-  if (nrow(hm_matrix) > 50 || ncol(hm_matrix) > 50) {
-    cat("Matrix is large, creating compact version...\n")
-    
-    # 按任务聚合行
-    row_means <- heatmap_data$raw_data %>%
-      group_by(big_task, omics_type, agg_mode) %>%
-      summarise(
-        mean_value = mean(mean_value, na.rm = TRUE),
-        .groups = "drop"
-      ) %>%
-      mutate(
-        row_id = big_task,
-        col_id = paste(omics_type, agg_mode, sep = " | ")
-      ) %>%
-      select(row_id, col_id, mean_value) %>%
-      pivot_wider(names_from = col_id, values_from = mean_value) %>%
-      as.data.frame()
-    
-    rownames(row_means) <- row_means$row_id
-    hm_matrix_compact <- as.matrix(row_means[, -1])
-    
-  } else {
-    hm_matrix_compact <- hm_matrix
-  }
-
-  n_rows <- nrow(hm_matrix_compact)
-  n_cols <- ncol(hm_matrix_compact)
-
-  cellheight <- 20
-  cellwidth  <- 20
-
-  plot_width  <- n_cols * cellwidth / 72 + 6
-  plot_height <- n_rows * cellheight / 72 + 6
-
-  plot_width  <- max(5, plot_width)
-  plot_height <- max(5, plot_height)
-  
-  # 创建热图
-  pheatmap(
-    hm_matrix_compact,
-    main = "Compact Performance Overview",
-    
-    show_rownames = TRUE,
-    show_colnames = TRUE,
-    fontsize_row = 10,
-    fontsize_col = 10,
-    
-    cluster_rows = FALSE,
-    cluster_cols = FALSE,
-    
-    color = colorRampPalette(brewer.pal(9, "YlOrRd"))(100),
-    
-    border_color = "white",
-    cellwidth = cellwidth,
-    cellheight = cellheight,
-    
-    display_numbers = ifelse(nrow(hm_matrix_compact) <= 20, TRUE, FALSE),
-    number_format = "%.2f",
-    
-    filename = file.path(out_dir, "compact_heatmap.png"),
-    width = plot_width,
-    height = plot_height
-  )
-  
-  cat("Saved: compact_heatmap.png\n")
-}
-
-# ==============================
-# 修复的汇总热图函数
-# ==============================
-create_summary_heatmap <- function(heatmap_data) {
-  
-  hm_matrix <- heatmap_data$matrix
-  row_anno <- heatmap_data$row_anno
-  col_anno <- heatmap_data$col_anno
-  
-  cat("Creating summary heatmap...\n")
-  
-  # 按 Task 和 Omics/Aggregation 分组平均
-  summary_by_task <- heatmap_data$raw_data %>%
-    group_by(big_task, omics_type, agg_mode) %>%
-    summarise(
-      mean_performance = mean(mean_value, na.rm = TRUE),
-      sd_performance = sd(mean_value, na.rm = TRUE),
-      n_models = n(),
-      .groups = "drop"
-    )
-  
-  # 确保有数据
-  if (nrow(summary_by_task) == 0) {
-    cat("No data for summary heatmap.\n")
+  if (is.null(hm_matrix) || length(hm_matrix) == 0) {
+    cat("No data for summary box plots.\n")
     return(NULL)
   }
   
-  # 创建矩阵
-  summary_matrix <- summary_by_task %>%
-    mutate(
-      row_id = big_task,
-      col_id = paste(omics_type, agg_mode, sep = " | ")
+  if (!exists("out_dir")) {
+    out_dir <- "."
+  }
+  
+  row_id_order <- rownames(heatmap_data$matrix)
+  col_id_order <- colnames(heatmap_data$matrix)
+  
+  plot_data <- as.data.frame(hm_matrix) %>%
+    tibble::rownames_to_column("row_id") %>%
+    pivot_longer(
+      cols = -row_id,
+      names_to = "col_id",
+      values_to = "value"
     ) %>%
-    select(row_id, col_id, mean_performance) %>%
-    pivot_wider(
-      names_from = col_id, 
-      values_from = mean_performance,
-      values_fill = NA
-    ) %>%
-    as.data.frame()
+    filter(!is.na(value))
   
-  rownames(summary_matrix) <- summary_matrix$row_id
-  summary_matrix <- as.matrix(summary_matrix[, -1])
-  
-  cat("Summary matrix dimensions:", dim(summary_matrix), "\n")
-  
-  # 准备行注释
-  row_annotation <- data.frame(
-    Task = rownames(summary_matrix),
-    row.names = rownames(summary_matrix)
-  )
-  
-  # 准备列注释
-  col_names <- colnames(summary_matrix)
-  col_omics <- sapply(strsplit(col_names, " \\| "), function(x) x[1])
-  col_agg <- sapply(strsplit(col_names, " \\| "), function(x) x[2])
-  
-  col_annotation <- data.frame(
-    Omics = col_omics,
-    Aggregation = col_agg,
-    row.names = col_names
-  )
-  
-  # 创建注释颜色
-  annotation_colors <- list()
-  
-  # Task 颜色
-  if (all(unique(row_annotation$Task) %in% names(big_task_colors))) {
-    annotation_colors$Task <- big_task_colors[names(big_task_colors) %in% unique(row_annotation$Task)]
-  } else {
-    task_colors <- colorRampPalette(brewer.pal(8, "Set2"))(length(unique(row_annotation$Task)))
-    names(task_colors) <- unique(row_annotation$Task)
-    annotation_colors$Task <- task_colors
+  if (!is.null(heatmap_data$row_anno)) {
+    row_anno <- heatmap_data$row_anno %>%
+      mutate(row_id = as.character(row_id))
+    
+    plot_data <- plot_data %>%
+      left_join(row_anno, by = "row_id")
   }
   
-  # Omics 颜色
-  existing_omics <- intersect(unique(col_annotation$Omics), names(omics_colors))
-  if (length(existing_omics) > 0) {
-    annotation_colors$Omics <- omics_colors[existing_omics]
-  } else {
-    omics_colors_custom <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(col_annotation$Omics)))
-    names(omics_colors_custom) <- unique(col_annotation$Omics)
-    annotation_colors$Omics <- omics_colors_custom
+  if (!is.null(heatmap_data$col_anno)) {
+    col_anno <- heatmap_data$col_anno %>%
+      mutate(col_id = as.character(col_id))
+    
+    plot_data <- plot_data %>%
+      left_join(col_anno, by = "col_id")
   }
   
-  # Aggregation 颜色
-  existing_agg <- intersect(unique(col_annotation$Aggregation), names(agg_colors))
-  if (length(existing_agg) > 0) {
-    annotation_colors$Aggregation <- agg_colors[existing_agg]
-  } else {
-    agg_colors_custom <- colorRampPalette(brewer.pal(8, "Set3"))(length(unique(col_annotation$Aggregation)))
-    names(agg_colors_custom) <- unique(col_annotation$Aggregation)
-    annotation_colors$Aggregation <- agg_colors_custom
-  }
-  
-  # 检查矩阵是否有有效数据
-  if (all(is.na(summary_matrix))) {
-    cat("Warning: Summary matrix contains only NA values\n")
+  if (nrow(plot_data) == 0) {
+    cat("No non-missing values for summary box plots.\n")
     return(NULL)
   }
-
-  n_rows <- nrow(summary_matrix)
-  n_cols <- ncol(summary_matrix)
-
-  cellheight <- 25
-  cellwidth  <- 25
-
-  plot_width  <- n_cols * cellwidth / 72 + 6
-  plot_height <- n_rows * cellheight / 72 + 6
-
-  plot_width  <- max(5, plot_width)
-  plot_height <- max(5, plot_height)
   
-  # 创建热图
-  tryCatch({
-    pheatmap(
-      summary_matrix,
-      main = "Summary: Average Performance by Configuration",
-      
-      annotation_row = row_annotation,
-      annotation_col = col_annotation,
-      annotation_colors = annotation_colors,
-      
-      show_rownames = TRUE,
-      show_colnames = TRUE,
-      fontsize = 11,
-      
-      cluster_rows = FALSE,
-      cluster_cols = FALSE,
-      
-      color = viridis(100),
-      na_col = "gray90",
-      
-      border_color = "white",
-      cellwidth = cellwidth,
-      cellheight = cellheight,
-      
-      display_numbers = TRUE,
-      number_format = "%.3f",
-      number_color = "black",
-      fontsize_number = 9,
-      
-      filename = file.path(out_dir, "summary_heatmap.png"),
-      width = plot_width,
-      height = plot_height,
-      silent = FALSE
-    )
-    
-    cat("Saved: summary_heatmap_fixed.png\n")
-    
-  }, error = function(e) {
-    cat("Error creating summary heatmap:", e$message, "\n")
-    
-    # 尝试简化版本
-    tryCatch({
-      pheatmap(
-        summary_matrix,
-        main = "Summary Performance",
-        show_rownames = TRUE,
-        show_colnames = TRUE,
-        cluster_rows = FALSE,
-        cluster_cols = FALSE,
-        color = viridis(100),
-        display_numbers = TRUE,
-        number_format = "%.3f",
-        filename = file.path(out_dir, "summary_heatmap_simple.png"),
-        width = 12,
-        height = 8
-      )
-      cat("Saved simplified version: summary_heatmap_simple.png\n")
-    }, error = function(e2) {
-      cat("Simplified version also failed:", e2$message, "\n")
-    })
-  })
-}
-
-# ==============================
-# 增强的汇总热图（显示均值和标准差）
-# ==============================
-create_enhanced_summary_heatmap <- function(heatmap_data) {
-  
-  cat("Creating enhanced summary heatmap...\n")
-  
-  # 计算均值和标准差
-  summary_stats <- heatmap_data$raw_data %>%
-    group_by(big_task, omics_type, agg_mode) %>%
-    summarise(
-      mean_value = mean(mean_value, na.rm = TRUE),
-      sd_value = sd(mean_value, na.rm = TRUE),
-      n = n(),
-      .groups = "drop"
-    ) %>%
+  plot_data <- plot_data %>%
     mutate(
-      display_text = sprintf("%.3f\n(±%.3f)", mean_value, sd_value)
+      row_id = factor(row_id, levels = row_id_order),
+      col_id = factor(col_id, levels = col_id_order)
     )
   
-  # 创建均值矩阵
-  mean_matrix <- summary_stats %>%
-    mutate(
-      row_id = big_task,
-      col_id = paste(omics_type, agg_mode, sep = " | ")
-    ) %>%
-    select(row_id, col_id, mean_value) %>%
-    pivot_wider(
-      names_from = col_id,
-      values_from = mean_value
-    ) %>%
-    as.data.frame()
+  if ("omics_type" %in% colnames(plot_data)) {
+    plot_data$omics_type <- factor(plot_data$omics_type, levels = omics_levels)
+  }
   
-  rownames(mean_matrix) <- mean_matrix$row_id
-  mean_matrix <- as.matrix(mean_matrix[, -1])
+  if ("agg_mode" %in% colnames(plot_data)) {
+    plot_data$agg_mode <- factor(plot_data$agg_mode, levels = agg_levels)
+  }
   
-  # 创建显示文本矩阵
-  text_matrix <- summary_stats %>%
-    mutate(
-      row_id = big_task,
-      col_id = paste(omics_type, agg_mode, sep = " | ")
-    ) %>%
-    select(row_id, col_id, display_text) %>%
-    pivot_wider(
-      names_from = col_id,
-      values_from = display_text
-    ) %>%
-    as.data.frame()
+  if (!"big_task" %in% colnames(plot_data)) {
+    plot_data$big_task <- NA_character_
+  }
   
-  rownames(text_matrix) <- text_matrix$row_id
-  text_matrix <- as.matrix(text_matrix[, -1])
+  if (!"subtask" %in% colnames(plot_data)) {
+    plot_data$subtask <- NA_character_
+  }
   
-  # 准备注释
-  col_names <- colnames(mean_matrix)
-  col_omics <- sapply(strsplit(col_names, " \\| "), function(x) x[1])
-  col_agg <- sapply(strsplit(col_names, " \\| "), function(x) x[2])
+  if (!"class_index" %in% colnames(plot_data)) {
+    plot_data$class_index <- NA_integer_
+  }
   
-  col_annotation <- data.frame(
-    Omics = col_omics,
-    Aggregation = col_agg,
-    row.names = col_names
+  if (!"class_label" %in% colnames(plot_data)) {
+    plot_data$class_label <- NA_character_
+  }
+  
+  mapped_class_label <- mapply(
+    function(subtask, class_index, class_label) {
+      subtask <- as.character(subtask)
+      class_key <- as.character(as.integer(class_index) - 1)
+      
+      if (!is.na(subtask) &&
+          subtask %in% names(class_name_map) &&
+          !is.na(class_key) &&
+          class_key %in% names(class_name_map[[subtask]])) {
+        return(class_name_map[[subtask]][[class_key]])
+      }
+      
+      return(as.character(class_label))
+    },
+    plot_data$subtask,
+    plot_data$class_index,
+    plot_data$class_label,
+    USE.NAMES = FALSE
   )
   
-  # 创建注释颜色
-  annotation_colors <- list(
-    Task = big_task_colors[names(big_task_colors) %in% rownames(mean_matrix)],
-    Omics = omics_colors[names(omics_colors) %in% unique(col_omics)],
-    Aggregation = agg_colors[names(agg_colors) %in% unique(col_agg)]
+  mapped_row_id <- ifelse(
+    as.character(plot_data$subtask) %in% names(class_name_map),
+    paste(plot_data$big_task, plot_data$subtask, mapped_class_label, sep = " | "),
+    as.character(plot_data$row_id)
   )
   
-  n_rows <- nrow(mean_matrix)
-  n_cols <- ncol(mean_matrix)
-
-  cellheight <- 30
-  cellwidth  <- 30
-
-  plot_width  <- n_cols * cellwidth / 72 + 6
-  plot_height <- n_rows * cellheight / 72 + 6
-
-  plot_width  <- max(5, plot_width)
-  plot_height <- max(5, plot_height)
-
-  # 创建热图
-  pheatmap(
-    mean_matrix,
-    main = "Enhanced Summary: Mean ± SD",
-    
-    annotation_row = data.frame(Task = rownames(mean_matrix), row.names = rownames(mean_matrix)),
-    annotation_col = col_annotation,
-    annotation_colors = annotation_colors,
-    
-    show_rownames = TRUE,
-    show_colnames = TRUE,
-    fontsize_row = 12,
-    fontsize_col = 11,
-    
-    cluster_rows = FALSE,
-    cluster_cols = FALSE,
-    
-    color = colorRampPalette(brewer.pal(9, "YlOrRd"))(100),
-    
-    display_numbers = text_matrix,
-    number_format = "%s",
-    number_color = "black",
-    fontsize_number = 8,
-    
-    border_color = "white",
-    cellwidth = cellwidth,
-    cellheight = 30,
-    
-    filename = file.path(out_dir, "enhanced_summary_heatmap.png"),
+  plot_data$row_id_display <- mapped_row_id
+  row_id_display_order <- plot_data %>%
+    distinct(row_id, row_id_display) %>%
+    arrange(match(as.character(row_id), row_id_order)) %>%
+    pull(row_id_display)
+  
+  plot_data$row_id_display <- factor(plot_data$row_id_display, levels = row_id_display_order)
+  
+  value_label <- case_when(
+    exists("ranking") && isTRUE(ranking) ~ "Ranking Score",
+    exists("topk") && isTRUE(topk) ~ "Top-k Score",
+    TRUE ~ "Performance Value"
+  )
+  
+  omics_plot_data <- plot_data %>%
+    filter(as.character(agg_mode) == "SPARRA")
+  
+  if (nrow(omics_plot_data) == 0) {
+    cat("No SPARRA values found for omics box plots.\n")
+  }
+  
+  cat("Creating box plot by row_id across all models...\n")
+  
+  rowid_plot <- ggplot(plot_data, aes(x = row_id_display, y = value, fill = row_id_display)) +
+    geom_boxplot(alpha = 0.7, outlier.size = 1.5, outlier.alpha = 0.5) +
+    stat_summary(fun = mean, geom = "point", shape = 23, size = 3, 
+                 fill = "white", color = "black", stroke = 1.2) +
+    labs(
+      title = "Score Distribution by Subtask",
+      subtitle = "Across all models, omics types, and aggregation modes",
+      x = "Subtask",
+      y = value_label
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+      axis.text.y = element_text(size = 10),
+      axis.title = element_text(size = 12, face = "bold"),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray50"),
+      legend.position = "none",
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(t = 15, r = 20, b = 120, l = 140)
+    ) +
+    scale_fill_viridis_d() +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.1))) +
+    coord_cartesian(clip = "off")
+  
+  n_rows <- length(unique(plot_data$row_id_display))
+  plot_width <- max(10, n_rows * 0.4)
+  
+  ggsave(
+    filename = file.path(out_dir, "summary_boxplot_by_rowid.png"),
+    plot = rowid_plot,
     width = plot_width,
-    height = plot_height
+    height = 10,
+    dpi = 300,
+    limitsize = FALSE
   )
+  cat("Saved: summary_boxplot_by_rowid.png\n")
   
-  cat("Saved: enhanced_summary_heatmap.png\n")
-}
-
-# ==============================
-# 按任务类型分开的汇总热图
-# ==============================
-create_taskwise_summary_heatmaps <- function(heatmap_data) {
+  cat("Creating box plot by Omics Type using SPARRA values only...\n")
   
-  for (task in names(big_tasks)) {
-    cat("\nCreating summary for:", task, "\n")
+  if (nrow(omics_plot_data) > 0) {
+    omics_plot <- ggplot(omics_plot_data, aes(x = omics_type, y = value, fill = omics_type)) +
+      geom_boxplot(alpha = 0.7, outlier.size = 1.5, outlier.alpha = 0.5) +
+      stat_summary(fun = mean, geom = "point", shape = 23, size = 3, 
+                   fill = "white", color = "black", stroke = 1.2) +
+      labs(
+        title = "Score Distribution by Omics Type",
+        subtitle = "SPARRA aggregation only, across all models",
+        x = "Omics Type",
+        y = value_label
+      ) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title = element_text(size = 12, face = "bold"),
+        plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray50"),
+        legend.position = "none",
+        panel.grid.minor = element_blank()
+      ) +
+      scale_fill_viridis_d() +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))
     
-    # 筛选该任务的数据
-    task_data <- heatmap_data$raw_data %>%
-      filter(big_task == task)
+    ggsave(
+      filename = file.path(out_dir, "summary_boxplot_by_omics.png"),
+      plot = omics_plot,
+      width = 10,
+      height = 8,
+      dpi = 300
+    )
+    cat("Saved: summary_boxplot_by_omics.png\n")
+  }
+  
+  cat("Creating box plot by Aggregation Mode across models and omics types...\n")
+  
+  agg_plot <- ggplot(plot_data, aes(x = agg_mode, y = value, fill = agg_mode)) +
+    geom_boxplot(alpha = 0.7, outlier.size = 1.5, outlier.alpha = 0.5) +
+    stat_summary(fun = mean, geom = "point", shape = 23, size = 3, 
+                 fill = "white", color = "black", stroke = 1.2) +
+    labs(
+      title = "Score Distribution by Aggregation Mode",
+      subtitle = "Across all models and omics types",
+      x = "Aggregation Mode",
+      y = value_label
+    ) +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+      axis.text.y = element_text(size = 10),
+      axis.title = element_text(size = 12, face = "bold"),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray50"),
+      legend.position = "none",
+      panel.grid.minor = element_blank()
+    ) +
+    scale_fill_viridis_d() +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))
+  
+  ggsave(
+    filename = file.path(out_dir, "summary_boxplot_by_agg.png"),
+    plot = agg_plot,
+    width = 10,
+    height = 8,
+    dpi = 300
+  )
+  cat("Saved: summary_boxplot_by_agg.png\n")
+  
+  task_order <- if (exists("big_tasks")) names(big_tasks) else unique(as.character(plot_data$big_task))
+  task_order <- task_order[task_order %in% unique(as.character(plot_data$big_task))]
+  
+  for (task in task_order) {
+    task_data <- plot_data %>%
+      filter(as.character(big_task) == task)
     
     if (nrow(task_data) == 0) {
-      cat("  No data for", task, "\n")
       next
     }
     
-    # 按 omics_type 和 agg_mode 汇总
-    task_summary <- task_data %>%
-      group_by(omics_type, agg_mode) %>%
+    task_label <- str_to_title(task)
+    task_file <- str_replace_all(task, "[^A-Za-z0-9]+", "_")
+    task_row_levels <- row_id_order[row_id_order %in% as.character(task_data$row_id)]
+    task_row_display_levels <- plot_data %>%
+      filter(as.character(row_id) %in% task_row_levels) %>%
+      distinct(row_id, row_id_display) %>%
+      arrange(match(as.character(row_id), task_row_levels)) %>%
+      pull(row_id_display)
+    
+    task_data <- task_data %>%
+      mutate(
+        row_id = factor(as.character(row_id), levels = task_row_levels),
+        row_id_display = factor(as.character(row_id_display), levels = task_row_display_levels)
+      )
+    
+    cat("Creating task-specific box plots for ", task, "...\n", sep = "")
+    
+    task_rowid_plot <- ggplot(task_data, aes(x = row_id_display, y = value, fill = row_id_display)) +
+      geom_boxplot(alpha = 0.7, outlier.size = 1.5, outlier.alpha = 0.5) +
+      stat_summary(fun = mean, geom = "point", shape = 23, size = 3,
+                   fill = "white", color = "black", stroke = 1.2) +
+      labs(
+        title = paste(task_label, "Score Distribution by Subtask"),
+        subtitle = "Across all models, omics types, and aggregation modes",
+        x = "Subtask",
+        y = value_label
+      ) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+        axis.text.y = element_text(size = 10),
+        axis.title = element_text(size = 12, face = "bold"),
+        plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray50"),
+        legend.position = "none",
+        panel.grid.minor = element_blank(),
+        plot.margin = margin(t = 15, r = 20, b = 120, l = 140)
+      ) +
+      scale_fill_viridis_d() +
+      scale_y_continuous(
+        breaks = seq(
+          floor(min(task_data$value, na.rm = TRUE) / 0.15) * 0.15,
+          ceiling(max(task_data$value, na.rm = TRUE) / 0.15) * 0.15,
+          by = 0.15
+        ),
+        expand = expansion(mult = c(0.05, 0.1))
+      ) +
+      coord_cartesian(clip = "off")
+    
+    task_n_rows <- length(unique(task_data$row_id_display))
+    task_plot_width <- max(10, task_n_rows * 0.4)
+    
+    ggsave(
+      filename = file.path(out_dir, paste0("summary_boxplot_", task_file, "_by_rowid.png")),
+      plot = task_rowid_plot,
+      width = task_plot_width,
+      height = 10,
+      dpi = 300,
+      limitsize = FALSE
+    )
+    cat("Saved: summary_boxplot_", task_file, "_by_rowid.png\n", sep = "")
+    
+    task_omics_data <- task_data %>%
+      filter(as.character(agg_mode) == "SPARRA")
+    
+    if (nrow(task_omics_data) > 0) {
+      task_omics_plot <- ggplot(task_omics_data, aes(x = omics_type, y = value, fill = omics_type)) +
+        geom_boxplot(alpha = 0.7, outlier.size = 1.5, outlier.alpha = 0.5) +
+        stat_summary(fun = mean, geom = "point", shape = 23, size = 3,
+                     fill = "white", color = "black", stroke = 1.2) +
+        labs(
+          title = paste(task_label, "Score Distribution by Omics Type"),
+          subtitle = "SPARRA aggregation only, across all models",
+          x = "Omics Type",
+          y = value_label
+        ) +
+        theme_minimal() +
+        theme(
+          axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+          axis.text.y = element_text(size = 10),
+          axis.title = element_text(size = 12, face = "bold"),
+          plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+          plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray50"),
+          legend.position = "none",
+          panel.grid.minor = element_blank()
+        ) +
+        scale_fill_viridis_d() +
+        scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))
+      
+      ggsave(
+        filename = file.path(out_dir, paste0("summary_boxplot_", task_file, "_by_omics.png")),
+        plot = task_omics_plot,
+        width = 10,
+        height = 8,
+        dpi = 300
+      )
+      cat("Saved: summary_boxplot_", task_file, "_by_omics.png\n", sep = "")
+    } else {
+      cat("No SPARRA values for ", task, " omics box plot.\n", sep = "")
+    }
+    
+    task_agg_plot <- ggplot(task_data, aes(x = agg_mode, y = value, fill = agg_mode)) +
+      geom_boxplot(alpha = 0.7, outlier.size = 1.5, outlier.alpha = 0.5) +
+      stat_summary(fun = mean, geom = "point", shape = 23, size = 3,
+                   fill = "white", color = "black", stroke = 1.2) +
+      labs(
+        title = paste(task_label, "Score Distribution by Aggregation Mode"),
+        subtitle = "Across all models and omics types",
+        x = "Aggregation Mode",
+        y = value_label
+      ) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+        axis.text.y = element_text(size = 10),
+        axis.title = element_text(size = 12, face = "bold"),
+        plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray50"),
+        legend.position = "none",
+        panel.grid.minor = element_blank()
+      ) +
+      scale_fill_viridis_d() +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.1)))
+    
+    ggsave(
+      filename = file.path(out_dir, paste0("summary_boxplot_", task_file, "_by_agg.png")),
+      plot = task_agg_plot,
+      width = 10,
+      height = 8,
+      dpi = 300
+    )
+    cat("Saved: summary_boxplot_", task_file, "_by_agg.png\n", sep = "")
+  }
+  
+  summary_stats <- list(
+    by_rowid = plot_data %>%
+      group_by(row_id) %>%
       summarise(
-        mean_value = mean(mean_value, na.rm = TRUE),
-        sd_value = sd(mean_value, na.rm = TRUE),
+        big_task = first(big_task),
+        subtask = first(subtask),
+        mean = mean(value, na.rm = TRUE),
+        median = median(value, na.rm = TRUE),
+        sd = sd(value, na.rm = TRUE),
+        min = min(value, na.rm = TRUE),
+        max = max(value, na.rm = TRUE),
         n = n(),
         .groups = "drop"
       ) %>%
-      mutate(
-        display_text = sprintf("%.3f\n(±%.3f)", mean_value, sd_value)
+      arrange(factor(row_id, levels = row_id_order)),
+    by_omics = omics_plot_data %>%
+      group_by(omics_type) %>%
+      summarise(
+        mean = mean(value, na.rm = TRUE),
+        median = median(value, na.rm = TRUE),
+        sd = sd(value, na.rm = TRUE),
+        min = min(value, na.rm = TRUE),
+        max = max(value, na.rm = TRUE),
+        n = n(),
+        .groups = "drop"
+      ),
+    by_agg = plot_data %>%
+      group_by(agg_mode) %>%
+      summarise(
+        mean = mean(value, na.rm = TRUE),
+        median = median(value, na.rm = TRUE),
+        sd = sd(value, na.rm = TRUE),
+        min = min(value, na.rm = TRUE),
+        max = max(value, na.rm = TRUE),
+        n = n(),
+        .groups = "drop"
       )
-    
-    # 创建矩阵
-    mean_matrix <- task_summary %>%
-      mutate(col_id = paste(omics_type, agg_mode, sep = " | ")) %>%
-      select(col_id, mean_value) %>%
-      pivot_wider(
-        names_from = col_id,
-        values_from = mean_value,
-        values_fill = NA
-      )
-    
-    if (ncol(mean_matrix) == 0) {
-      cat("  Cannot create matrix for", task, "\n")
-      next
-    }
-    
-    # 转换为矩阵
-    mean_matrix <- as.matrix(mean_matrix)
-    
-    # 准备列注释
-    col_names <- colnames(mean_matrix)
-    col_omics <- sapply(strsplit(col_names, " \\| "), function(x) x[1])
-    col_agg <- sapply(strsplit(col_names, " \\| "), function(x) x[2])
-    
-    col_annotation <- data.frame(
-      Omics = col_omics,
-      Aggregation = col_agg,
-      row.names = col_names
-    )
-    
-    n_rows <- nrow(mean_matrix)
-    n_cols <- ncol(mean_matrix)
-
-    cellheight <- 20
-    cellwidth  <- 25
-
-    plot_width  <- n_cols * cellwidth / 72 + 6
-    plot_height <- n_rows * cellheight / 72 + 6
-
-    plot_width  <- max(5, plot_width)
-    plot_height <- max(5, plot_height)
-
-    # 创建热图
-    tryCatch({
-      pheatmap(
-        mean_matrix,
-        main = paste(str_to_title(task), "Summary"),
-        
-        annotation_col = col_annotation,
-        annotation_colors = list(
-          Omics = omics_colors[names(omics_colors) %in% unique(col_omics)],
-          Aggregation = agg_colors[names(agg_colors) %in% unique(col_agg)]
-        ),
-        
-        show_rownames = FALSE,
-        show_colnames = TRUE,
-        fontsize_col = 11,
-        
-        cluster_rows = FALSE,
-        cluster_cols = FALSE,
-        
-        color = if (task == "survival") {
-          viridis(100, option = "inferno")
-        } else if (task == "phenotype") {
-          viridis(100, option = "magma")
-        } else {
-          viridis(100, option = "plasma")
-        },
-        
-        display_numbers = TRUE,
-        number_format = "%.3f",
-        fontsize_number = 10,
-        
-        border_color = "white",
-        cellwidth = cellwidth,
-        cellheight = cellheight,
-        
-        filename = file.path(out_dir, paste0("task_summary_", task, ".png")),
-        width = plot_width,
-        height = plot_height
-      )
-      
-      cat("  Saved: task_summary_", task, ".png\n", sep = "")
-      
-    }, error = function(e) {
-      cat("  Error:", e$message, "\n")
-    })
-  }
+  )
+  
+  cat("\nSummary box plots completed successfully!\n")
+  cat("Generated overall plot files:\n")
+  cat("  - summary_boxplot_by_rowid.png\n")
+  cat("  - summary_boxplot_by_omics.png\n")
+  cat("  - summary_boxplot_by_agg.png\n")
+  cat("Generated task-specific plot files for:", paste(task_order, collapse = ", "), "\n")
+  
+  return(summary_stats)
 }
 
 # ==============================
@@ -1347,34 +1390,10 @@ main_pheatmap <- function() {
     cat("   Error:", e$message, "\n")
   })
   
-  # 3. 创建汇总热图
-  cat("\n3. Creating summary heatmap...\n")
+  # 3. 创建汇总箱线图
+  cat("\n3. Creating summary box plots...\n")
   tryCatch({
-    create_summary_heatmap(heatmap_data)
-  }, error = function(e) {
-    cat("   Error:", e$message, "\n")
-  })
-  
-  # 4. 创建紧凑热图
-  cat("\n4. Creating compact heatmap...\n")
-  tryCatch({
-    create_compact_heatmap(heatmap_data)
-  }, error = function(e) {
-    cat("   Error:", e$message, "\n")
-  })
-
-  # 5. 增强的汇总热图（显示均值和标准差）
-  cat("\n5. Creating enhanced summary heatmap...\n")
-  tryCatch({
-    create_enhanced_summary_heatmap(heatmap_data)
-  }, error = function(e) {
-    cat("   Error:", e$message, "\n")
-  })
-
-  # 6. 按任务的汇总热图
-  cat("\n6. Creating task-wise summary heatmaps...\n")
-  tryCatch({
-    create_taskwise_summary_heatmaps(heatmap_data)
+    create_summary_boxplots(heatmap_data)
   }, error = function(e) {
     cat("   Error:", e$message, "\n")
   })
