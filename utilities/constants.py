@@ -51,6 +51,7 @@ CT_SITES = {
     'esophagus': 'lung',
     'colon': 'colon',
     'pancreas': 'pancreas',
+    'pelvis': 'pelvis',
 }
 
 BIOMED_CLASSES = ['liver', 'lung', 'kidney', 'pancreas', 'heart anatomies', 'brain anatomies', 

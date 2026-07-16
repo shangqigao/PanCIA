@@ -153,3 +153,37 @@ def prepare_CPTAC_radiology_info(img_json, lab_dir=None, lab_mode=None, img_form
     }
 
     return dataset_info
+
+def prepare_EndoMRI_info(img_dir, lab_dir=None, lab_mode=None, img_format='nifti'):
+    if img_format == 'dicom':
+        img_paths = pathlib.Path(img_dir).glob('*')
+        img_paths = [p for p in img_paths if p.is_dir()]
+        patient_ids = [p.name for p in img_paths]
+    else:
+        img_paths = sorted(pathlib.Path(f"{img_dir}/images").rglob('*.nii.gz'))
+        if lab_dir is not None:
+            lab_paths = sorted(pathlib.Path(f"{lab_dir}/{lab_mode}").glob('*.nii.gz'))
+        else:
+            lab_paths = [None]*len(img_paths)
+    text_prompts = [
+        [
+            "endometrioma in pelvis",
+            "ovary",
+            "uterus",
+            "tumor in pelvis and cervix",
+            "tumor in pelvis and uterus",
+            "tumor in pelvis and ovaries"
+        ]
+    ]*len(img_paths)
+    
+    dataset_info = {
+        'name': 'EndoMRI',
+        'img_paths': img_paths,
+        'lab_paths': lab_paths,
+        'text_prompts': text_prompts,
+        'modality': ['MRI']*len(img_paths),
+        'site': ['pelvis']*len(img_paths),
+        'meta_list': None,
+        'img_format': ['nifti']*len(img_paths)
+    }
+    return dataset_info
