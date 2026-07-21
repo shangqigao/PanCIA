@@ -4318,7 +4318,7 @@ class SurvivalAnalyzer:
         # Initialize bandit
         bandit = ContextualBandit(
             alpha_range=[0.001, 0.01, 0.1, 1.0],
-            max_iterations=10,
+            max_iterations=20,
             hidden_dim=8,
             learning_rate=0.01,
             batch_size=64,
@@ -4331,7 +4331,7 @@ class SurvivalAnalyzer:
         )
 
         # Create pipeline
-        pipeline = ContextualBanditPipeline(bandit, use_soft_ensemble=False)
+        pipeline = ContextualBanditPipeline(bandit, use_soft_ensemble=True)
 
         # Fit
         pipeline.fit(X_rad_train, X_path_train, tr_y)
@@ -4347,7 +4347,7 @@ class SurvivalAnalyzer:
         scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
         
         print(f"\nFinal Results:")
-        print(f"  C-index: {scores_dict.get('c_index', 0):.4f}")
+        print(f"  C-index: {scores_dict.get('C-index', 0):.4f}")
         print(f"  Policy action distribution: "
             f"Rad: {np.sum(actions == 0)}, "
             f"Path: {np.sum(actions == 1)}, "
