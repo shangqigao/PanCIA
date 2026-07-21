@@ -86,12 +86,12 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # Endometrioma segmentation
-radiology="/home/sg2162/rds/hpc-work/EndoMRI_All"
-save_dir="/home/sg2162/rds/hpc-work/EndoMRI_All/segmentations"
-srun python analysis/a02_tumor_segmentation/m_endometrioma_segmentation.py \
-            --radiology $radiology \
-            --dataset EndoMRI_All \
-            --save_dir $save_dir
+# radiology="/home/sg2162/rds/hpc-work/EndoMRI_All"
+# save_dir="/home/sg2162/rds/hpc-work/EndoMRI_All/segmentations"
+# srun python analysis/a02_tumor_segmentation/m_endometrioma_segmentation.py \
+#             --radiology $radiology \
+#             --dataset EndoMRI_All \
+#             --save_dir $save_dir
 
 # extract radiomic features (add srun for BiomedParse)
 # radiomics_config="/home/sg2162/rds/hpc-work/PanCIA/configs/feature_extraction/radiomics_extraction.yaml"
@@ -106,8 +106,8 @@ srun python analysis/a02_tumor_segmentation/m_endometrioma_segmentation.py \
 # python analysis/a05_outcome_prediction/m_multitask_learning.py --config_files $multitask_config
 
 # survival analysis
-# survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
-# python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
+survival_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/survival_analysis.yaml"
+python analysis/a05_outcome_prediction/m_survival_analysis.py --config_files $survival_config
 
 # phenotype prediction
 # phenotype_config="/home/sg2162/rds/hpc-work/PanCIA/configs/outcome_prediction/phenotype_prediction.yaml"
