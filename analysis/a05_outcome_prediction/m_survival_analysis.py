@@ -21,6 +21,7 @@ import pandas as pd
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -2012,8 +2013,8 @@ class WeightedCoxPLLoss(nn.Module):
         # Encourage exploration when variance is high (uncertainty bonus)
         return variance.mean()
     
-    def forward(self, probs, R, P, RP, E, T, 
-                return_components=False):
+    def forward(self, probs, R, P, RP, E, T,
+                return_components=False, regularization_probs=None):
         """
         Compute loss with exploration bonuses.
         
@@ -2039,6 +2040,8 @@ class WeightedCoxPLLoss(nn.Module):
         # COMPONENT 1: WEIGHTED COX PARTIAL LIKELIHOOD (Exploitation)
         # ============================================================
         
+        reg_probs = probs if regularization_probs is None else regularization_probs
+
         # Compute weighted risk scores
         h_weighted = (probs[:, 0] * R + 
                       probs[:, 1] * P + 
@@ -2067,7 +2070,7 @@ class WeightedCoxPLLoss(nn.Module):
         # ============================================================
         
         # Compute entropy of policy distribution
-        entropy = self.compute_entropy(probs)
+        entropy = self.compute_entropy(reg_probs)
         
         # Entropy bonus: encourage exploration when entropy is low
         # We want to maximize entropy (minimize -entropy)
@@ -2078,7 +2081,7 @@ class WeightedCoxPLLoss(nn.Module):
         # ============================================================
         
         # Encourage exploration when uncertainty is high
-        uncertainty = self.compute_uncertainty(probs, R, P, RP)
+        uncertainty = self.compute_uncertainty(reg_probs, R, P, RP)
         uncertainty_bonus = self.uncertainty_weight * uncertainty
         
         # ============================================================
@@ -2087,7 +2090,7 @@ class WeightedCoxPLLoss(nn.Module):
         
         # Penalize if policy assigns near-zero probability to any action
         # This ensures all actions remain possible
-        min_prob = torch.min(probs, dim=1)[0]
+        min_prob = torch.min(reg_probs, dim=1)[0]
         diversity_penalty = -torch.log(min_prob + 1e-8).mean()
         diversity_weight = 0.01  # Small weight to avoid over-regularization
         
@@ -2172,11 +2175,13 @@ class BayesianWeightedCoxPLLoss(nn.Module):
         std_risk = torch.std(risk_all, dim=1)
         return std_risk.mean()
     
-    def forward(self, probs, R, P, RP, E, T, 
-                return_components=False):
+    def forward(self, probs, R, P, RP, E, T,
+                return_components=False, regularization_probs=None):
         """
         Forward pass with Bayesian exploration.
         """
+        reg_probs = probs if regularization_probs is None else regularization_probs
+
         # ============================================================
         # COMPONENT 1: BAYESIAN RISK SCORES (Exploration via noise)
         # ============================================================
@@ -2219,7 +2224,9 @@ class BayesianWeightedCoxPLLoss(nn.Module):
         # COMPONENT 3: STANDARD ENTROPY BONUS
         # ============================================================
         
-        entropy = -torch.sum(probs * torch.log(probs + 1e-8), dim=1).mean()
+        entropy = -torch.sum(
+            reg_probs * torch.log(reg_probs + 1e-8), dim=1
+        ).mean()
         entropy_bonus = -0.05 * entropy
         
         # ============================================================
@@ -2338,11 +2345,13 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         
         return kl_div
     
-    def forward(self, probs, R, P, RP, E, T, 
-                return_components=False):
+    def forward(self, probs, R, P, RP, E, T,
+                return_components=False, regularization_probs=None):
         """
         Forward pass with adaptive exploration.
         """
+        reg_probs = probs if regularization_probs is None else regularization_probs
+
         # ============================================================
         # COMPONENT 1: WEIGHTED COX PL (Exploitation)
         # ============================================================
@@ -2364,17 +2373,21 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         # ============================================================
         
         # Entropy bonus
-        entropy = -torch.sum(probs * torch.log(probs + 1e-8), dim=1).mean()
+        entropy = -torch.sum(
+            reg_probs * torch.log(reg_probs + 1e-8), dim=1
+        ).mean()
         entropy_bonus = -self.exploration_weight * entropy
         
         # Diversity bonus: encourage exploration when actions are imbalanced
-        diversity = self.compute_action_diversity(probs)
+        diversity = self.compute_action_diversity(reg_probs)
         diversity_bonus = self.exploration_weight * 0.1 * diversity
         
         # Uncertainty bonus
         risk_all = torch.stack([R, P, RP], dim=1)
-        expected_risk = (probs * risk_all).sum(dim=1, keepdim=True)
-        variance = torch.sum(probs * (risk_all - expected_risk)**2, dim=1)
+        expected_risk = (reg_probs * risk_all).sum(dim=1, keepdim=True)
+        variance = torch.sum(
+            reg_probs * (risk_all - expected_risk)**2, dim=1
+        )
         uncertainty_bonus = self.exploration_weight * 0.1 * variance.mean()
         
         # ============================================================
@@ -2427,11 +2440,13 @@ class EnsembleWeightedCoxPLLoss(nn.Module):
         self.exploration_weight = exploration_weight
         self.ensemble_noise_scale = ensemble_noise_scale
         
-    def forward(self, probs, R, P, RP, E, T, 
-                return_components=False):
+    def forward(self, probs, R, P, RP, E, T,
+                return_components=False, regularization_probs=None):
         """
         Forward pass with ensemble exploration.
         """
+        reg_probs = probs if regularization_probs is None else regularization_probs
+
         # ============================================================
         # COMPONENT 1: ENSEMBLE RISK ESTIMATES
         # ============================================================
@@ -2479,7 +2494,9 @@ class EnsembleWeightedCoxPLLoss(nn.Module):
         # COMPONENT 3: STANDARD ENTROPY BONUS
         # ============================================================
         
-        entropy = -torch.sum(probs * torch.log(probs + 1e-8), dim=1).mean()
+        entropy = -torch.sum(
+            reg_probs * torch.log(reg_probs + 1e-8), dim=1
+        ).mean()
         entropy_bonus = -0.05 * entropy
         
         # ============================================================
@@ -2755,6 +2772,10 @@ class ContextualBandit:
         Required lower-confidence-bound C-index gain for cost-free RP use
     rp_bootstrap_samples : int, default=500
         Paired bootstrap samples used to estimate RP performance evidence
+    hard_policy : bool, default=False
+        Train Cox risk with straight-through one-hot Gumbel-Softmax actions
+    gumbel_temperature : float, default=1.0
+        Initial Gumbel-Softmax temperature
     device : str, default='cuda'
         Device for PyTorch ('cuda' or 'cpu')
     random_state : int, default=None
@@ -2781,6 +2802,10 @@ class ContextualBandit:
                  rp_minimum_gain=0.01,
                  rp_bootstrap_samples=500,
                  rp_confidence=0.95,
+                 hard_policy=False,
+                 gumbel_temperature=1.0,
+                 gumbel_min_temperature=0.1,
+                 gumbel_anneal_rate=0.95,
                  loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
                  exploration_weight=0.1,
                  entropy_weight=0.05,
@@ -2819,6 +2844,15 @@ class ContextualBandit:
         self.rp_minimum_gain = rp_minimum_gain
         self.rp_bootstrap_samples = rp_bootstrap_samples
         self.rp_confidence = rp_confidence
+        if gumbel_temperature <= 0 or gumbel_min_temperature <= 0:
+            raise ValueError("Gumbel temperatures must be positive")
+        if not 0.0 < gumbel_anneal_rate <= 1.0:
+            raise ValueError("gumbel_anneal_rate must be in (0, 1]")
+        self.hard_policy = hard_policy
+        self.gumbel_initial_temperature = gumbel_temperature
+        self.gumbel_temperature = gumbel_temperature
+        self.gumbel_min_temperature = gumbel_min_temperature
+        self.gumbel_anneal_rate = gumbel_anneal_rate
         self.loss_type = loss_type
         self.exploration_weight = exploration_weight
         self.entropy_weight = entropy_weight
@@ -3121,7 +3155,24 @@ class ContextualBandit:
         """
         return model.predict_log_partial_hazard(X)
     
-    def _get_policy_probs(self, S):
+    def _policy_outputs(self, S, stochastic=False):
+        """Return action weights used for risk and soft policy probabilities."""
+        logits = self.policy_network.get_logits(S)
+        soft_probs = torch.softmax(logits / self.gumbel_temperature, dim=1)
+        if not self.hard_policy:
+            return soft_probs, soft_probs
+        if stochastic:
+            action_weights = F.gumbel_softmax(
+                logits, tau=self.gumbel_temperature, hard=True, dim=1
+            )
+        else:
+            actions = torch.argmax(logits, dim=1)
+            action_weights = F.one_hot(
+                actions, num_classes=logits.shape[1]
+            ).to(dtype=logits.dtype)
+        return action_weights, soft_probs
+
+    def _get_policy_probs(self, S, hard=False):
         """
         Get policy probabilities for state vectors.
         
@@ -3137,18 +3188,26 @@ class ContextualBandit:
         """
         self.policy_network.eval()
         with torch.no_grad():
-            S_tensor = torch.FloatTensor(S).to(self.device)
-            probs = self.policy_network(S_tensor)
-            return probs.cpu().numpy()
+            S_tensor = torch.as_tensor(
+                np.ascontiguousarray(S), dtype=torch.float32, device=self.device
+            )
+            action_weights, soft_probs = self._policy_outputs(
+                S_tensor, stochastic=False
+            )
+            output = action_weights if hard else soft_probs
+            return output.detach().cpu().numpy()
     
     def _train_policy_epoch(self, S, R, P, RP, E, T, rp_cost=0.0):
         """Train one full-risk-set policy epoch."""
         self.policy_network.train()
-        probs = self.policy_network(S)
+        action_weights, soft_probs = self._policy_outputs(S, stochastic=True)
         base_loss = self.policy_loss_fn(
-            probs, R, P, RP, E, T
+            action_weights, R, P, RP, E, T,
+            regularization_probs=soft_probs
         )
-        rp_penalty = self.rp_cost_weight * rp_cost * probs[:, 2].mean()
+        rp_penalty = (
+            self.rp_cost_weight * rp_cost * action_weights[:, 2].mean()
+        )
         loss = base_loss + rp_penalty
 
         self.policy_optimizer.zero_grad()
@@ -3162,6 +3221,11 @@ class ContextualBandit:
             self.policy_loss_fn.update_exploration_weight(loss.detach())
         if hasattr(self.policy_loss_fn, 'update_parameters'):
             self.policy_loss_fn.update_parameters()
+        if self.hard_policy:
+            self.gumbel_temperature = max(
+                self.gumbel_min_temperature,
+                self.gumbel_temperature * self.gumbel_anneal_rate,
+            )
 
         return loss.item()
 
@@ -3191,13 +3255,15 @@ class ContextualBandit:
             self.policy_network.eval()
             with torch.no_grad():
                 S_val, R_val, P_val, RP_val, E_val, T_val = val_tensors
-                probs_val = self.policy_network(S_val)
+                action_val, soft_val = self._policy_outputs(
+                    S_val, stochastic=False
+                )
                 components = self.policy_loss_fn(
-                    probs_val, R_val, P_val, RP_val, E_val, T_val,
-                    return_components=True
+                    action_val, R_val, P_val, RP_val, E_val, T_val,
+                    return_components=True, regularization_probs=soft_val
                 )
                 rp_penalty = (
-                    self.rp_cost_weight * rp_cost * probs_val[:, 2].mean()
+                    self.rp_cost_weight * rp_cost * action_val[:, 2].mean()
                 )
                 val_loss = (components['total_loss'] + rp_penalty).item()
                 exploitation_loss = components['cox_loss'].item()
@@ -3214,6 +3280,7 @@ class ContextualBandit:
                     },
                     'optimizer': copy.deepcopy(self.policy_optimizer.state_dict()),
                     'loss_fn': copy.deepcopy(self.policy_loss_fn),
+                    'gumbel_temperature': self.gumbel_temperature,
                 }
                 patience_counter = 0
             else:
@@ -3225,7 +3292,8 @@ class ContextualBandit:
                     f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, "
                     f"Exploitation Loss = {exploitation_loss:.4f}, "
                     f"Exploration Loss = {exploration_loss:.4f}, "
-                    f"RP Penalty = {rp_penalty.item():.4f}"
+                    f"RP Penalty = {rp_penalty.item():.4f}, "
+                    f"Gumbel T = {self.gumbel_temperature:.3f}"
                 )
 
             if patience_counter >= patience:
@@ -3238,6 +3306,7 @@ class ContextualBandit:
         self.policy_network.load_state_dict(best_checkpoint['policy'])
         self.policy_optimizer.load_state_dict(best_checkpoint['optimizer'])
         self.policy_loss_fn = best_checkpoint['loss_fn']
+        self.gumbel_temperature = best_checkpoint['gumbel_temperature']
         return best_val_loss
     
     def _init_policy_network(self):
@@ -3277,6 +3346,7 @@ class ContextualBandit:
         """
         # Reset fit-specific state while retaining warm starts within this fit.
         self._cox_warm_starts = {}
+        self.gumbel_temperature = self.gumbel_initial_temperature
         self.objective_history = []
         self.cindex_history = []
         self.rp_cost_history = []
@@ -3386,6 +3456,7 @@ class ContextualBandit:
                 'optimizer': copy.deepcopy(self.policy_optimizer.state_dict()),
                 'loss_fn': copy.deepcopy(self.policy_loss_fn),
                 'risk_stats': copy.deepcopy(self.policy_risk_stats),
+                'gumbel_temperature': self.gumbel_temperature,
                 'w_rad': self.w_rad.copy(),
                 'w_path': self.w_path.copy(),
                 'w_rp': self.w_rp.copy(),
@@ -3445,12 +3516,17 @@ class ContextualBandit:
                 S_for_fit, R_for_fit, P_for_fit, RP_for_fit, E_train, T_train,
                 policy_train_idx, policy_val_idx, rp_cost, verbose=verbose
             )
-            probs = self._get_policy_probs(S_policy)
-            probs_val = self._get_policy_probs(S_for_fit[policy_val_idx])
+            action_weights = self._get_policy_probs(
+                S_policy, hard=self.hard_policy
+            )
+            soft_probs = self._get_policy_probs(S_policy, hard=False)
+            action_val = self._get_policy_probs(
+                S_for_fit[policy_val_idx], hard=self.hard_policy
+            )
             calibrated_val_risk = (
-                probs_val[:, 0] * R_for_fit[policy_val_idx]
-                + probs_val[:, 1] * P_for_fit[policy_val_idx]
-                + probs_val[:, 2] * RP_for_fit[policy_val_idx]
+                action_val[:, 0] * R_for_fit[policy_val_idx]
+                + action_val[:, 1] * P_for_fit[policy_val_idx]
+                + action_val[:, 2] * RP_for_fit[policy_val_idx]
             )
             validation_cindex = concordance_index(
                 T_train[policy_val_idx], -calibrated_val_risk,
@@ -3461,7 +3537,8 @@ class ContextualBandit:
                 'R': R_policy,
                 'P': P_policy,
                 'RP': RP_policy,
-                'probs': probs,
+                'probs': action_weights,
+                'soft_probs': soft_probs,
                 'rp_cost': rp_cost,
                 'val_loss': best_val_loss,
                 'val_cindex': validation_cindex,
@@ -3603,6 +3680,7 @@ class ContextualBandit:
         self.policy_optimizer.load_state_dict(best_em_checkpoint['optimizer'])
         self.policy_loss_fn = best_em_checkpoint['loss_fn']
         self.policy_risk_stats = best_em_checkpoint['risk_stats']
+        self.gumbel_temperature = best_em_checkpoint['gumbel_temperature']
         self.w_rad = best_em_checkpoint['w_rad']
         self.w_path = best_em_checkpoint['w_path']
         self.w_rp = best_em_checkpoint['w_rp']
@@ -4444,6 +4522,10 @@ class SurvivalAnalyzer:
             entropy_weight=0.05,
             rp_cost_weight=0.0,
             temperature=1.0,
+            hard_policy=True,
+            gumbel_temperature=1.0,
+            gumbel_min_temperature=0.1,
+            gumbel_anneal_rate=0.95,
             device='cuda',
             random_state=42
         )
