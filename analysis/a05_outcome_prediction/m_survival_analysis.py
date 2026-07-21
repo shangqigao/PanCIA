@@ -2891,41 +2891,47 @@ class ContextualBandit:
                 max_exploration_weight=0.5
             )
     
-    def _normalize_state(self, R, P, delta):
-        """
-        Normalize state features to [0, 1] for stable training.
-        
-        Parameters
-        ----------
-        R : array-like
-            Radiomic risk scores
-        P : array-like
-            Pathomic risk scores
-        delta : array-like
-            Absolute difference |R - P|
-            
-        Returns
-        -------
-        S : ndarray
-            Normalized state matrix of shape (n_samples, 3)
-        """
-        if self.state_stats is None:
-            # Compute min/max for normalization
-            self.state_stats = {
-                'R_min': np.min(R),
-                'R_max': np.max(R),
-                'P_min': np.min(P),
-                'P_max': np.max(P),
-                'delta_min': np.min(delta),
-                'delta_max': np.max(delta)
+    def _fit_policy_ood_stats(self, X_rad, X_path, fit_indices):
+        """Fit modality reference distributions on policy-training patients."""
+        X_rad = np.asarray(X_rad, dtype=np.float32)
+        X_path = np.asarray(X_path, dtype=np.float32)
+        fit_indices = np.asarray(fit_indices, dtype=np.int64)
+        X_rp = np.concatenate([X_rad, X_path], axis=1)
+
+        self.policy_feature_stats = {}
+        self.policy_ood_stats = {}
+        for name, X in (("R", X_rad), ("P", X_path), ("RP", X_rp)):
+            X_fit = X[fit_indices]
+            mean = X_fit.mean(axis=0)
+            std = np.maximum(X_fit.std(axis=0), 1e-6)
+            self.policy_feature_stats[name] = {"mean": mean, "std": std}
+
+            # The mean (rather than sum) makes scores comparable across the
+            # differently sized R, P, and RP feature spaces.
+            score_fit = np.mean(((X_fit - mean) / std) ** 2, axis=1)
+            transformed = np.log1p(score_fit)
+            self.policy_ood_stats[name] = {
+                "mean": float(transformed.mean()),
+                "std": max(float(transformed.std()), 1e-6),
             }
-        
-        stats = self.state_stats
-        R_norm = (R - stats['R_min']) / (stats['R_max'] - stats['R_min'] + 1e-8)
-        P_norm = (P - stats['P_min']) / (stats['P_max'] - stats['P_min'] + 1e-8)
-        delta_norm = (delta - stats['delta_min']) / (stats['delta_max'] - stats['delta_min'] + 1e-8)
-        
-        return np.column_stack([R_norm, P_norm, delta_norm])
+
+    def _compute_policy_ood_scores(self, X_rad, X_path):
+        """Return standardized, dimension-normalized OOD scores for R/P/RP."""
+        X_rad = np.asarray(X_rad, dtype=np.float32)
+        X_path = np.asarray(X_path, dtype=np.float32)
+        X_rp = np.concatenate([X_rad, X_path], axis=1)
+        scores = []
+        for name, X in (("R", X_rad), ("P", X_path), ("RP", X_rp)):
+            feature_stats = self.policy_feature_stats[name]
+            score = np.mean(
+                ((X - feature_stats["mean"]) / feature_stats["std"]) ** 2,
+                axis=1,
+            )
+            score = np.log1p(score)
+            ood_stats = self.policy_ood_stats[name]
+            score = (score - ood_stats["mean"]) / ood_stats["std"]
+            scores.append(np.clip(score, -5.0, 5.0))
+        return tuple(scores)
 
     def _standardize_policy_risks(self, R, P, RP, fit_indices=None, store=True):
         """Calibrate expert risks using policy-training samples only."""
@@ -2952,9 +2958,14 @@ class ContextualBandit:
             )
         return tuple(calibrated)
 
-    @staticmethod
-    def _make_policy_state(R, P):
-        return np.column_stack([R, P, np.abs(R - P)]).astype(np.float32)
+    def _make_policy_state(self, R, P, RP, X_rad, X_path):
+        """Build risks, signed expert contrasts, and modality OOD features."""
+        U_R, U_P, U_RP = self._compute_policy_ood_scores(X_rad, X_path)
+        return np.column_stack([
+            R, P, RP,
+            R - P, RP - R, RP - P,
+            U_R, U_P, U_RP,
+        ]).astype(np.float32)
 
     @staticmethod
     def _risk_cindex(risk, E, T):
@@ -3312,7 +3323,7 @@ class ContextualBandit:
     def _init_policy_network(self):
         """Initialize the policy network and optimizer."""
         self.policy_network = PolicyNetwork(
-            input_dim=3,
+            input_dim=9,
             hidden_dim=self.hidden_dim,
             output_dim=3,
             dropout_rate=0.1
@@ -3436,6 +3447,7 @@ class ContextualBandit:
 
         self.policy_train_indices_ = policy_train_idx.copy()
         self.policy_val_indices_ = policy_val_idx.copy()
+        self._fit_policy_ood_stats(X_rad, X_path, policy_train_idx)
         self.training_cindex_history = []
         self.validation_cindex_history = []
         best_em_checkpoint = None
@@ -3484,7 +3496,9 @@ class ContextualBandit:
                 self.R_curr, self.P_curr, self.RP_curr,
                 fit_indices=policy_train_idx, store=True
             )
-            S_policy = self._make_policy_state(R_policy, P_policy)
+            S_policy = self._make_policy_state(
+                R_policy, P_policy, RP_policy, X_rad, X_path
+            )
             rp_cost, rp_cost_info = prepare_rp_cost()
 
             # Policy training uses current full-fit expert risks, while policy
@@ -3500,7 +3514,9 @@ class ContextualBandit:
             R_for_fit[policy_val_idx] = R_oof[policy_val_idx]
             P_for_fit[policy_val_idx] = P_oof[policy_val_idx]
             RP_for_fit[policy_val_idx] = RP_oof[policy_val_idx]
-            S_for_fit = self._make_policy_state(R_for_fit, P_for_fit)
+            S_for_fit = self._make_policy_state(
+                R_for_fit, P_for_fit, RP_for_fit, X_rad, X_path
+            )
 
             self.rp_cost_history.append(rp_cost)
             if verbose:
@@ -3717,7 +3733,7 @@ class ContextualBandit:
         RP = self._predict_risk(self.cox_rp, X_rp)
 
         R, P, RP = self._apply_policy_risk_stats(R, P, RP)
-        S = self._make_policy_state(R, P)
+        S = self._make_policy_state(R, P, RP, X_rad, X_path)
         
         # Get policy probabilities
         probs = self._get_policy_probs(S)
@@ -3744,8 +3760,8 @@ class ContextualBandit:
         P = self._predict_risk(self.cox_path, X_path)
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
-        R, P, _ = self._apply_policy_risk_stats(R, P, RP)
-        S = self._make_policy_state(R, P)
+        R, P, RP = self._apply_policy_risk_stats(R, P, RP)
+        S = self._make_policy_state(R, P, RP, X_rad, X_path)
         return self._get_policy_probs(S)
     
     def get_weighted_risk(self, X_rad, X_path):
@@ -3758,7 +3774,7 @@ class ContextualBandit:
         RP = self._predict_risk(self.cox_rp, X_rp)
 
         R, P, RP = self._apply_policy_risk_stats(R, P, RP)
-        S = self._make_policy_state(R, P)
+        S = self._make_policy_state(R, P, RP, X_rad, X_path)
         probs = self._get_policy_probs(S)
         
         # Weighted risk = sum(prob * risk)
