@@ -142,7 +142,7 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
         logger.info("Segmenting image: {}/{}...".format(idx + 1, len(img_paths)))
 
         img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-        save_prob_path = pathlib.Path(f"{save_dir}/{img_name}_{seg_obj}.npy")
+        save_prob_path = pathlib.Path(f"{save_dir}/{img_name}_{seg_obj}.nii.gz")
         if save_prob_path.exists() and skip_exist:
             logger.info(f"{save_prob_path.name} has existed, skip!")
             continue
@@ -191,13 +191,31 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
                 slice_feat = np.mean(np.stack(ensemble_feat, axis=0), axis=0, keepdims=True)
                 feat_4d.append(slice_feat)
 
-        final_prob = np.concatenate(prob_4d, axis=0)
+        final_prob = np.stack(prob_4d, axis=0)
         final_prob = np.moveaxis(final_prob, 0, slice_axis)
-        if save_radiomics: feat_4d = np.concatenate(feat_4d, axis=0)
+
+        if save_radiomics: feat_4d = np.stack(feat_4d, axis=0)
         
         logger.info(f"Saving predicted prob to {save_prob_path}")
         os.makedirs(os.path.dirname(save_prob_path), exist_ok=True)
-        np.save(final_prob, save_prob_path)
+        
+        # Convert probabilities [0, 1] to uint8 [0, 255].
+        final_prob_uint8 = np.round(
+            np.clip(final_prob, 0.0, 1.0) * 255.0
+        ).astype(np.uint8)
+
+        prob_nii = nib.Nifti1Image(
+            final_prob_uint8,
+            affine,
+        )
+
+        prob_nii.set_data_dtype(np.uint8)
+        prob_nii.header["descrip"] = (
+            b"probability map scaled from [0,1] to uint8 [0,255]"
+        )
+
+        nib.save(prob_nii, str(save_prob_path))
+
         if save_radiomics:
             radiomic_feat = np.moveaxis(feat_4d, 0, slice_axis)
             save_feat_path = f"{save_dir}/{img_name}_radiomics.npy"

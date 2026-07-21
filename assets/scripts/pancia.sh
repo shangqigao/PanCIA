@@ -86,8 +86,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # Endometrioma segmentation
-radiology="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/Endometriosis/EndoMRI_All"
-save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/Endometriosis/EndoMRI_All/Seg_prob"
+radiology="/home/sg2162/rds/hpc-work/EndoMRI_All"
+save_dir="/home/sg2162/rds/hpc-work/EndoMRI_All/segmentations"
 srun python analysis/a02_tumor_segmentation/m_endometrioma_segmentation.py \
             --radiology $radiology \
             --dataset EndoMRI_All \
