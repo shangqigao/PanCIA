@@ -109,6 +109,17 @@ class TorchCoxPHTests(unittest.TestCase):
         self.assertTrue(np.isfinite(model.coef_).all())
         self.assertTrue(np.isfinite(model.predict_log_partial_hazard(X)).all())
 
+    def test_zero_weight_event_groups_do_not_create_nan(self):
+        X = torch.tensor([[1.0], [0.5], [-0.2]])
+        T = torch.tensor([3.0, 2.0, 1.0])
+        E = torch.tensor([1.0, 0.0, 1.0])
+        W = torch.tensor([0.0, 0.0, 1.0])
+        beta = torch.tensor([0.3])
+
+        loss = TorchCoxPH._breslow_negative_log_likelihood(beta, X, T, E, W)
+        self.assertTrue(torch.isfinite(loss).item())
+        self.assertAlmostEqual(loss.item(), 0.0, places=6)
+
     def test_all_censored_or_zero_weighted_events_are_rejected(self):
         X = np.ones((4, 2), dtype=np.float32)
         T = np.arange(1, 5, dtype=np.float32)
@@ -180,6 +191,18 @@ class TorchCoxPHTests(unittest.TestCase):
             X, survival["duration"], survival["event"], model_key="strided"
         )
         self.assertTrue(np.isfinite(model.predict_log_partial_hazard(X)).all())
+
+    def test_policy_risks_are_standardized_per_expert(self):
+        bandit = ContextualBandit(device="cpu")
+        R, P, RP = bandit._standardize_policy_risks(
+            np.array([1.0, 2.0, 3.0]),
+            np.array([10.0, 20.0, 30.0]),
+            np.array([-5.0, 0.0, 5.0]),
+        )
+
+        for risk in (R, P, RP):
+            self.assertAlmostEqual(float(risk.mean()), 0.0, places=6)
+            self.assertAlmostEqual(float(risk.std()), 1.0, places=6)
 
 if __name__ == "__main__":
     unittest.main()

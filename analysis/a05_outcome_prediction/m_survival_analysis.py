@@ -2060,7 +2060,7 @@ class WeightedCoxPLLoss(nn.Module):
 
         # Cox partial likelihood (negative for minimization)
         loglik = torch.sum(E_sorted * (h_sorted - log_risk_sums))
-        cox_loss = -loglik  # Minimize negative likelihood
+        cox_loss = -loglik / E_sorted.sum().clamp_min(1.0)
         
         # ============================================================
         # COMPONENT 2: ENTROPY BONUS (Exploration)
@@ -2205,7 +2205,7 @@ class BayesianWeightedCoxPLLoss(nn.Module):
         # Cox PL
         log_risk_sums = torch.logcumsumexp(h_sorted, dim=0)
         loglik = torch.sum(E_sorted * (h_sorted - log_risk_sums))
-        cox_loss = -loglik
+        cox_loss = -loglik / E_sorted.sum().clamp_min(1.0)
         
         # ============================================================
         # COMPONENT 2: EXPLORATION BONUS (epistemic uncertainty)
@@ -2357,7 +2357,7 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         
         log_risk_sums = torch.logcumsumexp(h_sorted, dim=0)
         loglik = torch.sum(E_sorted * (h_sorted - log_risk_sums))
-        cox_loss = -loglik
+        cox_loss = -loglik / E_sorted.sum().clamp_min(1.0)
         
         # ============================================================
         # COMPONENT 2: EXPLORATION BONUS (Adaptive)
@@ -2462,7 +2462,7 @@ class EnsembleWeightedCoxPLLoss(nn.Module):
             
             log_risk_sums = torch.logcumsumexp(h_sorted, dim=0)
             loglik = torch.sum(E_sorted * (h_sorted - log_risk_sums))
-            ensemble_losses.append(-loglik)
+            ensemble_losses.append(-loglik / E_sorted.sum().clamp_min(1.0))
         
         # Average over ensemble
         cox_loss = torch.stack(ensemble_losses).mean()
@@ -2599,8 +2599,14 @@ class TorchCoxPH:
         ).scatter_add_(0, group_ids, event_weights)
 
         group_log_risk = log_risk_sums[group_end]
-        log_likelihood = weighted_event_eta - event_weight_sum * group_log_risk
-        total_event_weight = event_weight_sum.sum()
+        # Groups with no weighted events contribute exactly zero. Mask them
+        # before multiplication so an empty early risk set cannot form 0 * -inf.
+        event_groups = event_weight_sum > 0
+        log_likelihood = (
+            weighted_event_eta[event_groups]
+            - event_weight_sum[event_groups] * group_log_risk[event_groups]
+        )
+        total_event_weight = event_weight_sum[event_groups].sum()
         return -log_likelihood.sum() / total_event_weight
 
     @classmethod
@@ -2744,6 +2750,8 @@ class ContextualBandit:
         Consecutive low-change steps before stopping Cox optimization
     cox_l1_ratio : float, default=0.9
         Elastic-net mixing parameter used by TorchCoxPH
+    min_expert_weight : float, default=0.01
+        Minimum M-step sample weight assigned to each survival expert
     device : str, default='cuda'
         Device for PyTorch ('cuda' or 'cpu')
     random_state : int, default=None
@@ -2765,6 +2773,7 @@ class ContextualBandit:
                  cox_patience=20,
                  cox_l1_ratio=0.9,
                  cox_gradient_clip=10.0,
+                 min_expert_weight=0.01,
                  loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
                  exploration_weight=0.1,
                  entropy_weight=0.05,
@@ -2787,6 +2796,9 @@ class ContextualBandit:
         self.cox_patience = cox_patience
         self.cox_l1_ratio = cox_l1_ratio
         self.cox_gradient_clip = cox_gradient_clip
+        if not 0.0 <= min_expert_weight < 1.0 / 3.0:
+            raise ValueError("min_expert_weight must be in [0, 1/3)")
+        self.min_expert_weight = min_expert_weight
         self.loss_type = loss_type
         self.exploration_weight = exploration_weight
         self.entropy_weight = entropy_weight
@@ -2860,6 +2872,19 @@ class ContextualBandit:
         delta_norm = (delta - stats['delta_min']) / (stats['delta_max'] - stats['delta_min'] + 1e-8)
         
         return np.column_stack([R_norm, P_norm, delta_norm])
+
+    def _standardize_policy_risks(self, R, P, RP):
+        """Put expert log-risk scores on comparable scales for policy loss."""
+        standardized = []
+        self.policy_risk_stats = {}
+        for name, risk in (("R", R), ("P", P), ("RP", RP)):
+            risk = np.asarray(risk, dtype=np.float32)
+            mean = float(np.mean(risk))
+            std = float(np.std(risk))
+            std = max(std, 1e-6)
+            self.policy_risk_stats[name] = {"mean": mean, "std": std}
+            standardized.append((risk - mean) / std)
+        return tuple(standardized)
     
     def train_survival_model(self, X, T, E, weights=None, alpha_range=None,
                              model_key='cox'):
@@ -3068,7 +3093,7 @@ class ContextualBandit:
             weight_decay=1e-5
         )
         
-        self.policy_loss_fn = WeightedCoxPLLoss()
+        self._init_loss_function()
     
     def fit(self, X_rad, X_path, y):
         """
@@ -3166,6 +3191,13 @@ class ContextualBandit:
         
         for iteration in range(self.max_iterations):
             print(f"\n--- EM Iteration {iteration + 1} ---")
+
+            # Cox models have arbitrary log-risk scales. Standardizing each
+            # expert prevents the fusion expert from winning merely because
+            # its score variance is larger.
+            R_policy, P_policy, RP_policy = self._standardize_policy_risks(
+                self.R_curr, self.P_curr, self.RP_curr
+            )
             
             # ============================================================
             # E-STEP: Train Policy Network (Direct Optimization)
@@ -3189,9 +3221,9 @@ class ContextualBandit:
                 # Train epoch
                 train_loss = self._train_policy_epoch(
                     S_train_np[train_idx],
-                    self.R_curr[train_idx],
-                    self.P_curr[train_idx],
-                    self.RP_curr[train_idx],
+                    R_policy[train_idx],
+                    P_policy[train_idx],
+                    RP_policy[train_idx],
                     E_train[train_idx],
                     T_train[train_idx]
                 )
@@ -3200,9 +3232,9 @@ class ContextualBandit:
                 self.policy_network.eval()
                 with torch.no_grad():
                     S_val_tensor = torch.FloatTensor(S_train_np[val_idx]).to(self.device)
-                    R_val_tensor = torch.FloatTensor(self.R_curr[val_idx]).to(self.device)
-                    P_val_tensor = torch.FloatTensor(self.P_curr[val_idx]).to(self.device)
-                    RP_val_tensor = torch.FloatTensor(self.RP_curr[val_idx]).to(self.device)
+                    R_val_tensor = torch.FloatTensor(R_policy[val_idx]).to(self.device)
+                    P_val_tensor = torch.FloatTensor(P_policy[val_idx]).to(self.device)
+                    RP_val_tensor = torch.FloatTensor(RP_policy[val_idx]).to(self.device)
                     E_val_tensor = torch.FloatTensor(E_train[val_idx]).to(self.device)
                     T_val_tensor = torch.FloatTensor(T_train[val_idx]).to(self.device)
                     
@@ -3246,16 +3278,18 @@ class ContextualBandit:
                 probs = self.policy_network(S_tensor)
                 policy_probs = probs.cpu().numpy()
             
-            self.w_rad = policy_probs[:, 0]
-            self.w_path = policy_probs[:, 1]
-            self.w_rp = policy_probs[:, 2]
+            floor = self.min_expert_weight
+            m_step_probs = policy_probs * (1.0 - 3.0 * floor) + floor
+            self.w_rad = m_step_probs[:, 0]
+            self.w_path = m_step_probs[:, 1]
+            self.w_rp = m_step_probs[:, 2]
             
             # Compute objective for history
             with torch.no_grad():
                 S_tensor = torch.FloatTensor(S_train).to(self.device)
-                R_tensor = torch.FloatTensor(self.R_curr).to(self.device)
-                P_tensor = torch.FloatTensor(self.P_curr).to(self.device)
-                RP_tensor = torch.FloatTensor(self.RP_curr).to(self.device)
+                R_tensor = torch.FloatTensor(R_policy).to(self.device)
+                P_tensor = torch.FloatTensor(P_policy).to(self.device)
+                RP_tensor = torch.FloatTensor(RP_policy).to(self.device)
                 E_tensor = torch.FloatTensor(E_train).to(self.device)
                 T_tensor = torch.FloatTensor(T_train).to(self.device)
                 
@@ -3334,6 +3368,8 @@ class ContextualBandit:
             print(f"Subgroup sizes - Rad: {np.sum(self.w_rad > 0.5):.0f}, "
                   f"Path: {np.sum(self.w_path > 0.5):.0f}, "
                   f"RP: {np.sum(self.w_rp > 0.5):.0f}")
+            print(f"Mean expert weights - Rad: {self.w_rad.mean():.3f}, "
+                  f"Path: {self.w_path.mean():.3f}, RP: {self.w_rp.mean():.3f}")
             
             # Check convergence
             if len(self.cindex_history) > 1:
