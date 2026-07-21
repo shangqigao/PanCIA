@@ -2054,13 +2054,12 @@ class WeightedCoxPLLoss(nn.Module):
         h_sorted = h_weighted[idx]
         E_sorted = E[idx]
         
-        # Compute Cox partial likelihood with numerical stability
-        h_max = torch.max(h_sorted)
-        exp_h = torch.exp(h_sorted - h_max)
-        cumsum = torch.cumsum(exp_h, dim=0)
-        
+        # Stable log risk-set sums. Unlike subtracting a global maximum,
+        # logcumsumexp retains the corresponding additive offset.
+        log_risk_sums = torch.logcumsumexp(h_sorted, dim=0)
+
         # Cox partial likelihood (negative for minimization)
-        loglik = torch.sum(E_sorted * (h_sorted - torch.log(cumsum + 1e-8)))
+        loglik = torch.sum(E_sorted * (h_sorted - log_risk_sums))
         cox_loss = -loglik  # Minimize negative likelihood
         
         # ============================================================
@@ -2204,11 +2203,8 @@ class BayesianWeightedCoxPLLoss(nn.Module):
         E_sorted = E[idx]
         
         # Cox PL
-        h_max = torch.max(h_sorted)
-        exp_h = torch.exp(h_sorted - h_max)
-        cumsum = torch.cumsum(exp_h, dim=0)
-        
-        loglik = torch.sum(E_sorted * (h_sorted - torch.log(cumsum + 1e-8)))
+        log_risk_sums = torch.logcumsumexp(h_sorted, dim=0)
+        loglik = torch.sum(E_sorted * (h_sorted - log_risk_sums))
         cox_loss = -loglik
         
         # ============================================================
@@ -2359,11 +2355,8 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         h_sorted = h_weighted[idx]
         E_sorted = E[idx]
         
-        h_max = torch.max(h_sorted)
-        exp_h = torch.exp(h_sorted - h_max)
-        cumsum = torch.cumsum(exp_h, dim=0)
-        
-        loglik = torch.sum(E_sorted * (h_sorted - torch.log(cumsum + 1e-8)))
+        log_risk_sums = torch.logcumsumexp(h_sorted, dim=0)
+        loglik = torch.sum(E_sorted * (h_sorted - log_risk_sums))
         cox_loss = -loglik
         
         # ============================================================
@@ -2467,11 +2460,8 @@ class EnsembleWeightedCoxPLLoss(nn.Module):
             h_sorted = h_e[idx]
             E_sorted = E[idx]
             
-            h_max = torch.max(h_sorted)
-            exp_h = torch.exp(h_sorted - h_max)
-            cumsum = torch.cumsum(exp_h, dim=0)
-            
-            loglik = torch.sum(E_sorted * (h_sorted - torch.log(cumsum + 1e-8)))
+            log_risk_sums = torch.logcumsumexp(h_sorted, dim=0)
+            loglik = torch.sum(E_sorted * (h_sorted - log_risk_sums))
             ensemble_losses.append(-loglik)
         
         # Average over ensemble
@@ -2899,11 +2889,11 @@ class ContextualBandit:
         if alpha_range is None:
             alpha_range = self.alpha_range
 
-        X = np.asarray(X, dtype=np.float32)
-        T = np.asarray(T, dtype=np.float32).reshape(-1)
-        E = np.asarray(E, dtype=np.float32).reshape(-1)
+        X = np.ascontiguousarray(X, dtype=np.float32)
+        T = np.ascontiguousarray(T, dtype=np.float32).reshape(-1)
+        E = np.ascontiguousarray(E, dtype=np.float32).reshape(-1)
         if weights is not None:
-            weights = np.asarray(weights, dtype=np.float32).reshape(-1)
+            weights = np.ascontiguousarray(weights, dtype=np.float32).reshape(-1)
         
         # Cross-validation to select best alpha
         best_alpha = None
@@ -3104,8 +3094,8 @@ class ContextualBandit:
         self.cindex_history = []
         self.policies = []
 
-        X_rad = np.asarray(X_rad, dtype=np.float32)
-        X_path = np.asarray(X_path, dtype=np.float32)
+        X_rad = np.ascontiguousarray(X_rad, dtype=np.float32)
+        X_path = np.ascontiguousarray(X_path, dtype=np.float32)
 
         # Extract survival data
         if isinstance(y, pd.DataFrame):
@@ -3114,6 +3104,12 @@ class ContextualBandit:
         else:
             T_train = y["duration"]
             E_train = y["event"].astype(bool)
+
+        # Structured-array fields are often strided views whose strides are
+        # incompatible with torch.FloatTensor. Materialize compact arrays once
+        # before policy and Cox training.
+        T_train = np.ascontiguousarray(T_train, dtype=np.float32)
+        E_train = np.ascontiguousarray(E_train, dtype=np.float32)
         
         N_train = len(T_train)
         
@@ -3231,8 +3227,9 @@ class ContextualBandit:
                 
                 if (epoch + 1) % 10 == 0 or epoch == 0:
                     print(f"  Epoch {epoch+1}/{self.policy_epochs}: "
-                          f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}"
-                          f"Exploitation Loss = {exploitation_loss:.4f}, Exploration Loss = {exploration_loss:.4f}")
+                          f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, "
+                          f"Exploitation Loss = {exploitation_loss:.4f}, "
+                          f"Exploration Loss = {exploration_loss:.4f}")
                 
                 if patience_counter >= patience:
                     print(f"  Early stopping at epoch {epoch+1}")

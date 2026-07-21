@@ -33,7 +33,10 @@ def _load_cox_classes():
     }
     module = ast.Module(body=class_nodes, type_ignores=[])
     exec(compile(module, str(source_path), "exec"), namespace)
-    return namespace["TorchCoxPH"], namespace["ContextualBandit"]
+    return (
+        namespace["TorchCoxPH"],
+        namespace["ContextualBandit"],
+    )
 
 
 TorchCoxPH, ContextualBandit = _load_cox_classes()
@@ -159,6 +162,24 @@ class TorchCoxPHTests(unittest.TestCase):
         self.assertEqual(first.coef_.shape, second.coef_.shape)
         self.assertTrue(np.isfinite(second.predict_log_partial_hazard(X)).all())
 
+    def test_contextual_bandit_accepts_strided_structured_array_fields(self):
+        X, T, E, _ = _synthetic_survival(seed=31, n_samples=30, n_features=3)
+        survival = np.empty(30, dtype=[("event", "?"), ("duration", "<f4")])
+        survival["event"] = E.astype(bool)
+        survival["duration"] = T
+        self.assertNotEqual(survival["duration"].strides[0] % T.itemsize, 0)
+
+        bandit = ContextualBandit(
+            alpha_range=[0.01],
+            cv_folds=3,
+            cox_max_epochs=20,
+            cox_patience=5,
+            device="cpu",
+        )
+        model, _ = bandit.train_survival_model(
+            X, survival["duration"], survival["event"], model_key="strided"
+        )
+        self.assertTrue(np.isfinite(model.predict_log_partial_hazard(X)).all())
 
 if __name__ == "__main__":
     unittest.main()
