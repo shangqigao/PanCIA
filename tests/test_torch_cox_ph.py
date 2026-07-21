@@ -204,5 +204,28 @@ class TorchCoxPHTests(unittest.TestCase):
             self.assertAlmostEqual(float(risk.mean()), 0.0, places=6)
             self.assertAlmostEqual(float(risk.std()), 1.0, places=6)
 
+    def test_rp_cost_is_zero_only_for_reliable_improvement(self):
+        T = np.arange(1, 21, dtype=np.float32)
+        E = np.ones(20, dtype=bool)
+        poor_risk = T.copy()
+        strong_risk = -T
+        bandit = ContextualBandit(
+            rp_minimum_gain=0.01,
+            rp_bootstrap_samples=100,
+            random_state=9,
+            device="cpu",
+        )
+
+        justified_cost, info = bandit._compute_rp_cost(
+            poor_risk, poor_risk, strong_risk, E, T
+        )
+        unsupported_cost, _ = bandit._compute_rp_cost(
+            strong_risk, poor_risk, strong_risk, E, T
+        )
+
+        self.assertEqual(justified_cost, 0.0)
+        self.assertGreater(info["lower_gain_vs_rad"], 0.01)
+        self.assertGreater(unsupported_cost, 0.0)
+
 if __name__ == "__main__":
     unittest.main()

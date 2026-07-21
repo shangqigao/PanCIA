@@ -2752,6 +2752,12 @@ class ContextualBandit:
         Elastic-net mixing parameter used by TorchCoxPH
     min_expert_weight : float, default=0.01
         Minimum M-step sample weight assigned to each survival expert
+    rp_cost_weight : float, default=1.0
+        Strength of the evidence-based penalty on RP policy probability
+    rp_minimum_gain : float, default=0.01
+        Required lower-confidence-bound C-index gain for cost-free RP use
+    rp_bootstrap_samples : int, default=500
+        Paired bootstrap samples used to estimate RP performance evidence
     device : str, default='cuda'
         Device for PyTorch ('cuda' or 'cpu')
     random_state : int, default=None
@@ -2774,6 +2780,10 @@ class ContextualBandit:
                  cox_l1_ratio=0.9,
                  cox_gradient_clip=10.0,
                  min_expert_weight=0.01,
+                 rp_cost_weight=1.0,
+                 rp_minimum_gain=0.01,
+                 rp_bootstrap_samples=500,
+                 rp_confidence=0.95,
                  loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
                  exploration_weight=0.1,
                  entropy_weight=0.05,
@@ -2799,6 +2809,16 @@ class ContextualBandit:
         if not 0.0 <= min_expert_weight < 1.0 / 3.0:
             raise ValueError("min_expert_weight must be in [0, 1/3)")
         self.min_expert_weight = min_expert_weight
+        if rp_cost_weight < 0:
+            raise ValueError("rp_cost_weight must be non-negative")
+        if rp_bootstrap_samples < 0:
+            raise ValueError("rp_bootstrap_samples must be non-negative")
+        if not 0.0 < rp_confidence < 1.0:
+            raise ValueError("rp_confidence must be between 0 and 1")
+        self.rp_cost_weight = rp_cost_weight
+        self.rp_minimum_gain = rp_minimum_gain
+        self.rp_bootstrap_samples = rp_bootstrap_samples
+        self.rp_confidence = rp_confidence
         self.loss_type = loss_type
         self.exploration_weight = exploration_weight
         self.entropy_weight = entropy_weight
@@ -2885,6 +2905,66 @@ class ContextualBandit:
             self.policy_risk_stats[name] = {"mean": mean, "std": std}
             standardized.append((risk - mean) / std)
         return tuple(standardized)
+
+    @staticmethod
+    def _risk_cindex(risk, E, T):
+        return concordance_index(T, -risk, E.astype(bool))
+
+    def _compute_rp_cost(self, R, P, RP, E, T, seed_offset=0):
+        """Estimate whether RP reliably improves on both unimodal experts.
+
+        The same patient indices are used for all three experts in every
+        bootstrap replicate. RP is cost-free only when the lower confidence
+        bounds of both paired C-index gains exceed ``rp_minimum_gain``.
+        """
+        R = np.asarray(R, dtype=np.float32)
+        P = np.asarray(P, dtype=np.float32)
+        RP = np.asarray(RP, dtype=np.float32)
+        E = np.asarray(E, dtype=bool)
+        T = np.asarray(T, dtype=np.float32)
+
+        point_scores = {
+            'rad': self._risk_cindex(R, E, T),
+            'path': self._risk_cindex(P, E, T),
+            'rp': self._risk_cindex(RP, E, T),
+        }
+        point_gains = np.array([
+            point_scores['rp'] - point_scores['rad'],
+            point_scores['rp'] - point_scores['path'],
+        ])
+
+        gains = []
+        if self.rp_bootstrap_samples > 0:
+            base_seed = 0 if self.random_state is None else self.random_state
+            rng = np.random.default_rng(base_seed + seed_offset)
+            n_samples = len(T)
+            for _ in range(self.rp_bootstrap_samples):
+                idx = rng.integers(0, n_samples, size=n_samples)
+                try:
+                    c_rad = self._risk_cindex(R[idx], E[idx], T[idx])
+                    c_path = self._risk_cindex(P[idx], E[idx], T[idx])
+                    c_rp = self._risk_cindex(RP[idx], E[idx], T[idx])
+                    gains.append([c_rp - c_rad, c_rp - c_path])
+                except Exception:
+                    # Some small/censored resamples contain no comparable pair.
+                    continue
+
+        if gains:
+            lower_percentile = 100.0 * (1.0 - self.rp_confidence) / 2.0
+            lower_gains = np.percentile(np.asarray(gains), lower_percentile, axis=0)
+        else:
+            lower_gains = point_gains
+
+        rp_evidence = float(np.min(lower_gains))
+        rp_cost = max(0.0, self.rp_minimum_gain - rp_evidence)
+        return rp_cost, {
+            'cindex_rad': point_scores['rad'],
+            'cindex_path': point_scores['path'],
+            'cindex_rp': point_scores['rp'],
+            'lower_gain_vs_rad': float(lower_gains[0]),
+            'lower_gain_vs_path': float(lower_gains[1]),
+            'valid_bootstraps': len(gains),
+        }
     
     def train_survival_model(self, X, T, E, weights=None, alpha_range=None,
                              model_key='cox'):
@@ -3032,7 +3112,7 @@ class ContextualBandit:
             probs = self.policy_network(S_tensor)
             return probs.cpu().numpy()
     
-    def _train_policy_epoch(self, S, R, P, RP, E, T):
+    def _train_policy_epoch(self, S, R, P, RP, E, T, rp_cost=0.0):
         """
         Train policy network for one epoch with exploration.
         """
@@ -3059,9 +3139,11 @@ class ContextualBandit:
             probs = self.policy_network(S_batch)
             
             # Compute loss with exploration components
-            loss = self.policy_loss_fn(
+            base_loss = self.policy_loss_fn(
                 probs, R_batch, P_batch, RP_batch, E_batch, T_batch
             )
+            rp_penalty = self.rp_cost_weight * rp_cost * probs[:, 2].mean()
+            loss = base_loss + rp_penalty
             
             # Backward pass
             self.policy_optimizer.zero_grad()
@@ -3117,6 +3199,7 @@ class ContextualBandit:
         self._cox_warm_starts = {}
         self.objective_history = []
         self.cindex_history = []
+        self.rp_cost_history = []
         self.policies = []
 
         X_rad = np.ascontiguousarray(X_rad, dtype=np.float32)
@@ -3211,6 +3294,20 @@ class ContextualBandit:
             train_idx, val_idx = train_test_split(
                 indices, test_size=0.2, random_state=self.random_state
             )
+
+            rp_cost, rp_cost_info = self._compute_rp_cost(
+                self.R_curr[val_idx], self.P_curr[val_idx], self.RP_curr[val_idx],
+                E_train[val_idx], T_train[val_idx], seed_offset=iteration
+            )
+            self.rp_cost_history.append(rp_cost)
+            print(
+                f"RP evidence cost: {rp_cost:.4f} "
+                f"(C-index R={rp_cost_info['cindex_rad']:.4f}, "
+                f"P={rp_cost_info['cindex_path']:.4f}, "
+                f"RP={rp_cost_info['cindex_rp']:.4f}; "
+                f"lower gains RP-R={rp_cost_info['lower_gain_vs_rad']:.4f}, "
+                f"RP-P={rp_cost_info['lower_gain_vs_path']:.4f})"
+            )
             
             best_val_loss = float('inf')
             best_policy_state = None
@@ -3225,7 +3322,8 @@ class ContextualBandit:
                     P_policy[train_idx],
                     RP_policy[train_idx],
                     E_train[train_idx],
-                    T_train[train_idx]
+                    T_train[train_idx],
+                    rp_cost=rp_cost
                 )
                 
                 # Validation loss
@@ -3243,9 +3341,16 @@ class ContextualBandit:
                         probs_val, R_val_tensor, P_val_tensor, RP_val_tensor,
                         E_val_tensor, T_val_tensor, return_components=True
                     )
-                    val_loss = val_loss_CPs['total_loss'].item()
+                    rp_penalty_val = (
+                        self.rp_cost_weight * rp_cost * probs_val[:, 2].mean()
+                    )
+                    val_loss = (
+                        val_loss_CPs['total_loss'] + rp_penalty_val
+                    ).item()
                     exploitation_loss = val_loss_CPs['cox_loss'].item()
-                    exploration_loss = val_loss - exploitation_loss
+                    exploration_loss = (
+                        val_loss_CPs['total_loss'].item() - exploitation_loss
+                    )
                 
                 # Early stopping
                 if val_loss < best_val_loss:
@@ -3261,7 +3366,8 @@ class ContextualBandit:
                     print(f"  Epoch {epoch+1}/{self.policy_epochs}: "
                           f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, "
                           f"Exploitation Loss = {exploitation_loss:.4f}, "
-                          f"Exploration Loss = {exploration_loss:.4f}")
+                          f"Exploration Loss = {exploration_loss:.4f}, "
+                          f"RP Penalty = {rp_penalty_val.item():.4f}")
                 
                 if patience_counter >= patience:
                     print(f"  Early stopping at epoch {epoch+1}")
@@ -3294,9 +3400,10 @@ class ContextualBandit:
                 T_tensor = torch.FloatTensor(T_train).to(self.device)
                 
                 probs = self.policy_network(S_tensor)
-                objective = -self.policy_loss_fn(
+                objective_loss = self.policy_loss_fn(
                     probs, R_tensor, P_tensor, RP_tensor, E_tensor, T_tensor
-                ).item()
+                ) + self.rp_cost_weight * rp_cost * probs[:, 2].mean()
+                objective = -objective_loss.item()
                 self.objective_history.append(objective)
                 print(f"Policy objective (Weighted Cox PL): {objective:.4f}")
             
