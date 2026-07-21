@@ -2514,6 +2514,210 @@ class EnsembleWeightedCoxPLLoss(nn.Module):
         return total_loss
 
 
+class TorchCoxPH:
+    """Linear Cox proportional-hazards model optimized with PyTorch.
+
+    The implementation supports case weights, Breslow handling of tied event
+    times, elastic-net regularization, warm starts, and CUDA execution.  It is
+    intentionally prediction-focused: unlike ``lifelines.CoxPHFitter``, it does
+    not calculate standard errors or a robust covariance matrix.
+    """
+
+    def __init__(self, penalizer=0.0, l1_ratio=0.0, learning_rate=0.05,
+                 max_epochs=500, tolerance=1e-6, patience=20,
+                 gradient_clip=10.0, device='cpu'):
+        if penalizer < 0:
+            raise ValueError("penalizer must be non-negative")
+        if not 0.0 <= l1_ratio <= 1.0:
+            raise ValueError("l1_ratio must be between 0 and 1")
+
+        self.penalizer = float(penalizer)
+        self.l1_ratio = float(l1_ratio)
+        self.learning_rate = float(learning_rate)
+        self.max_epochs = int(max_epochs)
+        self.tolerance = float(tolerance)
+        self.patience = int(patience)
+        self.gradient_clip = float(gradient_clip)
+        self.device = torch.device(
+            device if str(device).startswith('cuda') and torch.cuda.is_available()
+            else 'cpu'
+        )
+        self.coef_ = None
+        self.n_features_in_ = None
+        self.n_iter_ = 0
+        self.loss_ = None
+
+    @staticmethod
+    def _as_tensor(values, device, dtype=torch.float32):
+        if torch.is_tensor(values):
+            return values.detach().to(device=device, dtype=dtype)
+        return torch.as_tensor(values, device=device, dtype=dtype)
+
+    @staticmethod
+    def _validate_inputs(X, T, E, weights):
+        if X.ndim != 2:
+            raise ValueError("X must be a two-dimensional feature matrix")
+        n_samples = X.shape[0]
+        if T.ndim != 1 or E.ndim != 1 or weights.ndim != 1:
+            raise ValueError("T, E, and weights must be one-dimensional")
+        if not (len(T) == len(E) == len(weights) == n_samples):
+            raise ValueError("X, T, E, and weights must contain the same samples")
+        if n_samples < 2:
+            raise ValueError("At least two samples are required")
+        if not torch.isfinite(X).all() or not torch.isfinite(T).all():
+            raise ValueError("X and T must contain only finite values")
+        if not torch.isfinite(weights).all() or torch.any(weights < 0):
+            raise ValueError("weights must be finite and non-negative")
+        if torch.sum(weights * E) <= 0:
+            raise ValueError("At least one event must have a positive weight")
+
+    @staticmethod
+    def _prepare_risk_sets(X, T, E, weights):
+        order = torch.argsort(T, descending=True, stable=True)
+        X_sorted = X[order]
+        T_sorted = T[order]
+        E_sorted = E[order]
+        W_sorted = weights[order]
+
+        _, group_ids, group_counts = torch.unique_consecutive(
+            T_sorted, return_inverse=True, return_counts=True
+        )
+        group_end = torch.cumsum(group_counts, dim=0) - 1
+        return X_sorted, E_sorted, W_sorted, group_ids, group_end
+
+    @staticmethod
+    def _breslow_loss_from_risk_sets(beta, risk_sets):
+        """Return mean weighted negative partial log-likelihood."""
+        X_sorted, E_sorted, W_sorted, group_ids, group_end = risk_sets
+
+        eta = X_sorted.mv(beta)
+        log_weights = torch.where(
+            W_sorted > 0,
+            torch.log(W_sorted),
+            torch.full_like(W_sorted, -torch.inf),
+        )
+        log_risk_sums = torch.logcumsumexp(eta + log_weights, dim=0)
+
+        n_groups = group_end.numel()
+        event_weights = W_sorted * E_sorted
+
+        weighted_event_eta = torch.zeros(
+            n_groups, device=X_sorted.device, dtype=X_sorted.dtype
+        ).scatter_add_(0, group_ids, event_weights * eta)
+        event_weight_sum = torch.zeros(
+            n_groups, device=X_sorted.device, dtype=X_sorted.dtype
+        ).scatter_add_(0, group_ids, event_weights)
+
+        group_log_risk = log_risk_sums[group_end]
+        log_likelihood = weighted_event_eta - event_weight_sum * group_log_risk
+        total_event_weight = event_weight_sum.sum()
+        return -log_likelihood.sum() / total_event_weight
+
+    @classmethod
+    def _breslow_negative_log_likelihood(cls, beta, X, T, E, weights):
+        """Convenience entry point that prepares and evaluates risk sets."""
+        risk_sets = cls._prepare_risk_sets(X, T, E, weights)
+        return cls._breslow_loss_from_risk_sets(beta, risk_sets)
+
+    def _objective(self, beta, risk_sets, include_l1=True):
+        loss = self._breslow_loss_from_risk_sets(beta, risk_sets)
+        l2_strength = self.penalizer * (1.0 - self.l1_ratio)
+        if l2_strength:
+            loss = loss + 0.5 * l2_strength * torch.sum(beta.square())
+        if include_l1:
+            l1_strength = self.penalizer * self.l1_ratio
+            if l1_strength:
+                loss = loss + l1_strength * torch.sum(torch.abs(beta))
+        return loss
+
+    def fit(self, X, T, E, weights=None, initial_coef=None):
+        X_tensor = self._as_tensor(X, self.device)
+        T_tensor = self._as_tensor(T, self.device).reshape(-1)
+        E_tensor = self._as_tensor(E, self.device).reshape(-1)
+        if weights is None:
+            W_tensor = torch.ones_like(T_tensor)
+        else:
+            W_tensor = self._as_tensor(weights, self.device).reshape(-1)
+
+        self._validate_inputs(X_tensor, T_tensor, E_tensor, W_tensor)
+        self.n_features_in_ = X_tensor.shape[1]
+        risk_sets = self._prepare_risk_sets(
+            X_tensor, T_tensor, E_tensor, W_tensor
+        )
+
+        if initial_coef is None:
+            beta = torch.zeros(
+                self.n_features_in_, device=self.device, dtype=X_tensor.dtype
+            )
+        else:
+            beta = self._as_tensor(initial_coef, self.device).reshape(-1).clone()
+            if beta.numel() != self.n_features_in_:
+                raise ValueError("initial_coef has the wrong number of features")
+        beta.requires_grad_(True)
+
+        optimizer = optim.Adam([beta], lr=self.learning_rate)
+        best_coef = beta.detach().clone()
+        best_loss = float('inf')
+        previous_loss = None
+        stale_epochs = 0
+        l1_strength = self.penalizer * self.l1_ratio
+
+        for epoch in range(self.max_epochs):
+            optimizer.zero_grad()
+            smooth_loss = self._objective(
+                beta, risk_sets, include_l1=False
+            )
+            if not torch.isfinite(smooth_loss):
+                raise FloatingPointError("Non-finite TorchCoxPH loss")
+            smooth_loss.backward()
+            torch.nn.utils.clip_grad_norm_([beta], self.gradient_clip)
+            optimizer.step()
+
+            # Proximal step for the non-smooth L1 component.
+            if l1_strength:
+                threshold = self.learning_rate * l1_strength
+                with torch.no_grad():
+                    beta.copy_(
+                        torch.sign(beta) * torch.clamp(torch.abs(beta) - threshold, min=0)
+                    )
+
+            with torch.no_grad():
+                current_loss = self._objective(
+                    beta, risk_sets
+                ).item()
+            if not np.isfinite(current_loss):
+                raise FloatingPointError("Non-finite TorchCoxPH objective")
+
+            if current_loss < best_loss:
+                best_loss = current_loss
+                best_coef = beta.detach().clone()
+
+            if previous_loss is not None:
+                relative_change = abs(previous_loss - current_loss) / max(
+                    1.0, abs(previous_loss)
+                )
+                stale_epochs = stale_epochs + 1 if relative_change < self.tolerance else 0
+                if stale_epochs >= self.patience:
+                    self.n_iter_ = epoch + 1
+                    break
+            previous_loss = current_loss
+            self.n_iter_ = epoch + 1
+
+        self.coef_ = best_coef.detach().cpu().numpy().copy()
+        self.loss_ = best_loss
+        return self
+
+    def predict_log_partial_hazard(self, X):
+        if self.coef_ is None:
+            raise RuntimeError("TorchCoxPH must be fitted before prediction")
+        X_tensor = self._as_tensor(X, self.device)
+        if X_tensor.ndim != 2 or X_tensor.shape[1] != self.n_features_in_:
+            raise ValueError("X has an incompatible feature dimension")
+        coef = self._as_tensor(self.coef_, self.device)
+        with torch.no_grad():
+            return X_tensor.mv(coef).cpu().numpy()
+
+
 class ContextualBandit:
     """
     Contextual Bandit with PyTorch policy network.
@@ -2525,7 +2729,7 @@ class ContextualBandit:
     Parameters
     ----------
     alpha_range : list, default=[0.001, 0.01, 0.1, 1.0, 10.0]
-        Regularization parameter range for Cox models (L2 penalty)
+        Elastic-net penalty range for Cox models
     max_iterations : int, default=10
         Maximum number of EM iterations
     convergence_threshold : float, default=0.001
@@ -2540,6 +2744,16 @@ class ContextualBandit:
         Number of epochs for policy training per EM iteration
     cv_folds : int, default=5
         Number of cross-validation folds for Cox model selection
+    cox_learning_rate : float, default=0.05
+        Learning rate for TorchCoxPH optimization
+    cox_max_epochs : int, default=500
+        Maximum optimizer steps for each TorchCoxPH fit
+    cox_tolerance : float, default=1e-6
+        Relative objective-change threshold for Cox early stopping
+    cox_patience : int, default=20
+        Consecutive low-change steps before stopping Cox optimization
+    cox_l1_ratio : float, default=0.9
+        Elastic-net mixing parameter used by TorchCoxPH
     device : str, default='cuda'
         Device for PyTorch ('cuda' or 'cpu')
     random_state : int, default=None
@@ -2555,6 +2769,12 @@ class ContextualBandit:
                  batch_size=32,
                  policy_epochs=50,
                  cv_folds=5,
+                 cox_learning_rate=0.05,
+                 cox_max_epochs=500,
+                 cox_tolerance=1e-6,
+                 cox_patience=20,
+                 cox_l1_ratio=0.9,
+                 cox_gradient_clip=10.0,
                  loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
                  exploration_weight=0.1,
                  entropy_weight=0.05,
@@ -2571,6 +2791,12 @@ class ContextualBandit:
         self.batch_size = batch_size
         self.policy_epochs = policy_epochs
         self.cv_folds = cv_folds
+        self.cox_learning_rate = cox_learning_rate
+        self.cox_max_epochs = cox_max_epochs
+        self.cox_tolerance = cox_tolerance
+        self.cox_patience = cox_patience
+        self.cox_l1_ratio = cox_l1_ratio
+        self.cox_gradient_clip = cox_gradient_clip
         self.loss_type = loss_type
         self.exploration_weight = exploration_weight
         self.entropy_weight = entropy_weight
@@ -2578,6 +2804,7 @@ class ContextualBandit:
         self.temperature = temperature
         self.device = device if torch.cuda.is_available() else 'cpu'
         self.random_state = random_state
+        self._cox_warm_starts = {}
         
     def _init_loss_function(self):
         """Initialize the appropriate loss function."""
@@ -2644,39 +2871,8 @@ class ContextualBandit:
         
         return np.column_stack([R_norm, P_norm, delta_norm])
     
-    def _prepare_dataframe(self, X, T, E, weights=None):
-        """
-        Prepare DataFrame for CoxPHFitter.
-        
-        Parameters
-        ----------
-        X : ndarray
-            Feature matrix
-        T : ndarray
-            Survival times
-        E : ndarray
-            Event indicators
-        weights : ndarray, optional
-            Sample weights
-            
-        Returns
-        -------
-        df : pd.DataFrame
-            DataFrame with features, duration, event, and optional weights
-        """
-        n_features = X.shape[1]
-        feature_names = [f'f{i}' for i in range(n_features)]
-        
-        df = pd.DataFrame(X, columns=feature_names)
-        df['duration'] = T
-        df['event'] = E.astype(int)
-        
-        if weights is not None:
-            df['weights'] = weights
-        
-        return df, feature_names
-    
-    def train_survival_model(self, X, T, E, weights=None, alpha_range=None):
+    def train_survival_model(self, X, T, E, weights=None, alpha_range=None,
+                             model_key='cox'):
         """
         Train a CoxPH model with cross-validation for regularization parameter selection.
         
@@ -2695,34 +2891,43 @@ class ContextualBandit:
             
         Returns
         -------
-        model : CoxPHFitter
-            Fitted CoxPH model with best regularization parameter
+        model : TorchCoxPH
+            Fitted GPU-native CoxPH model with the best regularization parameter
         best_alpha : float
             Best regularization parameter
         """
         if alpha_range is None:
             alpha_range = self.alpha_range
-        
-        # Prepare DataFrame
-        df, feature_names = self._prepare_dataframe(X, T, E, weights)
-        
-        has_weights = weights is not None
-        weights_col = 'weights' if has_weights else None
+
+        X = np.asarray(X, dtype=np.float32)
+        T = np.asarray(T, dtype=np.float32).reshape(-1)
+        E = np.asarray(E, dtype=np.float32).reshape(-1)
+        if weights is not None:
+            weights = np.asarray(weights, dtype=np.float32).reshape(-1)
         
         # Cross-validation to select best alpha
         best_alpha = None
         best_concordance = -1
-        best_model = None
-        
-        # Split data for CV
-        n_samples = len(df)
+        n_samples = len(T)
         indices = np.arange(n_samples)
+
+        def make_model(alpha):
+            return TorchCoxPH(
+                penalizer=alpha,
+                l1_ratio=self.cox_l1_ratio,
+                learning_rate=self.cox_learning_rate,
+                max_epochs=self.cox_max_epochs,
+                tolerance=self.cox_tolerance,
+                patience=self.cox_patience,
+                gradient_clip=self.cox_gradient_clip,
+                device=self.device,
+            )
         
         for alpha in alpha_range:
             try:
                 cv_scores = []
                 
-                # Manual CV since CoxPHFitter doesn't have built-in CV
+                # Preserve the existing contiguous-fold CV construction.
                 for fold in range(self.cv_folds):
                     # Split indices
                     fold_size = n_samples // self.cv_folds
@@ -2731,30 +2936,34 @@ class ContextualBandit:
                     
                     val_idx = indices[start:end]
                     train_idx = np.concatenate([indices[:start], indices[end:]])
-                    
-                    # Train on fold
-                    df_train = df.iloc[train_idx]
-                    model = CoxPHFitter(penalizer=alpha, l1_ratio=0.9)
-                    
-                    if has_weights:
-                        model.fit(df_train, duration_col='duration', event_col='event',
-                                 weights_col='weights', robust=True)
-                    else:
-                        model.fit(df_train, duration_col='duration', event_col='event', robust=True)
+
+                    if len(val_idx) == 0 or len(train_idx) < 2:
+                        continue
+
+                    warm_key = (model_key, float(alpha), 'fold', fold)
+                    model = make_model(alpha)
+                    fold_weights = None if weights is None else weights[train_idx]
+                    model.fit(
+                        X[train_idx], T[train_idx], E[train_idx],
+                        weights=fold_weights,
+                        initial_coef=self._cox_warm_starts.get(warm_key),
+                    )
+                    self._cox_warm_starts[warm_key] = model.coef_.copy()
                     
                     # Validate
-                    df_val = df.iloc[val_idx]
                     try:
-                        risk_scores = model.predict_log_partial_hazard(df_val).values
+                        risk_scores = model.predict_log_partial_hazard(X[val_idx])
                         c_index = concordance_index(
-                            df_val['duration'].values,
+                            T[val_idx],
                             -risk_scores,
-                            df_val['event'].values.astype(bool)
+                            E[val_idx].astype(bool)
                         )
                         cv_scores.append(c_index)
-                    except:
+                    except Exception:
                         cv_scores.append(0.0)
-                
+
+                if not cv_scores:
+                    continue
                 mean_cv_score = np.mean(cv_scores)
                 
                 if mean_cv_score > best_concordance:
@@ -2769,27 +2978,24 @@ class ContextualBandit:
         if best_alpha is None:
             print(f"  All alphas failed, fitting with default alpha=0.01")
             best_alpha = 0.01
-        
-        model = CoxPHFitter(penalizer=best_alpha, l1_ratio=0.9)
-        if has_weights:
-            model.fit(df, duration_col='duration', event_col='event',
-                     weights_col='weights', robust=True)
-        else:
-            model.fit(df, duration_col='duration', event_col='event', robust=True)
+
+        full_key = (model_key, float(best_alpha), 'full')
+        model = make_model(best_alpha)
+        model.fit(
+            X, T, E, weights=weights,
+            initial_coef=self._cox_warm_starts.get(full_key),
+        )
+        self._cox_warm_starts[full_key] = model.coef_.copy()
         
         return model, best_alpha
     
     def _predict_risk(self, model, X):
         """
-        Predict risk scores using CoxPHFitter.
+        Predict log-risk scores using TorchCoxPH.
         
         Returns log partial hazard (higher = higher risk).
         """
-        n_features = X.shape[1]
-        feature_names = [f'f{i}' for i in range(n_features)]
-        df = pd.DataFrame(X, columns=feature_names)
-        risk_scores = model.predict_log_partial_hazard(df).values
-        return risk_scores
+        return model.predict_log_partial_hazard(X)
     
     def _get_policy_probs(self, S):
         """
@@ -2892,6 +3098,15 @@ class ContextualBandit:
         self : ContextualBandit
             Fitted instance
         """
+        # Reset fit-specific state while retaining warm starts within this fit.
+        self._cox_warm_starts = {}
+        self.objective_history = []
+        self.cindex_history = []
+        self.policies = []
+
+        X_rad = np.asarray(X_rad, dtype=np.float32)
+        X_path = np.asarray(X_path, dtype=np.float32)
+
         # Extract survival data
         if isinstance(y, pd.DataFrame):
             T_train = y["duration"].values
@@ -2909,20 +3124,23 @@ class ContextualBandit:
         print("Initializing global Cox models...")
         print(f"Training Radiomic model...")
         self.cox_rad, _ = self.train_survival_model(
-            X_rad, T_train, E_train, alpha_range=self.alpha_range
+            X_rad, T_train, E_train, alpha_range=self.alpha_range,
+            model_key='radiomics'
         )
         R_train = self._predict_risk(self.cox_rad, X_rad)
         
         print(f"Training Pathomic model...")
         self.cox_path, _ = self.train_survival_model(
-            X_path, T_train, E_train, alpha_range=self.alpha_range
+            X_path, T_train, E_train, alpha_range=self.alpha_range,
+            model_key='pathomics'
         )
         P_train = self._predict_risk(self.cox_path, X_path)
         
         print(f"Training Radiopathomics model...")
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         self.cox_rp, _ = self.train_survival_model(
-            X_rp, T_train, E_train, alpha_range=self.alpha_range
+            X_rp, T_train, E_train, alpha_range=self.alpha_range,
+            model_key='radiopathomics'
         )
         RP_train = self._predict_risk(self.cox_rp, X_rp)
         
@@ -3061,7 +3279,7 @@ class ContextualBandit:
             print(f"  Weighted Radiomic model...")
             self.cox_rad, _ = self.train_survival_model(
                 X_rad, T_train, E_train, weights=self.w_rad,
-                alpha_range=self.alpha_range
+                alpha_range=self.alpha_range, model_key='radiomics'
             )
             R_new = self._predict_risk(self.cox_rad, X_rad)
             
@@ -3069,7 +3287,7 @@ class ContextualBandit:
             print(f"  Weighted Pathomic model...")
             self.cox_path, _ = self.train_survival_model(
                 X_path, T_train, E_train, weights=self.w_path,
-                alpha_range=self.alpha_range
+                alpha_range=self.alpha_range, model_key='pathomics'
             )
             P_new = self._predict_risk(self.cox_path, X_path)
             
@@ -3077,7 +3295,7 @@ class ContextualBandit:
             print(f"  Weighted Fusion (RP) model...")
             self.cox_rp, _ = self.train_survival_model(
                 X_rp, T_train, E_train, weights=self.w_rp,
-                alpha_range=self.alpha_range
+                alpha_range=self.alpha_range, model_key='radiopathomics'
             )
             RP_new = self._predict_risk(self.cox_rp, X_rp)
             
