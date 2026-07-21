@@ -6,6 +6,8 @@ import unittest
 
 import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from lifelines.utils import concordance_index
 
@@ -24,12 +26,15 @@ def _load_cox_classes():
         for node in tree.body
         if isinstance(node, ast.ClassDef)
         and node.name in {
-            "TorchCoxPH", "ContextualBandit", "ContextualBanditPipeline"
+            "PolicyNetwork", "WeightedCoxPLLoss", "TorchCoxPH",
+            "ContextualBandit", "ContextualBanditPipeline"
         }
     ]
     namespace = {
         "np": np,
         "torch": torch,
+        "nn": nn,
+        "F": F,
         "optim": optim,
         "concordance_index": concordance_index,
     }
@@ -71,6 +76,55 @@ class TorchCoxPHTests(unittest.TestCase):
 
         np.testing.assert_array_equal(risk, np.array([0.4, -0.2]))
         np.testing.assert_array_equal(pipeline.actions_, np.array([1, 2]))
+
+    def test_straight_through_gumbel_is_one_hot_and_has_gradients(self):
+        torch.manual_seed(3)
+        bandit = ContextualBandit(
+            hard_policy=True,
+            gumbel_temperature=1.0,
+            gumbel_anneal_rate=0.9,
+            loss_type="weighted",
+            device="cpu",
+        )
+        bandit._init_policy_network()
+        states = torch.randn(12, 3)
+        actions, soft_probs = bandit._policy_outputs(states, stochastic=True)
+
+        torch.testing.assert_close(actions.sum(dim=1), torch.ones(12))
+        self.assertTrue(torch.all((actions == 0) | (actions == 1)).item())
+        loss = (actions * torch.tensor([0.0, 1.0, 2.0])).sum()
+        loss.backward()
+        gradients = [
+            parameter.grad for parameter in bandit.policy_network.parameters()
+            if parameter.grad is not None
+        ]
+        self.assertTrue(gradients)
+        self.assertTrue(all(torch.isfinite(gradient).all() for gradient in gradients))
+        torch.testing.assert_close(soft_probs.sum(dim=1), torch.ones(12))
+
+        initial_temperature = bandit.gumbel_temperature
+        risk = torch.randn(12)
+        bandit._train_policy_epoch(
+            states, risk, -risk, 0.5 * risk,
+            torch.ones(12), torch.arange(12, 0, -1, dtype=torch.float32),
+        )
+        self.assertAlmostEqual(
+            bandit.gumbel_temperature,
+            initial_temperature * bandit.gumbel_anneal_rate,
+        )
+
+    def test_deterministic_hard_policy_matches_soft_argmax(self):
+        bandit = ContextualBandit(
+            hard_policy=True, loss_type="weighted", device="cpu"
+        )
+        bandit._init_policy_network()
+        states = np.random.default_rng(4).normal(size=(10, 3)).astype(np.float32)
+
+        soft = bandit._get_policy_probs(states, hard=False)
+        hard = bandit._get_policy_probs(states, hard=True)
+
+        np.testing.assert_array_equal(np.argmax(hard, axis=1), np.argmax(soft, axis=1))
+        np.testing.assert_allclose(hard.sum(axis=1), 1.0)
 
     def test_weighted_breslow_loss_with_ties_matches_manual_value(self):
         X = torch.tensor([[1.0], [2.0], [3.0]])
