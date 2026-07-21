@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 
 
-def _load_weighted_cox_loss():
+def _load_policy_cox_losses():
     source_path = (
         Path(__file__).parents[1]
         / "analysis"
@@ -16,20 +16,21 @@ def _load_weighted_cox_loss():
         / "m_survival_analysis.py"
     )
     tree = ast.parse(source_path.read_text())
-    class_node = next(
+    class_nodes = [
         node
         for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "WeightedCoxPLLoss"
-    )
+        if isinstance(node, ast.ClassDef)
+        and node.name in {"WeightedCoxPLLoss", "AdaptiveWeightedCoxPLLoss"}
+    ]
     namespace = {"torch": torch, "nn": nn}
     exec(
-        compile(ast.Module(body=[class_node], type_ignores=[]), str(source_path), "exec"),
+        compile(ast.Module(body=class_nodes, type_ignores=[]), str(source_path), "exec"),
         namespace,
     )
-    return namespace["WeightedCoxPLLoss"]
+    return namespace["WeightedCoxPLLoss"], namespace["AdaptiveWeightedCoxPLLoss"]
 
 
-WeightedCoxPLLoss = _load_weighted_cox_loss()
+WeightedCoxPLLoss, AdaptiveWeightedCoxPLLoss = _load_policy_cox_losses()
 
 
 class PolicyCoxLossTests(unittest.TestCase):
@@ -56,6 +57,19 @@ class PolicyCoxLossTests(unittest.TestCase):
         self.assertAlmostEqual(
             original["cox_loss"].item(), shifted["cox_loss"].item(), places=5
         )
+
+    def test_adaptive_forward_does_not_mutate_exploration_schedule(self):
+        loss_fn = AdaptiveWeightedCoxPLLoss(initial_exploration_weight=0.2)
+        probs = torch.full((4, 3), 1.0 / 3.0)
+        risk = torch.tensor([0.2, -0.1, 0.5, 0.0])
+        events = torch.tensor([1.0, 0.0, 1.0, 1.0])
+        times = torch.tensor([4.0, 3.0, 2.0, 1.0])
+
+        loss_fn(probs, risk, risk, risk, events, times)
+
+        self.assertEqual(loss_fn.exploration_weight, 0.2)
+        self.assertEqual(loss_fn.step_count, 0)
+        self.assertEqual(loss_fn.loss_history, [])
 
 
 if __name__ == "__main__":

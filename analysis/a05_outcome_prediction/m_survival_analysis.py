@@ -2383,9 +2383,6 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         
         total_loss = cox_loss + entropy_bonus + diversity_bonus + uncertainty_bonus
         
-        # Update exploration weight adaptively
-        self.update_exploration_weight(total_loss)
-        
         if return_components:
             return {
                 'total_loss': total_loss,
@@ -2735,7 +2732,7 @@ class ContextualBandit:
     learning_rate : float, default=0.01
         Learning rate for policy network
     batch_size : int, default=32
-        Batch size for policy training
+        Retained for compatibility; policy Cox training uses full risk sets
     policy_epochs : int, default=50
         Number of epochs for policy training per EM iteration
     cv_folds : int, default=5
@@ -2765,7 +2762,7 @@ class ContextualBandit:
     """
     
     def __init__(self, 
-                 alpha_range=[0.001, 0.01, 0.1, 1.0, 10.0],
+                 alpha_range=None,
                  max_iterations=10,
                  convergence_threshold=0.001,
                  hidden_dim=16,
@@ -2792,7 +2789,10 @@ class ContextualBandit:
                  device='cuda',
                  random_state=None):
         
-        self.alpha_range = alpha_range
+        self.alpha_range = (
+            [0.001, 0.01, 0.1, 1.0, 10.0]
+            if alpha_range is None else list(alpha_range)
+        )
         self.max_iterations = max_iterations
         self.convergence_threshold = convergence_threshold
         self.hidden_dim = hidden_dim
@@ -2893,24 +2893,41 @@ class ContextualBandit:
         
         return np.column_stack([R_norm, P_norm, delta_norm])
 
-    def _standardize_policy_risks(self, R, P, RP):
-        """Put expert log-risk scores on comparable scales for policy loss."""
+    def _standardize_policy_risks(self, R, P, RP, fit_indices=None, store=True):
+        """Calibrate expert risks using policy-training samples only."""
         standardized = []
-        self.policy_risk_stats = {}
+        stats = {}
         for name, risk in (("R", R), ("P", P), ("RP", RP)):
             risk = np.asarray(risk, dtype=np.float32)
-            mean = float(np.mean(risk))
-            std = float(np.std(risk))
+            fit_risk = risk if fit_indices is None else risk[fit_indices]
+            mean = float(np.mean(fit_risk))
+            std = float(np.std(fit_risk))
             std = max(std, 1e-6)
-            self.policy_risk_stats[name] = {"mean": mean, "std": std}
+            stats[name] = {"mean": mean, "std": std}
             standardized.append((risk - mean) / std)
+        if store:
+            self.policy_risk_stats = stats
         return tuple(standardized)
+
+    def _apply_policy_risk_stats(self, R, P, RP):
+        calibrated = []
+        for name, risk in (("R", R), ("P", P), ("RP", RP)):
+            stats = self.policy_risk_stats[name]
+            calibrated.append(
+                (np.asarray(risk, dtype=np.float32) - stats['mean']) / stats['std']
+            )
+        return tuple(calibrated)
+
+    @staticmethod
+    def _make_policy_state(R, P):
+        return np.column_stack([R, P, np.abs(R - P)]).astype(np.float32)
 
     @staticmethod
     def _risk_cindex(risk, E, T):
         return concordance_index(T, -risk, E.astype(bool))
 
-    def _compute_rp_cost(self, R, P, RP, E, T, seed_offset=0):
+    def _compute_rp_cost(self, R, P, RP, E, T, bootstrap_indices=None,
+                         seed_offset=0):
         """Estimate whether RP reliably improves on both unimodal experts.
 
         The same patient indices are used for all three experts in every
@@ -2934,12 +2951,18 @@ class ContextualBandit:
         ])
 
         gains = []
-        if self.rp_bootstrap_samples > 0:
+        if bootstrap_indices is not None:
+            bootstrap_indices = np.asarray(bootstrap_indices, dtype=np.int64)
+        elif self.rp_bootstrap_samples > 0:
             base_seed = 0 if self.random_state is None else self.random_state
             rng = np.random.default_rng(base_seed + seed_offset)
             n_samples = len(T)
-            for _ in range(self.rp_bootstrap_samples):
-                idx = rng.integers(0, n_samples, size=n_samples)
+            bootstrap_indices = rng.integers(
+                0, n_samples, size=(self.rp_bootstrap_samples, n_samples)
+            )
+
+        if bootstrap_indices is not None:
+            for idx in bootstrap_indices:
                 try:
                     c_rad = self._risk_cindex(R[idx], E[idx], T[idx])
                     c_path = self._risk_cindex(P[idx], E[idx], T[idx])
@@ -3003,6 +3026,7 @@ class ContextualBandit:
         # Cross-validation to select best alpha
         best_alpha = None
         best_concordance = -1
+        best_oof_risk = None
         n_samples = len(T)
         indices = np.arange(n_samples)
 
@@ -3021,6 +3045,7 @@ class ContextualBandit:
         for alpha in alpha_range:
             try:
                 cv_scores = []
+                oof_risk = np.full(n_samples, np.nan, dtype=np.float32)
                 
                 # Preserve the existing contiguous-fold CV construction.
                 for fold in range(self.cv_folds):
@@ -3048,6 +3073,7 @@ class ContextualBandit:
                     # Validate
                     try:
                         risk_scores = model.predict_log_partial_hazard(X[val_idx])
+                        oof_risk[val_idx] = risk_scores
                         c_index = concordance_index(
                             T[val_idx],
                             -risk_scores,
@@ -3064,6 +3090,7 @@ class ContextualBandit:
                 if mean_cv_score > best_concordance:
                     best_concordance = mean_cv_score
                     best_alpha = alpha
+                    best_oof_risk = oof_risk.copy()
                     
             except Exception as e:
                 print(f"  Alpha={alpha} failed: {e}")
@@ -3081,6 +3108,8 @@ class ContextualBandit:
             initial_coef=self._cox_warm_starts.get(full_key),
         )
         self._cox_warm_starts[full_key] = model.coef_.copy()
+        model.oof_risk_ = best_oof_risk
+        model.cv_concordance_ = best_concordance
         
         return model, best_alpha
     
@@ -3113,52 +3142,103 @@ class ContextualBandit:
             return probs.cpu().numpy()
     
     def _train_policy_epoch(self, S, R, P, RP, E, T, rp_cost=0.0):
-        """
-        Train policy network for one epoch with exploration.
-        """
-        # Convert to tensors
-        S_tensor = torch.FloatTensor(S).to(self.device)
-        R_tensor = torch.FloatTensor(R).to(self.device)
-        P_tensor = torch.FloatTensor(P).to(self.device)
-        RP_tensor = torch.FloatTensor(RP).to(self.device)
-        E_tensor = torch.FloatTensor(E).to(self.device)
-        T_tensor = torch.FloatTensor(T).to(self.device)
-        
-        # Create dataset and dataloader
-        dataset = TensorDataset(S_tensor, R_tensor, P_tensor, RP_tensor, E_tensor, T_tensor)
-        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
-        
+        """Train one full-risk-set policy epoch."""
         self.policy_network.train()
-        total_loss = 0.0
-        num_batches = 0
-        
-        for batch in dataloader:
-            S_batch, R_batch, P_batch, RP_batch, E_batch, T_batch = batch
-            
-            # Forward pass
-            probs = self.policy_network(S_batch)
-            
-            # Compute loss with exploration components
-            base_loss = self.policy_loss_fn(
-                probs, R_batch, P_batch, RP_batch, E_batch, T_batch
-            )
-            rp_penalty = self.rp_cost_weight * rp_cost * probs[:, 2].mean()
-            loss = base_loss + rp_penalty
-            
-            # Backward pass
-            self.policy_optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.policy_network.parameters(), max_norm=1.0)
-            self.policy_optimizer.step()
-            
-            total_loss += loss.item()
-            num_batches += 1
-        
-        # Update loss function parameters (annealing)
+        probs = self.policy_network(S)
+        base_loss = self.policy_loss_fn(
+            probs, R, P, RP, E, T
+        )
+        rp_penalty = self.rp_cost_weight * rp_cost * probs[:, 2].mean()
+        loss = base_loss + rp_penalty
+
+        self.policy_optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy_network.parameters(), max_norm=1.0)
+        self.policy_optimizer.step()
+
+        # Update stochastic/adaptive schedules from training only. Validation
+        # and objective reporting must be side-effect free.
+        if hasattr(self.policy_loss_fn, 'update_exploration_weight'):
+            self.policy_loss_fn.update_exploration_weight(loss.detach())
         if hasattr(self.policy_loss_fn, 'update_parameters'):
             self.policy_loss_fn.update_parameters()
-        
-        return total_loss / num_batches if num_batches > 0 else 0.0
+
+        return loss.item()
+
+    def _fit_policy_network(self, S, R, P, RP, E, T, train_idx, val_idx,
+                            rp_cost, verbose=True):
+        """Fit policy with a fixed validation set and restore one checkpoint."""
+        train_tensors = [
+            torch.as_tensor(np.ascontiguousarray(values[train_idx]),
+                            dtype=torch.float32, device=self.device)
+            for values in (S, R, P, RP, E, T)
+        ]
+        val_tensors = [
+            torch.as_tensor(np.ascontiguousarray(values[val_idx]),
+                            dtype=torch.float32, device=self.device)
+            for values in (S, R, P, RP, E, T)
+        ]
+        best_val_loss = float('inf')
+        best_checkpoint = None
+        patience_counter = 0
+        patience = 10
+
+        for epoch in range(self.policy_epochs):
+            train_loss = self._train_policy_epoch(
+                *train_tensors, rp_cost=rp_cost
+            )
+
+            self.policy_network.eval()
+            with torch.no_grad():
+                S_val, R_val, P_val, RP_val, E_val, T_val = val_tensors
+                probs_val = self.policy_network(S_val)
+                components = self.policy_loss_fn(
+                    probs_val, R_val, P_val, RP_val, E_val, T_val,
+                    return_components=True
+                )
+                rp_penalty = (
+                    self.rp_cost_weight * rp_cost * probs_val[:, 2].mean()
+                )
+                val_loss = (components['total_loss'] + rp_penalty).item()
+                exploitation_loss = components['cox_loss'].item()
+                exploration_loss = (
+                    components['total_loss'].item() - exploitation_loss
+                )
+
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_checkpoint = {
+                    'policy': {
+                        key: value.detach().cpu().clone()
+                        for key, value in self.policy_network.state_dict().items()
+                    },
+                    'optimizer': copy.deepcopy(self.policy_optimizer.state_dict()),
+                    'loss_fn': copy.deepcopy(self.policy_loss_fn),
+                }
+                patience_counter = 0
+            else:
+                patience_counter += 1
+
+            if verbose and ((epoch + 1) % 10 == 0 or epoch == 0):
+                print(
+                    f"  Epoch {epoch + 1}/{self.policy_epochs}: "
+                    f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, "
+                    f"Exploitation Loss = {exploitation_loss:.4f}, "
+                    f"Exploration Loss = {exploration_loss:.4f}, "
+                    f"RP Penalty = {rp_penalty.item():.4f}"
+                )
+
+            if patience_counter >= patience:
+                if verbose:
+                    print(f"  Early stopping at epoch {epoch + 1}")
+                break
+
+        if best_checkpoint is None:
+            raise RuntimeError("Policy training did not produce a valid checkpoint")
+        self.policy_network.load_state_dict(best_checkpoint['policy'])
+        self.policy_optimizer.load_state_dict(best_checkpoint['optimizer'])
+        self.policy_loss_fn = best_checkpoint['loss_fn']
+        return best_val_loss
     
     def _init_policy_network(self):
         """Initialize the policy network and optimizer."""
@@ -3201,6 +3281,12 @@ class ContextualBandit:
         self.cindex_history = []
         self.rp_cost_history = []
         self.policies = []
+
+        if self.random_state is not None:
+            np.random.seed(self.random_state)
+            torch.manual_seed(self.random_state)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(self.random_state)
 
         X_rad = np.ascontiguousarray(X_rad, dtype=np.float32)
         X_path = np.ascontiguousarray(X_path, dtype=np.float32)
@@ -3258,13 +3344,128 @@ class ContextualBandit:
         self.P_curr = P_train.copy()
         self.RP_curr = RP_train.copy()
         
-        # Initialize state statistics
-        delta_train = np.abs(self.R_curr - self.P_curr)
-        self.state_stats = None
-        S_train = self._normalize_state(self.R_curr, self.P_curr, delta_train)
-        
         # Initialize policy network
         self._init_policy_network()
+
+        # One fixed split supports comparable early stopping, RP evidence, and
+        # EM checkpoint selection. Expert OOF risks keep RP evidence independent
+        # of the samples used to fit each corresponding Cox fold model.
+        indices = np.arange(N_train)
+        policy_train_idx, policy_val_idx = train_test_split(
+            indices, test_size=0.2, random_state=self.random_state
+        )
+        bootstrap_seed = 0 if self.random_state is None else self.random_state
+        bootstrap_rng = np.random.default_rng(bootstrap_seed)
+        if self.rp_bootstrap_samples > 0:
+            fixed_bootstrap_indices = bootstrap_rng.integers(
+                0, N_train,
+                size=(self.rp_bootstrap_samples, N_train)
+            )
+        else:
+            fixed_bootstrap_indices = None
+
+        self.policy_train_indices_ = policy_train_idx.copy()
+        self.policy_val_indices_ = policy_val_idx.copy()
+        self.training_cindex_history = []
+        self.validation_cindex_history = []
+        best_em_checkpoint = None
+        best_em_cindex = -np.inf
+        no_improvement = 0
+        em_patience = 2
+        experts_updated_since_policy = True
+
+        def capture_checkpoint(validation_cindex):
+            return {
+                'cox_rad': copy.deepcopy(self.cox_rad),
+                'cox_path': copy.deepcopy(self.cox_path),
+                'cox_rp': copy.deepcopy(self.cox_rp),
+                'policy': {
+                    key: value.detach().cpu().clone()
+                    for key, value in self.policy_network.state_dict().items()
+                },
+                'optimizer': copy.deepcopy(self.policy_optimizer.state_dict()),
+                'loss_fn': copy.deepcopy(self.policy_loss_fn),
+                'risk_stats': copy.deepcopy(self.policy_risk_stats),
+                'w_rad': self.w_rad.copy(),
+                'w_path': self.w_path.copy(),
+                'w_rp': self.w_rp.copy(),
+                'validation_cindex': validation_cindex,
+            }
+
+        def prepare_rp_cost():
+            oof_risks = (
+                self.cox_rad.oof_risk_,
+                self.cox_path.oof_risk_,
+                self.cox_rp.oof_risk_,
+            )
+            if any(risk is None for risk in oof_risks):
+                raise RuntimeError("OOF expert risks are required for RP cost")
+            R_oof, P_oof, RP_oof = oof_risks
+            if not all(np.isfinite(risk).all() for risk in oof_risks):
+                raise RuntimeError("OOF expert risks contain non-finite values")
+            return self._compute_rp_cost(
+                R_oof, P_oof, RP_oof, E_train, T_train,
+                bootstrap_indices=fixed_bootstrap_indices
+            )
+
+        def fit_aligned_policy(verbose=True):
+            R_policy, P_policy, RP_policy = self._standardize_policy_risks(
+                self.R_curr, self.P_curr, self.RP_curr,
+                fit_indices=policy_train_idx, store=True
+            )
+            S_policy = self._make_policy_state(R_policy, P_policy)
+            rp_cost, rp_cost_info = prepare_rp_cost()
+
+            # Policy training uses current full-fit expert risks, while policy
+            # validation uses expert OOF risks to avoid outcome leakage from
+            # fitting the experts on the validation patients.
+            R_for_fit = R_policy.copy()
+            P_for_fit = P_policy.copy()
+            RP_for_fit = RP_policy.copy()
+            R_oof, P_oof, RP_oof = self._apply_policy_risk_stats(
+                self.cox_rad.oof_risk_, self.cox_path.oof_risk_,
+                self.cox_rp.oof_risk_
+            )
+            R_for_fit[policy_val_idx] = R_oof[policy_val_idx]
+            P_for_fit[policy_val_idx] = P_oof[policy_val_idx]
+            RP_for_fit[policy_val_idx] = RP_oof[policy_val_idx]
+            S_for_fit = self._make_policy_state(R_for_fit, P_for_fit)
+
+            self.rp_cost_history.append(rp_cost)
+            if verbose:
+                print(
+                    f"RP evidence cost: {rp_cost:.4f} "
+                    f"(OOF C-index R={rp_cost_info['cindex_rad']:.4f}, "
+                    f"P={rp_cost_info['cindex_path']:.4f}, "
+                    f"RP={rp_cost_info['cindex_rp']:.4f}; "
+                    f"lower gains RP-R={rp_cost_info['lower_gain_vs_rad']:.4f}, "
+                    f"RP-P={rp_cost_info['lower_gain_vs_path']:.4f})"
+                )
+            best_val_loss = self._fit_policy_network(
+                S_for_fit, R_for_fit, P_for_fit, RP_for_fit, E_train, T_train,
+                policy_train_idx, policy_val_idx, rp_cost, verbose=verbose
+            )
+            probs = self._get_policy_probs(S_policy)
+            probs_val = self._get_policy_probs(S_for_fit[policy_val_idx])
+            calibrated_val_risk = (
+                probs_val[:, 0] * R_for_fit[policy_val_idx]
+                + probs_val[:, 1] * P_for_fit[policy_val_idx]
+                + probs_val[:, 2] * RP_for_fit[policy_val_idx]
+            )
+            validation_cindex = concordance_index(
+                T_train[policy_val_idx], -calibrated_val_risk,
+                E_train[policy_val_idx].astype(bool)
+            )
+            return {
+                'S': S_policy,
+                'R': R_policy,
+                'P': P_policy,
+                'RP': RP_policy,
+                'probs': probs,
+                'rp_cost': rp_cost,
+                'val_loss': best_val_loss,
+                'val_cindex': validation_cindex,
+            }
         
         # ============================================================
         # STEP 2: EM LOOP
@@ -3274,138 +3475,39 @@ class ContextualBandit:
         
         for iteration in range(self.max_iterations):
             print(f"\n--- EM Iteration {iteration + 1} ---")
-
-            # Cox models have arbitrary log-risk scales. Standardizing each
-            # expert prevents the fusion expert from winning merely because
-            # its score variance is larger.
-            R_policy, P_policy, RP_policy = self._standardize_policy_risks(
-                self.R_curr, self.P_curr, self.RP_curr
-            )
-            
-            # ============================================================
-            # E-STEP: Train Policy Network (Direct Optimization)
-            # ============================================================
-            
             print(f"Training policy network for {self.policy_epochs} epochs...")
-            
-            # Create validation split for early stopping
-            S_train_np = S_train
-            indices = np.arange(len(S_train_np))
-            train_idx, val_idx = train_test_split(
-                indices, test_size=0.2, random_state=self.random_state
-            )
-
-            rp_cost, rp_cost_info = self._compute_rp_cost(
-                self.R_curr[val_idx], self.P_curr[val_idx], self.RP_curr[val_idx],
-                E_train[val_idx], T_train[val_idx], seed_offset=iteration
-            )
-            self.rp_cost_history.append(rp_cost)
-            print(
-                f"RP evidence cost: {rp_cost:.4f} "
-                f"(C-index R={rp_cost_info['cindex_rad']:.4f}, "
-                f"P={rp_cost_info['cindex_path']:.4f}, "
-                f"RP={rp_cost_info['cindex_rp']:.4f}; "
-                f"lower gains RP-R={rp_cost_info['lower_gain_vs_rad']:.4f}, "
-                f"RP-P={rp_cost_info['lower_gain_vs_path']:.4f})"
-            )
-            
-            best_val_loss = float('inf')
-            best_policy_state = None
-            patience_counter = 0
-            patience = 10
-            
-            for epoch in range(self.policy_epochs):
-                # Train epoch
-                train_loss = self._train_policy_epoch(
-                    S_train_np[train_idx],
-                    R_policy[train_idx],
-                    P_policy[train_idx],
-                    RP_policy[train_idx],
-                    E_train[train_idx],
-                    T_train[train_idx],
-                    rp_cost=rp_cost
-                )
-                
-                # Validation loss
-                self.policy_network.eval()
-                with torch.no_grad():
-                    S_val_tensor = torch.FloatTensor(S_train_np[val_idx]).to(self.device)
-                    R_val_tensor = torch.FloatTensor(R_policy[val_idx]).to(self.device)
-                    P_val_tensor = torch.FloatTensor(P_policy[val_idx]).to(self.device)
-                    RP_val_tensor = torch.FloatTensor(RP_policy[val_idx]).to(self.device)
-                    E_val_tensor = torch.FloatTensor(E_train[val_idx]).to(self.device)
-                    T_val_tensor = torch.FloatTensor(T_train[val_idx]).to(self.device)
-                    
-                    probs_val = self.policy_network(S_val_tensor)
-                    val_loss_CPs = self.policy_loss_fn(
-                        probs_val, R_val_tensor, P_val_tensor, RP_val_tensor,
-                        E_val_tensor, T_val_tensor, return_components=True
-                    )
-                    rp_penalty_val = (
-                        self.rp_cost_weight * rp_cost * probs_val[:, 2].mean()
-                    )
-                    val_loss = (
-                        val_loss_CPs['total_loss'] + rp_penalty_val
-                    ).item()
-                    exploitation_loss = val_loss_CPs['cox_loss'].item()
-                    exploration_loss = (
-                        val_loss_CPs['total_loss'].item() - exploitation_loss
-                    )
-                
-                # Early stopping
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    best_policy_state = {
-                        k: v.cpu().clone() for k, v in self.policy_network.state_dict().items()
-                    }
-                    patience_counter = 0
-                else:
-                    patience_counter += 1
-                
-                if (epoch + 1) % 10 == 0 or epoch == 0:
-                    print(f"  Epoch {epoch+1}/{self.policy_epochs}: "
-                          f"Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, "
-                          f"Exploitation Loss = {exploitation_loss:.4f}, "
-                          f"Exploration Loss = {exploration_loss:.4f}, "
-                          f"RP Penalty = {rp_penalty_val.item():.4f}")
-                
-                if patience_counter >= patience:
-                    print(f"  Early stopping at epoch {epoch+1}")
-                    break
-            
-            # Restore best policy
-            if best_policy_state is not None:
-                self.policy_network.load_state_dict(best_policy_state)
-            
-            # Get policy probabilities
-            self.policy_network.eval()
-            with torch.no_grad():
-                S_tensor = torch.FloatTensor(S_train).to(self.device)
-                probs = self.policy_network(S_tensor)
-                policy_probs = probs.cpu().numpy()
-            
+            aligned = fit_aligned_policy(verbose=True)
+            experts_updated_since_policy = False
+            policy_probs = aligned['probs']
             floor = self.min_expert_weight
             m_step_probs = policy_probs * (1.0 - 3.0 * floor) + floor
             self.w_rad = m_step_probs[:, 0]
             self.w_path = m_step_probs[:, 1]
             self.w_rp = m_step_probs[:, 2]
-            
-            # Compute objective for history
-            with torch.no_grad():
-                S_tensor = torch.FloatTensor(S_train).to(self.device)
-                R_tensor = torch.FloatTensor(R_policy).to(self.device)
-                P_tensor = torch.FloatTensor(P_policy).to(self.device)
-                RP_tensor = torch.FloatTensor(RP_policy).to(self.device)
-                E_tensor = torch.FloatTensor(E_train).to(self.device)
-                T_tensor = torch.FloatTensor(T_train).to(self.device)
-                
-                probs = self.policy_network(S_tensor)
-                objective_loss = self.policy_loss_fn(
-                    probs, R_tensor, P_tensor, RP_tensor, E_tensor, T_tensor
-                ) + self.rp_cost_weight * rp_cost * probs[:, 2].mean()
-                objective = -objective_loss.item()
-                self.objective_history.append(objective)
-                print(f"Policy objective (Weighted Cox PL): {objective:.4f}")
+
+            self.validation_cindex_history.append(aligned['val_cindex'])
+            self.cindex_history.append(aligned['val_cindex'])
+            self.objective_history.append(-aligned['val_loss'])
+            self.policies.append({
+                key: value.detach().cpu().clone()
+                for key, value in self.policy_network.state_dict().items()
+            })
+            self.models_rad.append(self.cox_rad)
+            self.models_path.append(self.cox_path)
+            self.models_rp.append(self.cox_rp)
+            print(f"Aligned validation C-index: {aligned['val_cindex']:.4f}")
+
+            previous_best = best_em_cindex
+            if aligned['val_cindex'] > best_em_cindex:
+                best_em_cindex = aligned['val_cindex']
+                best_em_checkpoint = capture_checkpoint(aligned['val_cindex'])
+            if aligned['val_cindex'] > previous_best + self.convergence_threshold:
+                no_improvement = 0
+            else:
+                no_improvement += 1
+            if no_improvement >= em_patience:
+                print("EM convergence reached on fixed validation C-index")
+                break
             
             # ============================================================
             # M-STEP: Train Weighted Cox Models
@@ -3444,58 +3546,69 @@ class ContextualBandit:
             self.R_curr = R_new
             self.P_curr = P_new
             self.RP_curr = RP_new
-            
-            # Update state
-            delta_train = np.abs(self.R_curr - self.P_curr)
-            S_train = self._normalize_state(self.R_curr, self.P_curr, delta_train)
+            experts_updated_since_policy = True
             
             # ============================================================
             # EVALUATE AND CHECK CONVERGENCE
             # ============================================================
             
-            # Compute weighted risk scores
-            h_weighted = (self.w_rad * self.R_curr + 
-                          self.w_path * self.P_curr + 
-                          self.w_rp * self.RP_curr)
+            R_eval, P_eval, RP_eval = self._standardize_policy_risks(
+                self.R_curr, self.P_curr, self.RP_curr,
+                fit_indices=policy_train_idx, store=False
+            )
+            h_weighted = (
+                self.w_rad * R_eval + self.w_path * P_eval + self.w_rp * RP_eval
+            )
+            training_cindex = concordance_index(T_train, -h_weighted, E_train)
+            self.training_cindex_history.append(training_cindex)
+            print(f"Training C-index after M-step: {training_cindex:.4f}")
             
-            c_index = concordance_index(T_train, -h_weighted, E_train)
-            self.cindex_history.append(c_index)
-            print(f"Training C-index (weighted): {c_index:.4f}")
-            
-            # Store models
-            self.models_rad.append(self.cox_rad)
-            self.models_path.append(self.cox_path)
-            self.models_rp.append(self.cox_rp)
-            
-            # Save policy state
-            policy_state = {k: v.cpu().clone() for k, v in self.policy_network.state_dict().items()}
-            self.policies.append(policy_state)
-            
-            # Print subgroup sizes
-            print(f"Subgroup sizes - Rad: {np.sum(self.w_rad > 0.5):.0f}, "
-                  f"Path: {np.sum(self.w_path > 0.5):.0f}, "
-                  f"RP: {np.sum(self.w_rp > 0.5):.0f}")
+            # Print mutually exclusive policy assignments. The M-step still
+            # uses the complete soft weights above.
+            expert_weights = np.column_stack([
+                self.w_rad, self.w_path, self.w_rp
+            ])
+            subgroup_counts = np.bincount(
+                np.argmax(expert_weights, axis=1), minlength=3
+            )
+            print(f"Argmax subgroup sizes - Rad: {subgroup_counts[0]}, "
+                  f"Path: {subgroup_counts[1]}, RP: {subgroup_counts[2]}")
             print(f"Mean expert weights - Rad: {self.w_rad.mean():.3f}, "
                   f"Path: {self.w_path.mean():.3f}, RP: {self.w_rp.mean():.3f}")
             
-            # Check convergence
-            if len(self.cindex_history) > 1:
-                improvement = self.cindex_history[-1] - self.cindex_history[-2]
-                if improvement < self.convergence_threshold and improvement >= 0:
-                    print(f"Convergence reached (improvement: {improvement:.4f} < {self.convergence_threshold})")
-                    break
-        
-        # Use final iteration models
-        self.cox_rad = self.models_rad[-1]
-        self.cox_path = self.models_path[-1]
-        self.cox_rp = self.models_rp[-1]
-        
-        # Restore final policy
-        if self.policies:
-            self.policy_network.load_state_dict(self.policies[-1])
-        
-        print(f"\nEM completed. Final C-index: {self.cindex_history[-1]:.4f}")
-        print(f"Total iterations: {len(self.cindex_history)}")
+
+        # A final E-step aligns the policy with experts produced by the last
+        # M-step. It is skipped when convergence stopped before another M-step.
+        if experts_updated_since_policy:
+            print("\nFinal policy calibration on the last Cox experts...")
+            aligned = fit_aligned_policy(verbose=False)
+            floor = self.min_expert_weight
+            final_m_step_probs = aligned['probs'] * (1.0 - 3.0 * floor) + floor
+            self.w_rad = final_m_step_probs[:, 0]
+            self.w_path = final_m_step_probs[:, 1]
+            self.w_rp = final_m_step_probs[:, 2]
+            self.validation_cindex_history.append(aligned['val_cindex'])
+            self.cindex_history.append(aligned['val_cindex'])
+            self.objective_history.append(-aligned['val_loss'])
+            if aligned['val_cindex'] > best_em_cindex:
+                best_em_cindex = aligned['val_cindex']
+                best_em_checkpoint = capture_checkpoint(aligned['val_cindex'])
+
+        if best_em_checkpoint is None:
+            raise RuntimeError("EM did not produce a valid synchronized checkpoint")
+        self.cox_rad = best_em_checkpoint['cox_rad']
+        self.cox_path = best_em_checkpoint['cox_path']
+        self.cox_rp = best_em_checkpoint['cox_rp']
+        self.policy_network.load_state_dict(best_em_checkpoint['policy'])
+        self.policy_optimizer.load_state_dict(best_em_checkpoint['optimizer'])
+        self.policy_loss_fn = best_em_checkpoint['loss_fn']
+        self.policy_risk_stats = best_em_checkpoint['risk_stats']
+        self.w_rad = best_em_checkpoint['w_rad']
+        self.w_path = best_em_checkpoint['w_path']
+        self.w_rp = best_em_checkpoint['w_rp']
+
+        print(f"\nEM completed. Best validation C-index: {best_em_cindex:.4f}")
+        print(f"Aligned policy evaluations: {len(self.validation_cindex_history)}")
         
         return self
     
@@ -3524,10 +3637,9 @@ class ContextualBandit:
         P = self._predict_risk(self.cox_path, X_path)
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
-        
-        # Construct state
-        delta = np.abs(R - P)
-        S = self._normalize_state(R, P, delta)
+
+        R, P, RP = self._apply_policy_risk_stats(R, P, RP)
+        S = self._make_policy_state(R, P)
         
         # Get policy probabilities
         probs = self._get_policy_probs(S)
@@ -3552,8 +3664,10 @@ class ContextualBandit:
         """
         R = self._predict_risk(self.cox_rad, X_rad)
         P = self._predict_risk(self.cox_path, X_path)
-        delta = np.abs(R - P)
-        S = self._normalize_state(R, P, delta)
+        X_rp = np.concatenate([X_rad, X_path], axis=1)
+        RP = self._predict_risk(self.cox_rp, X_rp)
+        R, P, _ = self._apply_policy_risk_stats(R, P, RP)
+        S = self._make_policy_state(R, P)
         return self._get_policy_probs(S)
     
     def get_weighted_risk(self, X_rad, X_path):
@@ -3564,9 +3678,9 @@ class ContextualBandit:
         P = self._predict_risk(self.cox_path, X_path)
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
-        
-        delta = np.abs(R - P)
-        S = self._normalize_state(R, P, delta)
+
+        R, P, RP = self._apply_policy_risk_stats(R, P, RP)
+        S = self._make_policy_state(R, P)
         probs = self._get_policy_probs(S)
         
         # Weighted risk = sum(prob * risk)
@@ -3595,7 +3709,9 @@ class ContextualBanditPipeline:
         if self.use_soft_ensemble:
             risk_scores, probs = self.bandit.get_weighted_risk(X_rad, X_path)
             self.probs_ = probs
-            self.actions_ = None
+            # Diagnostic hard assignments remain available even though risk
+            # prediction uses the complete soft probability distribution.
+            self.actions_ = np.argmax(probs, axis=1)
         else:
             risk_scores, actions, probs = self.bandit.predict_risk(X_rad, X_path)
             self.actions_ = actions
@@ -4327,7 +4443,8 @@ class SurvivalAnalyzer:
             exploration_weight=0.2,
             entropy_weight=0.05,
             temperature=1.0,
-            device='cuda'
+            device='cuda',
+            random_state=42
         )
 
         # Create pipeline
@@ -4340,9 +4457,16 @@ class SurvivalAnalyzer:
         risk_scores = pipeline.transform(X_rad_test, X_path_test)
         actions = pipeline.actions_
         probs = pipeline.probs_
+        if actions is None:
+            if probs is None:
+                raise RuntimeError("Contextual-bandit predictions returned no policy probabilities")
+            actions = np.argmax(probs, axis=1)
         
         # Raw test set predictions
-        raw_risk_scores = bandit.predict_risk(X_rad_raw, X_path_raw)[0]
+        if pipeline.use_soft_ensemble:
+            raw_risk_scores = bandit.get_weighted_risk(X_rad_raw, X_path_raw)[0]
+        else:
+            raw_risk_scores = bandit.predict_risk(X_rad_raw, X_path_raw)[0]
         
         scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
         

@@ -23,7 +23,9 @@ def _load_cox_classes():
         node
         for node in tree.body
         if isinstance(node, ast.ClassDef)
-        and node.name in {"TorchCoxPH", "ContextualBandit"}
+        and node.name in {
+            "TorchCoxPH", "ContextualBandit", "ContextualBanditPipeline"
+        }
     ]
     namespace = {
         "np": np,
@@ -36,10 +38,11 @@ def _load_cox_classes():
     return (
         namespace["TorchCoxPH"],
         namespace["ContextualBandit"],
+        namespace["ContextualBanditPipeline"],
     )
 
 
-TorchCoxPH, ContextualBandit = _load_cox_classes()
+TorchCoxPH, ContextualBandit, ContextualBanditPipeline = _load_cox_classes()
 
 
 def _synthetic_survival(seed=7, n_samples=80, n_features=6):
@@ -56,6 +59,19 @@ def _synthetic_survival(seed=7, n_samples=80, n_features=6):
 
 
 class TorchCoxPHTests(unittest.TestCase):
+    def test_soft_pipeline_exposes_argmax_actions(self):
+        class FakeBandit:
+            @staticmethod
+            def get_weighted_risk(X_rad, X_path):
+                probs = np.array([[0.2, 0.7, 0.1], [0.1, 0.3, 0.6]])
+                return np.array([0.4, -0.2]), probs
+
+        pipeline = ContextualBanditPipeline(FakeBandit(), use_soft_ensemble=True)
+        risk = pipeline.transform(np.zeros((2, 1)), np.zeros((2, 1)))
+
+        np.testing.assert_array_equal(risk, np.array([0.4, -0.2]))
+        np.testing.assert_array_equal(pipeline.actions_, np.array([1, 2]))
+
     def test_weighted_breslow_loss_with_ties_matches_manual_value(self):
         X = torch.tensor([[1.0], [2.0], [3.0]])
         T = torch.tensor([2.0, 2.0, 1.0])
@@ -172,6 +188,8 @@ class TorchCoxPHTests(unittest.TestCase):
         self.assertEqual(len(fold_keys_after_second_fit), 6)
         self.assertEqual(first.coef_.shape, second.coef_.shape)
         self.assertTrue(np.isfinite(second.predict_log_partial_hazard(X)).all())
+        self.assertEqual(second.oof_risk_.shape, (len(T),))
+        self.assertTrue(np.isfinite(second.oof_risk_).all())
 
     def test_contextual_bandit_accepts_strided_structured_array_fields(self):
         X, T, E, _ = _synthetic_survival(seed=31, n_samples=30, n_features=3)
@@ -203,6 +221,15 @@ class TorchCoxPHTests(unittest.TestCase):
         for risk in (R, P, RP):
             self.assertAlmostEqual(float(risk.mean()), 0.0, places=6)
             self.assertAlmostEqual(float(risk.std()), 1.0, places=6)
+
+        R2, P2, RP2 = bandit._apply_policy_risk_stats(
+            np.array([1.0, 2.0, 3.0]),
+            np.array([10.0, 20.0, 30.0]),
+            np.array([-5.0, 0.0, 5.0]),
+        )
+        np.testing.assert_allclose(R, R2)
+        np.testing.assert_allclose(P, P2)
+        np.testing.assert_allclose(RP, RP2)
 
     def test_rp_cost_is_zero_only_for_reliable_improvement(self):
         T = np.arange(1, 21, dtype=np.float32)
