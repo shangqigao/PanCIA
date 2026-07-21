@@ -4442,13 +4442,14 @@ class SurvivalAnalyzer:
             loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
             exploration_weight=0.2,
             entropy_weight=0.05,
+            rp_cost_weight=0.0,
             temperature=1.0,
             device='cuda',
             random_state=42
         )
 
         # Create pipeline
-        pipeline = ContextualBanditPipeline(bandit, use_soft_ensemble=True)
+        pipeline = ContextualBanditPipeline(bandit, use_soft_ensemble=False)
 
         # Fit
         pipeline.fit(X_rad_train, X_path_train, tr_y)
