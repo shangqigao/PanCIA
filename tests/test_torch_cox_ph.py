@@ -87,7 +87,7 @@ class TorchCoxPHTests(unittest.TestCase):
             device="cpu",
         )
         bandit._init_policy_network()
-        states = torch.randn(12, 9)
+        states = torch.randn(12, 4)
         actions, soft_probs = bandit._policy_outputs(states, stochastic=True)
 
         torch.testing.assert_close(actions.sum(dim=1), torch.ones(12))
@@ -118,7 +118,7 @@ class TorchCoxPHTests(unittest.TestCase):
             hard_policy=True, loss_type="weighted", device="cpu"
         )
         bandit._init_policy_network()
-        states = np.random.default_rng(4).normal(size=(10, 9)).astype(np.float32)
+        states = np.random.default_rng(4).normal(size=(10, 4)).astype(np.float32)
 
         soft = bandit._get_policy_probs(states, hard=False)
         hard = bandit._get_policy_probs(states, hard=True)
@@ -126,22 +126,20 @@ class TorchCoxPHTests(unittest.TestCase):
         np.testing.assert_array_equal(np.argmax(hard, axis=1), np.argmax(soft, axis=1))
         np.testing.assert_allclose(hard.sum(axis=1), 1.0)
 
-    def test_nine_dimensional_policy_state_has_signed_contrasts_and_ood(self):
+    def test_version_b_policy_state_contains_risks_and_signed_contrast(self):
         rng = np.random.default_rng(9)
-        X_rad = rng.normal(size=(20, 4)).astype(np.float32)
-        X_path = rng.normal(size=(20, 7)).astype(np.float32)
         bandit = ContextualBandit(device="cpu")
-        bandit._fit_policy_ood_stats(X_rad, X_path, np.arange(15))
         R = rng.normal(size=20).astype(np.float32)
         P = rng.normal(size=20).astype(np.float32)
         RP = rng.normal(size=20).astype(np.float32)
 
-        state = bandit._make_policy_state(R, P, RP, X_rad, X_path)
+        state = bandit._make_policy_state(R, P, RP)
 
-        self.assertEqual(state.shape, (20, 9))
+        self.assertEqual(state.shape, (20, 4))
+        np.testing.assert_allclose(state[:, 0], R)
+        np.testing.assert_allclose(state[:, 1], P)
+        np.testing.assert_allclose(state[:, 2], RP)
         np.testing.assert_allclose(state[:, 3], R - P)
-        np.testing.assert_allclose(state[:, 4], RP - R)
-        np.testing.assert_allclose(state[:, 5], RP - P)
         self.assertTrue(np.isfinite(state).all())
 
     def test_weighted_breslow_loss_with_ties_matches_manual_value(self):
