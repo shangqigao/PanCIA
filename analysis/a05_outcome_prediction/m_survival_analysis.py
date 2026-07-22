@@ -2778,6 +2778,16 @@ class ContextualBandit:
         Initial Gumbel-Softmax temperature
     policy_horizon_days : float, default=1826.25
         Common survival-calibration horizon (five years for day-based outcomes)
+    m_step_momentum : float, default=0.3
+        Fraction of newly proposed policy weights used in each M-step
+    min_expert_ess : float, default=50
+        Absolute lower bound for each expert's effective sample size
+    min_expert_ess_fraction : float, default=0.2
+        Dataset-relative lower bound for each expert's effective sample size
+    expert_cindex_tolerance : float, default=0.01
+        Maximum accepted OOF C-index loss relative to the previous expert
+    expert_anchor_tolerance : float, default=0.03
+        Maximum accepted OOF C-index loss relative to the frozen anchor
     device : str, default='cuda'
         Device for PyTorch ('cuda' or 'cpu')
     random_state : int, default=None
@@ -2809,6 +2819,11 @@ class ContextualBandit:
                  gumbel_min_temperature=0.1,
                  gumbel_anneal_rate=0.95,
                  policy_horizon_days=5 * 365.25,
+                 m_step_momentum=0.3,
+                 min_expert_ess=50,
+                 min_expert_ess_fraction=0.2,
+                 expert_cindex_tolerance=0.01,
+                 expert_anchor_tolerance=0.03,
                  loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
                  exploration_weight=0.1,
                  entropy_weight=0.05,
@@ -2859,6 +2874,17 @@ class ContextualBandit:
         if policy_horizon_days <= 0:
             raise ValueError("policy_horizon_days must be positive")
         self.policy_horizon_days = float(policy_horizon_days)
+        if not 0.0 < m_step_momentum <= 1.0:
+            raise ValueError("m_step_momentum must be in (0, 1]")
+        if min_expert_ess < 1 or not 0.0 <= min_expert_ess_fraction <= 1.0:
+            raise ValueError("Invalid minimum expert ESS configuration")
+        if expert_cindex_tolerance < 0 or expert_anchor_tolerance < 0:
+            raise ValueError("Expert C-index tolerances must be non-negative")
+        self.m_step_momentum = float(m_step_momentum)
+        self.min_expert_ess = float(min_expert_ess)
+        self.min_expert_ess_fraction = float(min_expert_ess_fraction)
+        self.expert_cindex_tolerance = float(expert_cindex_tolerance)
+        self.expert_anchor_tolerance = float(expert_anchor_tolerance)
         self.loss_type = loss_type
         self.exploration_weight = exploration_weight
         self.entropy_weight = entropy_weight
@@ -2975,9 +3001,69 @@ class ContextualBandit:
         )
 
     @staticmethod
+    def _effective_sample_size(weights):
+        weights = np.asarray(weights, dtype=np.float64)
+        denominator = np.sum(weights ** 2)
+        return 0.0 if denominator <= 0 else float(weights.sum() ** 2 / denominator)
+
+    def _stabilize_expert_weights(self, previous, proposed, minimum_ess):
+        """Momentum-smooth weights and blend toward uniform to satisfy ESS."""
+        previous = np.asarray(previous, dtype=np.float64)
+        proposed = np.asarray(proposed, dtype=np.float64)
+        smoothed = (
+            (1.0 - self.m_step_momentum) * previous
+            + self.m_step_momentum * proposed
+        )
+        if self._effective_sample_size(smoothed) >= minimum_ess:
+            return smoothed.astype(np.float32)
+
+        uniform = np.full_like(smoothed, smoothed.mean())
+        low, high = 0.0, 1.0
+        for _ in range(30):
+            blend = 0.5 * (low + high)
+            candidate = (1.0 - blend) * smoothed + blend * uniform
+            if self._effective_sample_size(candidate) >= minimum_ess:
+                high = blend
+            else:
+                low = blend
+        stabilized = (1.0 - high) * smoothed + high * uniform
+        return stabilized.astype(np.float32)
+
+    def _expert_candidate_is_acceptable(self, candidate_cindex,
+                                         previous_cindex, anchor_cindex,
+                                         calibration_is_finite=True):
+        threshold = max(
+            previous_cindex - self.expert_cindex_tolerance,
+            anchor_cindex - self.expert_anchor_tolerance,
+        )
+        accepted = bool(
+            np.isfinite(candidate_cindex)
+            and calibration_is_finite
+            and candidate_cindex >= threshold
+        )
+        return accepted, threshold
+
+    @staticmethod
     def _make_policy_state(R, P, RP):
         """Build the compact Version-B state: R, P, RP, and signed R-P."""
         return np.column_stack([R, P, RP, R - P]).astype(np.float32)
+
+    def _make_routing_state_from_features(self, X_rad, X_path):
+        """Build the stationary state from frozen global routing experts."""
+        X_rp = np.concatenate([X_rad, X_path], axis=1)
+        R = self._apply_horizon_calibrator(
+            self._predict_risk(self.routing_cox_rad, X_rad),
+            self.routing_calibrators['R'],
+        )
+        P = self._apply_horizon_calibrator(
+            self._predict_risk(self.routing_cox_path, X_path),
+            self.routing_calibrators['P'],
+        )
+        RP = self._apply_horizon_calibrator(
+            self._predict_risk(self.routing_cox_rp, X_rp),
+            self.routing_calibrators['RP'],
+        )
+        return self._make_policy_state(R, P, RP)
 
     @staticmethod
     def _risk_cindex(risk, E, T):
@@ -3459,8 +3545,64 @@ class ContextualBandit:
 
         self.policy_train_indices_ = policy_train_idx.copy()
         self.policy_val_indices_ = policy_val_idx.copy()
+
+        # Frozen global experts provide a stationary routing context. Their OOF
+        # predictions and calibration never change during EM.
+        self.routing_cox_rad = copy.deepcopy(self.cox_rad)
+        self.routing_cox_path = copy.deepcopy(self.cox_path)
+        self.routing_cox_rp = copy.deepcopy(self.cox_rp)
+        routing_raw_oof = {
+            'R': self.routing_cox_rad.oof_risk_.copy(),
+            'P': self.routing_cox_path.oof_risk_.copy(),
+            'RP': self.routing_cox_rp.oof_risk_.copy(),
+        }
+        self.routing_calibrators = {
+            name: self._fit_horizon_calibrator(
+                risk, T_train, E_train, policy_train_idx
+            )
+            for name, risk in routing_raw_oof.items()
+        }
+        routing_oof = {
+            name: self._apply_horizon_calibrator(
+                risk, self.routing_calibrators[name]
+            )
+            for name, risk in routing_raw_oof.items()
+        }
+        routing_full = {
+            'R': self._apply_horizon_calibrator(
+                R_train, self.routing_calibrators['R']
+            ),
+            'P': self._apply_horizon_calibrator(
+                P_train, self.routing_calibrators['P']
+            ),
+            'RP': self._apply_horizon_calibrator(
+                RP_train, self.routing_calibrators['RP']
+            ),
+        }
+        fixed_oof_policy_state = self._make_policy_state(
+            routing_oof['R'], routing_oof['P'], routing_oof['RP']
+        )
+        fixed_full_policy_state = self._make_policy_state(
+            routing_full['R'], routing_full['P'], routing_full['RP']
+        )
+        self.anchor_expert_cindices_ = {
+            name: self._risk_cindex(
+                risk[policy_train_idx], E_train[policy_train_idx],
+                T_train[policy_train_idx]
+            )
+            for name, risk in routing_raw_oof.items()
+        }
+        self.current_expert_cindices_ = self.anchor_expert_cindices_.copy()
+        self.w_rad = np.full(N_train, 1.0 / 3.0, dtype=np.float32)
+        self.w_path = np.full(N_train, 1.0 / 3.0, dtype=np.float32)
+        self.w_rp = np.full(N_train, 1.0 / 3.0, dtype=np.float32)
+        minimum_expert_ess = min(
+            float(N_train),
+            max(self.min_expert_ess, self.min_expert_ess_fraction * N_train),
+        )
         self.training_cindex_history = []
         self.validation_cindex_history = []
+        self.expert_diagnostics_history = []
         best_em_checkpoint = None
         best_em_cindex = -np.inf
         no_improvement = 0
@@ -3479,12 +3621,24 @@ class ContextualBandit:
                 'optimizer': copy.deepcopy(self.policy_optimizer.state_dict()),
                 'loss_fn': copy.deepcopy(self.policy_loss_fn),
                 'calibrators': copy.deepcopy(self.policy_calibrators),
+                'routing_cox_rad': copy.deepcopy(self.routing_cox_rad),
+                'routing_cox_path': copy.deepcopy(self.routing_cox_path),
+                'routing_cox_rp': copy.deepcopy(self.routing_cox_rp),
+                'routing_calibrators': copy.deepcopy(self.routing_calibrators),
+                'expert_cindices': copy.deepcopy(self.current_expert_cindices_),
                 'gumbel_temperature': self.gumbel_temperature,
                 'w_rad': self.w_rad.copy(),
                 'w_path': self.w_path.copy(),
                 'w_rp': self.w_rp.copy(),
                 'validation_cindex': validation_cindex,
             }
+
+        def experts_meet_quality_guard():
+            return all(
+                self.current_expert_cindices_[name]
+                >= self.anchor_expert_cindices_[name] - self.expert_anchor_tolerance
+                for name in ('R', 'P', 'RP')
+            )
 
         def prepare_rp_cost():
             oof_risks = (
@@ -3529,7 +3683,7 @@ class ContextualBandit:
             RP_for_fit = self._apply_horizon_calibrator(
                 raw_oof['RP'], self.policy_calibrators['RP']
             )
-            S_for_fit = self._make_policy_state(R_for_fit, P_for_fit, RP_for_fit)
+            S_for_fit = fixed_oof_policy_state
 
             R_policy = self._apply_horizon_calibrator(
                 self.R_curr, self.policy_calibrators['R']
@@ -3540,7 +3694,7 @@ class ContextualBandit:
             RP_policy = self._apply_horizon_calibrator(
                 self.RP_curr, self.policy_calibrators['RP']
             )
-            S_policy = self._make_policy_state(R_policy, P_policy, RP_policy)
+            S_policy = fixed_full_policy_state
 
             self.rp_cost_history.append(rp_cost)
             if verbose:
@@ -3589,6 +3743,58 @@ class ContextualBandit:
                 'val_loss': best_val_loss,
                 'val_cindex': validation_cindex,
             }
+
+        def fit_guarded_expert(name, X, weights, current_model, model_key):
+            """Fit an M-step candidate and reject material OOF degradation."""
+            warm_starts_before = copy.deepcopy(self._cox_warm_starts)
+            previous_cindex = self.current_expert_cindices_[name]
+            anchor_cindex = self.anchor_expert_cindices_[name]
+            try:
+                candidate, _ = self.train_survival_model(
+                    X, T_train, E_train, weights=weights,
+                    alpha_range=self.alpha_range, model_key=model_key
+                )
+                candidate_cindex = self._risk_cindex(
+                    candidate.oof_risk_[policy_train_idx],
+                    E_train[policy_train_idx], T_train[policy_train_idx]
+                )
+                candidate_calibrator = self._fit_horizon_calibrator(
+                    candidate.oof_risk_, T_train, E_train, policy_train_idx
+                )
+                calibration_is_finite = all(np.isfinite([
+                    candidate_calibrator['slope'],
+                    candidate_calibrator['baseline_cumulative_hazard'],
+                ]))
+                accepted, threshold = self._expert_candidate_is_acceptable(
+                    candidate_cindex, previous_cindex, anchor_cindex,
+                    calibration_is_finite,
+                )
+            except Exception as error:
+                candidate = None
+                candidate_cindex = float('nan')
+                accepted = False
+                _, threshold = self._expert_candidate_is_acceptable(
+                    candidate_cindex, previous_cindex, anchor_cindex, False
+                )
+                print(f"    {name} candidate failed quality evaluation: {error}")
+
+            if accepted:
+                selected_model = candidate
+                selected_cindex = candidate_cindex
+            else:
+                self._cox_warm_starts = warm_starts_before
+                selected_model = current_model
+                selected_cindex = previous_cindex
+
+            selected_risk = self._predict_risk(selected_model, X)
+            return selected_model, selected_risk, {
+                'accepted': accepted,
+                'previous_cindex': previous_cindex,
+                'candidate_cindex': candidate_cindex,
+                'selected_cindex': selected_cindex,
+                'threshold': threshold,
+                'ess': self._effective_sample_size(weights),
+            }
         
         # ============================================================
         # STEP 2: EM LOOP
@@ -3604,9 +3810,15 @@ class ContextualBandit:
             policy_probs = aligned['probs']
             floor = self.min_expert_weight
             m_step_probs = policy_probs * (1.0 - 3.0 * floor) + floor
-            self.w_rad = m_step_probs[:, 0]
-            self.w_path = m_step_probs[:, 1]
-            self.w_rp = m_step_probs[:, 2]
+            next_w_rad = self._stabilize_expert_weights(
+                self.w_rad, m_step_probs[:, 0], minimum_expert_ess
+            )
+            next_w_path = self._stabilize_expert_weights(
+                self.w_path, m_step_probs[:, 1], minimum_expert_ess
+            )
+            next_w_rp = self._stabilize_expert_weights(
+                self.w_rp, m_step_probs[:, 2], minimum_expert_ess
+            )
 
             self.validation_cindex_history.append(aligned['val_cindex'])
             self.cindex_history.append(aligned['val_cindex'])
@@ -3621,7 +3833,10 @@ class ContextualBandit:
             print(f"Aligned validation C-index: {aligned['val_cindex']:.4f}")
 
             previous_best = best_em_cindex
-            if aligned['val_cindex'] > best_em_cindex:
+            if (
+                aligned['val_cindex'] > best_em_cindex
+                and experts_meet_quality_guard()
+            ):
                 best_em_cindex = aligned['val_cindex']
                 best_em_checkpoint = capture_checkpoint(aligned['val_cindex'])
             if aligned['val_cindex'] > previous_best + self.convergence_threshold:
@@ -3631,6 +3846,18 @@ class ContextualBandit:
             if no_improvement >= em_patience:
                 print("EM convergence reached on fixed validation C-index")
                 break
+
+            # Commit proposed weights only when an M-step will actually use
+            # them. Checkpoints above therefore remain synchronized with the
+            # weights that fitted their stored expert models.
+            previous_expert_weights = {
+                'R': self.w_rad.copy(),
+                'P': self.w_path.copy(),
+                'RP': self.w_rp.copy(),
+            }
+            self.w_rad = next_w_rad
+            self.w_path = next_w_path
+            self.w_rp = next_w_rp
             
             # ============================================================
             # M-STEP: Train Weighted Cox Models
@@ -3640,27 +3867,54 @@ class ContextualBandit:
             
             # Radiomic model with weights
             print(f"  Weighted Radiomic model...")
-            self.cox_rad, _ = self.train_survival_model(
-                X_rad, T_train, E_train, weights=self.w_rad,
-                alpha_range=self.alpha_range, model_key='radiomics'
+            self.cox_rad, R_new, rad_diagnostics = fit_guarded_expert(
+                'R', X_rad, self.w_rad, self.cox_rad, 'radiomics'
             )
-            R_new = self._predict_risk(self.cox_rad, X_rad)
             
             # Pathomic model with weights
             print(f"  Weighted Pathomic model...")
-            self.cox_path, _ = self.train_survival_model(
-                X_path, T_train, E_train, weights=self.w_path,
-                alpha_range=self.alpha_range, model_key='pathomics'
+            self.cox_path, P_new, path_diagnostics = fit_guarded_expert(
+                'P', X_path, self.w_path, self.cox_path, 'pathomics'
             )
-            P_new = self._predict_risk(self.cox_path, X_path)
             
             # Fusion model with weights
             print(f"  Weighted Fusion (RP) model...")
-            self.cox_rp, _ = self.train_survival_model(
-                X_rp, T_train, E_train, weights=self.w_rp,
-                alpha_range=self.alpha_range, model_key='radiopathomics'
+            self.cox_rp, RP_new, rp_diagnostics = fit_guarded_expert(
+                'RP', X_rp, self.w_rp, self.cox_rp, 'radiopathomics'
             )
-            RP_new = self._predict_risk(self.cox_rp, X_rp)
+            iteration_diagnostics = {
+                'iteration': iteration + 1,
+                'R': rad_diagnostics,
+                'P': path_diagnostics,
+                'RP': rp_diagnostics,
+            }
+            self.expert_diagnostics_history.append(iteration_diagnostics)
+            self.current_expert_cindices_ = {
+                name: diagnostics['selected_cindex']
+                for name, diagnostics in (
+                    ('R', rad_diagnostics),
+                    ('P', path_diagnostics),
+                    ('RP', rp_diagnostics),
+                )
+            }
+            if not rad_diagnostics['accepted']:
+                self.w_rad = previous_expert_weights['R']
+            if not path_diagnostics['accepted']:
+                self.w_path = previous_expert_weights['P']
+            if not rp_diagnostics['accepted']:
+                self.w_rp = previous_expert_weights['RP']
+            for name, diagnostics in (
+                ('R', rad_diagnostics),
+                ('P', path_diagnostics),
+                ('RP', rp_diagnostics),
+            ):
+                status = "accepted" if diagnostics['accepted'] else "rejected"
+                print(
+                    f"    {name}: {status}; candidate OOF C-index="
+                    f"{diagnostics['candidate_cindex']:.4f}, "
+                    f"selected={diagnostics['selected_cindex']:.4f}, "
+                    f"ESS={diagnostics['ess']:.1f}"
+                )
             
             # ============================================================
             # UPDATE RISK SCORES
@@ -3675,6 +3929,16 @@ class ContextualBandit:
             # EVALUATE AND CHECK CONVERGENCE
             # ============================================================
             
+            self.policy_calibrators = {
+                name: self._fit_horizon_calibrator(
+                    model.oof_risk_, T_train, E_train, policy_train_idx
+                )
+                for name, model in (
+                    ('R', self.cox_rad),
+                    ('P', self.cox_path),
+                    ('RP', self.cox_rp),
+                )
+            }
             R_eval = self._apply_horizon_calibrator(
                 self.R_curr, self.policy_calibrators['R']
             )
@@ -3710,15 +3974,13 @@ class ContextualBandit:
         if experts_updated_since_policy:
             print("\nFinal policy calibration on the last Cox experts...")
             aligned = fit_aligned_policy(verbose=False)
-            floor = self.min_expert_weight
-            final_m_step_probs = aligned['probs'] * (1.0 - 3.0 * floor) + floor
-            self.w_rad = final_m_step_probs[:, 0]
-            self.w_path = final_m_step_probs[:, 1]
-            self.w_rp = final_m_step_probs[:, 2]
             self.validation_cindex_history.append(aligned['val_cindex'])
             self.cindex_history.append(aligned['val_cindex'])
             self.objective_history.append(-aligned['val_loss'])
-            if aligned['val_cindex'] > best_em_cindex:
+            if (
+                aligned['val_cindex'] > best_em_cindex
+                and experts_meet_quality_guard()
+            ):
                 best_em_cindex = aligned['val_cindex']
                 best_em_checkpoint = capture_checkpoint(aligned['val_cindex'])
 
@@ -3731,6 +3993,11 @@ class ContextualBandit:
         self.policy_optimizer.load_state_dict(best_em_checkpoint['optimizer'])
         self.policy_loss_fn = best_em_checkpoint['loss_fn']
         self.policy_calibrators = best_em_checkpoint['calibrators']
+        self.routing_cox_rad = best_em_checkpoint['routing_cox_rad']
+        self.routing_cox_path = best_em_checkpoint['routing_cox_path']
+        self.routing_cox_rp = best_em_checkpoint['routing_cox_rp']
+        self.routing_calibrators = best_em_checkpoint['routing_calibrators']
+        self.current_expert_cindices_ = best_em_checkpoint['expert_cindices']
         self.gumbel_temperature = best_em_checkpoint['gumbel_temperature']
         self.w_rad = best_em_checkpoint['w_rad']
         self.w_path = best_em_checkpoint['w_path']
@@ -3768,7 +4035,7 @@ class ContextualBandit:
         RP = self._predict_risk(self.cox_rp, X_rp)
 
         R, P, RP = self._calibrate_expert_risks(R, P, RP)
-        S = self._make_policy_state(R, P, RP)
+        S = self._make_routing_state_from_features(X_rad, X_path)
         
         # Get policy probabilities
         probs = self._get_policy_probs(S)
@@ -3798,12 +4065,7 @@ class ContextualBandit:
         """
         Get soft subgroup assignment probabilities for new patients.
         """
-        R = self._predict_risk(self.cox_rad, X_rad)
-        P = self._predict_risk(self.cox_path, X_path)
-        X_rp = np.concatenate([X_rad, X_path], axis=1)
-        RP = self._predict_risk(self.cox_rp, X_rp)
-        R, P, RP = self._calibrate_expert_risks(R, P, RP)
-        S = self._make_policy_state(R, P, RP)
+        S = self._make_routing_state_from_features(X_rad, X_path)
         return self._get_policy_probs(S)
     
     def get_weighted_risk(self, X_rad, X_path):
@@ -3816,7 +4078,7 @@ class ContextualBandit:
         RP = self._predict_risk(self.cox_rp, X_rp)
 
         R, P, RP = self._calibrate_expert_risks(R, P, RP)
-        S = self._make_policy_state(R, P, RP)
+        S = self._make_routing_state_from_features(X_rad, X_path)
         probs = self._get_policy_probs(S)
         
         # Weighted risk = sum(prob * risk)
