@@ -103,7 +103,7 @@ arrow(ax, (0.125, 0.48), (0.125, 0.425))
 box(ax, (0.025, 0.29), 0.20, 0.12, "Expert predictions",
     ("Full-fit risks", "Out-of-fold risks"), "green")
 box(ax, (0.025, 0.115), 0.20, 0.11, "Training-only references",
-    ("Expert-risk calibration",), "blue", fontsize=14)
+    ("OOF 5-year survival calibration",), "blue", fontsize=14)
 
 # Stage 2
 state = FancyBboxPatch(
@@ -115,12 +115,12 @@ ax.add_patch(state)
 ax.text(0.3625, 0.755, "Compact four-dimensional state", ha="center", va="center",
         fontsize=16, fontweight="bold", color=COLORS["ink"])
 ax.plot([0.285, 0.44], [0.715, 0.715], color="#B9ACD8", linewidth=1.8)
-ax.text(0.285, 0.665, "Expert risks", fontsize=15, fontweight="bold", color=COLORS["ink"])
-ax.text(0.285, 0.625, "R,  P,  RP", fontsize=15, color=COLORS["muted"])
+ax.text(0.285, 0.665, "Calibrated 5-year risks", fontsize=15, fontweight="bold", color=COLORS["ink"])
+ax.text(0.285, 0.625, "qᴿ,  qᴾ,  qᴿᴾ", fontsize=15, color=COLORS["muted"])
 ax.text(0.285, 0.55, "Signed contrast", fontsize=15, fontweight="bold", color=COLORS["ink"])
-ax.text(0.285, 0.50, "R − P", fontsize=15, color=COLORS["muted"])
+ax.text(0.285, 0.50, "qᴿ − qᴾ", fontsize=15, color=COLORS["muted"])
 ax.text(0.285, 0.405, "Version B", fontsize=15, fontweight="bold", color=COLORS["ink"])
-ax.text(0.285, 0.36, "R,  P,  RP,  R − P", fontsize=15, color=COLORS["muted"])
+ax.text(0.285, 0.36, "qᴿ,  qᴾ,  qᴿᴾ,  qᴿ − qᴾ", fontsize=15, color=COLORS["muted"])
 ax.text(0.3625, 0.235, "Same state at deployment", ha="center", fontsize=12,
         color=COLORS["purple_edge"], fontweight="bold")
 

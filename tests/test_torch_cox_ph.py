@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from lifelines.utils import concordance_index
+from sklearn.preprocessing import StandardScaler
 
 
 def _load_cox_classes():
@@ -36,6 +37,7 @@ def _load_cox_classes():
         "nn": nn,
         "F": F,
         "optim": optim,
+        "StandardScaler": StandardScaler,
         "concordance_index": concordance_index,
     }
     module = ast.Module(body=class_nodes, type_ignores=[])
@@ -67,15 +69,53 @@ class TorchCoxPHTests(unittest.TestCase):
     def test_soft_pipeline_exposes_argmax_actions(self):
         class FakeBandit:
             @staticmethod
+            def fit(X_rad, X_path, y):
+                return None
+
+            @staticmethod
             def get_weighted_risk(X_rad, X_path):
                 probs = np.array([[0.2, 0.7, 0.1], [0.1, 0.3, 0.6]])
                 return np.array([0.4, -0.2]), probs
 
         pipeline = ContextualBanditPipeline(FakeBandit(), use_soft_ensemble=True)
+        pipeline.fit(np.zeros((2, 1)), np.zeros((2, 1)), None)
         risk = pipeline.transform(np.zeros((2, 1)), np.zeros((2, 1)))
 
         np.testing.assert_array_equal(risk, np.array([0.4, -0.2]))
         np.testing.assert_array_equal(pipeline.actions_, np.array([1, 2]))
+
+    def test_pipeline_fits_separate_scalers_and_reuses_them_at_inference(self):
+        class RecordingBandit:
+            def fit(self, X_rad, X_path, y):
+                self.fit_rad = X_rad.copy()
+                self.fit_path = X_path.copy()
+
+            def predict_risk(self, X_rad, X_path):
+                self.test_rad = X_rad.copy()
+                self.test_path = X_path.copy()
+                n = len(X_rad)
+                return np.zeros(n), np.zeros(n, dtype=int), np.tile(
+                    [1.0, 0.0, 0.0], (n, 1)
+                )
+
+        X_rad = np.array([[0.0, 10.0], [2.0, 14.0], [4.0, 18.0]])
+        X_path = np.array([[100.0], [200.0], [300.0]])
+        bandit = RecordingBandit()
+        pipeline = ContextualBanditPipeline(bandit)
+        pipeline.fit(X_rad, X_path, None)
+
+        np.testing.assert_allclose(bandit.fit_rad.mean(axis=0), 0.0, atol=1e-7)
+        np.testing.assert_allclose(bandit.fit_path.mean(axis=0), 0.0, atol=1e-7)
+        np.testing.assert_allclose(bandit.fit_rad.std(axis=0), 1.0, atol=1e-7)
+        np.testing.assert_allclose(bandit.fit_path.std(axis=0), 1.0, atol=1e-7)
+
+        rad_mean_before = pipeline.radiomics_scaler.mean_.copy()
+        path_mean_before = pipeline.pathomics_scaler.mean_.copy()
+        pipeline.transform(np.array([[6.0, 22.0]]), np.array([[400.0]]))
+        np.testing.assert_array_equal(pipeline.radiomics_scaler.mean_, rad_mean_before)
+        np.testing.assert_array_equal(pipeline.pathomics_scaler.mean_, path_mean_before)
+        np.testing.assert_allclose(bandit.test_rad, [[2.4494898, 2.4494898]])
+        np.testing.assert_allclose(bandit.test_path, [[2.4494898]])
 
     def test_straight_through_gumbel_is_one_hot_and_has_gradients(self):
         torch.manual_seed(3)
@@ -280,26 +320,37 @@ class TorchCoxPHTests(unittest.TestCase):
         )
         self.assertTrue(np.isfinite(model.predict_log_partial_hazard(X)).all())
 
-    def test_policy_risks_are_standardized_per_expert(self):
-        bandit = ContextualBandit(device="cpu")
-        R, P, RP = bandit._standardize_policy_risks(
-            np.array([1.0, 2.0, 3.0]),
-            np.array([10.0, 20.0, 30.0]),
-            np.array([-5.0, 0.0, 5.0]),
+    def test_horizon_calibration_produces_valid_five_year_survival(self):
+        rng = np.random.default_rng(19)
+        n = 80
+        oof_risk = rng.normal(size=n).astype(np.float32)
+        durations = np.exp(
+            7.5 - 0.8 * oof_risk + rng.normal(scale=0.35, size=n)
+        ).astype(np.float32)
+        events = (rng.random(n) < 0.8).astype(np.float32)
+        bandit = ContextualBandit(
+            policy_horizon_days=5 * 365.25,
+            cox_max_epochs=150,
+            cox_patience=15,
+            device="cpu",
+        )
+        calibrator = bandit._fit_horizon_calibrator(
+            oof_risk, durations, events, np.arange(60)
         )
 
-        for risk in (R, P, RP):
-            self.assertAlmostEqual(float(risk.mean()), 0.0, places=6)
-            self.assertAlmostEqual(float(risk.std()), 1.0, places=6)
+        calibrated_risk = bandit._apply_horizon_calibrator(oof_risk, calibrator)
+        survival = bandit._predict_horizon_survival(oof_risk, calibrator)
 
-        R2, P2, RP2 = bandit._apply_policy_risk_stats(
-            np.array([1.0, 2.0, 3.0]),
-            np.array([10.0, 20.0, 30.0]),
-            np.array([-5.0, 0.0, 5.0]),
+        self.assertEqual(calibrator['horizon_days'], 5 * 365.25)
+        self.assertGreaterEqual(calibrator['slope'], 0.0)
+        self.assertTrue(np.isfinite(calibrated_risk).all())
+        self.assertTrue(np.all((survival >= 0.0) & (survival <= 1.0)))
+        np.testing.assert_allclose(
+            calibrated_risk,
+            np.log(-np.log(survival)),
+            rtol=2e-5,
+            atol=2e-5,
         )
-        np.testing.assert_allclose(R, R2)
-        np.testing.assert_allclose(P, P2)
-        np.testing.assert_allclose(RP, RP2)
 
     def test_rp_cost_is_zero_only_for_reliable_improvement(self):
         T = np.arange(1, 21, dtype=np.float32)

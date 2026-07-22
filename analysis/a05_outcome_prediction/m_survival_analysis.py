@@ -2776,6 +2776,8 @@ class ContextualBandit:
         Train Cox risk with straight-through one-hot Gumbel-Softmax actions
     gumbel_temperature : float, default=1.0
         Initial Gumbel-Softmax temperature
+    policy_horizon_days : float, default=1826.25
+        Common survival-calibration horizon (five years for day-based outcomes)
     device : str, default='cuda'
         Device for PyTorch ('cuda' or 'cpu')
     random_state : int, default=None
@@ -2806,6 +2808,7 @@ class ContextualBandit:
                  gumbel_temperature=1.0,
                  gumbel_min_temperature=0.1,
                  gumbel_anneal_rate=0.95,
+                 policy_horizon_days=5 * 365.25,
                  loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
                  exploration_weight=0.1,
                  entropy_weight=0.05,
@@ -2853,6 +2856,9 @@ class ContextualBandit:
         self.gumbel_temperature = gumbel_temperature
         self.gumbel_min_temperature = gumbel_min_temperature
         self.gumbel_anneal_rate = gumbel_anneal_rate
+        if policy_horizon_days <= 0:
+            raise ValueError("policy_horizon_days must be positive")
+        self.policy_horizon_days = float(policy_horizon_days)
         self.loss_type = loss_type
         self.exploration_weight = exploration_weight
         self.entropy_weight = entropy_weight
@@ -2891,30 +2897,82 @@ class ContextualBandit:
                 max_exploration_weight=0.5
             )
     
-    def _standardize_policy_risks(self, R, P, RP, fit_indices=None, store=True):
-        """Calibrate expert risks using policy-training samples only."""
-        standardized = []
-        stats = {}
-        for name, risk in (("R", R), ("P", P), ("RP", RP)):
-            risk = np.asarray(risk, dtype=np.float32)
-            fit_risk = risk if fit_indices is None else risk[fit_indices]
-            mean = float(np.mean(fit_risk))
-            std = float(np.std(fit_risk))
-            std = max(std, 1e-6)
-            stats[name] = {"mean": mean, "std": std}
-            standardized.append((risk - mean) / std)
-        if store:
-            self.policy_risk_stats = stats
-        return tuple(standardized)
+    def _fit_horizon_calibrator(self, risk, T, E, fit_indices):
+        """Fit an OOF Cox recalibrator and its five-year baseline hazard."""
+        risk = np.asarray(risk, dtype=np.float32).reshape(-1)
+        T = np.asarray(T, dtype=np.float32).reshape(-1)
+        E = np.asarray(E, dtype=np.float32).reshape(-1)
+        fit_indices = np.asarray(fit_indices, dtype=np.int64)
+        risk_fit = risk[fit_indices]
+        T_fit = T[fit_indices]
+        E_fit = E[fit_indices]
 
-    def _apply_policy_risk_stats(self, R, P, RP):
-        calibrated = []
-        for name, risk in (("R", R), ("P", P), ("RP", RP)):
-            stats = self.policy_risk_stats[name]
-            calibrated.append(
-                (np.asarray(risk, dtype=np.float32) - stats['mean']) / stats['std']
+        center = float(risk_fit.mean())
+        scale = max(float(risk_fit.std()), 1e-6)
+        normalized_risk = ((risk_fit - center) / scale).reshape(-1, 1)
+        calibration_model = TorchCoxPH(
+            penalizer=0.01,
+            l1_ratio=0.0,
+            learning_rate=self.cox_learning_rate,
+            max_epochs=self.cox_max_epochs,
+            tolerance=self.cox_tolerance,
+            patience=self.cox_patience,
+            gradient_clip=self.cox_gradient_clip,
+            device=self.device,
+        ).fit(normalized_risk, T_fit, E_fit)
+
+        # A negative calibration slope would reverse an expert based on a
+        # noisy calibration sample. Treat such an expert as uninformative;
+        # the upper cap prevents extreme OOF slopes from destabilizing routing.
+        slope = float(np.clip(calibration_model.coef_[0], 0.0, 5.0))
+        calibrated_eta = slope * normalized_risk[:, 0]
+
+        event_times = np.unique(
+            T_fit[(E_fit > 0) & (T_fit <= self.policy_horizon_days)]
+        )
+        if event_times.size == 0:
+            raise ValueError(
+                "No calibration events occur at or before the policy horizon"
             )
-        return tuple(calibrated)
+        exp_eta = np.exp(np.clip(calibrated_eta, -50.0, 50.0))
+        baseline_hazard = 0.0
+        for event_time in event_times:
+            n_events = float(np.sum((T_fit == event_time) & (E_fit > 0)))
+            risk_set_sum = float(exp_eta[T_fit >= event_time].sum())
+            if risk_set_sum > 0:
+                baseline_hazard += n_events / risk_set_sum
+        baseline_hazard = max(baseline_hazard, 1e-12)
+        return {
+            'center': center,
+            'scale': scale,
+            'slope': slope,
+            'baseline_cumulative_hazard': baseline_hazard,
+            'horizon_days': self.policy_horizon_days,
+        }
+
+    @staticmethod
+    def _apply_horizon_calibrator(risk, calibrator):
+        """Return calibrated log cumulative hazard: log(-log(S(tau)))."""
+        risk = np.asarray(risk, dtype=np.float32)
+        normalized = (risk - calibrator['center']) / calibrator['scale']
+        normalized = np.clip(normalized, -8.0, 8.0)
+        return (
+            np.log(calibrator['baseline_cumulative_hazard'])
+            + calibrator['slope'] * normalized
+        ).astype(np.float32)
+
+    @classmethod
+    def _predict_horizon_survival(cls, risk, calibrator):
+        log_cumulative_hazard = cls._apply_horizon_calibrator(risk, calibrator)
+        cumulative_hazard = np.exp(np.clip(log_cumulative_hazard, -50.0, 50.0))
+        return np.exp(-cumulative_hazard).astype(np.float32)
+
+    def _calibrate_expert_risks(self, R, P, RP):
+        return (
+            self._apply_horizon_calibrator(R, self.policy_calibrators['R']),
+            self._apply_horizon_calibrator(P, self.policy_calibrators['P']),
+            self._apply_horizon_calibrator(RP, self.policy_calibrators['RP']),
+        )
 
     @staticmethod
     def _make_policy_state(R, P, RP):
@@ -3420,7 +3478,7 @@ class ContextualBandit:
                 },
                 'optimizer': copy.deepcopy(self.policy_optimizer.state_dict()),
                 'loss_fn': copy.deepcopy(self.policy_loss_fn),
-                'risk_stats': copy.deepcopy(self.policy_risk_stats),
+                'calibrators': copy.deepcopy(self.policy_calibrators),
                 'gumbel_temperature': self.gumbel_temperature,
                 'w_rad': self.w_rad.copy(),
                 'w_path': self.w_path.copy(),
@@ -3445,27 +3503,44 @@ class ContextualBandit:
             )
 
         def fit_aligned_policy(verbose=True):
-            R_policy, P_policy, RP_policy = self._standardize_policy_risks(
-                self.R_curr, self.P_curr, self.RP_curr,
-                fit_indices=policy_train_idx, store=True
-            )
-            S_policy = self._make_policy_state(R_policy, P_policy, RP_policy)
             rp_cost, rp_cost_info = prepare_rp_cost()
 
-            # Policy training uses current full-fit expert risks, while policy
-            # validation uses expert OOF risks to avoid outcome leakage from
-            # fitting the experts on the validation patients.
-            R_for_fit = R_policy.copy()
-            P_for_fit = P_policy.copy()
-            RP_for_fit = RP_policy.copy()
-            R_oof, P_oof, RP_oof = self._apply_policy_risk_stats(
-                self.cox_rad.oof_risk_, self.cox_path.oof_risk_,
-                self.cox_rp.oof_risk_
+            raw_oof = {
+                'R': self.cox_rad.oof_risk_,
+                'P': self.cox_path.oof_risk_,
+                'RP': self.cox_rp.oof_risk_,
+            }
+            self.policy_calibrators = {
+                name: self._fit_horizon_calibrator(
+                    risk, T_train, E_train, policy_train_idx
+                )
+                for name, risk in raw_oof.items()
+            }
+
+            # The policy is trained and validated entirely on OOF expert risks.
+            # Full-fit risks are used only to obtain EM assignment weights and,
+            # after fitting, to make predictions for new patients.
+            R_for_fit = self._apply_horizon_calibrator(
+                raw_oof['R'], self.policy_calibrators['R']
             )
-            R_for_fit[policy_val_idx] = R_oof[policy_val_idx]
-            P_for_fit[policy_val_idx] = P_oof[policy_val_idx]
-            RP_for_fit[policy_val_idx] = RP_oof[policy_val_idx]
+            P_for_fit = self._apply_horizon_calibrator(
+                raw_oof['P'], self.policy_calibrators['P']
+            )
+            RP_for_fit = self._apply_horizon_calibrator(
+                raw_oof['RP'], self.policy_calibrators['RP']
+            )
             S_for_fit = self._make_policy_state(R_for_fit, P_for_fit, RP_for_fit)
+
+            R_policy = self._apply_horizon_calibrator(
+                self.R_curr, self.policy_calibrators['R']
+            )
+            P_policy = self._apply_horizon_calibrator(
+                self.P_curr, self.policy_calibrators['P']
+            )
+            RP_policy = self._apply_horizon_calibrator(
+                self.RP_curr, self.policy_calibrators['RP']
+            )
+            S_policy = self._make_policy_state(R_policy, P_policy, RP_policy)
 
             self.rp_cost_history.append(rp_cost)
             if verbose:
@@ -3476,6 +3551,12 @@ class ContextualBandit:
                     f"RP={rp_cost_info['cindex_rp']:.4f}; "
                     f"lower gains RP-R={rp_cost_info['lower_gain_vs_rad']:.4f}, "
                     f"RP-P={rp_cost_info['lower_gain_vs_path']:.4f})"
+                )
+                print(
+                    "5-year calibration slopes - "
+                    f"R: {self.policy_calibrators['R']['slope']:.3f}, "
+                    f"P: {self.policy_calibrators['P']['slope']:.3f}, "
+                    f"RP: {self.policy_calibrators['RP']['slope']:.3f}"
                 )
             best_val_loss = self._fit_policy_network(
                 S_for_fit, R_for_fit, P_for_fit, RP_for_fit, E_train, T_train,
@@ -3594,9 +3675,14 @@ class ContextualBandit:
             # EVALUATE AND CHECK CONVERGENCE
             # ============================================================
             
-            R_eval, P_eval, RP_eval = self._standardize_policy_risks(
-                self.R_curr, self.P_curr, self.RP_curr,
-                fit_indices=policy_train_idx, store=False
+            R_eval = self._apply_horizon_calibrator(
+                self.R_curr, self.policy_calibrators['R']
+            )
+            P_eval = self._apply_horizon_calibrator(
+                self.P_curr, self.policy_calibrators['P']
+            )
+            RP_eval = self._apply_horizon_calibrator(
+                self.RP_curr, self.policy_calibrators['RP']
             )
             h_weighted = (
                 self.w_rad * R_eval + self.w_path * P_eval + self.w_rp * RP_eval
@@ -3644,7 +3730,7 @@ class ContextualBandit:
         self.policy_network.load_state_dict(best_em_checkpoint['policy'])
         self.policy_optimizer.load_state_dict(best_em_checkpoint['optimizer'])
         self.policy_loss_fn = best_em_checkpoint['loss_fn']
-        self.policy_risk_stats = best_em_checkpoint['risk_stats']
+        self.policy_calibrators = best_em_checkpoint['calibrators']
         self.gumbel_temperature = best_em_checkpoint['gumbel_temperature']
         self.w_rad = best_em_checkpoint['w_rad']
         self.w_path = best_em_checkpoint['w_path']
@@ -3669,7 +3755,7 @@ class ContextualBandit:
         Returns
         -------
         risk_scores : ndarray
-            Fused risk scores based on policy decisions
+            Selected calibrated log cumulative hazards at five years
         actions : ndarray
             Selected actions for each patient
         probs : ndarray
@@ -3681,7 +3767,7 @@ class ContextualBandit:
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
 
-        R, P, RP = self._apply_policy_risk_stats(R, P, RP)
+        R, P, RP = self._calibrate_expert_risks(R, P, RP)
         S = self._make_policy_state(R, P, RP)
         
         # Get policy probabilities
@@ -3700,6 +3786,13 @@ class ContextualBandit:
                 risk_scores[i] = RP[i]
         
         return risk_scores, actions, probs
+
+    def predict_survival_probability(self, X_rad, X_path):
+        """Predict calibrated five-year survival under the selected expert."""
+        risk_scores, actions, probs = self.predict_risk(X_rad, X_path)
+        cumulative_hazard = np.exp(np.clip(risk_scores, -50.0, 50.0))
+        survival = np.exp(-cumulative_hazard).astype(np.float32)
+        return survival, actions, probs
     
     def get_subgroup_probabilities(self, X_rad, X_path):
         """
@@ -3709,7 +3802,7 @@ class ContextualBandit:
         P = self._predict_risk(self.cox_path, X_path)
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
-        R, P, RP = self._apply_policy_risk_stats(R, P, RP)
+        R, P, RP = self._calibrate_expert_risks(R, P, RP)
         S = self._make_policy_state(R, P, RP)
         return self._get_policy_probs(S)
     
@@ -3722,7 +3815,7 @@ class ContextualBandit:
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
 
-        R, P, RP = self._apply_policy_risk_stats(R, P, RP)
+        R, P, RP = self._calibrate_expert_risks(R, P, RP)
         S = self._make_policy_state(R, P, RP)
         probs = self._get_policy_probs(S)
         
@@ -3737,18 +3830,53 @@ class ContextualBanditPipeline:
     Pipeline wrapper for Contextual Bandit with survival prediction.
     """
     
-    def __init__(self, bandit, use_soft_ensemble=False):
+    def __init__(self, bandit, use_soft_ensemble=False,
+                 radiomics_scaler=None, pathomics_scaler=None):
         self.bandit = bandit
         self.use_soft_ensemble = use_soft_ensemble
+        self.radiomics_scaler = (
+            StandardScaler() if radiomics_scaler is None else radiomics_scaler
+        )
+        self.pathomics_scaler = (
+            StandardScaler() if pathomics_scaler is None else pathomics_scaler
+        )
         self.risk_scores_ = None
         self.actions_ = None
         self.probs_ = None
+
+    @staticmethod
+    def _as_feature_matrix(X):
+        values = X.values if hasattr(X, 'values') else X
+        return np.ascontiguousarray(values, dtype=np.float32)
+
+    def _transform_inputs(self, X_rad, X_path):
+        if not hasattr(self.radiomics_scaler, 'mean_'):
+            raise RuntimeError("ContextualBanditPipeline must be fitted first")
+        X_rad = self._as_feature_matrix(X_rad)
+        X_path = self._as_feature_matrix(X_path)
+        return (
+            np.ascontiguousarray(
+                self.radiomics_scaler.transform(X_rad), dtype=np.float32
+            ),
+            np.ascontiguousarray(
+                self.pathomics_scaler.transform(X_path), dtype=np.float32
+            ),
+        )
     
     def fit(self, X_rad, X_path, y):
-        self.bandit.fit(X_rad, X_path, y)
+        X_rad = self._as_feature_matrix(X_rad)
+        X_path = self._as_feature_matrix(X_path)
+        X_rad_scaled = np.ascontiguousarray(
+            self.radiomics_scaler.fit_transform(X_rad), dtype=np.float32
+        )
+        X_path_scaled = np.ascontiguousarray(
+            self.pathomics_scaler.fit_transform(X_path), dtype=np.float32
+        )
+        self.bandit.fit(X_rad_scaled, X_path_scaled, y)
         return self
     
     def transform(self, X_rad, X_path):
+        X_rad, X_path = self._transform_inputs(X_rad, X_path)
         if self.use_soft_ensemble:
             risk_scores, probs = self.bandit.get_weighted_risk(X_rad, X_path)
             self.probs_ = probs
@@ -3768,6 +3896,7 @@ class ContextualBanditPipeline:
         return self.transform(X_rad, X_path)
     
     def get_subgroup_probs(self, X_rad, X_path):
+        X_rad, X_path = self._transform_inputs(X_rad, X_path)
         return self.bandit.get_subgroup_probabilities(X_rad, X_path)
     
     def get_cindex_history(self):
@@ -4511,10 +4640,12 @@ class SurvivalAnalyzer:
             actions = np.argmax(probs, axis=1)
         
         # Raw test set predictions
-        if pipeline.use_soft_ensemble:
-            raw_risk_scores = bandit.get_weighted_risk(X_rad_raw, X_path_raw)[0]
-        else:
-            raw_risk_scores = bandit.predict_risk(X_rad_raw, X_path_raw)[0]
+        raw_risk_scores = pipeline.transform(X_rad_raw, X_path_raw)
+        # Keep the returned pipeline diagnostics aligned with the primary test
+        # cohort rather than the auxiliary raw cohort predicted last.
+        pipeline.risk_scores_ = risk_scores
+        pipeline.actions_ = actions
+        pipeline.probs_ = probs
         
         scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
         
