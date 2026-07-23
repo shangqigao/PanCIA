@@ -3046,7 +3046,8 @@ class ContextualBandit:
     @staticmethod
     def _make_policy_state(R, P, RP):
         """Build the compact Version-B state: R, P, RP, and signed R-P."""
-        return np.column_stack([R, P, RP, R - P]).astype(np.float32)
+        # return np.column_stack([R, P, RP, R - P]).astype(np.float32)
+        return np.column_stack([R, P, R - P]).astype(np.float32)
 
     def _make_routing_state_from_features(self, X_rad, X_path):
         """Build the stationary state from frozen global routing experts."""
@@ -3421,7 +3422,7 @@ class ContextualBandit:
     def _init_policy_network(self):
         """Initialize the policy network and optimizer."""
         self.policy_network = PolicyNetwork(
-            input_dim=4,
+            input_dim=3,
             hidden_dim=self.hidden_dim,
             output_dim=3,
             dropout_rate=0.1
