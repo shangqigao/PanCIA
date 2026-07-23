@@ -66,12 +66,16 @@ class SpatialPriors:
 
     uterus_ovary_distance_min_mm: float
     uterus_ovary_distance_max_mm: float
+    uterus_ovary_distance_median_mm: float
     uterus_ovary_delta_r_min_mm: float
     uterus_ovary_delta_r_max_mm: float
     uterus_ovary_delta_a_min_mm: float
     uterus_ovary_delta_a_max_mm: float
     uterus_ovary_delta_s_min_mm: float
     uterus_ovary_delta_s_max_mm: float
+    uterus_ovary_abs_delta_r_median_mm: float
+    uterus_ovary_delta_a_median_mm: float
+    uterus_ovary_delta_s_median_mm: float
     endometrioma_uterus_distance_min_mm: float
     endometrioma_uterus_distance_max_mm: float
     endometrioma_uterus_delta_r_min_mm: float
@@ -80,6 +84,12 @@ class SpatialPriors:
     endometrioma_uterus_delta_a_max_mm: float
     endometrioma_uterus_delta_s_min_mm: float
     endometrioma_uterus_delta_s_max_mm: float
+    endometrioma_ovary_delta_r_min_mm: float
+    endometrioma_ovary_delta_r_max_mm: float
+    endometrioma_ovary_delta_a_min_mm: float
+    endometrioma_ovary_delta_a_max_mm: float
+    endometrioma_ovary_delta_s_min_mm: float
+    endometrioma_ovary_delta_s_max_mm: float
     endometrioma_ovary_surface_max_mm: float
     n_uterus_ovary_pairs: int
     n_endometrioma_uterus_pairs: int
@@ -492,62 +502,31 @@ def extract_components(
     return retained, components
 
 
-def select_fragmented_uterus(
+def select_uterus(
     label_map: np.ndarray,
     components: list[dict],
     probability: np.ndarray,
     affine: np.ndarray,
-    voxel_spacing_mm: tuple[float, float, float],
-    anchor_confidence: float,
-    maximum_fragment_gap_mm: float,
+    minimum_uterus_volume_mm3: float,
 ) -> tuple[dict | None, np.ndarray]:
-    """Select one uterus while preserving nearby disconnected mask fragments.
-
-    Missing middle slices can split one uterus into multiple 3D components. The
-    highest-confidence component seeds the anchor, then observed fragments are
-    added iteratively when their surface is within a physical gap limit. No
-    synthetic voxels are filled into the missing slices.
-    """
+    """Select the largest individual uterus component above the volume minimum."""
     empty = np.zeros(label_map.shape, dtype=bool)
-    if not components:
-        return None, empty
-    primary = max(components, key=lambda item: item["confidence"])
-    if primary["confidence"] < anchor_confidence:
-        return None, empty
-
-    selected_ids = {primary["component_id"]}
-    uterus_mask = label_map == primary["component_id"]
-    remaining = {
-        item["component_id"]: item
+    viable = [
+        item
         for item in components
-        if item["component_id"] != primary["component_id"]
-    }
-    while remaining:
-        distance_to_selected = ndimage.distance_transform_edt(
-            ~uterus_mask,
-            sampling=voxel_spacing_mm,
-        )
-        nearest_id = None
-        nearest_distance = np.inf
-        for component_id in remaining:
-            fragment = label_map == component_id
-            distance = float(distance_to_selected[fragment].min())
-            if distance < nearest_distance:
-                nearest_id = component_id
-                nearest_distance = distance
-        if nearest_id is None or nearest_distance > maximum_fragment_gap_mm:
-            break
-        selected_ids.add(nearest_id)
-        uterus_mask |= label_map == nearest_id
-        remaining.pop(nearest_id)
-
+        if item["volume_mm3"] >= minimum_uterus_volume_mm3
+    ]
+    if not viable:
+        return None, empty
     voxel_volume_mm3 = float(abs(np.linalg.det(affine[:3, :3])))
+    primary = max(viable, key=lambda item: item["volume_mm3"])
+    uterus_mask = label_map == primary["component_id"]
+
     values = probability[uterus_mask]
     centroid_voxel = np.mean(np.argwhere(uterus_mask), axis=0)
     uterus = {
         "component_id": primary["component_id"],
-        "fragment_ids": sorted(selected_ids),
-        "fragment_count": len(selected_ids),
+        "selection_rule": "largest_component_above_minimum_volume",
         "voxel_count": int(uterus_mask.sum()),
         "volume_mm3": float(uterus_mask.sum() * voxel_volume_mm3),
         "mean_probability": float(values.mean()),
@@ -586,6 +565,9 @@ def learn_spatial_priors(labels_dir: Path) -> SpatialPriors:
     endo_uterus_delta_r: list[float] = []
     endo_uterus_delta_a: list[float] = []
     endo_uterus_delta_s: list[float] = []
+    endo_ovary_delta_r: list[float] = []
+    endo_ovary_delta_a: list[float] = []
+    endo_ovary_delta_s: list[float] = []
     endometrioma_surface_distances: list[float] = []
 
     for label_path in sorted(labels_dir.glob("D1-*_seg.nii.gz")):
@@ -595,10 +577,29 @@ def learn_spatial_priors(labels_dir: Path) -> SpatialPriors:
         uterus = labels == GT_LABELS["uterus"]
         ovaries = labels == GT_LABELS["ovary"]
         endometriomas = labels == GT_LABELS["endometrioma"]
+        largest_ovary_ids: list[int] = []
+        if ovaries.any():
+            ovary_labels, ovary_count = ndimage.label(ovaries)
+            # A scan can contain label islands from partial annotation. Because
+            # a patient has at most two ovaries, only its two largest annotated
+            # ovarian objects contribute to the physical-volume prior.
+            ranked_ovary_ids = sorted(
+                range(1, ovary_count + 1),
+                key=lambda ovary_id: int((ovary_labels == ovary_id).sum()),
+                reverse=True,
+            )
+            largest_voxel_count = int(
+                (ovary_labels == ranked_ovary_ids[0]).sum()
+            )
+            largest_ovary_ids = [
+                ovary_id
+                for ovary_id in ranked_ovary_ids[:2]
+                if int((ovary_labels == ovary_id).sum())
+                >= 0.05 * largest_voxel_count
+            ]
         if uterus.any() and ovaries.any():
             uterus_world = _world_centroid(uterus, nii.affine)
-            ovary_labels, ovary_count = ndimage.label(ovaries)
-            for ovary_id in range(1, ovary_count + 1):
+            for ovary_id in largest_ovary_ids:
                 ovary_mask = ovary_labels == ovary_id
                 ovary_world = _world_centroid(ovary_mask, nii.affine)
                 delta = ovary_world - uterus_world
@@ -620,11 +621,27 @@ def learn_spatial_priors(labels_dir: Path) -> SpatialPriors:
         if ovaries.any() and endometriomas.any():
             distance_to_ovary = ndimage.distance_transform_edt(~ovaries, sampling=zooms)
             endo_labels, endo_count = ndimage.label(endometriomas)
+            ovary_centroids = [
+                _world_centroid(ovary_labels == ovary_id, nii.affine)
+                for ovary_id in largest_ovary_ids
+            ]
             for endo_id in range(1, endo_count + 1):
                 endo_mask = endo_labels == endo_id
                 endometrioma_surface_distances.append(
                     float(distance_to_ovary[endo_mask].min())
                 )
+                if ovary_centroids:
+                    endo_world = _world_centroid(endo_mask, nii.affine)
+                    nearest_ovary = min(
+                        ovary_centroids,
+                        key=lambda centroid: float(
+                            np.linalg.norm(endo_world - centroid)
+                        ),
+                    )
+                    delta = endo_world - nearest_ovary
+                    endo_ovary_delta_r.append(float(delta[0]))
+                    endo_ovary_delta_a.append(float(delta[1]))
+                    endo_ovary_delta_s.append(float(delta[2]))
 
     distance_bounds = _robust_bounds(distances, (0.0, 120.0))
     r_bounds = _robust_bounds(delta_r, (-120.0, 120.0))
@@ -642,6 +659,9 @@ def learn_spatial_priors(labels_dir: Path) -> SpatialPriors:
     endo_uterus_s_bounds = _robust_bounds(
         endo_uterus_delta_s, (-100.0, 100.0)
     )
+    endo_ovary_r_bounds = _robust_bounds(endo_ovary_delta_r, (-100.0, 100.0))
+    endo_ovary_a_bounds = _robust_bounds(endo_ovary_delta_a, (-100.0, 100.0))
+    endo_ovary_s_bounds = _robust_bounds(endo_ovary_delta_s, (-100.0, 100.0))
     _, endo_surface_max = _robust_bounds(
         endometrioma_surface_distances,
         (0.0, 30.0),
@@ -651,12 +671,22 @@ def learn_spatial_priors(labels_dir: Path) -> SpatialPriors:
     return SpatialPriors(
         uterus_ovary_distance_min_mm=max(0.0, distance_bounds[0]),
         uterus_ovary_distance_max_mm=distance_bounds[1],
+        uterus_ovary_distance_median_mm=float(np.median(distances)) if distances else 60.0,
         uterus_ovary_delta_r_min_mm=r_bounds[0],
         uterus_ovary_delta_r_max_mm=r_bounds[1],
         uterus_ovary_delta_a_min_mm=a_bounds[0],
         uterus_ovary_delta_a_max_mm=a_bounds[1],
         uterus_ovary_delta_s_min_mm=s_bounds[0],
         uterus_ovary_delta_s_max_mm=s_bounds[1],
+        uterus_ovary_abs_delta_r_median_mm=(
+            float(np.median(np.abs(delta_r))) if delta_r else 35.0
+        ),
+        uterus_ovary_delta_a_median_mm=(
+            float(np.median(delta_a)) if delta_a else 0.0
+        ),
+        uterus_ovary_delta_s_median_mm=(
+            float(np.median(delta_s)) if delta_s else 0.0
+        ),
         endometrioma_uterus_distance_min_mm=max(
             0.0, endo_uterus_distance_bounds[0]
         ),
@@ -667,6 +697,12 @@ def learn_spatial_priors(labels_dir: Path) -> SpatialPriors:
         endometrioma_uterus_delta_a_max_mm=endo_uterus_a_bounds[1],
         endometrioma_uterus_delta_s_min_mm=endo_uterus_s_bounds[0],
         endometrioma_uterus_delta_s_max_mm=endo_uterus_s_bounds[1],
+        endometrioma_ovary_delta_r_min_mm=endo_ovary_r_bounds[0],
+        endometrioma_ovary_delta_r_max_mm=endo_ovary_r_bounds[1],
+        endometrioma_ovary_delta_a_min_mm=endo_ovary_a_bounds[0],
+        endometrioma_ovary_delta_a_max_mm=endo_ovary_a_bounds[1],
+        endometrioma_ovary_delta_s_min_mm=endo_ovary_s_bounds[0],
+        endometrioma_ovary_delta_s_max_mm=endo_ovary_s_bounds[1],
         endometrioma_ovary_surface_max_mm=max(0.0, endo_surface_max),
         n_uterus_ovary_pairs=len(distances),
         n_endometrioma_uterus_pairs=len(endo_uterus_distances),
@@ -702,7 +738,7 @@ def _relation_to_uterus(component: dict, uterus: dict, priors: SpatialPriors) ->
         uterus["centroid_world"]
     )
     distance = float(np.linalg.norm(delta))
-    plausible = (
+    geometry_plausible = (
         priors.uterus_ovary_distance_min_mm
         <= distance
         <= priors.uterus_ovary_distance_max_mm
@@ -716,12 +752,51 @@ def _relation_to_uterus(component: dict, uterus: dict, priors: SpatialPriors) ->
         <= delta[2]
         <= priors.uterus_ovary_delta_s_max_mm
     )
+    def scaled_deviation(value: float, target: float, low: float, high: float) -> float:
+        return abs(value - target) / max((high - low) / 2.0, 1.0)
+
+    distance_cost = scaled_deviation(
+        distance,
+        priors.uterus_ovary_distance_median_mm,
+        priors.uterus_ovary_distance_min_mm,
+        priors.uterus_ovary_distance_max_mm,
+    )
+    lateral_cost = scaled_deviation(
+        abs(float(delta[0])),
+        priors.uterus_ovary_abs_delta_r_median_mm,
+        0.0,
+        max(
+            abs(priors.uterus_ovary_delta_r_min_mm),
+            abs(priors.uterus_ovary_delta_r_max_mm),
+        ),
+    )
+    anterior_cost = scaled_deviation(
+        float(delta[1]),
+        priors.uterus_ovary_delta_a_median_mm,
+        priors.uterus_ovary_delta_a_min_mm,
+        priors.uterus_ovary_delta_a_max_mm,
+    )
+    superior_cost = scaled_deviation(
+        float(delta[2]),
+        priors.uterus_ovary_delta_s_median_mm,
+        priors.uterus_ovary_delta_s_min_mm,
+        priors.uterus_ovary_delta_s_max_mm,
+    )
+    prior_cost = (
+        distance_cost
+        + lateral_cost
+        + anterior_cost
+        + superior_cost
+    )
     return {
         "distance_to_uterus_mm": distance,
         "delta_r_mm": float(delta[0]),
         "delta_a_mm": float(delta[1]),
         "delta_s_mm": float(delta[2]),
-        "uterus_relation_plausible": bool(plausible),
+        "uterus_relation_plausible": bool(geometry_plausible),
+        "uterus_relative_prior_cost": float(prior_cost),
+        "uterus_relative_prior_score": float(1.0 / (1.0 + prior_cost)),
+        "ovary_selection_plausible": bool(geometry_plausible),
     }
 
 
@@ -756,6 +831,50 @@ def _endometrioma_relation_to_uterus(
         "endometrioma_delta_s_mm": float(delta[2]),
         "endometrioma_uterus_relation_plausible": bool(plausible),
     }
+
+
+def _endometrioma_relation_to_ovaries(
+    component: dict,
+    ovaries: list[dict],
+    priors: SpatialPriors,
+) -> dict:
+    """Require plausible R/A/S displacement from at least one selected ovary."""
+    relations = []
+    endometrioma_world = np.asarray(component["centroid_world"])
+    for ovary in ovaries:
+        delta = endometrioma_world - np.asarray(ovary["centroid_world"])
+        distance = float(np.linalg.norm(delta))
+        plausible = (
+            priors.endometrioma_ovary_delta_r_min_mm
+            <= delta[0]
+            <= priors.endometrioma_ovary_delta_r_max_mm
+            and priors.endometrioma_ovary_delta_a_min_mm
+            <= delta[1]
+            <= priors.endometrioma_ovary_delta_a_max_mm
+            and priors.endometrioma_ovary_delta_s_min_mm
+            <= delta[2]
+            <= priors.endometrioma_ovary_delta_s_max_mm
+        )
+        relations.append(
+            {
+                "matched_ovary_component_id": ovary["component_id"],
+                "distance_to_matched_ovary_centroid_mm": distance,
+                "endometrioma_ovary_delta_r_mm": float(delta[0]),
+                "endometrioma_ovary_delta_a_mm": float(delta[1]),
+                "endometrioma_ovary_delta_s_mm": float(delta[2]),
+                "endometrioma_ovary_relation_plausible": bool(plausible),
+            }
+        )
+    plausible_relations = [
+        relation
+        for relation in relations
+        if relation["endometrioma_ovary_relation_plausible"]
+    ]
+    candidates = plausible_relations or relations
+    return min(
+        candidates,
+        key=lambda relation: relation["distance_to_matched_ovary_centroid_mm"],
+    )
 
 
 def _block_values(
@@ -896,8 +1015,7 @@ def analyze_scan_hierarchy(
     output_dir: Path,
     threshold: float,
     minimum_volume_mm3: float,
-    anchor_confidence: float,
-    uterus_fragment_gap_mm: float,
+    minimum_uterus_volume_mm3: float,
     permutations: int,
     fdr_alpha: float,
     minimum_effect_size: float,
@@ -933,50 +1051,54 @@ def analyze_scan_hierarchy(
             minimum_volume_mm3,
         )
 
-    uterus, uterus_mask = select_fragmented_uterus(
+    uterus, uterus_mask = select_uterus(
         maps["uterus"],
         components["uterus"],
         probability[..., ANATOMY_CHANNELS["uterus"]],
         probability_nii.affine,
-        voxel_spacing_mm,
-        anchor_confidence,
-        uterus_fragment_gap_mm,
+        minimum_uterus_volume_mm3,
     )
 
     selected_ovaries: list[dict] = []
     if uterus is not None:
+        plausible_ovaries = []
         for ovary in components["ovary"]:
             relation = _relation_to_uterus(ovary, uterus, priors)
             ovary.update(relation)
-            if (
-                ovary["confidence"] >= anchor_confidence
-                and relation["uterus_relation_plausible"]
-            ):
-                selected_ovaries.append(ovary)
+            if relation["ovary_selection_plausible"]:
+                plausible_ovaries.append(ovary)
         # At most one ovary on each side of the selected uterus. Absolute world
         # position is never used; side is defined only by the relative R axis.
         best_by_side: dict[str, dict] = {}
-        for ovary in selected_ovaries:
+        for ovary in plausible_ovaries:
             side = "right" if ovary["delta_r_mm"] >= 0 else "left"
             if side not in best_by_side or (
-                ovary["confidence"] > best_by_side[side]["confidence"]
+                ovary["uterus_relative_prior_score"]
+                > best_by_side[side]["uterus_relative_prior_score"]
             ):
                 best_by_side[side] = ovary
         selected_ovaries = sorted(
             best_by_side.values(),
-            key=lambda item: item["confidence"],
+            key=lambda item: item["uterus_relative_prior_score"],
             reverse=True,
         )
 
-    ovary_mask = np.isin(
-        maps["ovary"], [item["component_id"] for item in selected_ovaries]
-    )
+    selected_ovary_ids = [item["component_id"] for item in selected_ovaries]
+    ovary_mask = np.isin(maps["ovary"], selected_ovary_ids)
     ovary_distance = (
         ndimage.distance_transform_edt(
             ~ovary_mask,
             sampling=probability_nii.header.get_zooms()[:3],
         )
         if ovary_mask.any()
+        else None
+    )
+    uterus_surface_distance = (
+        ndimage.distance_transform_edt(
+            ~uterus_mask,
+            sampling=probability_nii.header.get_zooms()[:3],
+        )
+        if uterus_mask.any()
         else None
     )
 
@@ -993,10 +1115,26 @@ def analyze_scan_hierarchy(
             "candidate_mean_probability": candidate["mean_probability"],
             "candidate_max_probability": candidate["max_probability"],
             "uterus_detected": uterus is not None,
-            "uterus_fragment_count": (
-                uterus["fragment_count"] if uterus is not None else 0
+            "selected_uterus_component_id": (
+                uterus["component_id"] if uterus is not None else np.nan
+            ),
+            "uterus_volume_mm3": (
+                uterus["volume_mm3"] if uterus is not None else 0.0
+            ),
+            "uterus_selection_rule": (
+                uterus["selection_rule"] if uterus is not None else "none"
             ),
             "ovaries_detected": len(selected_ovaries),
+            "ovary_selection_rule": "best_uterus_relative_prior_per_side",
+            "selected_ovary_component_ids": json.dumps(
+                [item["component_id"] for item in selected_ovaries]
+            ),
+            "selected_ovary_uterus_relative_scores": json.dumps(
+                [
+                    round(item["uterus_relative_prior_score"], 6)
+                    for item in selected_ovaries
+                ]
+            ),
             "reasoning_path": "none",
             "anatomically_plausible": False,
             "distance_to_uterus_mm": np.nan,
@@ -1004,6 +1142,13 @@ def analyze_scan_hierarchy(
             "endometrioma_delta_a_mm": np.nan,
             "endometrioma_delta_s_mm": np.nan,
             "surface_distance_to_ovary_mm": np.nan,
+            "surface_distance_to_uterus_mm": np.nan,
+            "joint_anchor_surface_distance_mm": np.nan,
+            "matched_ovary_component_id": np.nan,
+            "distance_to_matched_ovary_centroid_mm": np.nan,
+            "endometrioma_ovary_delta_r_mm": np.nan,
+            "endometrioma_ovary_delta_a_mm": np.nan,
+            "endometrioma_ovary_delta_s_mm": np.nan,
             "p_vs_ovary": np.nan,
             "q_vs_ovary": np.nan,
             "effect_vs_ovary": np.nan,
@@ -1015,12 +1160,25 @@ def analyze_scan_hierarchy(
             "ovary_reference_erosion_iterations": np.nan,
             "ovary_reference_blocks": 0,
             "accepted": False,
+            "preliminary_accepted": False,
+            "stage_1_anatomical_pass": False,
+            "stage_2_inter_class_pass": False,
+            "stage_3_intra_class_pass": False,
+            "intra_reference_candidate_id": np.nan,
+            "p_vs_reference_endometrioma": np.nan,
+            "q_vs_reference_endometrioma": np.nan,
+            "effect_vs_reference_endometrioma": np.nan,
             "rejection_reason": "",
             "preview": "",
         }
         if uterus is None:
             record["rejection_reason"] = "missing_or_low_confidence_uterus"
         else:
+            uterus_surface = float(
+                uterus_surface_distance[candidate_mask].min()
+            )
+            record["surface_distance_to_uterus_mm"] = uterus_surface
+            record["joint_anchor_surface_distance_mm"] = uterus_surface
             uterus_relation = _endometrioma_relation_to_uterus(
                 candidate, uterus, priors
             )
@@ -1044,13 +1202,33 @@ def analyze_scan_hierarchy(
             else:
                 surface_distance = float(ovary_distance[candidate_mask].min())
                 record["surface_distance_to_ovary_mm"] = surface_distance
+                record["joint_anchor_surface_distance_mm"] = max(
+                    uterus_surface, surface_distance
+                )
                 if surface_distance > priors.endometrioma_ovary_surface_max_mm:
                     record["rejection_reason"] = (
                         "implausible_endometrioma_ovary_distance"
                     )
                 else:
-                    record["reasoning_path"] = "uterus_and_ovary"
-                    record["anatomically_plausible"] = True
+                    ovary_relation = _endometrioma_relation_to_ovaries(
+                        candidate, selected_ovaries, priors
+                    )
+                    record.update(
+                        {
+                            key: value
+                            for key, value in ovary_relation.items()
+                            if key != "endometrioma_ovary_relation_plausible"
+                        }
+                    )
+                    if not ovary_relation[
+                        "endometrioma_ovary_relation_plausible"
+                    ]:
+                        record["rejection_reason"] = (
+                            "implausible_endometrioma_ovary_relation"
+                        )
+                    else:
+                        record["reasoning_path"] = "uterus_and_ovary"
+                        record["anatomically_plausible"] = True
 
             if record["anatomically_plausible"]:
                 candidate_values = _block_values(
@@ -1121,6 +1299,9 @@ def analyze_scan_hierarchy(
     for index, record in enumerate(records):
         record["q_vs_ovary"] = adjusted[2 * index]
         record["q_vs_uterus"] = adjusted[2 * index + 1]
+        record["stage_1_anatomical_pass"] = bool(
+            record["anatomically_plausible"]
+        )
         if not record["anatomically_plausible"]:
             continue
         if not np.isfinite(record["q_vs_uterus"]):
@@ -1130,7 +1311,7 @@ def analyze_scan_hierarchy(
         elif record["q_vs_uterus"] >= fdr_alpha:
             record["rejection_reason"] = "fdr_not_significant_vs_uterus"
         elif record["reasoning_path"] == "uterus_only":
-            record["accepted"] = True
+            record["preliminary_accepted"] = True
             record["rejection_reason"] = "accepted_uterus_only"
         elif not np.isfinite(record["q_vs_ovary"]):
             record["rejection_reason"] = "insufficient_reference_samples"
@@ -1139,8 +1320,83 @@ def analyze_scan_hierarchy(
         elif record["q_vs_ovary"] >= fdr_alpha:
             record["rejection_reason"] = "fdr_not_significant_vs_ovary"
         else:
-            record["accepted"] = True
+            record["preliminary_accepted"] = True
             record["rejection_reason"] = "accepted_uterus_and_ovary"
+        record["stage_2_inter_class_pass"] = bool(
+            record["preliminary_accepted"]
+        )
+
+    # Final intra-endometrioma consistency stage. The reference minimizes the
+    # worst (maximum) surface distance to the available anatomical anchors;
+    # every other survivor must be statistically indistinguishable after FDR.
+    survivors = [record for record in records if record["preliminary_accepted"]]
+    if not survivors:
+        return records
+
+    def reference_rank(record: dict) -> tuple[float, float, float]:
+        """Minimize the worst surface distance to the available anchors."""
+        ovary_distance_value = record["surface_distance_to_ovary_mm"]
+        if not np.isfinite(ovary_distance_value):
+            ovary_distance_value = np.inf
+        return (
+            float(record["joint_anchor_surface_distance_mm"]),
+            float(ovary_distance_value),
+            float(record["surface_distance_to_uterus_mm"]),
+        )
+
+    reference = min(
+        survivors,
+        key=reference_rank,
+    )
+    reference_id = reference["candidate_id"]
+    reference_mask = maps["endometrioma"] == reference_id
+    reference_values = _block_values(
+        normalized_image,
+        reference_mask,
+        block_size_mm,
+        voxel_spacing_mm,
+    )
+    reference["accepted"] = True
+    reference["stage_3_intra_class_pass"] = True
+    reference["intra_reference_candidate_id"] = reference_id
+    reference["rejection_reason"] = "accepted_intra_endometrioma_reference"
+
+    comparison_records = [
+        record for record in survivors if record["candidate_id"] != reference_id
+    ]
+    intra_p_values = []
+    for record in comparison_records:
+        candidate_values = _block_values(
+            normalized_image,
+            maps["endometrioma"] == record["candidate_id"],
+            block_size_mm,
+            voxel_spacing_mm,
+        )
+        p_value, effect_size = permutation_energy_test(
+            reference_values,
+            candidate_values,
+            permutations,
+            rng,
+            maximum_samples,
+        )
+        record["intra_reference_candidate_id"] = reference_id
+        record["p_vs_reference_endometrioma"] = p_value
+        record["effect_vs_reference_endometrioma"] = effect_size
+        intra_p_values.append(p_value)
+
+    intra_adjusted = benjamini_hochberg(intra_p_values)
+    for record, q_value in zip(comparison_records, intra_adjusted):
+        record["q_vs_reference_endometrioma"] = q_value
+        if not np.isfinite(q_value):
+            record["accepted"] = False
+            record["rejection_reason"] = "insufficient_intra_endometrioma_samples"
+        elif q_value < fdr_alpha:
+            record["accepted"] = False
+            record["rejection_reason"] = "intra_endometrioma_statistical_difference"
+        else:
+            record["accepted"] = True
+            record["stage_3_intra_class_pass"] = True
+            record["rejection_reason"] = "accepted_intra_endometrioma_consistent"
     return records
 
 
@@ -1152,8 +1408,7 @@ def run_hierarchical_rejection(
     suffix: str,
     threshold: float,
     minimum_volume_mm3: float,
-    anchor_confidence: float,
-    uterus_fragment_gap_mm: float,
+    minimum_uterus_volume_mm3: float,
     endometrioma_distance_cap_mm: float,
     permutations: int,
     fdr_alpha: float,
@@ -1189,8 +1444,7 @@ def run_hierarchical_rejection(
                 output_dir,
                 threshold,
                 minimum_volume_mm3,
-                anchor_confidence,
-                uterus_fragment_gap_mm,
+                minimum_uterus_volume_mm3,
                 permutations,
                 fdr_alpha,
                 minimum_effect_size,
@@ -1216,20 +1470,47 @@ def build_review_dashboard(
             "<p>No endometrioma candidates were extracted.</p>", encoding="utf-8"
         )
         return
-    summary = (
-        candidates.groupby(["domain", "rejection_reason"], dropna=False)
-        .size()
-        .reset_index(name="candidates")
-    )
+    stage_columns = [
+        ("Stage 1: anatomical", "stage_1_anatomical_pass"),
+        ("Stage 2: inter-class", "stage_2_inter_class_pass"),
+        ("Stage 3: intra-class", "stage_3_intra_class_pass"),
+    ]
+    summary_rows = []
+    for domain_name, domain_data in candidates.groupby("domain"):
+        before = len(domain_data)
+        for stage_name, pass_column in stage_columns:
+            after = int(domain_data[pass_column].sum())
+            summary_rows.extend(
+                [
+                    {
+                        "domain": domain_name,
+                        "stage": stage_name,
+                        "checkpoint": "Before",
+                        "candidates": before,
+                    },
+                    {
+                        "domain": domain_name,
+                        "stage": stage_name,
+                        "checkpoint": "After",
+                        "candidates": after,
+                    },
+                ]
+            )
+            before = after
+    summary = pd.DataFrame(summary_rows)
     bar = px.bar(
         summary,
-        x="rejection_reason",
+        x="stage",
         y="candidates",
-        color="domain",
+        color="checkpoint",
         barmode="group",
-        title="Candidate decisions by domain",
+        facet_col="domain",
+        text="candidates",
+        title="Candidate survival through the three rejection stages",
+        category_orders={"checkpoint": ["Before", "After"]},
     )
-    bar.update_layout(xaxis_title="Decision", yaxis_title="Candidates")
+    bar.update_layout(xaxis_title="Stage", yaxis_title="Candidates")
+    bar.update_traces(textposition="outside")
     plot_html = bar.to_html(full_html=False, include_plotlyjs="cdn")
 
     safe_records = candidates.replace({np.nan: None}).to_dict(orient="records")
@@ -1241,14 +1522,15 @@ def build_review_dashboard(
 <title>Endometrioma candidate review</title>
 <style>
 body{{font-family:Arial,sans-serif;margin:0;background:#f5f7fb;color:#172033}}
-main{{max-width:1500px;margin:auto;padding:24px}} h1{{margin:0 0 8px}}
+main{{max-width:1900px;margin:auto;padding:24px}} h1{{margin:0 0 8px}}
 .controls{{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}}
 select{{padding:8px 10px;border:1px solid #c8d0df;border-radius:6px;background:white}}
-.grid{{display:grid;grid-template-columns:minmax(480px,1.4fr) minmax(320px,1fr);gap:18px}}
+.grid{{display:grid;grid-template-columns:minmax(900px,2fr) minmax(320px,1fr);gap:18px}}
 .panel{{background:white;border:1px solid #dde3ee;border-radius:10px;padding:16px}}
-table{{width:100%;border-collapse:collapse;font-size:13px}} th,td{{padding:7px;border-bottom:1px solid #e7ebf2;text-align:left}}
+section.panel{{overflow-x:auto}} table{{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}} th,td{{padding:7px;border-bottom:1px solid #e7ebf2;text-align:left}}
 tr{{cursor:pointer}} tr:hover{{background:#eef4ff}} img{{width:100%;height:auto}}
 .accepted{{color:#08783e;font-weight:600}} .rejected{{color:#a33a2b;font-weight:600}}
+.stage-head{{text-align:center;background:#eaf0fa;border-left:2px solid white}} .pass{{color:#08783e;font-weight:700;font-size:16px}} .fail{{color:#b42318;font-weight:700;font-size:16px}}
 pre{{white-space:pre-wrap;font-size:12px}} @media(max-width:900px){{.grid{{grid-template-columns:1fr}}}}
 </style></head><body><main>
 <h1>Endometrioma candidate review</h1>
@@ -1259,9 +1541,10 @@ pre{{white-space:pre-wrap;font-size:12px}} @media(max-width:900px){{.grid{{grid-
 <label>Decision <select id="decision"><option value="all">All</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option></select></label>
 <label>Scan <select id="scan"><option value="all">All scans</option></select></label>
 </div>
-<div class="grid"><section class="panel"><table><thead><tr>
-<th>Scan</th><th>ID</th><th>Path</th><th>Status</th><th>Reason</th><th>Distance mm</th><th>q ovary</th><th>q uterus</th>
-</tr></thead><tbody id="rows"></tbody></table></section>
+<div class="grid"><section class="panel"><table><thead>
+<tr><th rowspan="2">Scan</th><th rowspan="2">ID</th><th rowspan="2">Final</th><th rowspan="2">Reason</th><th class="stage-head" colspan="5">Stage 1 · Anatomical reasoning</th><th class="stage-head" colspan="5">Stage 2 · Inter-class statistics</th><th class="stage-head" colspan="5">Stage 3 · Intra-class statistics</th></tr>
+<tr><th>Pass</th><th>Path</th><th>Uterus ΔS</th><th>Ovary ΔS</th><th>Ovary surface</th><th>Pass</th><th>q uterus</th><th>Effect uterus</th><th>q ovary</th><th>Effect ovary</th><th>Pass</th><th>Reference</th><th>Joint distance</th><th>q intra</th><th>Effect intra</th></tr>
+</thead><tbody id="rows"></tbody></table></section>
 <aside class="panel"><img id="preview" alt="Select a candidate to view its overlay"><pre id="detail">Select a candidate.</pre></aside></div>
 <details class="panel" style="margin-top:18px"><summary>D1-derived spatial priors</summary><pre>{priors_json}</pre></details>
 </main><script>
@@ -1269,8 +1552,9 @@ const records={records_json};
 const domain=document.getElementById('domain'),decision=document.getElementById('decision'),scan=document.getElementById('scan');
 [...new Set(records.map(r=>r.scan_name))].sort().forEach(s=>{{const o=document.createElement('option');o.value=o.textContent=s;scan.appendChild(o)}});
 function fmt(v){{return v==null?'—':Number(v).toFixed(3)}}
+function mark(v){{return `<span class="${{v?'pass':'fail'}}">${{v?'✓':'✕'}}</span>`}}
 function selectRecord(r){{const image=document.getElementById('preview');image.src=r.preview?new URL(r.preview,window.location.href).href:'';document.getElementById('detail').textContent=JSON.stringify(r,null,2)}}
-function render(){{const body=document.getElementById('rows');body.innerHTML='';const filtered=records.filter(r=>(domain.value==='all'||r.domain===domain.value)&&(scan.value==='all'||r.scan_name===scan.value)&&(decision.value==='all'||(decision.value==='accepted')===r.accepted));filtered.forEach(r=>{{const tr=document.createElement('tr');tr.innerHTML=`<td>${{r.scan_name}}</td><td>${{r.candidate_id}}</td><td>${{r.reasoning_path}}</td><td class="${{r.accepted?'accepted':'rejected'}}">${{r.accepted?'Accepted':'Rejected'}}</td><td>${{r.rejection_reason}}</td><td>${{fmt(r.surface_distance_to_ovary_mm)}}</td><td>${{fmt(r.q_vs_ovary)}}</td><td>${{fmt(r.q_vs_uterus)}}</td>`;tr.onclick=()=>selectRecord(r);body.appendChild(tr)}});const initial=filtered.find(r=>r.accepted)||filtered[0];if(initial)selectRecord(initial)}}
+function render(){{const body=document.getElementById('rows');body.innerHTML='';const filtered=records.filter(r=>(domain.value==='all'||r.domain===domain.value)&&(scan.value==='all'||r.scan_name===scan.value)&&(decision.value==='all'||(decision.value==='accepted')===r.accepted));filtered.forEach(r=>{{const tr=document.createElement('tr');tr.innerHTML=`<td>${{r.scan_name}}</td><td>${{r.candidate_id}}</td><td class="${{r.accepted?'accepted':'rejected'}}">${{r.accepted?'Accepted':'Rejected'}}</td><td>${{r.rejection_reason}}</td><td>${{mark(r.stage_1_anatomical_pass)}}</td><td>${{r.reasoning_path}}</td><td>${{fmt(r.endometrioma_delta_s_mm)}}</td><td>${{fmt(r.endometrioma_ovary_delta_s_mm)}}</td><td>${{fmt(r.surface_distance_to_ovary_mm)}}</td><td>${{mark(r.stage_2_inter_class_pass)}}</td><td>${{fmt(r.q_vs_uterus)}}</td><td>${{fmt(r.effect_vs_uterus)}}</td><td>${{fmt(r.q_vs_ovary)}}</td><td>${{fmt(r.effect_vs_ovary)}}</td><td>${{mark(r.stage_3_intra_class_pass)}}</td><td>${{fmt(r.intra_reference_candidate_id)}}</td><td>${{fmt(r.joint_anchor_surface_distance_mm)}}</td><td>${{fmt(r.q_vs_reference_endometrioma)}}</td><td>${{fmt(r.effect_vs_reference_endometrioma)}}</td>`;tr.onclick=()=>selectRecord(r);body.appendChild(tr)}});const initial=filtered.find(r=>r.accepted)||filtered[0];if(initial)selectRecord(initial)}}
 [domain,decision,scan].forEach(e=>e.addEventListener('change',render));render();
 </script></body></html>"""
     output_path.write_text(template, encoding="utf-8")
@@ -1321,12 +1605,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--random-seed", type=int, default=42)
     parser.add_argument("--component-threshold", type=float, default=0.5)
     parser.add_argument("--minimum-component-volume-mm3", type=float, default=20.0)
-    parser.add_argument("--anchor-confidence", type=float, default=0.6)
     parser.add_argument(
-        "--uterus-fragment-gap-mm",
+        "--minimum-uterus-volume-mm3",
         type=float,
-        default=12.0,
-        help="Maximum surface gap for grouping observed uterine fragments.",
+        default=5000.0,
+        help="Reject individual uterus components smaller than this volume.",
     )
     parser.add_argument(
         "--max-endometrioma-ovary-distance-mm",
@@ -1378,8 +1661,8 @@ def main() -> None:
         )
     if args.max_endometrioma_ovary_distance_mm <= 0:
         raise ValueError("--max-endometrioma-ovary-distance-mm must be positive")
-    if args.uterus_fragment_gap_mm <= 0:
-        raise ValueError("--uterus-fragment-gap-mm must be positive")
+    if args.minimum_uterus_volume_mm3 <= 0:
+        raise ValueError("--minimum-uterus-volume-mm3 must be positive")
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -1438,8 +1721,7 @@ def main() -> None:
             suffix=args.suffix,
             threshold=args.component_threshold,
             minimum_volume_mm3=args.minimum_component_volume_mm3,
-            anchor_confidence=args.anchor_confidence,
-            uterus_fragment_gap_mm=args.uterus_fragment_gap_mm,
+            minimum_uterus_volume_mm3=args.minimum_uterus_volume_mm3,
             endometrioma_distance_cap_mm=args.max_endometrioma_ovary_distance_mm,
             permutations=args.permutations,
             fdr_alpha=args.fdr_alpha,
