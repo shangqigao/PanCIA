@@ -1,20 +1,15 @@
 """Focused tests for TorchCoxPH without importing the monolithic analysis module."""
 
 import ast
-import contextlib
-import copy
-import io
 from pathlib import Path
 import unittest
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from lifelines.utils import concordance_index
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 
@@ -38,14 +33,11 @@ def _load_cox_classes():
     ]
     namespace = {
         "np": np,
-        "pd": pd,
-        "copy": copy,
         "torch": torch,
         "nn": nn,
         "F": F,
         "optim": optim,
         "StandardScaler": StandardScaler,
-        "train_test_split": train_test_split,
         "concordance_index": concordance_index,
     }
     module = ast.Module(body=class_nodes, type_ignores=[])
@@ -135,7 +127,7 @@ class TorchCoxPHTests(unittest.TestCase):
             device="cpu",
         )
         bandit._init_policy_network()
-        states = torch.randn(12, 4)
+        states = torch.randn(12, 3)
         actions, soft_probs = bandit._policy_outputs(states, stochastic=True)
 
         torch.testing.assert_close(actions.sum(dim=1), torch.ones(12))
@@ -166,7 +158,7 @@ class TorchCoxPHTests(unittest.TestCase):
             hard_policy=True, loss_type="weighted", device="cpu"
         )
         bandit._init_policy_network()
-        states = np.random.default_rng(4).normal(size=(10, 4)).astype(np.float32)
+        states = np.random.default_rng(4).normal(size=(10, 3)).astype(np.float32)
 
         soft = bandit._get_policy_probs(states, hard=False)
         hard = bandit._get_policy_probs(states, hard=True)
@@ -174,7 +166,7 @@ class TorchCoxPHTests(unittest.TestCase):
         np.testing.assert_array_equal(np.argmax(hard, axis=1), np.argmax(soft, axis=1))
         np.testing.assert_allclose(hard.sum(axis=1), 1.0)
 
-    def test_version_b_policy_state_contains_risks_and_signed_contrast(self):
+    def test_policy_state_contains_unimodal_risks_and_signed_contrast(self):
         rng = np.random.default_rng(9)
         bandit = ContextualBandit(device="cpu")
         R = rng.normal(size=20).astype(np.float32)
@@ -183,119 +175,11 @@ class TorchCoxPHTests(unittest.TestCase):
 
         state = bandit._make_policy_state(R, P, RP)
 
-        self.assertEqual(state.shape, (20, 4))
+        self.assertEqual(state.shape, (20, 3))
         np.testing.assert_allclose(state[:, 0], R)
         np.testing.assert_allclose(state[:, 1], P)
-        np.testing.assert_allclose(state[:, 2], RP)
-        np.testing.assert_allclose(state[:, 3], R - P)
+        np.testing.assert_allclose(state[:, 2], R - P)
         self.assertTrue(np.isfinite(state).all())
-
-    def test_m_step_weight_stabilization_enforces_effective_sample_size(self):
-        bandit = ContextualBandit(m_step_momentum=1.0, device="cpu")
-        previous = np.full(100, 1.0 / 3.0)
-        proposed = np.full(100, 0.01)
-        proposed[0] = 0.98
-
-        stabilized = bandit._stabilize_expert_weights(
-            previous, proposed, minimum_ess=80
-        )
-
-        self.assertGreaterEqual(
-            bandit._effective_sample_size(stabilized), 80 - 1e-4
-        )
-        self.assertAlmostEqual(stabilized.mean(), proposed.mean(), places=6)
-
-    def test_expert_quality_guard_rejects_material_degradation(self):
-        bandit = ContextualBandit(
-            expert_cindex_tolerance=0.01,
-            expert_anchor_tolerance=0.03,
-            device="cpu",
-        )
-        accepted, threshold = bandit._expert_candidate_is_acceptable(
-            candidate_cindex=0.61,
-            previous_cindex=0.66,
-            anchor_cindex=0.65,
-        )
-        self.assertFalse(accepted)
-        self.assertAlmostEqual(threshold, 0.65)
-        accepted, _ = bandit._expert_candidate_is_acceptable(
-            candidate_cindex=0.655,
-            previous_cindex=0.66,
-            anchor_cindex=0.65,
-        )
-        self.assertTrue(accepted)
-
-    def test_routing_state_uses_frozen_experts_only(self):
-        class FakeRiskModel:
-            def __init__(self, multiplier):
-                self.multiplier = multiplier
-
-            def predict_log_partial_hazard(self, X):
-                return np.asarray(X)[:, 0] * self.multiplier
-
-        identity_calibrator = {
-            'center': 0.0,
-            'scale': 1.0,
-            'slope': 1.0,
-            'baseline_cumulative_hazard': 1.0,
-            'horizon_days': 5 * 365.25,
-        }
-        bandit = ContextualBandit(device="cpu")
-        bandit.routing_cox_rad = FakeRiskModel(1.0)
-        bandit.routing_cox_path = FakeRiskModel(2.0)
-        bandit.routing_cox_rp = FakeRiskModel(3.0)
-        bandit.routing_calibrators = {
-            key: identity_calibrator.copy() for key in ('R', 'P', 'RP')
-        }
-        X_rad = np.array([[1.0], [2.0]], dtype=np.float32)
-        X_path = np.array([[4.0], [5.0]], dtype=np.float32)
-
-        state_before = bandit._make_routing_state_from_features(X_rad, X_path)
-        bandit.cox_rad = FakeRiskModel(100.0)
-        bandit.cox_path = FakeRiskModel(100.0)
-        bandit.cox_rp = FakeRiskModel(100.0)
-        state_after = bandit._make_routing_state_from_features(X_rad, X_path)
-
-        np.testing.assert_array_equal(state_before, state_after)
-
-    def test_guarded_em_smoke_fit_produces_finite_hard_predictions(self):
-        X_rad, T, E, _ = _synthetic_survival(
-            seed=41, n_samples=42, n_features=4
-        )
-        X_path, _, _, _ = _synthetic_survival(
-            seed=42, n_samples=42, n_features=5
-        )
-        T = T * 1000.0
-        survival = np.empty(42, dtype=[("event", "?"), ("duration", "<f4")])
-        survival["event"] = E.astype(bool)
-        survival["duration"] = T
-        bandit = ContextualBandit(
-            alpha_range=[0.01],
-            max_iterations=1,
-            policy_epochs=2,
-            cv_folds=3,
-            cox_max_epochs=25,
-            cox_patience=5,
-            rp_bootstrap_samples=0,
-            min_expert_ess=10,
-            min_expert_ess_fraction=0.2,
-            hard_policy=True,
-            loss_type="weighted",
-            device="cpu",
-            random_state=5,
-        )
-
-        with contextlib.redirect_stdout(io.StringIO()):
-            bandit.fit(X_rad, X_path, survival)
-        risk, actions, probs = bandit.predict_risk(X_rad[:6], X_path[:6])
-
-        self.assertTrue(np.isfinite(risk).all())
-        self.assertTrue(np.isfinite(probs).all())
-        self.assertTrue(np.all((actions >= 0) & (actions < 3)))
-        self.assertIsNot(bandit.routing_cox_rad, bandit.cox_rad)
-        for diagnostics in bandit.expert_diagnostics_history:
-            for name in ("R", "P", "RP"):
-                self.assertGreaterEqual(diagnostics[name]["ess"], 10 - 1e-4)
 
     def test_weighted_breslow_loss_with_ties_matches_manual_value(self):
         X = torch.tensor([[1.0], [2.0], [3.0]])

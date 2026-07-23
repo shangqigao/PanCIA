@@ -1510,6 +1510,9 @@ def build_review_dashboard(
         category_orders={"checkpoint": ["Before", "After"]},
     )
     bar.update_layout(xaxis_title="Stage", yaxis_title="Candidates")
+    # D1 and D2 contain different numbers of scans/candidates, so a shared
+    # y-axis would compress the smaller domain and obscure its stage changes.
+    bar.update_yaxes(matches=None, showticklabels=True)
     bar.update_traces(textposition="outside")
     plot_html = bar.to_html(full_html=False, include_plotlyjs="cdn")
 

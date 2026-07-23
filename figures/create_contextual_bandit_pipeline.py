@@ -81,7 +81,7 @@ ax.text(
     ha="center", va="center", fontsize=25, fontweight="bold", color=COLORS["ink"],
 )
 
-phase(ax, 0.125, 1, "Frozen anchors", COLORS["blue_edge"])
+phase(ax, 0.125, 1, "Experts", COLORS["blue_edge"])
 phase(ax, 0.362, 2, "Policy state", COLORS["purple_edge"])
 phase(ax, 0.64, 3, "EM policy learning", COLORS["orange_edge"])
 phase(ax, 0.892, 4, "Hard deployment", COLORS["teal_edge"])
@@ -100,7 +100,7 @@ for x, name, subtitle in [
     box(ax, (x, expert_y), 0.058, 0.12, name, tuple(subtitle.split()), "green", fontsize=14)
 
 arrow(ax, (0.125, 0.48), (0.125, 0.425))
-box(ax, (0.025, 0.29), 0.20, 0.12, "Fixed routing risks",
+box(ax, (0.025, 0.29), 0.20, 0.12, "Expert predictions",
     ("Full-fit risks", "Out-of-fold risks"), "green")
 box(ax, (0.025, 0.115), 0.20, 0.11, "Training-only references",
     ("OOF 5-year survival calibration",), "blue", fontsize=14)
@@ -112,15 +112,15 @@ state = FancyBboxPatch(
     linewidth=2.2, edgecolor=COLORS["purple_edge"], facecolor=COLORS["purple"],
 )
 ax.add_patch(state)
-ax.text(0.3625, 0.755, "Frozen 4-D state", ha="center", va="center",
+ax.text(0.3625, 0.755, "Current 3-D state", ha="center", va="center",
         fontsize=16, fontweight="bold", color=COLORS["ink"])
 ax.plot([0.285, 0.44], [0.715, 0.715], color="#B9ACD8", linewidth=1.8)
 ax.text(0.285, 0.665, "Calibrated 5-year risks", fontsize=15, fontweight="bold", color=COLORS["ink"])
-ax.text(0.285, 0.625, "qᴿ,  qᴾ,  qᴿᴾ", fontsize=15, color=COLORS["muted"])
+ax.text(0.285, 0.625, "qᴿ,  qᴾ", fontsize=15, color=COLORS["muted"])
 ax.text(0.285, 0.55, "Signed contrast", fontsize=15, fontweight="bold", color=COLORS["ink"])
 ax.text(0.285, 0.50, "qᴿ − qᴾ", fontsize=15, color=COLORS["muted"])
-ax.text(0.285, 0.405, "Version B", fontsize=15, fontweight="bold", color=COLORS["ink"])
-ax.text(0.285, 0.36, "qᴿ,  qᴾ,  qᴿᴾ,  qᴿ − qᴾ", fontsize=15, color=COLORS["muted"])
+ax.text(0.285, 0.405, "Policy state", fontsize=15, fontweight="bold", color=COLORS["ink"])
+ax.text(0.285, 0.36, "qᴿ,  qᴾ,  qᴿ − qᴾ", fontsize=15, color=COLORS["muted"])
 ax.text(0.3625, 0.235, "Same state at deployment", ha="center", fontsize=12,
         color=COLORS["purple_edge"], fontweight="bold")
 
@@ -144,12 +144,12 @@ box(ax, (0.525, 0.48), 0.23, 0.105, "ST Gumbel-Softmax",
     ("Forward: one-hot action", "Backward: soft gradient"), "purple", fontsize=14)
 arrow(ax, (0.64, 0.48), (0.64, 0.435))
 box(ax, (0.525, 0.315), 0.23, 0.115, "Policy loss",
-    ("Current specialist Cox risks", "+ RP cost + soft regularization"), "orange", fontsize=15)
+    ("Hard-action Cox likelihood", "+ RP cost + soft regularization"), "orange", fontsize=15)
 arrow(ax, (0.64, 0.315), (0.64, 0.275))
 box(ax, (0.515, 0.16), 0.115, 0.105, "Validate",
     ("Argmax + OOF risks",), "blue", fontsize=14)
-box(ax, (0.655, 0.16), 0.115, 0.105, "Guarded M-step",
-    ("ESS + OOF rollback",), "green", fontsize=13)
+box(ax, (0.655, 0.16), 0.115, 0.105, "M-step",
+    ("Refit weighted Cox",), "green", fontsize=14)
 arrow(ax, (0.63, 0.212), (0.655, 0.212))
 ax.plot([0.77, 0.779, 0.779], [0.212, 0.212, 0.685],
         color=COLORS["purple_edge"], linewidth=2.3)
@@ -163,9 +163,9 @@ arrow(ax, (0.785, 0.50), (0.81, 0.50))
 
 # Stage 4
 box(ax, (0.81, 0.675), 0.165, 0.13, "New patient",
-    ("Xᴿ + Xᴾ", "frozen anchor risks"), "teal")
+    ("Xᴿ + Xᴾ", "three expert risks"), "teal")
 arrow(ax, (0.8925, 0.675), (0.8925, 0.62))
-box(ax, (0.81, 0.50), 0.165, 0.11, "Same 4-D state",
+box(ax, (0.81, 0.50), 0.165, 0.11, "Same 3-D state",
     ("Policy network → logits",), "purple", fontsize=15)
 arrow(ax, (0.8925, 0.50), (0.8925, 0.445))
 diamond = Polygon(
@@ -179,7 +179,7 @@ ax.text(0.8925, 0.335, "hard selection", ha="center", va="center", fontsize=13,
         color=COLORS["muted"])
 arrow(ax, (0.8925, 0.265), (0.8925, 0.21))
 box(ax, (0.81, 0.08), 0.165, 0.12, "Final survival risk",
-    ("one current specialist", "R · P · RP"), "teal")
+    ("exactly one of  R · P · RP",), "teal")
 
 ax.text(
     0.5, 0.035,
