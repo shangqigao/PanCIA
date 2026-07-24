@@ -15,7 +15,7 @@
 
 ## activate environment
 source ~/.bashrc
-conda activate /home/sg2162/rds/hpc-work/miniconda3/PanCIA
+conda activate PanCIA
 
 data_root="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/"
 export DETECTRON2_DATASETS=$data_root

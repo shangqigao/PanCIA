@@ -6,7 +6,7 @@
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
 #SBATCH --time=0-36:00:00
-##SBATCH --time=0-00:10:00
+##SBATCH --time=0-00:08:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
@@ -17,7 +17,7 @@
 source ~/.bashrc
 conda activate PanCIA
 
-data_root="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_Endometriosis/"
+data_root="/home/sg2162/rds/hpc-work/BiomedParse_Endometriosis/"
 export DETECTRON2_DATASETS=$data_root
 export DATASET=$data_root
 export DATASET2=$data_root
@@ -28,7 +28,7 @@ export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 #export WANDB_KEY=YOUR_WANDB_KEY # Provide your wandb key here
 srun --mpi=pmi2 python entry.py train \
-            --conf_files configs/radiology_segmentation/biomed_seg_lang_v1.yaml \
+            --conf_files configs/radiology_segmentation/pancia_bayes_seg_lang.yaml \
             --overrides \
             FP16 True \
             RANDOM_SEED 2024 \
@@ -39,8 +39,10 @@ srun --mpi=pmi2 python entry.py train \
             TEST.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_TOTAL 4 \
             TRAIN.BATCH_SIZE_PER_GPU 4 \
-            SOLVER.MAX_NUM_EPOCHS 5 \
+            SOLVER.MAX_NUM_EPOCHS 10 \
             SOLVER.BASE_LR 0.0001 \
+            SOLVER.FIX_PARAM.decomposition False \
+            SOLVER.LR_MULTIPLIER.decomposition 1.0 \
             SOLVER.FIX_PARAM.backbone True \
             SOLVER.FIX_PARAM.lang_encoder True \
             SOLVER.FIX_PARAM.pixel_decoder True \
@@ -58,6 +60,9 @@ srun --mpi=pmi2 python entry.py train \
             MODEL.DECODER.SPATIAL.MAX_ITER 0 \
             ATTENTION_ARCH.QUERY_NUMBER 3 \
             STROKE_SAMPLER.MAX_CANDIDATE 10 \
-            LoRA.ENABLE True \
+            LoRA.ENABLE False \
             WEIGHT True \
             RESUME_FROM checkpoints/BiomedParse/biomedparse_v1.pt
+            # LoRA.ENABLE True \
+            # LoRA.RESUME True \
+            # LoRA.RESUME_FROM output_bayes_LoRA_multiphase_breast_heart_sqrt/pancia_bayes_seg_lang.yaml_conf~/run_1/00050092

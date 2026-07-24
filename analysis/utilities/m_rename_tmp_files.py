@@ -32,7 +32,7 @@
 
 from pathlib import Path
 
-root = Path("/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/Experiments/radiomics/TCGA_radiomic_features/LVMMed/segmentator_BiomedParse")
+root = Path("/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation")
 
-for file in root.rglob("*.json"):
+for file in root.rglob("*.png"):
     file.unlink()
