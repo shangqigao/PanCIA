@@ -2978,7 +2978,7 @@ class ContextualBandit:
     def _make_policy_state(R, P, RP):
         """Build the compact Version-B state: R, P, RP, and signed R-P."""
         # return np.column_stack([R, P, RP, R - P]).astype(np.float32)
-        return np.column_stack([R, P, R - P]).astype(np.float32)
+        return np.column_stack([R, P, np.abs(R - P)]).astype(np.float32)
 
     @staticmethod
     def _risk_cindex(risk, E, T):
@@ -4617,7 +4617,7 @@ class SurvivalAnalyzer:
             entropy_weight=0.05,
             rp_cost_weight=0.0,
             temperature=1.0,
-            hard_policy=True,
+            hard_policy=False,
             gumbel_temperature=1.0,
             gumbel_min_temperature=0.1,
             gumbel_anneal_rate=0.95,
@@ -4626,7 +4626,7 @@ class SurvivalAnalyzer:
         )
 
         # Create pipeline
-        pipeline = ContextualBanditPipeline(bandit, use_soft_ensemble=False)
+        pipeline = ContextualBanditPipeline(bandit, use_soft_ensemble=True)
 
         # Fit
         pipeline.fit(X_rad_train, X_path_train, tr_y)
