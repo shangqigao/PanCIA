@@ -37,6 +37,8 @@ LOADER:
 RANDOM_SEED: 2024
 
 STANDARD_TEXT_FOR_EVAL: False
+SAVE_PROB_MAP: False
+SAVE_FOLDER: 'test_pred' # if SAVE_PROB_MAP is true, probability map would be saved to parent dir of test
 
 ##################
 # Task settings
