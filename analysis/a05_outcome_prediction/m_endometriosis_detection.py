@@ -27,7 +27,7 @@ import pandas as pd
 import plotly.express as px
 from nibabel.processing import resample_from_to, resample_to_output
 from scipy import ndimage
-from scipy.stats import energy_distance
+from scipy.stats import energy_distance, pearsonr, spearmanr
 from sklearn.metrics import roc_auc_score
 
 
@@ -211,7 +211,13 @@ def join_labels(measurements: pd.DataFrame, csv_path: Path) -> pd.DataFrame:
 
     metadata_columns = [
         column
-        for column in ("center", "case_id", "scan_name", "endometrioma_label")
+        for column in (
+            "center",
+            "case_id",
+            "scan_name",
+            "endometrioma_label",
+            "em",
+        )
         if column in labels.columns
     ]
     merged = measurements.merge(
@@ -242,6 +248,294 @@ def join_labels(measurements: pd.DataFrame, csv_path: Path) -> pd.DataFrame:
         scans = merged.loc[merged["domain"].isna(), "scan_name"].tolist()
         raise ValueError(f"Cannot assign D1/D2 domain for scans: {scans[:10]}")
     return merged
+
+
+def attach_gt_endometrioma_case_volumes(
+    data: pd.DataFrame,
+    labels_dir: Path,
+) -> pd.DataFrame:
+    """Measure annotated GT masks and propagate maximum case volume to scans.
+
+    The scan-level value is missing for scans without an explicit endometrioma
+    annotation. The case-level value is the maximum physical volume among its
+    annotated scans, avoiding duplicate-lesion summation across modalities.
+    """
+    required = {"scan_name", "case_id", "endometrioma_label", "em"}
+    missing = required.difference(data.columns)
+    if missing:
+        raise ValueError(
+            f"GT endometrioma volume data is missing: {sorted(missing)}"
+        )
+    result = data.copy()
+    scan_volumes = []
+    for _, row in result.iterrows():
+        if int(row["em"]) != 1:
+            scan_volumes.append(np.nan)
+            continue
+        label_path = labels_dir / f"{row['scan_name']}_seg.nii.gz"
+        if not label_path.exists():
+            raise FileNotFoundError(
+                f"Missing annotated label map: {label_path}"
+            )
+        label_nii = nib.as_closest_canonical(nib.load(str(label_path)))
+        label = np.asanyarray(label_nii.dataobj)
+        voxel_volume_mm3 = float(
+            abs(np.linalg.det(label_nii.affine[:3, :3]))
+        )
+        scan_volumes.append(
+            float(np.count_nonzero(label == GT_LABELS["endometrioma"]))
+            * voxel_volume_mm3
+        )
+    result["gt_endometrioma_scan_volume_mm3"] = scan_volumes
+    case_volume = result.groupby("case_id")[
+        "gt_endometrioma_scan_volume_mm3"
+    ].transform("max")
+    negative_case = result["endometrioma_label"].astype(int) == 0
+    case_volume = case_volume.mask(negative_case & case_volume.isna(), 0.0)
+    if case_volume.isna().any():
+        cases = result.loc[case_volume.isna(), "case_id"].unique().tolist()
+        raise ValueError(
+            "Positive cases have no annotated endometrioma volume: "
+            f"{cases[:10]}"
+        )
+    result["gt_endometrioma_case_volume_mm3"] = case_volume.astype(float)
+    annotated_counts = (
+        result.assign(_annotated=result["em"].astype(int))
+        .groupby("case_id")["_annotated"]
+        .transform("sum")
+    )
+    result["gt_endometrioma_case_annotated_scans"] = annotated_counts.astype(int)
+    result["gt_endometrioma_case_aggregation"] = "maximum_annotated_scan"
+    return result
+
+
+def compute_gt_volume_correlations(
+    pre_post_data: pd.DataFrame,
+    output_path: Path,
+) -> pd.DataFrame:
+    """Correlate predicted pre/post volumes with propagated case GT volume."""
+    required = {
+        "domain",
+        "case_id",
+        "gt_endometrioma_case_volume_mm3",
+        "pre_endometrioma_volume_mm3",
+        "post_endometrioma_volume_mm3",
+    }
+    missing = required.difference(pre_post_data.columns)
+    if missing:
+        raise ValueError(
+            f"GT volume correlation data is missing: {sorted(missing)}"
+        )
+    rows = []
+    score_columns = {
+        "pre": "pre_endometrioma_volume_mm3",
+        "post": "post_endometrioma_volume_mm3",
+    }
+    target = "gt_endometrioma_case_volume_mm3"
+    for domain, domain_data in pre_post_data.groupby("domain"):
+        for level, aggregation in (
+            ("scan", None),
+            ("case_mean", "mean"),
+            ("case_max", "max"),
+        ):
+            if aggregation is None:
+                level_data = domain_data
+            else:
+                named_aggregations = {
+                    "gt_volume": (target, "first"),
+                    **{
+                        stage: (column, aggregation)
+                        for stage, column in score_columns.items()
+                    },
+                }
+                level_data = domain_data.groupby(
+                    "case_id", as_index=False
+                ).agg(**named_aggregations)
+            gt_name = "gt_volume" if aggregation is not None else target
+            for gt_subset, subset_data in (
+                ("all", level_data),
+                (
+                    "gt_positive_only",
+                    level_data.loc[level_data[gt_name] > 0],
+                ),
+            ):
+                for stage, column in score_columns.items():
+                    score_name = stage if aggregation is not None else column
+                    values = subset_data[[gt_name, score_name]].dropna()
+                    if len(values) < 3:
+                        continue
+                    pearson = pearsonr(values[gt_name], values[score_name])
+                    spearman = spearmanr(values[gt_name], values[score_name])
+                    rows.append(
+                        {
+                            "domain": domain,
+                            "level": level,
+                            "gt_subset": gt_subset,
+                            "prediction": stage,
+                            "case_prediction_aggregation": (
+                                aggregation
+                                if aggregation is not None
+                                else "none"
+                            ),
+                            "n": len(values),
+                            "pearson_r": float(pearson.statistic),
+                            "pearson_p": float(pearson.pvalue),
+                            "spearman_rho": float(spearman.statistic),
+                            "spearman_p": float(spearman.pvalue),
+                        }
+                    )
+    results = pd.DataFrame(rows)
+    results.to_csv(output_path, index=False)
+    case_results = results.loc[
+        results["level"].isin(["case_mean", "case_max"])
+    ].copy()
+    if not case_results.empty:
+        fig, axes = plt.subplots(
+            2,
+            2,
+            figsize=(14, 9),
+            sharex=True,
+            sharey=True,
+        )
+        categories = [
+            ("case_mean", "pearson_r", "Mean\nPearson"),
+            ("case_mean", "spearman_rho", "Mean\nSpearman"),
+            ("case_max", "pearson_r", "Maximum\nPearson"),
+            ("case_max", "spearman_rho", "Maximum\nSpearman"),
+        ]
+        x = np.arange(len(categories), dtype=float)
+        width = 0.34
+        displayed_values = case_results[
+            ["pearson_r", "spearman_rho"]
+        ].to_numpy(dtype=float)
+        y_min = min(0.0, float(np.nanmin(displayed_values)) - 0.1)
+        y_max = max(0.1, float(np.nanmax(displayed_values)) + 0.18)
+
+        def significance_label(p_value: float) -> str:
+            if not np.isfinite(p_value) or p_value >= 0.05:
+                return "ns"
+            if p_value < 0.0001:
+                return "****"
+            if p_value < 0.001:
+                return "***"
+            if p_value < 0.01:
+                return "**"
+            return "*"
+
+        for row_index, domain in enumerate(("D1", "D2")):
+            for column_index, gt_subset in enumerate(
+                ("all", "gt_positive_only")
+            ):
+                axis = axes[row_index, column_index]
+                subset = case_results.loc[
+                    (case_results["domain"] == domain)
+                    & (case_results["gt_subset"] == gt_subset)
+                ]
+                pre_values = []
+                post_values = []
+                pre_p_values = []
+                post_p_values = []
+                sample_sizes = []
+                for level, coefficient, _ in categories:
+                    p_column = (
+                        "pearson_p"
+                        if coefficient == "pearson_r"
+                        else "spearman_p"
+                    )
+                    matches = {}
+                    for prediction in ("pre", "post"):
+                        matches[prediction] = subset.loc[
+                            (subset["level"] == level)
+                            & (subset["prediction"] == prediction)
+                        ]
+                    pre_values.append(
+                        matches["pre"][coefficient].iloc[0]
+                        if not matches["pre"].empty
+                        else np.nan
+                    )
+                    post_values.append(
+                        matches["post"][coefficient].iloc[0]
+                        if not matches["post"].empty
+                        else np.nan
+                    )
+                    pre_p_values.append(
+                        matches["pre"][p_column].iloc[0]
+                        if not matches["pre"].empty
+                        else np.nan
+                    )
+                    post_p_values.append(
+                        matches["post"][p_column].iloc[0]
+                        if not matches["post"].empty
+                        else np.nan
+                    )
+                    sample_sizes.extend(
+                        int(match["n"].iloc[0])
+                        for match in matches.values()
+                        if not match.empty
+                    )
+                pre_bars = axis.bar(
+                    x - width / 2,
+                    pre_values,
+                    width,
+                    color="#4c78a8",
+                    label="Pre",
+                )
+                post_bars = axis.bar(
+                    x + width / 2,
+                    post_values,
+                    width,
+                    color="#f2a541",
+                    label="Post",
+                )
+                for bars, p_values in (
+                    (pre_bars, pre_p_values),
+                    (post_bars, post_p_values),
+                ):
+                    for bar, p_value in zip(bars, p_values):
+                        height = bar.get_height()
+                        if np.isfinite(height):
+                            axis.text(
+                                bar.get_x() + bar.get_width() / 2,
+                                height + (0.025 if height >= 0 else -0.04),
+                                f"{height:.2f}\n{significance_label(p_value)}",
+                                ha="center",
+                                va="bottom" if height >= 0 else "top",
+                                fontsize=8,
+                            )
+                sample_size = max(sample_sizes) if sample_sizes else 0
+                subset_title = (
+                    "All cases"
+                    if gt_subset == "all"
+                    else "GT-positive cases only"
+                )
+                axis.set_title(f"{domain}: {subset_title} (n={sample_size})")
+                axis.axhline(0, color="0.35", linewidth=1)
+                axis.set_ylim(y_min, y_max)
+                axis.grid(axis="y", alpha=0.2)
+                axis.set_xticks(x, [label for _, _, label in categories])
+                if row_index == 1:
+                    axis.set_xlabel("Case aggregation and correlation coefficient")
+                if column_index == 0:
+                    axis.set_ylabel("Correlation with case GT volume")
+                axis.legend(frameon=False, fontsize=8, loc="lower right")
+        fig.suptitle(
+            "Pre/post predicted volume correlation with GT endometrioma volume\n"
+            "Case GT volume = maximum physical volume among annotated scans"
+        )
+        fig.text(
+            0.5,
+            0.012,
+            "Significance tests correlation against zero: "
+            "ns ≥ 0.05, * < 0.05, ** < 0.01, *** < 0.001, **** < 0.0001",
+            ha="center",
+            fontsize=9,
+        )
+        fig.tight_layout(rect=(0, 0.04, 1, 1))
+        figure_path = output_path.with_name("gt_volume_correlations.png")
+        fig.savefig(figure_path, dpi=220, bbox_inches="tight")
+        fig.savefig(figure_path.with_suffix(".svg"), bbox_inches="tight")
+        plt.close(fig)
+    return results
 
 
 def sensitivity_specificity_curve(
@@ -2027,6 +2321,12 @@ def collect_pre_post_reasoning_volumes(
                 "domain": pre_row["domain"],
                 "case_id": pre_row.get("case_id", scan_name),
                 "endometrioma_label": int(pre_row["endometrioma_label"]),
+                "gt_endometrioma_scan_volume_mm3": float(
+                    pre_row.get("gt_endometrioma_scan_volume_mm3", np.nan)
+                ),
+                "gt_endometrioma_case_volume_mm3": float(
+                    pre_row.get("gt_endometrioma_case_volume_mm3", np.nan)
+                ),
                 "probability_map": pre_row["probability_map"],
                 "field_of_view_volume_mm3": float(
                     pre_row.get("field_of_view_volume_mm3", np.nan)
@@ -3229,6 +3529,14 @@ def build_review_dashboard(
                 f"<figcaption>{title}</figcaption>"
                 f'<img src="{stem}" alt="{title}"></figure>',
             )
+    correlation_figure = output_path.parent / "gt_volume_correlations.png"
+    if correlation_figure.exists():
+        title = "Predicted-volume correlation with GT endometrioma volume"
+        analysis_figures.append(
+            f'<figure class="analysis-figure gt-recall-figure">'
+            f"<figcaption>{title}</figcaption>"
+            f'<img src="{correlation_figure.name}" alt="{title}"></figure>'
+        )
     figure_gallery = (
         '<section class="panel analysis-gallery">'
         + "".join(analysis_figures)
@@ -3275,6 +3583,55 @@ def build_review_dashboard(
             + pivot.to_html(index=False, border=0, na_rep="—")
             + "</section>"
         )
+    correlation_table = ""
+    correlation_path = output_path.parent / "gt_volume_correlations.csv"
+    if correlation_path.exists():
+        correlation_data = pd.read_csv(correlation_path)
+        display_columns = [
+            "domain",
+            "level",
+            "gt_subset",
+            "prediction",
+            "n",
+            "pearson_r",
+            "pearson_p",
+            "spearman_rho",
+            "spearman_p",
+        ]
+        if set(display_columns).issubset(correlation_data.columns):
+            display = correlation_data[display_columns].copy()
+            for column in (
+                "pearson_r",
+                "pearson_p",
+                "spearman_rho",
+                "spearman_p",
+            ):
+                display[column] = display[column].map(
+                    lambda value: f"{value:.4g}"
+                )
+            display = display.rename(
+                columns={
+                    "domain": "Domain",
+                    "level": "Level",
+                    "gt_subset": "GT subset",
+                    "prediction": "Prediction",
+                    "n": "n",
+                    "pearson_r": "Pearson r",
+                    "pearson_p": "Pearson p",
+                    "spearman_rho": "Spearman ρ",
+                    "spearman_p": "Spearman p",
+                }
+            )
+            correlation_table = (
+                '<section class="panel recall-table">'
+                "<h2>GT endometrioma volume correlations</h2>"
+                "<p>Case GT volume is the maximum physical volume among "
+                "explicitly annotated scans. Case-mean and case-maximum rows "
+                "are the primary patient-level analyses; scan rows repeat the "
+                "case GT value and are descriptive.</p>"
+                + display.to_html(index=False, border=0, na_rep="—")
+                + "</section>"
+            )
     template = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -3303,6 +3660,7 @@ pre{{white-space:pre-wrap;font-size:12px}} @media(max-width:900px){{.grid{{grid-
 {plot_html}
 {figure_gallery}
 {recall_table}
+{correlation_table}
 <div class="controls">
 <label>Domain <select id="domain"><option value="all">All</option><option>D1</option><option>D2</option></select></label>
 <label>Decision <select id="decision"><option value="all">All</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option></select></label>
@@ -3482,6 +3840,10 @@ def main() -> None:
             target_spacing=target_spacing,
         )
         analysis_data = join_labels(measurements, args.csv_path)
+        analysis_data = attach_gt_endometrioma_case_volumes(
+            analysis_data,
+            args.labels_dir,
+        )
         measurements_path = args.output_dir / "segmentation_volumes.csv"
         analysis_data.to_csv(measurements_path, index=False)
 
@@ -3553,6 +3915,10 @@ def main() -> None:
             )
             pre_post_path = args.output_dir / "pre_post_reasoning_volumes.csv"
             pre_post_volumes.to_csv(pre_post_path, index=False)
+            compute_gt_volume_correlations(
+                pre_post_volumes,
+                args.output_dir / "gt_volume_correlations.csv",
+            )
             comparison_results = []
             for domain in ("D1", "D2"):
                 domain_data = pre_post_volumes.loc[
