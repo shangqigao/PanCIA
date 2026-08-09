@@ -102,8 +102,8 @@ for x, name, subtitle in [
 arrow(ax, (0.125, 0.48), (0.125, 0.425))
 box(ax, (0.025, 0.29), 0.20, 0.12, "Expert predictions",
     ("Full-fit risks", "Out-of-fold risks"), "green")
-box(ax, (0.025, 0.115), 0.20, 0.11, "Training-only references",
-    ("OOF 5-year survival calibration",), "blue", fontsize=14)
+box(ax, (0.025, 0.115), 0.20, 0.11, "Normal-score references",
+    ("Sorted policy-training OOF risks",), "blue", fontsize=14)
 
 # Stage 2
 state = FancyBboxPatch(
@@ -115,7 +115,7 @@ ax.add_patch(state)
 ax.text(0.3625, 0.755, "Current 3-D state", ha="center", va="center",
         fontsize=16, fontweight="bold", color=COLORS["ink"])
 ax.plot([0.285, 0.44], [0.715, 0.715], color="#B9ACD8", linewidth=1.8)
-ax.text(0.285, 0.665, "Calibrated 5-year risks", fontsize=15, fontweight="bold", color=COLORS["ink"])
+ax.text(0.285, 0.665, "Empirical normal scores", fontsize=15, fontweight="bold", color=COLORS["ink"])
 ax.text(0.285, 0.625, "qᴿ,  qᴾ", fontsize=15, color=COLORS["muted"])
 ax.text(0.285, 0.55, "Signed contrast", fontsize=15, fontweight="bold", color=COLORS["ink"])
 ax.text(0.285, 0.50, "qᴿ − qᴾ", fontsize=15, color=COLORS["muted"])
@@ -178,7 +178,7 @@ ax.text(0.8925, 0.37, "ARGMAX", ha="center", va="center", fontsize=17,
 ax.text(0.8925, 0.335, "hard selection", ha="center", va="center", fontsize=13,
         color=COLORS["muted"])
 arrow(ax, (0.8925, 0.265), (0.8925, 0.21))
-box(ax, (0.81, 0.08), 0.165, 0.12, "Final survival risk",
+box(ax, (0.81, 0.08), 0.165, 0.12, "Final relative risk",
     ("exactly one of  R · P · RP",), "teal")
 
 ax.text(

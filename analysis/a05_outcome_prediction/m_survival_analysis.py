@@ -2776,8 +2776,6 @@ class ContextualBandit:
         Train Cox risk with straight-through one-hot Gumbel-Softmax actions
     gumbel_temperature : float, default=1.0
         Initial Gumbel-Softmax temperature
-    policy_horizon_days : float, default=1826.25
-        Common survival-calibration horizon (five years for day-based outcomes)
     device : str, default='cuda'
         Device for PyTorch ('cuda' or 'cpu')
     random_state : int, default=None
@@ -2808,7 +2806,6 @@ class ContextualBandit:
                  gumbel_temperature=1.0,
                  gumbel_min_temperature=0.1,
                  gumbel_anneal_rate=0.95,
-                 policy_horizon_days=5 * 365.25,
                  loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
                  exploration_weight=0.1,
                  entropy_weight=0.05,
@@ -2856,9 +2853,6 @@ class ContextualBandit:
         self.gumbel_temperature = gumbel_temperature
         self.gumbel_min_temperature = gumbel_min_temperature
         self.gumbel_anneal_rate = gumbel_anneal_rate
-        if policy_horizon_days <= 0:
-            raise ValueError("policy_horizon_days must be positive")
-        self.policy_horizon_days = float(policy_horizon_days)
         self.loss_type = loss_type
         self.exploration_weight = exploration_weight
         self.entropy_weight = entropy_weight
@@ -2897,86 +2891,51 @@ class ContextualBandit:
                 max_exploration_weight=0.5
             )
     
-    def _fit_horizon_calibrator(self, risk, T, E, fit_indices):
-        """Fit an OOF Cox recalibrator and its five-year baseline hazard."""
+    @staticmethod
+    def _fit_normal_score_reference(risk, fit_indices):
+        """Store an outcome-free empirical OOF reference distribution."""
         risk = np.asarray(risk, dtype=np.float32).reshape(-1)
-        T = np.asarray(T, dtype=np.float32).reshape(-1)
-        E = np.asarray(E, dtype=np.float32).reshape(-1)
         fit_indices = np.asarray(fit_indices, dtype=np.int64)
-        risk_fit = risk[fit_indices]
-        T_fit = T[fit_indices]
-        E_fit = E[fit_indices]
-
-        center = float(risk_fit.mean())
-        scale = max(float(risk_fit.std()), 1e-6)
-        normalized_risk = ((risk_fit - center) / scale).reshape(-1, 1)
-        calibration_model = TorchCoxPH(
-            penalizer=0.01,
-            l1_ratio=0.0,
-            learning_rate=self.cox_learning_rate,
-            max_epochs=self.cox_max_epochs,
-            tolerance=self.cox_tolerance,
-            patience=self.cox_patience,
-            gradient_clip=self.cox_gradient_clip,
-            device=self.device,
-        ).fit(normalized_risk, T_fit, E_fit)
-
-        # A negative calibration slope would reverse an expert based on a
-        # noisy calibration sample. Treat such an expert as uninformative;
-        # the upper cap prevents extreme OOF slopes from destabilizing routing.
-        slope = float(np.clip(calibration_model.coef_[0], 0.0, 5.0))
-        calibrated_eta = slope * normalized_risk[:, 0]
-
-        event_times = np.unique(
-            T_fit[(E_fit > 0) & (T_fit <= self.policy_horizon_days)]
-        )
-        if event_times.size == 0:
-            raise ValueError(
-                "No calibration events occur at or before the policy horizon"
-            )
-        exp_eta = np.exp(np.clip(calibrated_eta, -50.0, 50.0))
-        baseline_hazard = 0.0
-        for event_time in event_times:
-            n_events = float(np.sum((T_fit == event_time) & (E_fit > 0)))
-            risk_set_sum = float(exp_eta[T_fit >= event_time].sum())
-            if risk_set_sum > 0:
-                baseline_hazard += n_events / risk_set_sum
-        baseline_hazard = max(baseline_hazard, 1e-12)
-        return {
-            'center': center,
-            'scale': scale,
-            'slope': slope,
-            'baseline_cumulative_hazard': baseline_hazard,
-            'horizon_days': self.policy_horizon_days,
-        }
+        reference = risk[fit_indices]
+        if reference.size < 2 or not np.isfinite(reference).all():
+            raise ValueError("Normal-score reference requires finite OOF risks")
+        return np.sort(reference).astype(np.float32)
 
     @staticmethod
-    def _apply_horizon_calibrator(risk, calibrator):
-        """Return calibrated log cumulative hazard: log(-log(S(tau)))."""
+    def _apply_normal_score(risk, sorted_reference):
+        """Map risks to normal scores using a stored empirical OOF CDF."""
         risk = np.asarray(risk, dtype=np.float32)
-        normalized = (risk - calibrator['center']) / calibrator['scale']
-        normalized = np.clip(normalized, -8.0, 8.0)
-        return (
-            np.log(calibrator['baseline_cumulative_hazard'])
-            + calibrator['slope'] * normalized
-        ).astype(np.float32)
+        original_shape = risk.shape
+        flat_risk = risk.reshape(-1)
+        reference = np.asarray(sorted_reference, dtype=np.float32).reshape(-1)
+        if reference.size < 2 or not np.isfinite(reference).all():
+            raise ValueError("Invalid normal-score reference")
+        if not np.isfinite(flat_risk).all():
+            raise ValueError("Risk values must be finite")
 
-    @classmethod
-    def _predict_horizon_survival(cls, risk, calibrator):
-        log_cumulative_hazard = cls._apply_horizon_calibrator(risk, calibrator)
-        cumulative_hazard = np.exp(np.clip(log_cumulative_hazard, -50.0, 50.0))
-        return np.exp(-cumulative_hazard).astype(np.float32)
+        left = np.searchsorted(reference, flat_risk, side='left')
+        right = np.searchsorted(reference, flat_risk, side='right')
+        midrank = 0.5 * (left + right)
+        percentile = (midrank + 0.5) / reference.size
+        epsilon = 0.5 / reference.size
+        percentile = np.clip(percentile, epsilon, 1.0 - epsilon)
 
-    def _calibrate_expert_risks(self, R, P, RP):
+        percentile_tensor = torch.as_tensor(percentile, dtype=torch.float64)
+        normal_score = np.sqrt(2.0) * torch.erfinv(
+            2.0 * percentile_tensor - 1.0
+        )
+        return normal_score.cpu().numpy().reshape(original_shape).astype(np.float32)
+
+    def _normalize_expert_risks(self, R, P, RP):
         return (
-            self._apply_horizon_calibrator(R, self.policy_calibrators['R']),
-            self._apply_horizon_calibrator(P, self.policy_calibrators['P']),
-            self._apply_horizon_calibrator(RP, self.policy_calibrators['RP']),
+            self._apply_normal_score(R, self.policy_normal_score_references['R']),
+            self._apply_normal_score(P, self.policy_normal_score_references['P']),
+            self._apply_normal_score(RP, self.policy_normal_score_references['RP']),
         )
 
     @staticmethod
     def _make_policy_state(R, P, RP):
-        """Build the compact Version-B state: R, P, RP, and signed R-P."""
+        """Build the compact state: R, P, and their absolute difference."""
         # return np.column_stack([R, P, RP, R - P]).astype(np.float32)
         return np.column_stack([R, P, np.abs(R - P)]).astype(np.float32)
 
@@ -3479,7 +3438,9 @@ class ContextualBandit:
                 },
                 'optimizer': copy.deepcopy(self.policy_optimizer.state_dict()),
                 'loss_fn': copy.deepcopy(self.policy_loss_fn),
-                'calibrators': copy.deepcopy(self.policy_calibrators),
+                'normal_score_references': copy.deepcopy(
+                    self.policy_normal_score_references
+                ),
                 'gumbel_temperature': self.gumbel_temperature,
                 'w_rad': self.w_rad.copy(),
                 'w_path': self.w_path.copy(),
@@ -3511,35 +3472,33 @@ class ContextualBandit:
                 'P': self.cox_path.oof_risk_,
                 'RP': self.cox_rp.oof_risk_,
             }
-            self.policy_calibrators = {
-                name: self._fit_horizon_calibrator(
-                    risk, T_train, E_train, policy_train_idx
-                )
+            self.policy_normal_score_references = {
+                name: self._fit_normal_score_reference(risk, policy_train_idx)
                 for name, risk in raw_oof.items()
             }
 
             # The policy is trained and validated entirely on OOF expert risks.
             # Full-fit risks are used only to obtain EM assignment weights and,
             # after fitting, to make predictions for new patients.
-            R_for_fit = self._apply_horizon_calibrator(
-                raw_oof['R'], self.policy_calibrators['R']
+            R_for_fit = self._apply_normal_score(
+                raw_oof['R'], self.policy_normal_score_references['R']
             )
-            P_for_fit = self._apply_horizon_calibrator(
-                raw_oof['P'], self.policy_calibrators['P']
+            P_for_fit = self._apply_normal_score(
+                raw_oof['P'], self.policy_normal_score_references['P']
             )
-            RP_for_fit = self._apply_horizon_calibrator(
-                raw_oof['RP'], self.policy_calibrators['RP']
+            RP_for_fit = self._apply_normal_score(
+                raw_oof['RP'], self.policy_normal_score_references['RP']
             )
             S_for_fit = self._make_policy_state(R_for_fit, P_for_fit, RP_for_fit)
 
-            R_policy = self._apply_horizon_calibrator(
-                self.R_curr, self.policy_calibrators['R']
+            R_policy = self._apply_normal_score(
+                self.R_curr, self.policy_normal_score_references['R']
             )
-            P_policy = self._apply_horizon_calibrator(
-                self.P_curr, self.policy_calibrators['P']
+            P_policy = self._apply_normal_score(
+                self.P_curr, self.policy_normal_score_references['P']
             )
-            RP_policy = self._apply_horizon_calibrator(
-                self.RP_curr, self.policy_calibrators['RP']
+            RP_policy = self._apply_normal_score(
+                self.RP_curr, self.policy_normal_score_references['RP']
             )
             S_policy = self._make_policy_state(R_policy, P_policy, RP_policy)
 
@@ -3554,10 +3513,8 @@ class ContextualBandit:
                     f"RP-P={rp_cost_info['lower_gain_vs_path']:.4f})"
                 )
                 print(
-                    "5-year calibration slopes - "
-                    f"R: {self.policy_calibrators['R']['slope']:.3f}, "
-                    f"P: {self.policy_calibrators['P']['slope']:.3f}, "
-                    f"RP: {self.policy_calibrators['RP']['slope']:.3f}"
+                    "Normal-score references - "
+                    f"R/P/RP: {len(policy_train_idx)} OOF patients each"
                 )
             best_val_loss = self._fit_policy_network(
                 S_for_fit, R_for_fit, P_for_fit, RP_for_fit, E_train, T_train,
@@ -3570,13 +3527,13 @@ class ContextualBandit:
             action_val = self._get_policy_probs(
                 S_for_fit[policy_val_idx], hard=self.hard_policy
             )
-            calibrated_val_risk = (
+            normalized_val_risk = (
                 action_val[:, 0] * R_for_fit[policy_val_idx]
                 + action_val[:, 1] * P_for_fit[policy_val_idx]
                 + action_val[:, 2] * RP_for_fit[policy_val_idx]
             )
             validation_cindex = concordance_index(
-                T_train[policy_val_idx], -calibrated_val_risk,
+                T_train[policy_val_idx], -normalized_val_risk,
                 E_train[policy_val_idx].astype(bool)
             )
             return {
@@ -3676,14 +3633,14 @@ class ContextualBandit:
             # EVALUATE AND CHECK CONVERGENCE
             # ============================================================
             
-            R_eval = self._apply_horizon_calibrator(
-                self.R_curr, self.policy_calibrators['R']
+            R_eval = self._apply_normal_score(
+                self.R_curr, self.policy_normal_score_references['R']
             )
-            P_eval = self._apply_horizon_calibrator(
-                self.P_curr, self.policy_calibrators['P']
+            P_eval = self._apply_normal_score(
+                self.P_curr, self.policy_normal_score_references['P']
             )
-            RP_eval = self._apply_horizon_calibrator(
-                self.RP_curr, self.policy_calibrators['RP']
+            RP_eval = self._apply_normal_score(
+                self.RP_curr, self.policy_normal_score_references['RP']
             )
             h_weighted = (
                 self.w_rad * R_eval + self.w_path * P_eval + self.w_rp * RP_eval
@@ -3709,7 +3666,7 @@ class ContextualBandit:
         # A final E-step aligns the policy with experts produced by the last
         # M-step. It is skipped when convergence stopped before another M-step.
         if experts_updated_since_policy:
-            print("\nFinal policy calibration on the last Cox experts...")
+            print("\nFinal policy normalization on the last Cox experts...")
             aligned = fit_aligned_policy(verbose=False)
             floor = self.min_expert_weight
             final_m_step_probs = aligned['probs'] * (1.0 - 3.0 * floor) + floor
@@ -3731,7 +3688,9 @@ class ContextualBandit:
         self.policy_network.load_state_dict(best_em_checkpoint['policy'])
         self.policy_optimizer.load_state_dict(best_em_checkpoint['optimizer'])
         self.policy_loss_fn = best_em_checkpoint['loss_fn']
-        self.policy_calibrators = best_em_checkpoint['calibrators']
+        self.policy_normal_score_references = (
+            best_em_checkpoint['normal_score_references']
+        )
         self.gumbel_temperature = best_em_checkpoint['gumbel_temperature']
         self.w_rad = best_em_checkpoint['w_rad']
         self.w_path = best_em_checkpoint['w_path']
@@ -3756,7 +3715,7 @@ class ContextualBandit:
         Returns
         -------
         risk_scores : ndarray
-            Selected calibrated log cumulative hazards at five years
+            Selected empirical normal-score risk
         actions : ndarray
             Selected actions for each patient
         probs : ndarray
@@ -3768,7 +3727,7 @@ class ContextualBandit:
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
 
-        R, P, RP = self._calibrate_expert_risks(R, P, RP)
+        R, P, RP = self._normalize_expert_risks(R, P, RP)
         S = self._make_policy_state(R, P, RP)
         
         # Get policy probabilities
@@ -3788,13 +3747,6 @@ class ContextualBandit:
         
         return risk_scores, actions, probs
 
-    def predict_survival_probability(self, X_rad, X_path):
-        """Predict calibrated five-year survival under the selected expert."""
-        risk_scores, actions, probs = self.predict_risk(X_rad, X_path)
-        cumulative_hazard = np.exp(np.clip(risk_scores, -50.0, 50.0))
-        survival = np.exp(-cumulative_hazard).astype(np.float32)
-        return survival, actions, probs
-    
     def get_subgroup_probabilities(self, X_rad, X_path):
         """
         Get soft subgroup assignment probabilities for new patients.
@@ -3803,7 +3755,7 @@ class ContextualBandit:
         P = self._predict_risk(self.cox_path, X_path)
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
-        R, P, RP = self._calibrate_expert_risks(R, P, RP)
+        R, P, RP = self._normalize_expert_risks(R, P, RP)
         S = self._make_policy_state(R, P, RP)
         return self._get_policy_probs(S)
     
@@ -3816,7 +3768,7 @@ class ContextualBandit:
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
 
-        R, P, RP = self._calibrate_expert_risks(R, P, RP)
+        R, P, RP = self._normalize_expert_risks(R, P, RP)
         S = self._make_policy_state(R, P, RP)
         probs = self._get_policy_probs(S)
         

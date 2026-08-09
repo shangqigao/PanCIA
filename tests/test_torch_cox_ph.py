@@ -166,7 +166,7 @@ class TorchCoxPHTests(unittest.TestCase):
         np.testing.assert_array_equal(np.argmax(hard, axis=1), np.argmax(soft, axis=1))
         np.testing.assert_allclose(hard.sum(axis=1), 1.0)
 
-    def test_policy_state_contains_unimodal_risks_and_signed_contrast(self):
+    def test_policy_state_contains_unimodal_risks_and_absolute_difference(self):
         rng = np.random.default_rng(9)
         bandit = ContextualBandit(device="cpu")
         R = rng.normal(size=20).astype(np.float32)
@@ -178,7 +178,7 @@ class TorchCoxPHTests(unittest.TestCase):
         self.assertEqual(state.shape, (20, 3))
         np.testing.assert_allclose(state[:, 0], R)
         np.testing.assert_allclose(state[:, 1], P)
-        np.testing.assert_allclose(state[:, 2], R - P)
+        np.testing.assert_allclose(state[:, 2], np.abs(R - P))
         self.assertTrue(np.isfinite(state).all())
 
     def test_weighted_breslow_loss_with_ties_matches_manual_value(self):
@@ -319,37 +319,28 @@ class TorchCoxPHTests(unittest.TestCase):
         )
         self.assertTrue(np.isfinite(model.predict_log_partial_hazard(X)).all())
 
-    def test_horizon_calibration_produces_valid_five_year_survival(self):
+    def test_normal_score_uses_training_reference_for_single_test_case(self):
         rng = np.random.default_rng(19)
         n = 80
         oof_risk = rng.normal(size=n).astype(np.float32)
-        durations = np.exp(
-            7.5 - 0.8 * oof_risk + rng.normal(scale=0.35, size=n)
-        ).astype(np.float32)
-        events = (rng.random(n) < 0.8).astype(np.float32)
-        bandit = ContextualBandit(
-            policy_horizon_days=5 * 365.25,
-            cox_max_epochs=150,
-            cox_patience=15,
-            device="cpu",
-        )
-        calibrator = bandit._fit_horizon_calibrator(
-            oof_risk, durations, events, np.arange(60)
+        bandit = ContextualBandit(device="cpu")
+        reference = bandit._fit_normal_score_reference(
+            oof_risk, np.arange(60)
         )
 
-        calibrated_risk = bandit._apply_horizon_calibrator(oof_risk, calibrator)
-        survival = bandit._predict_horizon_survival(oof_risk, calibrator)
-
-        self.assertEqual(calibrator['horizon_days'], 5 * 365.25)
-        self.assertGreaterEqual(calibrator['slope'], 0.0)
-        self.assertTrue(np.isfinite(calibrated_risk).all())
-        self.assertTrue(np.all((survival >= 0.0) & (survival <= 1.0)))
-        np.testing.assert_allclose(
-            calibrated_risk,
-            np.log(-np.log(survival)),
-            rtol=2e-5,
-            atol=2e-5,
+        single = bandit._apply_normal_score(
+            np.array([oof_risk[70]], dtype=np.float32), reference
         )
+        batch = bandit._apply_normal_score(oof_risk[65:75], reference)
+
+        self.assertEqual(single.shape, (1,))
+        self.assertAlmostEqual(single[0], batch[5], places=6)
+        self.assertTrue(np.isfinite(single).all())
+        extremes = bandit._apply_normal_score(
+            np.array([-1e6, 1e6], dtype=np.float32), reference
+        )
+        self.assertTrue(np.isfinite(extremes).all())
+        self.assertLess(extremes[0], extremes[1])
 
     def test_rp_cost_is_zero_only_for_reliable_improvement(self):
         T = np.arange(1, 21, dtype=np.float32)
