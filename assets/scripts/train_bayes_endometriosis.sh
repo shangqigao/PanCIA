@@ -17,6 +17,10 @@
 source ~/.bashrc
 conda activate PanCIA
 
+export TMPDIR="/home/sg2162/rds/hpc-work/tmp"
+export TORCHINDUCTOR_CACHE_DIR="/home/sg2162/rds/hpc-work/torch_cache"
+export TRITON_CACHE_DIR="/home/sg2162/rds/hpc-work/triton_cache"
+
 data_root="/home/sg2162/rds/hpc-work/BiomedParse_Endometriosis/"
 export DETECTRON2_DATASETS=$data_root
 export DATASET=$data_root
@@ -43,9 +47,9 @@ srun --mpi=pmi2 python entry.py train \
             SOLVER.BASE_LR 0.0001 \
             SOLVER.FIX_PARAM.decomposition False \
             SOLVER.LR_MULTIPLIER.decomposition 1.0 \
-            SOLVER.FIX_PARAM.backbone True \
+            SOLVER.FIX_PARAM.backbone False \
             SOLVER.FIX_PARAM.lang_encoder True \
-            SOLVER.FIX_PARAM.pixel_decoder True \
+            SOLVER.FIX_PARAM.pixel_decoder False \
             MODEL.DECODER.COST_SPATIAL.CLASS_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.MASK_WEIGHT 1.0 \
             MODEL.DECODER.COST_SPATIAL.DICE_WEIGHT 1.0 \
@@ -63,6 +67,7 @@ srun --mpi=pmi2 python entry.py train \
             LoRA.ENABLE False \
             WEIGHT True \
             RESUME_FROM checkpoints/BiomedParse/biomedparse_v1.pt
+            # RESUME_FROM checkpoints/BiomedParse/biomedparse_v1.pt
             # LoRA.ENABLE True \
             # LoRA.RESUME True \
             # LoRA.RESUME_FROM output_bayes_LoRA_multiphase_breast_heart_sqrt/pancia_bayes_seg_lang.yaml_conf~/run_1/00050092
