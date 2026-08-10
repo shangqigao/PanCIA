@@ -3620,7 +3620,11 @@ class ContextualBandit:
             self._reset_policy_optimization_state()
             aligned = fit_aligned_policy(verbose=True)
             experts_updated_since_policy = False
-            policy_probs = aligned['probs']
+            # Use smooth policy responsibilities for expert specialization,
+            # even when the policy itself is trained and deployed with hard
+            # actions. This prevents small logit changes from discontinuously
+            # moving a patient's Cox training weight between experts.
+            policy_probs = aligned['soft_probs']
             floor = self.min_expert_weight
             m_step_probs = policy_probs * (1.0 - 3.0 * floor) + floor
             self.w_rad = m_step_probs[:, 0]
@@ -3749,7 +3753,9 @@ class ContextualBandit:
             self._reset_policy_optimization_state()
             aligned = fit_aligned_policy(verbose=False)
             floor = self.min_expert_weight
-            final_m_step_probs = aligned['probs'] * (1.0 - 3.0 * floor) + floor
+            final_m_step_probs = (
+                aligned['soft_probs'] * (1.0 - 3.0 * floor) + floor
+            )
             self.w_rad = final_m_step_probs[:, 0]
             self.w_path = final_m_step_probs[:, 1]
             self.w_rp = final_m_step_probs[:, 2]
