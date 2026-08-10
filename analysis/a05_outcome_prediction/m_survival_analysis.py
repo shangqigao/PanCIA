@@ -2766,6 +2766,12 @@ class ContextualBandit:
         Elastic-net mixing parameter used by TorchCoxPH
     min_expert_weight : float, default=0.01
         Minimum M-step sample weight assigned to each survival expert
+    expert_specialization_strength : float, default=0.5
+        Maximum fraction of policy weighting used in an expert M-step. The
+        remainder is uniform global-cohort weighting.
+    target_event_ess : float, default=50.0
+        Weighted event effective sample size required to use the maximum
+        expert specialization strength.
     rp_cost_weight : float, default=1.0
         Strength of the evidence-based penalty on RP policy probability
     rp_minimum_gain : float, default=0.01
@@ -2798,6 +2804,8 @@ class ContextualBandit:
                  cox_l1_ratio=0.9,
                  cox_gradient_clip=10.0,
                  min_expert_weight=0.01,
+                 expert_specialization_strength=0.5,
+                 target_event_ess=50.0,
                  rp_cost_weight=1.0,
                  rp_minimum_gain=0.01,
                  rp_bootstrap_samples=500,
@@ -2834,6 +2842,12 @@ class ContextualBandit:
         if not 0.0 <= min_expert_weight < 1.0 / 3.0:
             raise ValueError("min_expert_weight must be in [0, 1/3)")
         self.min_expert_weight = min_expert_weight
+        if not 0.0 <= expert_specialization_strength <= 1.0:
+            raise ValueError("expert_specialization_strength must be in [0, 1]")
+        if target_event_ess <= 0:
+            raise ValueError("target_event_ess must be positive")
+        self.expert_specialization_strength = expert_specialization_strength
+        self.target_event_ess = target_event_ess
         if rp_cost_weight < 0:
             raise ValueError("rp_cost_weight must be non-negative")
         if rp_bootstrap_samples < 0:
@@ -2942,6 +2956,41 @@ class ContextualBandit:
     @staticmethod
     def _risk_cindex(risk, E, T):
         return concordance_index(T, -risk, E.astype(bool))
+
+    def _prepare_expert_fit_weights(self, policy_weights, events):
+        """Build stable mean-one global-plus-specialist Cox weights."""
+        policy_weights = np.asarray(policy_weights, dtype=np.float64).reshape(-1)
+        events = np.asarray(events, dtype=bool).reshape(-1)
+        if policy_weights.shape != events.shape:
+            raise ValueError("policy_weights and events must have equal length")
+        if not np.isfinite(policy_weights).all() or np.any(policy_weights < 0):
+            raise ValueError("policy_weights must be finite and non-negative")
+
+        mean_weight = policy_weights.mean()
+        if mean_weight <= 0:
+            normalized = np.ones_like(policy_weights)
+        else:
+            normalized = policy_weights / mean_weight
+
+        event_weights = normalized[events]
+        squared_sum = np.square(event_weights).sum()
+        event_ess = (
+            float(event_weights.sum() ** 2 / squared_sum)
+            if squared_sum > 0 else 0.0
+        )
+        specialization = self.expert_specialization_strength * min(
+            1.0, event_ess / self.target_event_ess
+        )
+        fit_weights = (1.0 - specialization) + specialization * normalized
+        # Guard against accumulated floating-point error: equal mean weight
+        # keeps the elastic-net penalty scale comparable across experts.
+        fit_weights /= fit_weights.mean()
+        return np.ascontiguousarray(fit_weights, dtype=np.float32), {
+            'event_ess': event_ess,
+            'specialization': specialization,
+            'min_weight': float(fit_weights.min()),
+            'max_weight': float(fit_weights.max()),
+        }
 
     def _compute_rp_cost(self, R, P, RP, E, T, bootstrap_indices=None,
                          seed_offset=0):
@@ -3301,12 +3350,23 @@ class ContextualBandit:
             dropout_rate=0.1
         ).to(self.device)
         
+        self._reset_policy_optimization_state()
+
+    def _reset_policy_optimization_state(self):
+        """Reset E-step optimization state without resetting policy weights.
+
+        Expert OOF predictions, and therefore the policy optimization problem,
+        change after every M-step.  A fresh optimizer avoids carrying Adam
+        moments from the previous problem, while resetting the loss schedule
+        and Gumbel temperature restores the intended exploration schedule for
+        each E-step.
+        """
         self.policy_optimizer = optim.Adam(
             self.policy_network.parameters(),
             lr=self.learning_rate,
             weight_decay=1e-5
         )
-        
+        self.gumbel_temperature = self.gumbel_initial_temperature
         self._init_loss_function()
     
     def fit(self, X_rad, X_path, y):
@@ -3557,6 +3617,7 @@ class ContextualBandit:
         for iteration in range(self.max_iterations):
             print(f"\n--- EM Iteration {iteration + 1} ---")
             print(f"Training policy network for {self.policy_epochs} epochs...")
+            self._reset_policy_optimization_state()
             aligned = fit_aligned_policy(verbose=True)
             experts_updated_since_policy = False
             policy_probs = aligned['probs']
@@ -3595,11 +3656,29 @@ class ContextualBandit:
             # ============================================================
             
             print(f"Training weighted Cox models...")
+
+            expert_fit_weights = {}
+            for expert_name, policy_weights in (
+                ('Rad', self.w_rad),
+                ('Path', self.w_path),
+                ('RP', self.w_rp),
+            ):
+                fit_weights, weight_info = self._prepare_expert_fit_weights(
+                    policy_weights, E_train
+                )
+                expert_fit_weights[expert_name] = fit_weights
+                print(
+                    f"  {expert_name} stabilized weights: "
+                    f"event ESS={weight_info['event_ess']:.1f}, "
+                    f"rho={weight_info['specialization']:.3f}, "
+                    f"range=[{weight_info['min_weight']:.3f}, "
+                    f"{weight_info['max_weight']:.3f}]"
+                )
             
             # Radiomic model with weights
             print(f"  Weighted Radiomic model...")
             self.cox_rad, _ = self.train_survival_model(
-                X_rad, T_train, E_train, weights=self.w_rad,
+                X_rad, T_train, E_train, weights=expert_fit_weights['Rad'],
                 alpha_range=self.alpha_range, model_key='radiomics'
             )
             R_new = self._predict_risk(self.cox_rad, X_rad)
@@ -3607,7 +3686,7 @@ class ContextualBandit:
             # Pathomic model with weights
             print(f"  Weighted Pathomic model...")
             self.cox_path, _ = self.train_survival_model(
-                X_path, T_train, E_train, weights=self.w_path,
+                X_path, T_train, E_train, weights=expert_fit_weights['Path'],
                 alpha_range=self.alpha_range, model_key='pathomics'
             )
             P_new = self._predict_risk(self.cox_path, X_path)
@@ -3615,7 +3694,7 @@ class ContextualBandit:
             # Fusion model with weights
             print(f"  Weighted Fusion (RP) model...")
             self.cox_rp, _ = self.train_survival_model(
-                X_rp, T_train, E_train, weights=self.w_rp,
+                X_rp, T_train, E_train, weights=expert_fit_weights['RP'],
                 alpha_range=self.alpha_range, model_key='radiopathomics'
             )
             RP_new = self._predict_risk(self.cox_rp, X_rp)
@@ -3667,6 +3746,7 @@ class ContextualBandit:
         # M-step. It is skipped when convergence stopped before another M-step.
         if experts_updated_since_policy:
             print("\nFinal policy normalization on the last Cox experts...")
+            self._reset_policy_optimization_state()
             aligned = fit_aligned_policy(verbose=False)
             floor = self.min_expert_weight
             final_m_step_probs = aligned['probs'] * (1.0 - 3.0 * floor) + floor

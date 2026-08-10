@@ -181,6 +181,37 @@ class TorchCoxPHTests(unittest.TestCase):
         np.testing.assert_allclose(state[:, 2], np.abs(R - P))
         self.assertTrue(np.isfinite(state).all())
 
+    def test_expert_fit_weights_are_mean_one_and_ess_adaptive(self):
+        bandit = ContextualBandit(
+            expert_specialization_strength=0.5,
+            target_event_ess=4.0,
+            device="cpu",
+        )
+        policy_weights = np.array([0.1, 0.2, 0.8, 0.9], dtype=np.float32)
+
+        high_ess_weights, high_info = bandit._prepare_expert_fit_weights(
+            policy_weights, np.ones(4, dtype=bool)
+        )
+        low_ess_weights, low_info = bandit._prepare_expert_fit_weights(
+            policy_weights, np.array([True, False, False, False])
+        )
+
+        self.assertAlmostEqual(float(high_ess_weights.mean()), 1.0, places=6)
+        self.assertAlmostEqual(float(low_ess_weights.mean()), 1.0, places=6)
+        self.assertGreater(high_info['specialization'], low_info['specialization'])
+        self.assertLess(np.ptp(low_ess_weights), np.ptp(high_ess_weights))
+        self.assertGreater(low_ess_weights.min(), 0.0)
+
+    def test_uniform_policy_produces_uniform_expert_fit_weights(self):
+        bandit = ContextualBandit(device="cpu")
+        weights, info = bandit._prepare_expert_fit_weights(
+            np.full(10, 0.2, dtype=np.float32),
+            np.array([True] * 5 + [False] * 5),
+        )
+
+        np.testing.assert_allclose(weights, np.ones(10, dtype=np.float32))
+        self.assertAlmostEqual(info['event_ess'], 5.0)
+
     def test_weighted_breslow_loss_with_ties_matches_manual_value(self):
         X = torch.tensor([[1.0], [2.0], [3.0]])
         T = torch.tensor([2.0, 2.0, 1.0])
