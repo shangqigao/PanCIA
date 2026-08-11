@@ -350,28 +350,62 @@ class TorchCoxPHTests(unittest.TestCase):
         )
         self.assertTrue(np.isfinite(model.predict_log_partial_hazard(X)).all())
 
-    def test_normal_score_uses_training_reference_for_single_test_case(self):
+    def test_policy_risk_reference_supports_a_single_test_case(self):
         rng = np.random.default_rng(19)
         n = 80
-        oof_risk = rng.normal(size=n).astype(np.float32)
+        times = np.arange(1, n + 1, dtype=np.float32)
+        events = np.ones(n, dtype=bool)
+        risks = {
+            "R": rng.normal(scale=0.2, size=n).astype(np.float32),
+            "P": (-times + rng.normal(scale=1.0, size=n)).astype(np.float32),
+            "RP": (-0.8 * times + rng.normal(scale=3.0, size=n)).astype(np.float32),
+        }
         bandit = ContextualBandit(device="cpu")
-        reference = bandit._fit_normal_score_reference(
-            oof_risk, np.arange(60)
+        reference = bandit._fit_policy_risk_reference(
+            risks, np.arange(60), events, times
         )
 
-        single = bandit._apply_normal_score(
-            np.array([oof_risk[70]], dtype=np.float32), reference
+        single = bandit._apply_policy_risk_reference(
+            np.array([risks["P"][70]], dtype=np.float32), "P", reference
         )
-        batch = bandit._apply_normal_score(oof_risk[65:75], reference)
+        batch = bandit._apply_policy_risk_reference(
+            risks["P"][65:75], "P", reference
+        )
 
         self.assertEqual(single.shape, (1,))
         self.assertAlmostEqual(single[0], batch[5], places=6)
         self.assertTrue(np.isfinite(single).all())
-        extremes = bandit._apply_normal_score(
-            np.array([-1e6, 1e6], dtype=np.float32), reference
+        self.assertEqual(reference["reliability"]["P"], 1.0)
+        self.assertGreater(reference["reliability"]["P"],
+                           reference["reliability"]["R"])
+        extremes = bandit._apply_policy_risk_reference(
+            np.array([-1e6, 1e6], dtype=np.float32), "P", reference
         )
         self.assertTrue(np.isfinite(extremes).all())
-        self.assertLess(extremes[0], extremes[1])
+        np.testing.assert_allclose(extremes, [-5.0, 5.0])
+
+    def test_policy_risk_reference_uses_one_common_scale(self):
+        times = np.arange(1, 21, dtype=np.float32)
+        events = np.ones(20, dtype=bool)
+        base = np.linspace(-1.0, 1.0, 20, dtype=np.float32)
+        risks = {"R": base, "P": 4.0 * base, "RP": 2.0 * base}
+        bandit = ContextualBandit(device="cpu", policy_risk_clip=100.0)
+        reference = bandit._fit_policy_risk_reference(
+            risks, np.arange(20), events, times
+        )
+
+        transformed_r = bandit._apply_policy_risk_reference(
+            risks["R"], "R", reference
+        )
+        transformed_p = bandit._apply_policy_risk_reference(
+            risks["P"], "P", reference
+        )
+
+        # All three rankings have equal reliability, so the shared scale must
+        # preserve P's fourfold raw dispersion relative to R.
+        self.assertAlmostEqual(
+            float(np.std(transformed_p) / np.std(transformed_r)), 4.0, places=5
+        )
 
     def test_rp_cost_is_zero_only_for_reliable_improvement(self):
         T = np.arange(1, 21, dtype=np.float32)

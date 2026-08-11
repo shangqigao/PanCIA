@@ -71,6 +71,27 @@ class PolicyCoxLossTests(unittest.TestCase):
         self.assertEqual(loss_fn.step_count, 0)
         self.assertEqual(loss_fn.loss_history, [])
 
+    def test_adaptive_loss_has_no_risk_variance_penalty(self):
+        loss_fn = AdaptiveWeightedCoxPLLoss(initial_exploration_weight=0.2)
+        probs = torch.full((4, 3), 1.0 / 3.0)
+        risk = torch.tensor([0.2, -0.1, 0.5, 0.0])
+        events = torch.tensor([1.0, 0.0, 1.0, 1.0])
+        times = torch.tensor([4.0, 3.0, 2.0, 1.0])
+
+        components = loss_fn(
+            probs, risk, -risk, 3.0 * risk, events, times,
+            return_components=True,
+        )
+
+        self.assertNotIn("uncertainty_bonus", components)
+        self.assertNotIn("uncertainty_value", components)
+        torch.testing.assert_close(
+            components["total_loss"],
+            components["cox_loss"]
+            + components["entropy_bonus"]
+            + components["diversity_bonus"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

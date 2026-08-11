@@ -2382,19 +2382,11 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         diversity = self.compute_action_diversity(reg_probs)
         diversity_bonus = self.exploration_weight * 0.1 * diversity
         
-        # Uncertainty bonus
-        risk_all = torch.stack([R, P, RP], dim=1)
-        expected_risk = (reg_probs * risk_all).sum(dim=1, keepdim=True)
-        variance = torch.sum(
-            reg_probs * (risk_all - expected_risk)**2, dim=1
-        )
-        uncertainty_bonus = self.exploration_weight * 0.1 * variance.mean()
-        
         # ============================================================
         # COMBINE
         # ============================================================
         
-        total_loss = cox_loss + entropy_bonus + diversity_bonus + uncertainty_bonus
+        total_loss = cox_loss + entropy_bonus + diversity_bonus
         
         if return_components:
             return {
@@ -2404,8 +2396,6 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
                 'entropy_value': entropy,
                 'diversity_bonus': diversity_bonus,
                 'diversity_value': diversity,
-                'uncertainty_bonus': uncertainty_bonus,
-                'uncertainty_value': variance.mean(),
                 'exploration_weight': self.exploration_weight
             }
         
@@ -2772,6 +2762,9 @@ class ContextualBandit:
     target_event_ess : float, default=50.0
         Weighted event effective sample size required to use the maximum
         expert specialization strength.
+    policy_risk_clip : float, default=5.0
+        Absolute clipping bound after OOF-centering, common-scale conversion,
+        and OOF reliability shrinkage.
     rp_cost_weight : float, default=1.0
         Strength of the evidence-based penalty on RP policy probability
     rp_minimum_gain : float, default=0.01
@@ -2806,6 +2799,7 @@ class ContextualBandit:
                  min_expert_weight=0.01,
                  expert_specialization_strength=0.5,
                  target_event_ess=50.0,
+                 policy_risk_clip=5.0,
                  rp_cost_weight=1.0,
                  rp_minimum_gain=0.01,
                  rp_bootstrap_samples=500,
@@ -2848,6 +2842,9 @@ class ContextualBandit:
             raise ValueError("target_event_ess must be positive")
         self.expert_specialization_strength = expert_specialization_strength
         self.target_event_ess = target_event_ess
+        if policy_risk_clip <= 0:
+            raise ValueError("policy_risk_clip must be positive")
+        self.policy_risk_clip = float(policy_risk_clip)
         if rp_cost_weight < 0:
             raise ValueError("rp_cost_weight must be non-negative")
         if rp_bootstrap_samples < 0:
@@ -2905,46 +2902,87 @@ class ContextualBandit:
                 max_exploration_weight=0.5
             )
     
-    @staticmethod
-    def _fit_normal_score_reference(risk, fit_indices):
-        """Store an outcome-free empirical OOF reference distribution."""
-        risk = np.asarray(risk, dtype=np.float32).reshape(-1)
+    def _fit_policy_risk_reference(self, risks, fit_indices, E, T):
+        """Fit OOF centres, one shared robust scale, and reliability factors."""
         fit_indices = np.asarray(fit_indices, dtype=np.int64)
-        reference = risk[fit_indices]
-        if reference.size < 2 or not np.isfinite(reference).all():
-            raise ValueError("Normal-score reference requires finite OOF risks")
-        return np.sort(reference).astype(np.float32)
+        E = np.asarray(E, dtype=bool).reshape(-1)
+        T = np.asarray(T, dtype=np.float32).reshape(-1)
+        names = ('R', 'P', 'RP')
+        selected = {}
+        centers = {}
+        mads = {}
+        cindices = {}
+
+        for name in names:
+            values = np.asarray(risks[name], dtype=np.float32).reshape(-1)
+            if len(values) != len(T):
+                raise ValueError("OOF risks and survival outcomes must align")
+            values = values[fit_indices]
+            if values.size < 2 or not np.isfinite(values).all():
+                raise ValueError("Policy risk reference requires finite OOF risks")
+            selected[name] = values
+            centers[name] = float(np.median(values))
+            mads[name] = float(np.median(np.abs(values - centers[name])))
+            cindices[name] = float(self._risk_cindex(
+                values, E[fit_indices], T[fit_indices]
+            ))
+
+        common_scale = 1.4826 * float(np.median(list(mads.values())))
+        if not np.isfinite(common_scale) or common_scale <= 1e-8:
+            pooled_centered = np.concatenate([
+                selected[name] - centers[name] for name in names
+            ])
+            common_scale = float(np.std(pooled_centered))
+        if not np.isfinite(common_scale) or common_scale <= 1e-8:
+            common_scale = 1.0
+
+        signals = {
+            name: max(0.0, cindices[name] - 0.5) for name in names
+        }
+        best_signal = max(signals.values())
+        if best_signal <= 1e-8:
+            reliability = {name: 1.0 for name in names}
+        else:
+            reliability = {
+                name: float(np.clip(signals[name] / best_signal, 0.0, 1.0))
+                for name in names
+            }
+
+        return {
+            'centers': centers,
+            'common_scale': common_scale,
+            'reliability': reliability,
+            'cindex': cindices,
+            'mad': mads,
+            'clip': self.policy_risk_clip,
+        }
 
     @staticmethod
-    def _apply_normal_score(risk, sorted_reference):
-        """Map risks to normal scores using a stored empirical OOF CDF."""
+    def _apply_policy_risk_reference(risk, expert_name, reference):
+        """Apply stored training-OOF risk statistics to any prediction batch."""
         risk = np.asarray(risk, dtype=np.float32)
-        original_shape = risk.shape
-        flat_risk = risk.reshape(-1)
-        reference = np.asarray(sorted_reference, dtype=np.float32).reshape(-1)
-        if reference.size < 2 or not np.isfinite(reference).all():
-            raise ValueError("Invalid normal-score reference")
-        if not np.isfinite(flat_risk).all():
+        if not np.isfinite(risk).all():
             raise ValueError("Risk values must be finite")
-
-        left = np.searchsorted(reference, flat_risk, side='left')
-        right = np.searchsorted(reference, flat_risk, side='right')
-        midrank = 0.5 * (left + right)
-        percentile = (midrank + 0.5) / reference.size
-        epsilon = 0.5 / reference.size
-        percentile = np.clip(percentile, epsilon, 1.0 - epsilon)
-
-        percentile_tensor = torch.as_tensor(percentile, dtype=torch.float64)
-        normal_score = np.sqrt(2.0) * torch.erfinv(
-            2.0 * percentile_tensor - 1.0
+        centered = risk - reference['centers'][expert_name]
+        transformed = (
+            reference['reliability'][expert_name]
+            * centered / reference['common_scale']
         )
-        return normal_score.cpu().numpy().reshape(original_shape).astype(np.float32)
+        return np.clip(
+            transformed, -reference['clip'], reference['clip']
+        ).astype(np.float32)
 
     def _normalize_expert_risks(self, R, P, RP):
         return (
-            self._apply_normal_score(R, self.policy_normal_score_references['R']),
-            self._apply_normal_score(P, self.policy_normal_score_references['P']),
-            self._apply_normal_score(RP, self.policy_normal_score_references['RP']),
+            self._apply_policy_risk_reference(
+                R, 'R', self.policy_risk_reference
+            ),
+            self._apply_policy_risk_reference(
+                P, 'P', self.policy_risk_reference
+            ),
+            self._apply_policy_risk_reference(
+                RP, 'RP', self.policy_risk_reference
+            ),
         )
 
     @staticmethod
@@ -3498,8 +3536,8 @@ class ContextualBandit:
                 },
                 'optimizer': copy.deepcopy(self.policy_optimizer.state_dict()),
                 'loss_fn': copy.deepcopy(self.policy_loss_fn),
-                'normal_score_references': copy.deepcopy(
-                    self.policy_normal_score_references
+                'policy_risk_reference': copy.deepcopy(
+                    self.policy_risk_reference
                 ),
                 'gumbel_temperature': self.gumbel_temperature,
                 'w_rad': self.w_rad.copy(),
@@ -3532,33 +3570,32 @@ class ContextualBandit:
                 'P': self.cox_path.oof_risk_,
                 'RP': self.cox_rp.oof_risk_,
             }
-            self.policy_normal_score_references = {
-                name: self._fit_normal_score_reference(risk, policy_train_idx)
-                for name, risk in raw_oof.items()
-            }
+            self.policy_risk_reference = self._fit_policy_risk_reference(
+                raw_oof, policy_train_idx, E_train, T_train
+            )
 
             # The policy is trained and validated entirely on OOF expert risks.
             # Full-fit risks are used only to obtain EM assignment weights and,
             # after fitting, to make predictions for new patients.
-            R_for_fit = self._apply_normal_score(
-                raw_oof['R'], self.policy_normal_score_references['R']
+            R_for_fit = self._apply_policy_risk_reference(
+                raw_oof['R'], 'R', self.policy_risk_reference
             )
-            P_for_fit = self._apply_normal_score(
-                raw_oof['P'], self.policy_normal_score_references['P']
+            P_for_fit = self._apply_policy_risk_reference(
+                raw_oof['P'], 'P', self.policy_risk_reference
             )
-            RP_for_fit = self._apply_normal_score(
-                raw_oof['RP'], self.policy_normal_score_references['RP']
+            RP_for_fit = self._apply_policy_risk_reference(
+                raw_oof['RP'], 'RP', self.policy_risk_reference
             )
             S_for_fit = self._make_policy_state(R_for_fit, P_for_fit, RP_for_fit)
 
-            R_policy = self._apply_normal_score(
-                self.R_curr, self.policy_normal_score_references['R']
+            R_policy = self._apply_policy_risk_reference(
+                self.R_curr, 'R', self.policy_risk_reference
             )
-            P_policy = self._apply_normal_score(
-                self.P_curr, self.policy_normal_score_references['P']
+            P_policy = self._apply_policy_risk_reference(
+                self.P_curr, 'P', self.policy_risk_reference
             )
-            RP_policy = self._apply_normal_score(
-                self.RP_curr, self.policy_normal_score_references['RP']
+            RP_policy = self._apply_policy_risk_reference(
+                self.RP_curr, 'RP', self.policy_risk_reference
             )
             S_policy = self._make_policy_state(R_policy, P_policy, RP_policy)
 
@@ -3572,9 +3609,13 @@ class ContextualBandit:
                     f"lower gains RP-R={rp_cost_info['lower_gain_vs_rad']:.4f}, "
                     f"RP-P={rp_cost_info['lower_gain_vs_path']:.4f})"
                 )
+                ref = self.policy_risk_reference
                 print(
-                    "Normal-score references - "
-                    f"R/P/RP: {len(policy_train_idx)} OOF patients each"
+                    "Policy risk reference: "
+                    f"common scale={ref['common_scale']:.4f}; "
+                    f"reliability R={ref['reliability']['R']:.3f}, "
+                    f"P={ref['reliability']['P']:.3f}, "
+                    f"RP={ref['reliability']['RP']:.3f}"
                 )
             best_val_loss = self._fit_policy_network(
                 S_for_fit, R_for_fit, P_for_fit, RP_for_fit, E_train, T_train,
@@ -3716,14 +3757,14 @@ class ContextualBandit:
             # EVALUATE AND CHECK CONVERGENCE
             # ============================================================
             
-            R_eval = self._apply_normal_score(
-                self.R_curr, self.policy_normal_score_references['R']
+            R_eval = self._apply_policy_risk_reference(
+                self.R_curr, 'R', self.policy_risk_reference
             )
-            P_eval = self._apply_normal_score(
-                self.P_curr, self.policy_normal_score_references['P']
+            P_eval = self._apply_policy_risk_reference(
+                self.P_curr, 'P', self.policy_risk_reference
             )
-            RP_eval = self._apply_normal_score(
-                self.RP_curr, self.policy_normal_score_references['RP']
+            RP_eval = self._apply_policy_risk_reference(
+                self.RP_curr, 'RP', self.policy_risk_reference
             )
             h_weighted = (
                 self.w_rad * R_eval + self.w_path * P_eval + self.w_rp * RP_eval
@@ -3774,9 +3815,7 @@ class ContextualBandit:
         self.policy_network.load_state_dict(best_em_checkpoint['policy'])
         self.policy_optimizer.load_state_dict(best_em_checkpoint['optimizer'])
         self.policy_loss_fn = best_em_checkpoint['loss_fn']
-        self.policy_normal_score_references = (
-            best_em_checkpoint['normal_score_references']
-        )
+        self.policy_risk_reference = best_em_checkpoint['policy_risk_reference']
         self.gumbel_temperature = best_em_checkpoint['gumbel_temperature']
         self.w_rad = best_em_checkpoint['w_rad']
         self.w_path = best_em_checkpoint['w_path']
@@ -3801,7 +3840,7 @@ class ContextualBandit:
         Returns
         -------
         risk_scores : ndarray
-            Selected empirical normal-score risk
+            Selected OOF-centred, reliability-shrunk relative risk
         actions : ndarray
             Selected actions for each patient
         probs : ndarray

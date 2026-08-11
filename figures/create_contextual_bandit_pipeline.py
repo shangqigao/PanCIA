@@ -115,7 +115,7 @@ ax.add_patch(state)
 ax.text(0.3625, 0.755, "Current 3-D state", ha="center", va="center",
         fontsize=16, fontweight="bold", color=COLORS["ink"])
 ax.plot([0.285, 0.44], [0.715, 0.715], color="#B9ACD8", linewidth=1.8)
-ax.text(0.285, 0.665, "Empirical normal scores", fontsize=15, fontweight="bold", color=COLORS["ink"])
+ax.text(0.285, 0.665, "OOF robust risk scaling", fontsize=15, fontweight="bold", color=COLORS["ink"])
 ax.text(0.285, 0.625, "qᴿ,  qᴾ", fontsize=15, color=COLORS["muted"])
 ax.text(0.285, 0.55, "Signed contrast", fontsize=15, fontweight="bold", color=COLORS["ink"])
 ax.text(0.285, 0.50, "qᴿ − qᴾ", fontsize=15, color=COLORS["muted"])
