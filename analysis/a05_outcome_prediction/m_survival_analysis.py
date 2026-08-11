@@ -4694,7 +4694,7 @@ class SurvivalAnalyzer:
             entropy_weight=0.05,
             rp_cost_weight=0.0,
             temperature=1.0,
-            hard_policy=True,
+            hard_policy=False,
             gumbel_temperature=1.0,
             gumbel_min_temperature=0.1,
             gumbel_anneal_rate=0.95,
