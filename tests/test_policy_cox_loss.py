@@ -92,6 +92,28 @@ class PolicyCoxLossTests(unittest.TestCase):
             + components["diversity_bonus"],
         )
 
+    def test_policy_cox_loss_is_invariant_within_tied_time_groups(self):
+        loss_fn = AdaptiveWeightedCoxPLLoss(initial_exploration_weight=0.0)
+        probs = torch.tensor(
+            [[1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]
+        )
+        risk = torch.tensor([2.0, 0.0, -1.0])
+        events = torch.tensor([1.0, 1.0, 0.0])
+        times = torch.tensor([2.0, 2.0, 1.0])
+        permutation = torch.tensor([1, 0, 2])
+
+        original = loss_fn(
+            probs, risk, risk, risk, events, times,
+            return_components=True,
+        )["cox_loss"]
+        permuted = loss_fn(
+            probs[permutation], risk[permutation], risk[permutation],
+            risk[permutation], events[permutation], times[permutation],
+            return_components=True,
+        )["cox_loss"]
+
+        torch.testing.assert_close(original, permuted)
+
 
 if __name__ == "__main__":
     unittest.main()

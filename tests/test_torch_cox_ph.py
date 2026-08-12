@@ -127,7 +127,7 @@ class TorchCoxPHTests(unittest.TestCase):
             device="cpu",
         )
         bandit._init_policy_network()
-        states = torch.randn(12, 3)
+        states = torch.randn(12, 4)
         actions, soft_probs = bandit._policy_outputs(states, stochastic=True)
 
         torch.testing.assert_close(actions.sum(dim=1), torch.ones(12))
@@ -158,7 +158,7 @@ class TorchCoxPHTests(unittest.TestCase):
             hard_policy=True, loss_type="weighted", device="cpu"
         )
         bandit._init_policy_network()
-        states = np.random.default_rng(4).normal(size=(10, 3)).astype(np.float32)
+        states = np.random.default_rng(4).normal(size=(10, 4)).astype(np.float32)
 
         soft = bandit._get_policy_probs(states, hard=False)
         hard = bandit._get_policy_probs(states, hard=True)
@@ -166,7 +166,7 @@ class TorchCoxPHTests(unittest.TestCase):
         np.testing.assert_array_equal(np.argmax(hard, axis=1), np.argmax(soft, axis=1))
         np.testing.assert_allclose(hard.sum(axis=1), 1.0)
 
-    def test_policy_state_contains_unimodal_risks_and_absolute_difference(self):
+    def test_policy_state_contains_all_risks_and_unimodal_difference(self):
         rng = np.random.default_rng(9)
         bandit = ContextualBandit(device="cpu")
         R = rng.normal(size=20).astype(np.float32)
@@ -175,10 +175,11 @@ class TorchCoxPHTests(unittest.TestCase):
 
         state = bandit._make_policy_state(R, P, RP)
 
-        self.assertEqual(state.shape, (20, 3))
+        self.assertEqual(state.shape, (20, 4))
         np.testing.assert_allclose(state[:, 0], R)
         np.testing.assert_allclose(state[:, 1], P)
-        np.testing.assert_allclose(state[:, 2], np.abs(R - P))
+        np.testing.assert_allclose(state[:, 2], RP)
+        np.testing.assert_allclose(state[:, 3], np.abs(R - P))
         self.assertTrue(np.isfinite(state).all())
 
     def test_expert_fit_weights_are_mean_one_and_ess_adaptive(self):
@@ -405,6 +406,38 @@ class TorchCoxPHTests(unittest.TestCase):
         # preserve P's fourfold raw dispersion relative to R.
         self.assertAlmostEqual(
             float(np.std(transformed_p) / np.std(transformed_r)), 4.0, places=5
+        )
+
+    def test_fallback_expert_overrides_hard_and_soft_policy_predictions(self):
+        class FakeModel:
+            def __init__(self, risk):
+                self.risk = np.asarray(risk, dtype=np.float32)
+
+            def predict_log_partial_hazard(self, X):
+                return self.risk[:len(X)]
+
+        bandit = ContextualBandit(device="cpu")
+        bandit.cox_rad = FakeModel([1.0, 2.0])
+        bandit.cox_path = FakeModel([3.0, 4.0])
+        bandit.cox_rp = FakeModel([5.0, 6.0])
+        bandit.policy_risk_reference = {
+            "centers": {"R": 0.0, "P": 0.0, "RP": 0.0},
+            "common_scale": 1.0,
+            "reliability": {"R": 1.0, "P": 1.0, "RP": 1.0},
+            "clip": 10.0,
+        }
+        bandit.fallback_expert_ = 1
+        X = np.zeros((2, 1), dtype=np.float32)
+
+        hard_risk, actions, hard_probs = bandit.predict_risk(X, X)
+        soft_risk, soft_probs = bandit.get_weighted_risk(X, X)
+
+        np.testing.assert_allclose(hard_risk, [3.0, 4.0])
+        np.testing.assert_allclose(soft_risk, hard_risk)
+        np.testing.assert_array_equal(actions, [1, 1])
+        np.testing.assert_array_equal(hard_probs, soft_probs)
+        np.testing.assert_array_equal(
+            soft_probs, [[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]]
         )
 
     def test_rp_cost_is_zero_only_for_reliable_improvement(self):
