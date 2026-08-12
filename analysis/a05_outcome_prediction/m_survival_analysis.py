@@ -2270,6 +2270,8 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
                  initial_exploration_weight=0.3,
                  min_exploration_weight=0.01,
                  max_exploration_weight=0.5,
+                 target_entropy_fraction=0.7,
+                 min_action_coverage=0.1,
                  plateau_threshold=0.001,
                  plateau_patience=5):
         """
@@ -2291,6 +2293,12 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         self.exploration_weight = initial_exploration_weight
         self.min_exploration_weight = min_exploration_weight
         self.max_exploration_weight = max_exploration_weight
+        if not 0.0 <= target_entropy_fraction <= 1.0:
+            raise ValueError("target_entropy_fraction must be in [0, 1]")
+        if not 0.0 <= min_action_coverage <= 1.0 / 3.0:
+            raise ValueError("min_action_coverage must be in [0, 1/3]")
+        self.target_entropy_fraction = target_entropy_fraction
+        self.min_action_coverage = min_action_coverage
         self.plateau_threshold = plateau_threshold
         self.plateau_patience = plateau_patience
         
@@ -2334,24 +2342,6 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         
         return self.exploration_weight
     
-    def compute_action_diversity(self, probs):
-        """
-        Compute diversity metric: how evenly distributed are actions?
-        """
-        # Average probability per action across batch
-        avg_probs = probs.mean(dim=0)
-        
-        # Uniform distribution
-        uniform = torch.ones_like(avg_probs) / avg_probs.shape[0]
-        
-        # KL divergence between average and uniform
-        # Higher KL = more focused (less exploration)
-        # Lower KL = more uniform (more exploration)
-        kl_div = torch.sum(avg_probs * (torch.log(avg_probs + 1e-8) - 
-                                        torch.log(uniform + 1e-8)))
-        
-        return kl_div
-    
     def forward(self, probs, R, P, RP, E, T,
                 return_components=False, regularization_probs=None):
         """
@@ -2373,30 +2363,44 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         # COMPONENT 2: EXPLORATION BONUS (Adaptive)
         # ============================================================
         
-        # Entropy bonus
-        entropy = -torch.sum(
+        # Penalize only insufficient per-patient entropy. Once the target is
+        # reached, a more uniform policy receives no additional reward.
+        patient_entropy = -torch.sum(
             reg_probs * torch.log(reg_probs + 1e-8), dim=1
-        ).mean()
-        entropy_bonus = -self.exploration_weight * entropy
-        
-        # Diversity bonus: encourage exploration when actions are imbalanced
-        diversity = self.compute_action_diversity(reg_probs)
-        diversity_bonus = self.exploration_weight * 0.1 * diversity
+        )
+        target_entropy = (
+            self.target_entropy_fraction
+            * torch.log(torch.tensor(
+                reg_probs.shape[1], device=reg_probs.device,
+                dtype=reg_probs.dtype
+            ))
+        )
+        entropy_shortfall = torch.relu(target_entropy - patient_entropy)
+        entropy_penalty = self.exploration_weight * entropy_shortfall.square().mean()
+
+        # Prevent population-level expert starvation without forcing exactly
+        # one-third usage for every expert.
+        mean_probs = reg_probs.mean(dim=0)
+        coverage_shortfall = torch.relu(self.min_action_coverage - mean_probs)
+        coverage_penalty = (
+            self.exploration_weight * coverage_shortfall.square().mean()
+        )
         
         # ============================================================
         # COMBINE
         # ============================================================
         
-        total_loss = cox_loss + entropy_bonus + diversity_bonus
+        total_loss = cox_loss + entropy_penalty + coverage_penalty
         
         if return_components:
             return {
                 'total_loss': total_loss,
                 'cox_loss': cox_loss,
-                'entropy_bonus': entropy_bonus,
-                'entropy_value': entropy,
-                'diversity_bonus': diversity_bonus,
-                'diversity_value': diversity,
+                'entropy_penalty': entropy_penalty,
+                'entropy_value': patient_entropy.mean(),
+                'target_entropy': target_entropy,
+                'coverage_penalty': coverage_penalty,
+                'mean_action_probs': mean_probs,
                 'exploration_weight': self.exploration_weight
             }
         
@@ -2816,6 +2820,8 @@ class ContextualBandit:
                  exploration_weight=0.1,
                  entropy_weight=0.05,
                  uncertainty_weight=0.05,
+                 target_entropy_fraction=0.7,
+                 min_action_coverage=0.1,
                  temperature=1.0,
                  device='cuda',
                  random_state=None):
@@ -2881,6 +2887,8 @@ class ContextualBandit:
         self.exploration_weight = exploration_weight
         self.entropy_weight = entropy_weight
         self.uncertainty_weight = uncertainty_weight
+        self.target_entropy_fraction = target_entropy_fraction
+        self.min_action_coverage = min_action_coverage
         self.temperature = temperature
         self.device = device if torch.cuda.is_available() else 'cpu'
         self.random_state = random_state
@@ -2912,7 +2920,9 @@ class ContextualBandit:
             self.policy_loss_fn = AdaptiveWeightedCoxPLLoss(
                 initial_exploration_weight=self.exploration_weight,
                 min_exploration_weight=0.01,
-                max_exploration_weight=0.5
+                max_exploration_weight=0.5,
+                target_entropy_fraction=self.target_entropy_fraction,
+                min_action_coverage=self.min_action_coverage,
             )
     
     def _fit_policy_risk_reference(self, risks, fit_indices, E, T):
@@ -3396,11 +3406,15 @@ class ContextualBandit:
                     components['total_loss'].item() - exploitation_loss
                 )
 
+            # Select epochs by the complete regularized objective so adequate
+            # exploration is retained. C-index only breaks effectively tied
+            # validation losses.
+            loss_tolerance = 1e-6
             improved = (
-                val_cindex > best_val_cindex + 1e-12
+                val_loss < best_val_loss - loss_tolerance
                 or (
-                    abs(val_cindex - best_val_cindex) <= 1e-12
-                    and val_loss < best_val_loss
+                    abs(val_loss - best_val_loss) <= loss_tolerance
+                    and val_cindex > best_val_cindex
                 )
             )
             if improved:

@@ -88,9 +88,35 @@ class PolicyCoxLossTests(unittest.TestCase):
         torch.testing.assert_close(
             components["total_loss"],
             components["cox_loss"]
-            + components["entropy_bonus"]
-            + components["diversity_bonus"],
+            + components["entropy_penalty"]
+            + components["coverage_penalty"],
         )
+
+    def test_adaptive_exploration_uses_floors_not_uniformity_rewards(self):
+        loss_fn = AdaptiveWeightedCoxPLLoss(
+            initial_exploration_weight=0.2,
+            target_entropy_fraction=0.7,
+            min_action_coverage=0.1,
+        )
+        risk = torch.tensor([0.2, -0.1, 0.5, 0.0])
+        events = torch.tensor([1.0, 0.0, 1.0, 1.0])
+        times = torch.tensor([4.0, 3.0, 2.0, 1.0])
+        uniform = torch.full((4, 3), 1.0 / 3.0)
+        collapsed = torch.tensor([[0.98, 0.01, 0.01]]).repeat(4, 1)
+
+        uniform_parts = loss_fn(
+            uniform, risk, risk, risk, events, times,
+            return_components=True,
+        )
+        collapsed_parts = loss_fn(
+            collapsed, risk, risk, risk, events, times,
+            return_components=True,
+        )
+
+        self.assertEqual(uniform_parts["entropy_penalty"].item(), 0.0)
+        self.assertEqual(uniform_parts["coverage_penalty"].item(), 0.0)
+        self.assertGreater(collapsed_parts["entropy_penalty"].item(), 0.0)
+        self.assertGreater(collapsed_parts["coverage_penalty"].item(), 0.0)
 
     def test_policy_cox_loss_is_invariant_within_tied_time_groups(self):
         loss_fn = AdaptiveWeightedCoxPLLoss(initial_exploration_weight=0.0)
