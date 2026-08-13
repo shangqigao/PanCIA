@@ -2184,6 +2184,7 @@ class SurvivalAnalyzer:
             mcmc_step_size=model_params.get('mcmc_step_size', 0.01),
             mcmc_leapfrog_steps=model_params.get('mcmc_leapfrog_steps', 10),
             mcmc_chains=model_params.get('mcmc_chains', 4),
+            mcmc_max_tree_depth=model_params.get('mcmc_max_tree_depth', 8),
             prior_scale=model_params.get('bayesian_head_prior_scale', 1.0),
             baseline_prior_scale=model_params.get(
                 'baseline_hazard_prior_scale', 2.0
@@ -2305,8 +2306,9 @@ class SurvivalAnalyzer:
         )
         for expert_name, diagnostic in bandit.mcmc_diagnostics_.items():
             print(
-                f"  HMC {expert_name}: acceptance="
+                f"  {diagnostic.get('sampler', 'MCMC')} {expert_name}: acceptance="
                 f"{diagnostic['acceptance_rate']:.3f}, "
+                f"divergences={diagnostic.get('divergences', 0)}, "
                 f"R-hat(max)={diagnostic['max_rhat']:.3f}, "
                 f"ESS(min)={diagnostic['min_ess']:.1f}, "
                 f"step size=[{diagnostic['final_step_size_min']:.2e}, "

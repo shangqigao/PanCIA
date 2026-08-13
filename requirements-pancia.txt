@@ -23,6 +23,7 @@ openslide-python
 pandas
 peft
 plotly==5.24.1
+pyro-ppl==1.9.1
 pydicom
 pyradiomics
 rt_utils

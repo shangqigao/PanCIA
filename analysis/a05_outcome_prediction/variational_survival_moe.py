@@ -3,7 +3,7 @@
 The model targets p(T, E | X) and intentionally does not model p(X | S).
 Training uses outcome-informed posterior responsibilities, while deployment
 uses a state-only router. Each expert has a deterministic representation and a
-compact Bayesian linear survival head sampled by multi-chain HMC. Survival
+compact Bayesian linear survival head sampled by multi-chain Pyro NUTS. Survival
 experts use a piecewise-exponential full likelihood, so every patient has a
 well-defined censored-data likelihood.
 """
@@ -103,7 +103,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                  max_epochs=300, patience=30, mc_train_samples=1,
                  mc_test_samples=32, mcmc_warmup=100, mcmc_samples=200,
                  mcmc_step_size=0.01, mcmc_leapfrog_steps=10,
-                 mcmc_chains=2,
+                 mcmc_chains=2, mcmc_max_tree_depth=8,
                  prior_scale=1.0, baseline_prior_scale=2.0,
                  router_refit_epochs=100, bayesian_em_iterations=3,
                  responsibility_tolerance=1e-3,
@@ -130,6 +130,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.mcmc_step_size = float(mcmc_step_size)
         self.mcmc_leapfrog_steps = int(mcmc_leapfrog_steps)
         self.mcmc_chains = int(mcmc_chains)
+        self.mcmc_max_tree_depth = int(mcmc_max_tree_depth)
         if self.mcmc_chains < 2 or self.mcmc_samples < 2:
             raise ValueError("MCMC diagnostics require at least two chains and samples")
         self.prior_scale = float(prior_scale)
@@ -349,7 +350,11 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             name: theta[index * d:(index + 1) * d]
             for index, name in enumerate(self.expert_names)
         }
-        log_h0 = theta[3 * d:].clamp(-12.0, 8.0)
+        raw_log_h0 = theta[3 * d:]
+        # Bound only the exponential likelihood computation. The Gaussian
+        # prior must act on the unconstrained latent; clamping it here would
+        # create flat, improper posterior tails that are hostile to HMC/NUTS.
+        log_h0 = raw_log_h0.clamp(-12.0, 8.0)
         widths = self.time_boundaries_[1:] - self.time_boundaries_[:-1]
         exposure = torch.clamp(
             duration[:, None] - self.time_boundaries_[:-1][None, :], min=0.0
@@ -373,81 +378,89 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             beta.square().sum() for beta in betas.values()
         ) / self.prior_scale**2
         log_prior_hazard = (
-            -0.5 * (log_h0 - self.baseline_prior_location_).square().sum()
+            -0.5 * (
+                raw_log_h0 - self.baseline_prior_location_
+            ).square().sum()
             / self.baseline_prior_scale**2
         )
         return weighted_loglik + log_prior_beta + log_prior_hazard
 
     def _hmc_joint_head(self, representations, duration, event,
                         responsibilities):
-        """Jointly sample three heads and their single shared baseline."""
+        """Jointly sample all heads and the shared baseline using Pyro NUTS.
+
+        Chains run sequentially. This avoids CUDA multiprocessing and model
+        pickling issues while retaining independent initialization and NUTS
+        adaptation for every chain.
+        """
+        try:
+            import pyro
+            from pyro.infer.mcmc import MCMC, NUTS
+        except ImportError as error:
+            raise ImportError(
+                "Strategy 7 requires pyro-ppl==1.9.1. Install the updated "
+                "requirements-pancia.txt before fitting."
+            ) from error
+
         initial = torch.cat([
             *[self.experts[name].risk_coef.detach() for name in self.expert_names],
             self.shared_log_baseline_hazard.detach(),
         ]).clone()
         chain_draws, acceptance_rates, final_step_sizes = [], [], []
-        total = self.mcmc_warmup + self.mcmc_samples
+        divergence_counts = []
+
+        def potential_fn(params):
+            log_posterior = self._joint_head_log_posterior(
+                params["theta"], representations, duration, event,
+                responsibilities,
+            )
+            if not torch.isfinite(log_posterior):
+                raise FloatingPointError(
+                    "Non-finite joint survival log posterior during Pyro NUTS"
+                )
+            return -log_posterior
+
         for chain in range(self.mcmc_chains):
-            step_size = self.mcmc_step_size
-            current = initial + 0.01 * torch.randn_like(initial)
-            draws, retained_accepted = [], 0
-            for iteration in range(total):
-                position = current.detach().clone().requires_grad_(True)
-                momentum0 = torch.randn_like(position)
-                momentum = momentum0.clone()
-                logp = self._joint_head_log_posterior(
-                    position, representations, duration, event, responsibilities
+            chain_seed = (0 if self.random_state is None else self.random_state) + chain
+            pyro.set_rng_seed(chain_seed)
+            chain_initial = initial + 0.01 * torch.randn_like(initial)
+            kernel = NUTS(
+                potential_fn=potential_fn,
+                step_size=self.mcmc_step_size,
+                adapt_step_size=True,
+                adapt_mass_matrix=True,
+                full_mass=False,
+                target_accept_prob=self.hmc_target_acceptance,
+                max_tree_depth=self.mcmc_max_tree_depth,
+            )
+            sampler = MCMC(
+                kernel,
+                warmup_steps=self.mcmc_warmup,
+                num_samples=self.mcmc_samples,
+                num_chains=1,
+                initial_params={"theta": chain_initial},
+                disable_progbar=True,
+                disable_validation=False,
+            )
+            sampler.run()
+            draws = sampler.get_samples(group_by_chain=False)["theta"].detach()
+            if draws.shape != (self.mcmc_samples, initial.numel()):
+                raise RuntimeError(
+                    f"Unexpected Pyro NUTS draw shape {tuple(draws.shape)}"
                 )
-                gradient = torch.autograd.grad(logp, position)[0]
-                momentum = momentum + 0.5 * step_size * gradient
-                proposed = position
-                for leapfrog in range(self.mcmc_leapfrog_steps):
-                    proposed = (
-                        proposed + step_size * momentum
-                    ).detach().requires_grad_(True)
-                    proposed_logp = self._joint_head_log_posterior(
-                        proposed, representations, duration, event,
-                        responsibilities
-                    )
-                    gradient = torch.autograd.grad(proposed_logp, proposed)[0]
-                    if leapfrog < self.mcmc_leapfrog_steps - 1:
-                        momentum = momentum + step_size * gradient
-                momentum = momentum + 0.5 * step_size * gradient
-                log_acceptance = (
-                    proposed_logp.detach() - logp.detach()
-                    + 0.5 * momentum0.square().sum()
-                    - 0.5 * momentum.square().sum()
-                )
-                if torch.isfinite(log_acceptance):
-                    acceptance_probability = torch.exp(
-                        torch.minimum(log_acceptance, torch.zeros_like(log_acceptance))
-                    ).item()
-                else:
-                    acceptance_probability = 0.0
-                accepted = (
-                    torch.log(torch.rand((), device=self.device)) < log_acceptance
-                )
-                if accepted:
-                    current = proposed.detach()
-                    if iteration >= self.mcmc_warmup:
-                        retained_accepted += 1
-                if iteration < self.mcmc_warmup:
-                    # Diminishing Robbins-Monro adaptation. Sampling starts
-                    # only after this step size has been frozen.
-                    if acceptance_probability < 0.05:
-                        step_size *= 0.5
-                    else:
-                        adaptation_rate = 0.25 / math.sqrt(iteration + 1.0)
-                        log_step = math.log(step_size) + adaptation_rate * (
-                            acceptance_probability - self.hmc_target_acceptance
-                        )
-                        step_size = float(np.exp(log_step))
-                    step_size = float(np.clip(step_size, 1e-7, 0.1))
-                if iteration >= self.mcmc_warmup:
-                    draws.append(current.clone())
-            chain_draws.append(torch.stack(draws))
-            acceptance_rates.append(retained_accepted / self.mcmc_samples)
-            final_step_sizes.append(step_size)
+            diagnostics = sampler.diagnostics()
+            acceptance = diagnostics.get("acceptance rate", {})
+            if isinstance(acceptance, dict):
+                acceptance = next(iter(acceptance.values()), float("nan"))
+            divergences = diagnostics.get("divergences", {})
+            if isinstance(divergences, dict):
+                divergence_count = sum(len(value) for value in divergences.values())
+            else:
+                divergence_count = len(divergences)
+            chain_draws.append(draws)
+            acceptance_rates.append(float(acceptance))
+            divergence_counts.append(int(divergence_count))
+            final_step_sizes.append(float(kernel.step_size))
         chains = torch.stack(chain_draws).cpu()
         samples = chains.reshape(-1, chains.shape[-1])
         d = next(iter(representations.values())).shape[1]
@@ -517,6 +530,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             "acceptance_rate": mean_acceptance,
             "n_samples": self.mcmc_chains * self.mcmc_samples,
             "n_chains": self.mcmc_chains,
+            "sampler": "Pyro NUTS",
+            "divergences": int(sum(divergence_counts)),
             "max_rhat": float(rhat.max()),
             "min_ess": float(ess.min()),
             "worst_parameter": parameter_labels[worst_index],
@@ -545,7 +560,9 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             or predictive_min_ess < self.hmc_min_ess
         )
         if (
-            mean_acceptance < self.hmc_min_acceptance
+            not np.isfinite(mean_acceptance)
+            or mean_acceptance < self.hmc_min_acceptance
+            or sum(divergence_counts) > 0
             or torch.any(stationary)
             or not np.isfinite(max_rhat)
             or severe_parameter_failure
@@ -558,8 +575,9 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 f"min_ESS={min_ess:.1f}, predictive_max_Rhat="
                 f"{predictive_max_rhat:.3f}, predictive_min_ESS="
                 f"{predictive_min_ess:.1f}, predictive_p95_Rhat="
-                f"{predictive_p95_rhat:.3f}. Increase warmup/samples or adjust "
-                "mcmc_step_size and leapfrog steps."
+                f"{predictive_p95_rhat:.3f}, divergences="
+                f"{sum(divergence_counts)}. Increase warmup/samples, raise "
+                "hmc_target_acceptance, or reparameterize the posterior."
             )
         warnings = []
         if max_rhat > self.hmc_max_rhat or min_ess < self.hmc_min_ess:
@@ -846,6 +864,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     f"{record['mean_responsibility_P']:.3f}/"
                     f"{record['mean_responsibility_RP']:.3f}, "
                     f"acceptance={diagnostic['acceptance_rate']:.3f}, "
+                    f"divergences={diagnostic['divergences']}, "
                     f"R-hat(max)={diagnostic['max_rhat']:.3f}, "
                     f"ESS(min)={diagnostic['min_ess']:.1f}"
                 )
@@ -858,7 +877,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                         f"worst patient={values['worst_patient_index']}"
                     )
                 if "warning" in diagnostic:
-                    print(f"    HMC warning: {diagnostic['warning']}")
+                    print(f"    NUTS warning: {diagnostic['warning']}")
             if responsibility_change < self.responsibility_tolerance:
                 break
         # Keep the two assignment distributions separate. Responsibilities use
