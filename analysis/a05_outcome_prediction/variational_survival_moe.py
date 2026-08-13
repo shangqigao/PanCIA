@@ -108,6 +108,10 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                  prior_scale=1.0, baseline_prior_scale=2.0,
                  router_refit_epochs=100, bayesian_em_iterations=3,
                  responsibility_tolerance=1e-3,
+                 responsibility_temperature=2.0,
+                 responsibility_prior_mix=0.05,
+                 hmc_target_acceptance=0.8, hmc_min_acceptance=0.1,
+                 hmc_max_rhat=1.2, hmc_min_ess=10.0,
                  verbose=True, log_every=10,
                  device="cuda", random_state=None):
         super().__init__()
@@ -133,8 +137,18 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.router_refit_epochs = int(router_refit_epochs)
         self.bayesian_em_iterations = int(bayesian_em_iterations)
         self.responsibility_tolerance = float(responsibility_tolerance)
+        self.responsibility_temperature = float(responsibility_temperature)
+        self.responsibility_prior_mix = float(responsibility_prior_mix)
+        self.hmc_target_acceptance = float(hmc_target_acceptance)
+        self.hmc_min_acceptance = float(hmc_min_acceptance)
+        self.hmc_max_rhat = float(hmc_max_rhat)
+        self.hmc_min_ess = float(hmc_min_ess)
         if self.bayesian_em_iterations < 1:
             raise ValueError("bayesian_em_iterations must be positive")
+        if self.responsibility_temperature < 1.0:
+            raise ValueError("responsibility_temperature must be at least one")
+        if not 0.0 <= self.responsibility_prior_mix < 1.0:
+            raise ValueError("responsibility_prior_mix must be in [0, 1)")
         self.verbose = bool(verbose)
         self.log_every = max(1, int(log_every))
         self.random_state = random_state
@@ -247,17 +261,36 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         ], dim=1)
 
     @staticmethod
-    def posterior_responsibilities(gate_probs, expert_log_likelihoods):
-        """Exact categorical E-step; returned responsibilities are detached."""
+    def posterior_responsibilities(gate_probs, expert_log_likelihoods,
+                                   temperature=1.0, prior=None,
+                                   prior_mix=0.0):
+        """Tempered categorical E-step with optional prior smoothing."""
         log_joint = torch.log(gate_probs.clamp_min(1e-8)) + expert_log_likelihoods
-        return torch.softmax(log_joint, dim=1).detach()
+        responsibility = torch.softmax(log_joint / temperature, dim=1)
+        if prior_mix:
+            if prior is None:
+                prior = torch.full_like(responsibility, 1.0 / responsibility.shape[1])
+            else:
+                prior = prior.reshape(1, -1).to(responsibility)
+            responsibility = (
+                (1.0 - prior_mix) * responsibility + prior_mix * prior
+            )
+        return responsibility.detach()
+
+    def _update_responsibilities(self, gate_probs, expert_log_likelihoods):
+        return self.posterior_responsibilities(
+            gate_probs, expert_log_likelihoods,
+            temperature=self.responsibility_temperature,
+            prior=self.reliability_prior,
+            prior_mix=self.responsibility_prior_mix,
+        )
 
     def _objective(self, x_rad, x_path, duration, event, stochastic=True):
         states, representations = self._encode(x_rad, x_path, stochastic)
         zero_uncertainty = {name: torch.zeros_like(states[name]) + 1.0 for name in self.expert_names}
         gate = self._router_probs(states, zero_uncertainty)
         log_likelihood = self._expert_log_likelihoods(states, duration, event)
-        responsibility = self.posterior_responsibilities(gate, log_likelihood)
+        responsibility = self._update_responsibilities(gate, log_likelihood)
 
         expert_nll = -torch.mean(torch.sum(responsibility * log_likelihood, dim=1))
         router_ce = -torch.mean(torch.sum(
@@ -301,6 +334,11 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         else:
             self.register_buffer("time_boundaries_", boundary_tensor)
         self.risk_horizon_ = float(np.median(duration))
+        total_time = max(float(np.sum(duration)), 1e-8)
+        event_rate = max(float(np.sum(event)) / total_time, 1e-8)
+        self.baseline_prior_location_ = float(np.log(event_rate))
+        with torch.no_grad():
+            self.shared_log_baseline_hazard.fill_(self.baseline_prior_location_)
 
     def _joint_head_log_posterior(self, theta, representations, duration, event,
                                   responsibilities):
@@ -334,7 +372,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             beta.square().sum() for beta in betas.values()
         ) / self.prior_scale**2
         log_prior_hazard = (
-            -0.5 * (log_h0 + 2.0).square().sum() / self.baseline_prior_scale**2
+            -0.5 * (log_h0 - self.baseline_prior_location_).square().sum()
+            / self.baseline_prior_scale**2
         )
         return weighted_loglik + log_prior_beta + log_prior_hazard
 
@@ -345,12 +384,12 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             *[self.experts[name].risk_coef.detach() for name in self.expert_names],
             self.shared_log_baseline_hazard.detach(),
         ]).clone()
-        chain_draws, acceptance_rates = [], []
+        chain_draws, acceptance_rates, final_step_sizes = [], [], []
         total = self.mcmc_warmup + self.mcmc_samples
-        step_size = self.mcmc_step_size
         for chain in range(self.mcmc_chains):
+            step_size = self.mcmc_step_size
             current = initial + 0.01 * torch.randn_like(initial)
-            draws, accepted = [], 0
+            draws, retained_accepted = [], 0
             for iteration in range(total):
                 position = current.detach().clone().requires_grad_(True)
                 momentum0 = torch.randn_like(position)
@@ -378,13 +417,36 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     + 0.5 * momentum0.square().sum()
                     - 0.5 * momentum.square().sum()
                 )
-                if torch.log(torch.rand((), device=self.device)) < log_acceptance:
+                if torch.isfinite(log_acceptance):
+                    acceptance_probability = torch.exp(
+                        torch.minimum(log_acceptance, torch.zeros_like(log_acceptance))
+                    ).item()
+                else:
+                    acceptance_probability = 0.0
+                accepted = (
+                    torch.log(torch.rand((), device=self.device)) < log_acceptance
+                )
+                if accepted:
                     current = proposed.detach()
-                    accepted += 1
+                    if iteration >= self.mcmc_warmup:
+                        retained_accepted += 1
+                if iteration < self.mcmc_warmup:
+                    # Diminishing Robbins-Monro adaptation. Sampling starts
+                    # only after this step size has been frozen.
+                    if acceptance_probability < 0.05:
+                        step_size *= 0.5
+                    else:
+                        adaptation_rate = 0.25 / math.sqrt(iteration + 1.0)
+                        log_step = math.log(step_size) + adaptation_rate * (
+                            acceptance_probability - self.hmc_target_acceptance
+                        )
+                        step_size = float(np.exp(log_step))
+                    step_size = float(np.clip(step_size, 1e-7, 0.1))
                 if iteration >= self.mcmc_warmup:
                     draws.append(current.clone())
             chain_draws.append(torch.stack(draws))
-            acceptance_rates.append(accepted / max(total, 1))
+            acceptance_rates.append(retained_accepted / self.mcmc_samples)
+            final_step_sizes.append(step_size)
         chains = torch.stack(chain_draws).cpu()
         samples = chains.reshape(-1, chains.shape[-1])
         d = next(iter(representations.values())).shape[1]
@@ -395,7 +457,9 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.posterior_samples_["shared_log_baseline_hazard"] = samples[:, 3 * d:]
         chain_means = chains.mean(1)
         between = self.mcmc_samples * chain_means.var(0, unbiased=True)
-        within = chains.var(1, unbiased=True).mean(0).clamp_min(1e-12)
+        raw_within = chains.var(1, unbiased=True).mean(0)
+        stationary = raw_within <= 1e-12
+        within = raw_within.clamp_min(1e-12)
         posterior_var = (
             (self.mcmc_samples - 1) * within / self.mcmc_samples
             + between / self.mcmc_samples
@@ -407,15 +471,36 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             / centered.square().mean((0, 1)).clamp_min(1e-12)
         ).clamp(-0.99, 0.99)
         ess = self.mcmc_chains * self.mcmc_samples * (1 - lag1) / (1 + lag1)
+        rhat[stationary] = torch.inf
+        ess[stationary] = 0.0
+        mean_acceptance = float(np.mean(acceptance_rates))
         self.mcmc_diagnostics_ = {
             "joint": {
-            "acceptance_rate": float(np.mean(acceptance_rates)),
+            "acceptance_rate": mean_acceptance,
             "n_samples": self.mcmc_chains * self.mcmc_samples,
             "n_chains": self.mcmc_chains,
             "max_rhat": float(rhat.max()),
             "min_ess": float(ess.min()),
+            "final_step_size_min": float(np.min(final_step_sizes)),
+            "final_step_size_max": float(np.max(final_step_sizes)),
             }
         }
+        max_rhat = float(rhat.max())
+        min_ess = float(ess.min())
+        if (
+            mean_acceptance < self.hmc_min_acceptance
+            or torch.any(stationary)
+            or not np.isfinite(max_rhat)
+            or max_rhat > self.hmc_max_rhat
+            or min_ess < self.hmc_min_ess
+        ):
+            raise RuntimeError(
+                "Joint HMC failed: acceptance="
+                f"{mean_acceptance:.3f}, stationary_parameters="
+                f"{int(stationary.sum())}, max_Rhat={max_rhat:.3f}, "
+                f"min_ESS={min_ess:.1f}. Increase warmup/samples or adjust "
+                "mcmc_step_size and leapfrog steps."
+            )
 
     def _posterior_log_risk_summary(self, representations):
         means, stds = {}, {}
@@ -578,7 +663,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             map_loglik = self._expert_log_likelihoods(
                 map_risks, tensors[2], tensors[3]
             )
-            map_responsibility = self.posterior_responsibilities(
+            map_responsibility = self._update_responsibilities(
                 map_gate, map_loglik
             )
             representations = self._fit_representation_normalization(
@@ -615,7 +700,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 predictive_loglik = self._posterior_predictive_log_likelihood(
                     frozen_representations, tensors[2], tensors[3]
                 )
-                updated_responsibility = self.posterior_responsibilities(
+                updated_responsibility = self._update_responsibilities(
                     gate, predictive_loglik
                 )
                 responsibility_change = torch.mean(torch.abs(

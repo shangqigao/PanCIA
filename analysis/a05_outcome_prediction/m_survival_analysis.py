@@ -2179,10 +2179,10 @@ class SurvivalAnalyzer:
             patience=model_params.get('variational_patience', 30),
             mc_train_samples=model_params.get('mc_train_samples', 1),
             mc_test_samples=model_params.get('mc_test_samples', 32),
-            mcmc_warmup=model_params.get('mcmc_warmup', 100),
+            mcmc_warmup=model_params.get('mcmc_warmup', 300),
             mcmc_samples=model_params.get('mcmc_samples', 200),
-            mcmc_step_size=model_params.get('mcmc_step_size', 0.01),
-            mcmc_leapfrog_steps=model_params.get('mcmc_leapfrog_steps', 10),
+            mcmc_step_size=model_params.get('mcmc_step_size', 0.001),
+            mcmc_leapfrog_steps=model_params.get('mcmc_leapfrog_steps', 5),
             mcmc_chains=model_params.get('mcmc_chains', 2),
             prior_scale=model_params.get('bayesian_head_prior_scale', 1.0),
             baseline_prior_scale=model_params.get(
@@ -2195,6 +2195,18 @@ class SurvivalAnalyzer:
             responsibility_tolerance=model_params.get(
                 'responsibility_tolerance', 1e-3
             ),
+            responsibility_temperature=model_params.get(
+                'responsibility_temperature', 2.0
+            ),
+            responsibility_prior_mix=model_params.get(
+                'responsibility_prior_mix', 0.05
+            ),
+            hmc_target_acceptance=model_params.get(
+                'hmc_target_acceptance', 0.8
+            ),
+            hmc_min_acceptance=model_params.get('hmc_min_acceptance', 0.1),
+            hmc_max_rhat=model_params.get('hmc_max_rhat', 1.2),
+            hmc_min_ess=model_params.get('hmc_min_ess', 10.0),
             verbose=model_params.get('variational_verbose', True),
             log_every=model_params.get('variational_log_every', 10),
             device=model_params.get('device', 'cuda'),
@@ -2232,6 +2244,11 @@ class SurvivalAnalyzer:
             f"Path: {np.sum(actions == 1)}, "
             f"RP: {np.sum(actions == 2)}")
         print(f"  Variational epochs: {len(bandit.history_)}")
+        print(
+            f"  Baseline prior center: log-rate="
+            f"{bandit.baseline_prior_location_:.4f} "
+            f"(rate={np.exp(bandit.baseline_prior_location_):.6g} per time unit)"
+        )
         best_terms = bandit.best_validation_terms_
         print(
             f"  Best validation loss terms (epoch {bandit.best_epoch_}): "
@@ -2247,6 +2264,8 @@ class SurvivalAnalyzer:
                 f"{diagnostic['acceptance_rate']:.3f}, "
                 f"R-hat(max)={diagnostic['max_rhat']:.3f}, "
                 f"ESS(min)={diagnostic['min_ess']:.1f}, "
+                f"step size=[{diagnostic['final_step_size_min']:.2e}, "
+                f"{diagnostic['final_step_size_max']:.2e}], "
                 f"posterior samples={diagnostic['n_samples']}"
             )
         for expert_name, diagnostic in (

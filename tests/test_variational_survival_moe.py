@@ -43,6 +43,19 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         torch.testing.assert_close(responsibility, expected)
         self.assertFalse(responsibility.requires_grad)
 
+    def test_tempered_responsibility_is_smoothed_toward_prior(self):
+        gate = torch.tensor([[0.99, 0.005, 0.005]])
+        likelihood = torch.zeros(1, 3)
+        prior = torch.tensor([0.2, 0.6, 0.2])
+
+        responsibility = ConditionalVariationalSurvivalMoE.posterior_responsibilities(
+            gate, likelihood, temperature=2.0, prior=prior, prior_mix=0.1
+        )
+
+        self.assertLess(float(responsibility[0, 0]), 0.99)
+        self.assertGreaterEqual(float(responsibility[0, 1]), 0.06)
+        torch.testing.assert_close(responsibility.sum(1), torch.ones(1))
+
     def test_router_prior_kl_is_zero_when_gate_matches_prior(self):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, state_dim=2, hidden_dim=4,
@@ -121,6 +134,23 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         for expert in model.experts.values():
             self.assertFalse(hasattr(expert, "log_baseline_hazard"))
 
+    def test_baseline_prior_center_adapts_to_duration_units(self):
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=1, path_dim=1, hidden_dim=2, n_intervals=2,
+            mcmc_samples=2, mcmc_chains=2, device="cpu", verbose=False,
+        )
+        duration = np.array([100.0, 200.0, 300.0, 400.0])
+        event = np.array([1.0, 0.0, 1.0, 0.0])
+
+        model._make_boundaries(duration, event)
+
+        expected = np.log(event.sum() / duration.sum())
+        self.assertAlmostEqual(model.baseline_prior_location_, expected)
+        torch.testing.assert_close(
+            model.shared_log_baseline_hazard,
+            torch.full((2,), expected, dtype=torch.float32),
+        )
+
     def test_posterior_predictive_likelihood_averages_probabilities(self):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=1, path_dim=1, hidden_dim=1, n_intervals=1,
@@ -164,6 +194,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
             n_intervals=3, max_epochs=4, patience=3,
             mc_test_samples=3, mcmc_warmup=2, mcmc_samples=3,
             mcmc_leapfrog_steps=2, router_refit_epochs=2,
+            hmc_max_rhat=1e9, hmc_min_ess=0.0,
             verbose=False, device="cpu", random_state=4,
         ).fit(x_rad, x_path, y)
 
