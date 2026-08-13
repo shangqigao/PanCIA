@@ -28,7 +28,6 @@ class RiskRepresentationEncoder(nn.Module):
         self.backbone = nn.Sequential(
             nn.Linear(input_dim, hidden_dim), nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
-            nn.LayerNorm(hidden_dim),
         )
         self.output_dim = hidden_dim
 
@@ -455,24 +454,53 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             for index, name in enumerate(self.expert_names)
         }
         self.posterior_samples_["shared_log_baseline_hazard"] = samples[:, 3 * d:]
-        chain_means = chains.mean(1)
-        between = self.mcmc_samples * chain_means.var(0, unbiased=True)
-        raw_within = chains.var(1, unbiased=True).mean(0)
-        stationary = raw_within <= 1e-12
-        within = raw_within.clamp_min(1e-12)
-        posterior_var = (
-            (self.mcmc_samples - 1) * within / self.mcmc_samples
-            + between / self.mcmc_samples
-        )
-        rhat = torch.sqrt(posterior_var / within)
-        centered = chains - chains.mean(1, keepdim=True)
-        lag1 = (
-            (centered[:, :-1] * centered[:, 1:]).mean((0, 1))
-            / centered.square().mean((0, 1)).clamp_min(1e-12)
-        ).clamp(-0.99, 0.99)
-        ess = self.mcmc_chains * self.mcmc_samples * (1 - lag1) / (1 + lag1)
-        rhat[stationary] = torch.inf
-        ess[stationary] = 0.0
+        rhat, ess, stationary = self._chain_diagnostics(chains)
+        block_diagnostics = {}
+        parameter_labels = []
+        for expert_index, name in enumerate(self.expert_names):
+            block = slice(expert_index * d, (expert_index + 1) * d)
+            block_diagnostics[name] = {
+                "max_rhat": float(rhat[block].max()),
+                "median_rhat": float(rhat[block].median()),
+                "min_ess": float(ess[block].min()),
+            }
+            parameter_labels.extend([f"beta_{name}[{j}]" for j in range(d)])
+        baseline_block = slice(3 * d, None)
+        block_diagnostics["baseline"] = {
+            "max_rhat": float(rhat[baseline_block].max()),
+            "median_rhat": float(rhat[baseline_block].median()),
+            "min_ess": float(ess[baseline_block].min()),
+        }
+        parameter_labels.extend([
+            f"log_baseline[{j}]" for j in range(self.n_intervals)
+        ])
+        worst_index = int(torch.argmax(rhat))
+
+        predictive_diagnostics = {}
+        for expert_index, name in enumerate(self.expert_names):
+            beta_chains = chains[:, :, expert_index * d:(expert_index + 1) * d]
+            risk_chains = torch.einsum(
+                "nd,csd->csn", representations[name].cpu(), beta_chains
+            )
+            risk_rhat, risk_ess, risk_stationary = self._chain_diagnostics(
+                risk_chains
+            )
+            informative = ~risk_stationary
+            if torch.any(informative):
+                max_predictive_rhat = float(risk_rhat[informative].max())
+                median_predictive_rhat = float(risk_rhat[informative].median())
+                min_predictive_ess = float(risk_ess[informative].min())
+            else:
+                max_predictive_rhat = median_predictive_rhat = 1.0
+                min_predictive_ess = float(
+                    self.mcmc_chains * self.mcmc_samples
+                )
+            predictive_diagnostics[name] = {
+                "max_rhat": max_predictive_rhat,
+                "median_rhat": median_predictive_rhat,
+                "min_ess": min_predictive_ess,
+                "stationary_patients": int(risk_stationary.sum()),
+            }
         mean_acceptance = float(np.mean(acceptance_rates))
         self.mcmc_diagnostics_ = {
             "joint": {
@@ -481,26 +509,71 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             "n_chains": self.mcmc_chains,
             "max_rhat": float(rhat.max()),
             "min_ess": float(ess.min()),
+            "worst_parameter": parameter_labels[worst_index],
+            "block_diagnostics": block_diagnostics,
+            "predictive_diagnostics": predictive_diagnostics,
             "final_step_size_min": float(np.min(final_step_sizes)),
             "final_step_size_max": float(np.max(final_step_sizes)),
             }
         }
         max_rhat = float(rhat.max())
         min_ess = float(ess.min())
+        predictive_max_rhat = max(
+            value["max_rhat"] for value in predictive_diagnostics.values()
+        )
+        predictive_min_ess = min(
+            value["min_ess"] for value in predictive_diagnostics.values()
+        )
+        severe_parameter_failure = max_rhat > 2.0
+        predictive_failure = (
+            not np.isfinite(predictive_max_rhat)
+            or predictive_max_rhat > self.hmc_max_rhat
+            or predictive_min_ess < self.hmc_min_ess
+        )
         if (
             mean_acceptance < self.hmc_min_acceptance
             or torch.any(stationary)
             or not np.isfinite(max_rhat)
-            or max_rhat > self.hmc_max_rhat
-            or min_ess < self.hmc_min_ess
+            or severe_parameter_failure
+            or predictive_failure
         ):
             raise RuntimeError(
                 "Joint HMC failed: acceptance="
                 f"{mean_acceptance:.3f}, stationary_parameters="
                 f"{int(stationary.sum())}, max_Rhat={max_rhat:.3f}, "
-                f"min_ESS={min_ess:.1f}. Increase warmup/samples or adjust "
+                f"min_ESS={min_ess:.1f}, predictive_max_Rhat="
+                f"{predictive_max_rhat:.3f}, predictive_min_ESS="
+                f"{predictive_min_ess:.1f}. Increase warmup/samples or adjust "
                 "mcmc_step_size and leapfrog steps."
             )
+        if max_rhat > self.hmc_max_rhat or min_ess < self.hmc_min_ess:
+            self.mcmc_diagnostics_["joint"]["warning"] = (
+                "Some individual parameters have not fully mixed, but "
+                "patient-level log-risk diagnostics passed."
+            )
+
+    @staticmethod
+    def _chain_diagnostics(chains):
+        """Classical R-hat and lag-one ESS along chain/sample axes."""
+        n_samples = chains.shape[1]
+        chain_means = chains.mean(1)
+        between = n_samples * chain_means.var(0, unbiased=True)
+        raw_within = chains.var(1, unbiased=True).mean(0)
+        stationary = raw_within <= 1e-12
+        within = raw_within.clamp_min(1e-12)
+        posterior_var = (
+            (n_samples - 1) * within / n_samples + between / n_samples
+        )
+        rhat = torch.sqrt(posterior_var / within)
+        centered = chains - chains.mean(1, keepdim=True)
+        lag1 = (
+            (centered[:, :-1] * centered[:, 1:]).mean((0, 1))
+            / centered.square().mean((0, 1)).clamp_min(1e-12)
+        ).clamp(-0.99, 0.99)
+        ess = chains.shape[0] * n_samples * (1 - lag1) / (1 + lag1)
+        rhat[stationary] = torch.inf
+        ess[stationary] = 0.0
+        return rhat, ess, stationary
 
     def _posterior_log_risk_summary(self, representations):
         means, stds = {}, {}
@@ -737,6 +810,14 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     f"R-hat(max)={diagnostic['max_rhat']:.3f}, "
                     f"ESS(min)={diagnostic['min_ess']:.1f}"
                 )
+                for name, values in diagnostic["predictive_diagnostics"].items():
+                    print(
+                        f"    Predictive {name}: R-hat(max/median)="
+                        f"{values['max_rhat']:.3f}/{values['median_rhat']:.3f}, "
+                        f"ESS(min)={values['min_ess']:.1f}"
+                    )
+                if "warning" in diagnostic:
+                    print(f"    HMC warning: {diagnostic['warning']}")
             if responsibility_change < self.responsibility_tolerance:
                 break
         # Keep the two assignment distributions separate. Responsibilities use

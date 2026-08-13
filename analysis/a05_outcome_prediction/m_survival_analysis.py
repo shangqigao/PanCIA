@@ -2268,6 +2268,26 @@ class SurvivalAnalyzer:
                 f"{diagnostic['final_step_size_max']:.2e}], "
                 f"posterior samples={diagnostic['n_samples']}"
             )
+            print(f"    Worst parameter: {diagnostic['worst_parameter']}")
+            for block_name, block in diagnostic['block_diagnostics'].items():
+                print(
+                    f"    Parameter block {block_name}: "
+                    f"R-hat(max/median)="
+                    f"{block['max_rhat']:.3f}/{block['median_rhat']:.3f}, "
+                    f"ESS(min)={block['min_ess']:.1f}"
+                )
+            for expert_name, predictive in (
+                diagnostic['predictive_diagnostics'].items()
+            ):
+                print(
+                    f"    Predictive log-risk {expert_name}: "
+                    f"R-hat(max/median)="
+                    f"{predictive['max_rhat']:.3f}/"
+                    f"{predictive['median_rhat']:.3f}, "
+                    f"ESS(min)={predictive['min_ess']:.1f}"
+                )
+            if 'warning' in diagnostic:
+                print(f"    WARNING: {diagnostic['warning']}")
         for expert_name, diagnostic in (
             bandit.representation_normalization_diagnostics_.items()
         ):

@@ -179,6 +179,21 @@ class VariationalSurvivalMoETests(unittest.TestCase):
             result, torch.full((1, 3), expected, dtype=torch.float32)
         )
 
+    def test_chain_diagnostics_flag_stationary_parameters(self):
+        moving = torch.tensor([
+            [[0.0, 2.0], [0.5, 2.0], [1.0, 2.0]],
+            [[0.0, 2.0], [0.5, 2.0], [1.0, 2.0]],
+        ])
+
+        rhat, ess, stationary = (
+            ConditionalVariationalSurvivalMoE._chain_diagnostics(moving)
+        )
+
+        self.assertFalse(bool(stationary[0]))
+        self.assertTrue(bool(stationary[1]))
+        self.assertTrue(torch.isinf(rhat[1]))
+        self.assertEqual(float(ess[1]), 0.0)
+
     def test_fit_and_single_patient_prediction_do_not_require_outcome(self):
         rng = np.random.default_rng(12)
         n = 48
