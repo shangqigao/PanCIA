@@ -2179,28 +2179,28 @@ class SurvivalAnalyzer:
             patience=model_params.get('variational_patience', 30),
             mc_train_samples=model_params.get('mc_train_samples', 1),
             mc_test_samples=model_params.get('mc_test_samples', 32),
-            mcmc_warmup=model_params.get('mcmc_warmup', 500),
-            mcmc_samples=model_params.get('mcmc_samples', 500),
+            mcmc_warmup=model_params.get('mcmc_warmup', 250),
+            mcmc_samples=model_params.get('mcmc_samples', 250),
             mcmc_step_size=model_params.get('mcmc_step_size', 0.01),
             mcmc_leapfrog_steps=model_params.get('mcmc_leapfrog_steps', 10),
-            mcmc_chains=model_params.get('mcmc_chains', 4),
-            mcmc_max_tree_depth=model_params.get('mcmc_max_tree_depth', 8),
+            mcmc_chains=model_params.get('mcmc_chains', 2),
+            mcmc_max_tree_depth=model_params.get('mcmc_max_tree_depth', 6),
             prior_scale=model_params.get('bayesian_head_prior_scale', 1.0),
             baseline_prior_scale=model_params.get(
                 'baseline_hazard_prior_scale', 2.0
             ),
             router_refit_epochs=model_params.get('router_refit_epochs', 100),
             bayesian_em_iterations=model_params.get(
-                'bayesian_em_iterations', 3
+                'bayesian_em_iterations', 2
             ),
             responsibility_tolerance=model_params.get(
                 'responsibility_tolerance', 1e-3
             ),
             responsibility_temperature=model_params.get(
-                'responsibility_temperature', 2.0
+                'responsibility_temperature', 1.0
             ),
             responsibility_prior_mix=model_params.get(
-                'responsibility_prior_mix', 0.05
+                'responsibility_prior_mix', 0.0
             ),
             hmc_target_acceptance=model_params.get(
                 'hmc_target_acceptance', 0.8

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -A CRISPIN-ORTUZAR-SL2-GPU
+#SBATCH -A ECI-SL2-GPU
 #SBATCH -J radiopath
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
