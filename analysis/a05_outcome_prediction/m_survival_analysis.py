@@ -2179,11 +2179,11 @@ class SurvivalAnalyzer:
             patience=model_params.get('variational_patience', 30),
             mc_train_samples=model_params.get('mc_train_samples', 1),
             mc_test_samples=model_params.get('mc_test_samples', 32),
-            mcmc_warmup=model_params.get('mcmc_warmup', 300),
-            mcmc_samples=model_params.get('mcmc_samples', 200),
-            mcmc_step_size=model_params.get('mcmc_step_size', 0.001),
-            mcmc_leapfrog_steps=model_params.get('mcmc_leapfrog_steps', 5),
-            mcmc_chains=model_params.get('mcmc_chains', 2),
+            mcmc_warmup=model_params.get('mcmc_warmup', 500),
+            mcmc_samples=model_params.get('mcmc_samples', 500),
+            mcmc_step_size=model_params.get('mcmc_step_size', 0.01),
+            mcmc_leapfrog_steps=model_params.get('mcmc_leapfrog_steps', 10),
+            mcmc_chains=model_params.get('mcmc_chains', 4),
             prior_scale=model_params.get('bayesian_head_prior_scale', 1.0),
             baseline_prior_scale=model_params.get(
                 'baseline_hazard_prior_scale', 2.0
