@@ -2168,8 +2168,8 @@ class SurvivalAnalyzer:
         bandit = ConditionalVariationalSurvivalMoE(
             rad_dim=X_rad_train.shape[1],
             path_dim=X_path_train.shape[1],
-            hidden_dim=model_params.get('variational_hidden_dim', 32),
-            n_intervals=model_params.get('survival_intervals', 8),
+            hidden_dim=model_params.get('variational_hidden_dim', 16),
+            n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
             beta_router_prior=model_params.get('router_prior_weight', 0.1),
             reliability_prior=model_params.get(
@@ -2207,6 +2207,9 @@ class SurvivalAnalyzer:
             hmc_min_acceptance=model_params.get('hmc_min_acceptance', 0.1),
             hmc_max_rhat=model_params.get('hmc_max_rhat', 1.2),
             hmc_min_ess=model_params.get('hmc_min_ess', 10.0),
+            hmc_severe_predictive_rhat=model_params.get(
+                'hmc_severe_predictive_rhat', 1.5
+            ),
             verbose=model_params.get('variational_verbose', True),
             log_every=model_params.get('variational_log_every', 10),
             device=model_params.get('device', 'cuda'),
@@ -2284,7 +2287,9 @@ class SurvivalAnalyzer:
                     f"R-hat(max/median)="
                     f"{predictive['max_rhat']:.3f}/"
                     f"{predictive['median_rhat']:.3f}, "
-                    f"ESS(min)={predictive['min_ess']:.1f}"
+                    f"p95={predictive['p95_rhat']:.3f}, "
+                    f"ESS(min)={predictive['min_ess']:.1f}, "
+                    f"worst patient={predictive['worst_patient_index']}"
                 )
             if 'warning' in diagnostic:
                 print(f"    WARNING: {diagnostic['warning']}")

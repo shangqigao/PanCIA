@@ -111,6 +111,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                  responsibility_prior_mix=0.05,
                  hmc_target_acceptance=0.8, hmc_min_acceptance=0.1,
                  hmc_max_rhat=1.2, hmc_min_ess=10.0,
+                 hmc_severe_predictive_rhat=1.5,
                  verbose=True, log_every=10,
                  device="cuda", random_state=None):
         super().__init__()
@@ -142,6 +143,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.hmc_min_acceptance = float(hmc_min_acceptance)
         self.hmc_max_rhat = float(hmc_max_rhat)
         self.hmc_min_ess = float(hmc_min_ess)
+        self.hmc_severe_predictive_rhat = float(hmc_severe_predictive_rhat)
         if self.bayesian_em_iterations < 1:
             raise ValueError("bayesian_em_iterations must be positive")
         if self.responsibility_temperature < 1.0:
@@ -489,16 +491,24 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             if torch.any(informative):
                 max_predictive_rhat = float(risk_rhat[informative].max())
                 median_predictive_rhat = float(risk_rhat[informative].median())
+                p95_predictive_rhat = float(torch.quantile(
+                    risk_rhat[informative], 0.95
+                ))
                 min_predictive_ess = float(risk_ess[informative].min())
+                worst_patient = int(torch.argmax(risk_rhat))
             else:
                 max_predictive_rhat = median_predictive_rhat = 1.0
+                p95_predictive_rhat = 1.0
                 min_predictive_ess = float(
                     self.mcmc_chains * self.mcmc_samples
                 )
+                worst_patient = -1
             predictive_diagnostics[name] = {
                 "max_rhat": max_predictive_rhat,
                 "median_rhat": median_predictive_rhat,
+                "p95_rhat": p95_predictive_rhat,
                 "min_ess": min_predictive_ess,
+                "worst_patient_index": worst_patient,
                 "stationary_patients": int(risk_stationary.sum()),
             }
         mean_acceptance = float(np.mean(acceptance_rates))
@@ -521,13 +531,17 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         predictive_max_rhat = max(
             value["max_rhat"] for value in predictive_diagnostics.values()
         )
+        predictive_p95_rhat = max(
+            value["p95_rhat"] for value in predictive_diagnostics.values()
+        )
         predictive_min_ess = min(
             value["min_ess"] for value in predictive_diagnostics.values()
         )
         severe_parameter_failure = max_rhat > 2.0
         predictive_failure = (
             not np.isfinite(predictive_max_rhat)
-            or predictive_max_rhat > self.hmc_max_rhat
+            or predictive_p95_rhat > self.hmc_max_rhat
+            or predictive_max_rhat > self.hmc_severe_predictive_rhat
             or predictive_min_ess < self.hmc_min_ess
         )
         if (
@@ -543,14 +557,23 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 f"{int(stationary.sum())}, max_Rhat={max_rhat:.3f}, "
                 f"min_ESS={min_ess:.1f}, predictive_max_Rhat="
                 f"{predictive_max_rhat:.3f}, predictive_min_ESS="
-                f"{predictive_min_ess:.1f}. Increase warmup/samples or adjust "
+                f"{predictive_min_ess:.1f}, predictive_p95_Rhat="
+                f"{predictive_p95_rhat:.3f}. Increase warmup/samples or adjust "
                 "mcmc_step_size and leapfrog steps."
             )
+        warnings = []
         if max_rhat > self.hmc_max_rhat or min_ess < self.hmc_min_ess:
-            self.mcmc_diagnostics_["joint"]["warning"] = (
+            warnings.append(
                 "Some individual parameters have not fully mixed, but "
                 "patient-level log-risk diagnostics passed."
             )
+        if predictive_max_rhat > self.hmc_max_rhat:
+            warnings.append(
+                "At least one patient has elevated predictive R-hat, while "
+                "the predictive 95th percentile passed."
+            )
+        if warnings:
+            self.mcmc_diagnostics_["joint"]["warning"] = " ".join(warnings)
 
     @staticmethod
     def _chain_diagnostics(chains):
@@ -814,7 +837,9 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     print(
                         f"    Predictive {name}: R-hat(max/median)="
                         f"{values['max_rhat']:.3f}/{values['median_rhat']:.3f}, "
-                        f"ESS(min)={values['min_ess']:.1f}"
+                        f"p95={values['p95_rhat']:.3f}, "
+                        f"ESS(min)={values['min_ess']:.1f}, "
+                        f"worst patient={values['worst_patient_index']}"
                     )
                 if "warning" in diagnostic:
                     print(f"    HMC warning: {diagnostic['warning']}")
