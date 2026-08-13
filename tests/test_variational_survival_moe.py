@@ -15,16 +15,16 @@ from analysis.a05_outcome_prediction.variational_survival_moe import (
 
 class VariationalSurvivalMoETests(unittest.TestCase):
     def test_piecewise_exponential_likelihood_handles_events_and_censoring(self):
-        expert = PiecewiseExponentialExpert(state_dim=1, n_intervals=2)
-        with torch.no_grad():
-            expert.log_baseline_hazard.fill_(0.0)
-            expert.risk.weight.zero_()
-        state = torch.zeros(2, 1)
+        expert = PiecewiseExponentialExpert(representation_dim=1)
+        log_baseline = torch.zeros(2)
+        log_risk = torch.zeros(2, 1)
         duration = torch.tensor([0.5, 1.5])
         event = torch.tensor([1.0, 0.0])
         boundaries = torch.tensor([0.0, 1.0, 2.0])
 
-        loglik = expert.log_likelihood(state, duration, event, boundaries)
+        loglik = expert.log_likelihood(
+            log_risk, duration, event, boundaries, log_baseline
+        )
 
         torch.testing.assert_close(loglik, torch.tensor([-0.5, -1.5]))
 
@@ -54,6 +54,101 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         ))
         self.assertAlmostEqual(float(kl), 0.0, places=7)
 
+    def test_router_state_has_nine_interpretable_terms(self):
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2, device="cpu"
+        )
+        risks = {
+            "R": torch.tensor([[1.0]]),
+            "P": torch.tensor([[3.0]]),
+            "RP": torch.tensor([[2.0]]),
+        }
+        uncertainties = {
+            name: torch.tensor([[value]])
+            for name, value in zip(risks, [1.0, 1.0, 1.0])
+        }
+
+        state = model._make_router_state(risks, uncertainties)
+
+        scale = np.sqrt(2.0)
+        expected = torch.tensor([[1.0, 3.0, 2.0, 1.0, 1.0, 1.0,
+                                  2.0 / scale, 1.0 / scale, 1.0 / scale]],
+                                dtype=torch.float32)
+        torch.testing.assert_close(state, expected)
+
+    def test_representation_standardization_preserves_relative_log_risk(self):
+        torch.manual_seed(3)
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
+            mcmc_samples=2, mcmc_chains=2, device="cpu", verbose=False,
+        )
+        representations = {
+            name: torch.randn(12, 4) * torch.tensor([1.0, 2.0, 0.5, 3.0])
+            + torch.tensor([2.0, -1.0, 4.0, 0.5])
+            for name in model.expert_names
+        }
+        with torch.no_grad():
+            for expert in model.experts.values():
+                expert.risk_coef.copy_(torch.randn(4))
+            old_log_risks = {
+                name: model.experts[name].log_risk(representations[name]).clone()
+                for name in model.expert_names
+            }
+            old_baseline = model.shared_log_baseline_hazard.clone()
+
+        normalized = model._fit_representation_normalization(representations)
+
+        for name in model.expert_names:
+            new_log_risk = model.experts[name].log_risk(normalized[name])
+            old_centered = old_log_risks[name] - old_log_risks[name].mean()
+            torch.testing.assert_close(new_log_risk, old_centered)
+            torch.testing.assert_close(
+                normalized[name].mean(0), torch.zeros(4), atol=1e-6, rtol=0
+            )
+            torch.testing.assert_close(
+                normalized[name].std(0, unbiased=False), torch.ones(4),
+                atol=1e-6, rtol=0,
+            )
+        torch.testing.assert_close(model.shared_log_baseline_hazard, old_baseline)
+
+    def test_all_experts_use_one_shared_baseline_parameter(self):
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=3,
+            mcmc_samples=2, mcmc_chains=2, device="cpu", verbose=False,
+        )
+
+        self.assertEqual(tuple(model.shared_log_baseline_hazard.shape), (3,))
+        for expert in model.experts.values():
+            self.assertFalse(hasattr(expert, "log_baseline_hazard"))
+
+    def test_posterior_predictive_likelihood_averages_probabilities(self):
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=1, path_dim=1, hidden_dim=1, n_intervals=1,
+            mcmc_samples=2, mcmc_chains=2, device="cpu", verbose=False,
+        )
+        model.register_buffer("time_boundaries_", torch.tensor([0.0, 2.0]))
+        model.posterior_samples_ = {
+            name: {"beta": torch.tensor(
+                [[0.0], [np.log(2.0)]], dtype=torch.float32
+            )}
+            for name in model.expert_names
+        }
+        model.posterior_samples_["shared_log_baseline_hazard"] = torch.zeros(2, 1)
+        representations = {
+            name: torch.ones(1, 1) for name in model.expert_names
+        }
+
+        result = model._posterior_predictive_log_likelihood(
+            representations, torch.tensor([1.0]), torch.tensor([0.0])
+        )
+
+        # Censored likelihoods are exp(-1) and exp(-2); average probabilities
+        # first, then take log. This differs from averaging log-likelihoods.
+        expected = np.log((np.exp(-1.0) + np.exp(-2.0)) / 2.0)
+        torch.testing.assert_close(
+            result, torch.full((1, 3), expected, dtype=torch.float32)
+        )
+
     def test_fit_and_single_patient_prediction_do_not_require_outcome(self):
         rng = np.random.default_rng(12)
         n = 48
@@ -67,7 +162,9 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=3, path_dim=4, state_dim=2, hidden_dim=6,
             n_intervals=3, max_epochs=4, patience=3,
-            mc_test_samples=3, device="cpu", random_state=4,
+            mc_test_samples=3, mcmc_warmup=2, mcmc_samples=3,
+            mcmc_leapfrog_steps=2, router_refit_epochs=2,
+            verbose=False, device="cpu", random_state=4,
         ).fit(x_rad, x_path, y)
 
         risk, action, probs, uncertainty = model.predict(

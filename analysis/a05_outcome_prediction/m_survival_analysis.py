@@ -1992,8 +1992,120 @@ class SurvivalAnalyzer:
         }
     
     def strategy_6_EM_Contextual_Bandit(self, split, split_idx, omics_params, model_params):
+        """Strategy 6: legacy EM contextual bandit with hard deployment."""
+        print(f"\n=== Strategy 6: EM Contextual Bandit (Hard Selection) ===")
+
+        radiomics_params = omics_params.copy()
+        radiomics_params['omics'] = 'radiomics'
+        radiomics_params['save_omics_dir'] = omics_params['save_omics_dir']['radiomics']
+        data_tr, data_te, raw_data_te, tr_X_radio, te_X_radio, raw_te_X_radio, tr_y, te_y = self.load_data_for_fold(
+            split, **radiomics_params
+        )
+
+        pathomics_params = omics_params.copy()
+        pathomics_params['omics'] = 'pathomics'
+        pathomics_params['save_omics_dir'] = omics_params['save_omics_dir']['pathomics']
+        _, _, _, tr_X_patho, te_X_patho, raw_te_X_patho, _, _ = self.load_data_for_fold(
+            split, **pathomics_params
+        )
+
+        bandit = ContextualBandit(
+            alpha_range=model_params.get(
+                'alpha_range', [0.001, 0.01, 0.1, 1.0, 10.0]
+            ),
+            max_iterations=model_params.get('em_max_iterations', 10),
+            convergence_threshold=model_params.get(
+                'convergence_threshold', 0.001
+            ),
+            hidden_dim=model_params.get('policy_hidden_dim', 16),
+            learning_rate=model_params.get('policy_learning_rate', 0.01),
+            batch_size=model_params.get('policy_batch_size', 32),
+            policy_epochs=model_params.get('policy_epochs', 50),
+            cv_folds=model_params.get('cox_cv_folds', 5),
+            cox_learning_rate=model_params.get('cox_learning_rate', 0.05),
+            cox_max_epochs=model_params.get('cox_max_epochs', 500),
+            cox_tolerance=model_params.get('cox_tolerance', 1e-6),
+            cox_patience=model_params.get('cox_patience', 20),
+            cox_l1_ratio=model_params.get('cox_l1_ratio', 0.9),
+            cox_gradient_clip=model_params.get('cox_gradient_clip', 10.0),
+            min_expert_weight=model_params.get('min_expert_weight', 0.01),
+            expert_specialization_strength=model_params.get(
+                'expert_specialization_strength', 0.5
+            ),
+            target_event_ess=model_params.get('target_event_ess', 50.0),
+            policy_risk_clip=model_params.get('policy_risk_clip', 5.0),
+            reliability_floor=model_params.get('reliability_floor', 0.05),
+            reliability_prior_power=model_params.get(
+                'reliability_prior_power', 1.0
+            ),
+            policy_fallback_tolerance=model_params.get(
+                'policy_fallback_tolerance', 0.0
+            ),
+            rp_cost_weight=model_params.get('rp_cost_weight', 0.0),
+            rp_minimum_gain=model_params.get('rp_minimum_gain', 0.01),
+            rp_bootstrap_samples=model_params.get('rp_bootstrap_samples', 500),
+            rp_confidence=model_params.get('rp_confidence', 0.95),
+            hard_policy=True,
+            gumbel_temperature=model_params.get('gumbel_temperature', 1.0),
+            gumbel_min_temperature=model_params.get(
+                'gumbel_min_temperature', 0.1
+            ),
+            gumbel_anneal_rate=model_params.get('gumbel_anneal_rate', 0.95),
+            loss_type=model_params.get('policy_loss_type', 'adaptive'),
+            exploration_weight=model_params.get('exploration_weight', 0.1),
+            entropy_weight=model_params.get('entropy_weight', 0.05),
+            uncertainty_weight=model_params.get('uncertainty_weight', 0.0),
+            temperature=model_params.get('policy_temperature', 1.0),
+            device=model_params.get('device', 'cuda'),
+            random_state=model_params.get('random_state', split_idx),
+        )
+        pipeline = ContextualBanditPipeline(
+            bandit, use_soft_ensemble=False
+        )
+        pipeline.fit(tr_X_radio, tr_X_patho, tr_y)
+
+        risk_scores = pipeline.transform(te_X_radio, te_X_patho)
+        actions = pipeline.actions_.copy()
+        probs = pipeline.probs_.copy()
+        raw_risk_scores = pipeline.transform(raw_te_X_radio, raw_te_X_patho)
+        pipeline.actions_, pipeline.probs_ = actions, probs
+        pipeline.risk_scores_ = risk_scores
+
+        scores_dict, times = self.evaluate_predictions(
+            tr_y, None, te_y, risk_scores, None
+        )
+        print(f"\nFinal Results:")
+        print(f"  C-index: {scores_dict.get('C-index', 0):.4f}")
+        print(f"  Policy action distribution: "
+              f"Rad: {np.sum(actions == 0)}, "
+              f"Path: {np.sum(actions == 1)}, "
+              f"RP: {np.sum(actions == 2)}")
+
+        return {
+            'pipeline': pipeline,
+            'risk_scores': risk_scores,
+            'raw_risk_scores': raw_risk_scores,
+            'scores': scores_dict,
+            'times': times,
+            'subject_ids': [p[0][0] for p in data_te],
+            'raw_subject_ids': [p[0][0] for p in raw_data_te],
+            'event': te_y["event"].astype(int).tolist(),
+            'duration': te_y["duration"].tolist(),
+            'objective_history': bandit.objective_history,
+            'cindex_history': bandit.cindex_history,
+            'actions': actions.tolist(),
+            'policy_probs': probs.tolist(),
+            'subgroup_weights': {
+                'radiomics': float(np.mean(probs[:, 0])),
+                'pathomics': float(np.mean(probs[:, 1])),
+                'rp': float(np.mean(probs[:, 2])),
+            },
+        }
+
+    def strategy_7_variational_survival_moe(self, split, split_idx,
+                                             omics_params, model_params):
         """
-        Strategy 6: conditional latent mixture of survival experts.
+        Strategy 7: conditional latent mixture of survival experts.
 
         Outcome-informed posterior responsibilities supervise a state-only router
         during training. At deployment, hard R/P/RP selection uses the router
@@ -2021,7 +2133,7 @@ class SurvivalAnalyzer:
         -------
         dict : Results containing predictions, scores, and metadata
         """
-        print(f"\n=== Strategy 6: Variational Survival Mixture ===")
+        print(f"\n=== Strategy 7: Variational Survival Mixture ===")
         
         # ============================================================
         # STEP 1: LOAD DATA
@@ -2056,11 +2168,9 @@ class SurvivalAnalyzer:
         bandit = ConditionalVariationalSurvivalMoE(
             rad_dim=X_rad_train.shape[1],
             path_dim=X_path_train.shape[1],
-            state_dim=model_params.get('variational_state_dim', 8),
             hidden_dim=model_params.get('variational_hidden_dim', 32),
             n_intervals=model_params.get('survival_intervals', 8),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
-            beta_state=model_params.get('state_kl_weight', 1e-3),
             beta_router_prior=model_params.get('router_prior_weight', 0.1),
             reliability_prior=model_params.get(
                 'reliability_prior', (1.0, 1.0, 1.0)
@@ -2069,8 +2179,26 @@ class SurvivalAnalyzer:
             patience=model_params.get('variational_patience', 30),
             mc_train_samples=model_params.get('mc_train_samples', 1),
             mc_test_samples=model_params.get('mc_test_samples', 32),
-            device='cuda',
-            random_state=42,
+            mcmc_warmup=model_params.get('mcmc_warmup', 100),
+            mcmc_samples=model_params.get('mcmc_samples', 200),
+            mcmc_step_size=model_params.get('mcmc_step_size', 0.01),
+            mcmc_leapfrog_steps=model_params.get('mcmc_leapfrog_steps', 10),
+            mcmc_chains=model_params.get('mcmc_chains', 2),
+            prior_scale=model_params.get('bayesian_head_prior_scale', 1.0),
+            baseline_prior_scale=model_params.get(
+                'baseline_hazard_prior_scale', 2.0
+            ),
+            router_refit_epochs=model_params.get('router_refit_epochs', 100),
+            bayesian_em_iterations=model_params.get(
+                'bayesian_em_iterations', 3
+            ),
+            responsibility_tolerance=model_params.get(
+                'responsibility_tolerance', 1e-3
+            ),
+            verbose=model_params.get('variational_verbose', True),
+            log_every=model_params.get('variational_log_every', 10),
+            device=model_params.get('device', 'cuda'),
+            random_state=model_params.get('random_state', split_idx),
         )
         pipeline = ConditionalVariationalSurvivalPipeline(bandit, hard=True)
 
@@ -2104,6 +2232,33 @@ class SurvivalAnalyzer:
             f"Path: {np.sum(actions == 1)}, "
             f"RP: {np.sum(actions == 2)}")
         print(f"  Variational epochs: {len(bandit.history_)}")
+        best_terms = bandit.best_validation_terms_
+        print(
+            f"  Best validation loss terms (epoch {bandit.best_epoch_}): "
+            f"Total={best_terms['val_loss']:.4f}, "
+            f"Expert NLL={best_terms['expert_nll']:.4f}, "
+            f"Router CE={best_terms['router_ce']:.4f}, "
+            f"Router KL={best_terms['router_kl']:.4f} "
+            f"(weighted={best_terms['weighted_router_kl']:.4f})"
+        )
+        for expert_name, diagnostic in bandit.mcmc_diagnostics_.items():
+            print(
+                f"  HMC {expert_name}: acceptance="
+                f"{diagnostic['acceptance_rate']:.3f}, "
+                f"R-hat(max)={diagnostic['max_rhat']:.3f}, "
+                f"ESS(min)={diagnostic['min_ess']:.1f}, "
+                f"posterior samples={diagnostic['n_samples']}"
+            )
+        for expert_name, diagnostic in (
+            bandit.representation_normalization_diagnostics_.items()
+        ):
+            print(
+                f"  H normalization {expert_name}: raw scale range="
+                f"[{diagnostic['raw_scale_min']:.4f}, "
+                f"{diagnostic['raw_scale_max']:.4f}], "
+                f"removed risk offset="
+                f"{diagnostic['removed_log_risk_offset']:.4f}"
+            )
         print(f"  Responsibility-to-router KL: "
               f"{bandit.assignment_distillation_gap_:.4f}")
         
@@ -2118,6 +2273,13 @@ class SurvivalAnalyzer:
             'event': te_y["event"].astype(int).tolist(),
             'duration': te_y["duration"].tolist(),
             'training_history': bandit.history_,
+            'best_epoch': bandit.best_epoch_,
+            'best_validation_terms': bandit.best_validation_terms_,
+            'mcmc_diagnostics': bandit.mcmc_diagnostics_,
+            'bayesian_em_history': bandit.bayesian_em_history_,
+            'representation_normalization': (
+                bandit.representation_normalization_diagnostics_
+            ),
             'training_responsibilities': bandit.training_responsibilities_.tolist(),
             'training_gate_probs': bandit.training_gate_probs_.tolist(),
             'assignment_distillation_gap': bandit.assignment_distillation_gap_,
@@ -2211,6 +2373,7 @@ class SurvivalAnalyzer:
                 # 'Strategy4_PCA_Separate_Fusion': lambda s, idx, op, mp: self.strategy_4_pca_separate_fusion(s, idx, op, mp, n_pca_components, fusion_method),
                 # 'Strategy5_Domain_Adaptation_Fusion': lambda s, idx, op, mp: self.strategy_5_domain_adaptation_fusion(s, idx, op, mp),
                 'Strategy6_Contextual_Bandit_Fusion': lambda s, idx, op, mp: self.strategy_6_EM_Contextual_Bandit(s, idx, op, mp),
+                # 'Strategy7_Variational_Survival_MoE': lambda s, idx, op, mp: self.strategy_7_variational_survival_moe(s, idx, op, mp),
             }
         else:
             raise ValueError(f"{omics} is not supported yet")
