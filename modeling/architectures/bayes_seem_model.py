@@ -383,6 +383,7 @@ class BayesianSEEM(nn.Module):
         # Bayesian image decomposition
         decomp_outputs = self.decomposition(images.tensor)
         self.vis_counter += 1
+        self.decomposition.step_counter += 1
         if self.vis_counter % self.vis_every_n_steps == 0:
             self.visualizer(images.tensor, decomp_outputs['visualize'], self.vis_counter, self.writer)
 

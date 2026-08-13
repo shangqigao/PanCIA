@@ -33,6 +33,7 @@ class BayesDec(nn.Module):
         # repeat for multi-channel image
         Dx_grouped = Dx.repeat(self.in_channel, 1, 1, 1)
         self.register_buffer('Dx', Dx_grouped)
+        self.step_counter = 0
 
 
     @staticmethod
@@ -94,8 +95,9 @@ class BayesDec(nn.Module):
            dim=1
         )
 
-        kl_mu_m = self.sigma_0 * (mu_m - self.mu_0) * (mu_m - self.mu_0)
-        kl_sigma_m = self.sigma_0 * torch.exp(log_var_m) - log_var_m
+        temp = 100 * 0.954993 ** min(step // 40, 100)
+        kl_mu_m = temp * self.sigma_0 * (mu_m - self.mu_0) * (mu_m - self.mu_0)
+        kl_sigma_m = temp * self.sigma_0 * torch.exp(log_var_m) - log_var_m
 
         visualize = {
             "shape": torch.concat([x, mu_x, torch.exp(log_var_x / 2)]),

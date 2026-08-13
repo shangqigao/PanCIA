@@ -2372,8 +2372,8 @@ class SurvivalAnalyzer:
                 # 'Strategy3_Separate_Fusion': lambda s, idx, op, mp: self.strategy_3_separate_fusion(s, idx, op, mp, fusion_method),
                 # 'Strategy4_PCA_Separate_Fusion': lambda s, idx, op, mp: self.strategy_4_pca_separate_fusion(s, idx, op, mp, n_pca_components, fusion_method),
                 # 'Strategy5_Domain_Adaptation_Fusion': lambda s, idx, op, mp: self.strategy_5_domain_adaptation_fusion(s, idx, op, mp),
-                'Strategy6_Contextual_Bandit_Fusion': lambda s, idx, op, mp: self.strategy_6_EM_Contextual_Bandit(s, idx, op, mp),
-                # 'Strategy7_Variational_Survival_MoE': lambda s, idx, op, mp: self.strategy_7_variational_survival_moe(s, idx, op, mp),
+                # 'Strategy6_Contextual_Bandit_Fusion': lambda s, idx, op, mp: self.strategy_6_EM_Contextual_Bandit(s, idx, op, mp),
+                'Strategy7_Variational_Survival_MoE': lambda s, idx, op, mp: self.strategy_7_variational_survival_moe(s, idx, op, mp),
             }
         else:
             raise ValueError(f"{omics} is not supported yet")
