@@ -194,6 +194,17 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         self.assertTrue(torch.isinf(rhat[1]))
         self.assertEqual(float(ess[1]), 0.0)
 
+    def test_probability_diagnostics_detect_uniform_policy(self):
+        probabilities = np.full((5, 3), 1.0 / 3.0)
+
+        diagnostics = ConditionalVariationalSurvivalMoE.probability_diagnostics(
+            probabilities
+        )
+
+        self.assertAlmostEqual(diagnostics["normalized_entropy"], 1.0)
+        self.assertAlmostEqual(diagnostics["mean_max_probability"], 1.0 / 3.0)
+        self.assertAlmostEqual(diagnostics["mean_top_two_margin"], 0.0)
+
     def test_fit_and_single_patient_prediction_do_not_require_outcome(self):
         rng = np.random.default_rng(12)
         n = 48
@@ -213,7 +224,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
             verbose=False, device="cpu", random_state=4,
         ).fit(x_rad, x_path, y)
 
-        risk, action, probs, uncertainty = model.predict(
+        risk, action, probs, uncertainty, diagnostics = model.predict(
             x_rad[:1], x_path[:1], hard=True
         )
 
@@ -221,6 +232,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         self.assertEqual(action.shape, (1,))
         self.assertEqual(probs.shape, (1, 3))
         self.assertEqual(uncertainty.shape, (1,))
+        self.assertEqual(diagnostics["expert_risks"].shape, (1, 3))
         np.testing.assert_allclose(probs.sum(axis=1), 1.0, atol=1e-6)
         self.assertTrue(np.isfinite(risk).all())
 

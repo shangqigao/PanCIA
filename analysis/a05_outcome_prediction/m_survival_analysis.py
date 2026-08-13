@@ -2225,6 +2225,7 @@ class SurvivalAnalyzer:
         actions = pipeline.actions_
         probs = pipeline.probs_
         uncertainty = pipeline.uncertainty_
+        test_diagnostics = pipeline.prediction_diagnostics_
         if actions is None:
             if probs is None:
                 raise RuntimeError("Contextual-bandit predictions returned no policy probabilities")
@@ -2237,8 +2238,23 @@ class SurvivalAnalyzer:
         pipeline.actions_ = actions
         pipeline.probs_ = probs
         pipeline.uncertainty_ = uncertainty
+        pipeline.prediction_diagnostics_ = test_diagnostics
         
         scores_dict, times = self.evaluate_predictions(tr_y, None, te_y, risk_scores, None)
+        expert_risks = test_diagnostics['expert_risks']
+        comparison_risks = {
+            'R': expert_risks[:, 0],
+            'P': expert_risks[:, 1],
+            'RP': expert_risks[:, 2],
+            'soft': test_diagnostics['soft_risk'],
+            'hard': test_diagnostics['hard_risk'],
+        }
+        comparison_cindices = {
+            name: float(concordance_index(
+                te_y['duration'], -values, te_y['event'].astype(bool)
+            ))
+            for name, values in comparison_risks.items()
+        }
         
         print(f"\nFinal Results:")
         print(f"  C-index: {scores_dict.get('C-index', 0):.4f}")
@@ -2246,6 +2262,32 @@ class SurvivalAnalyzer:
             f"Rad: {np.sum(actions == 0)}, "
             f"Path: {np.sum(actions == 1)}, "
             f"RP: {np.sum(actions == 2)}")
+        print(
+            "  Test C-index R/P/RP/soft/hard: "
+            + "/".join(
+                f"{comparison_cindices[name]:.4f}"
+                for name in ('R', 'P', 'RP', 'soft', 'hard')
+            )
+        )
+        policy_diag = test_diagnostics['policy']
+        print(
+            "  Test policy diagnostics: mean probs R/P/RP="
+            + "/".join(f"{value:.3f}" for value in policy_diag['mean_probabilities'])
+            + f", entropy={policy_diag['mean_entropy']:.4f} "
+              f"(normalized={policy_diag['normalized_entropy']:.3f}), "
+              f"max prob={policy_diag['mean_max_probability']:.3f}, "
+              f"top-two margin={policy_diag['mean_top_two_margin']:.3f}"
+        )
+        for label, diagnostic in (
+            ('Training gate', bandit.training_gate_diagnostics_),
+            ('Training responsibility', bandit.training_responsibility_diagnostics_),
+        ):
+            print(
+                f"  {label}: entropy={diagnostic['mean_entropy']:.4f} "
+                f"(normalized={diagnostic['normalized_entropy']:.3f}), "
+                f"max prob={diagnostic['mean_max_probability']:.3f}, "
+                f"top-two margin={diagnostic['mean_top_two_margin']:.3f}"
+            )
         print(f"  Variational epochs: {len(bandit.history_)}")
         print(
             f"  Baseline prior center: log-rate="
@@ -2330,6 +2372,12 @@ class SurvivalAnalyzer:
             'actions': actions.tolist(),
             'policy_probs': probs.tolist(),
             'routing_uncertainty': uncertainty.tolist(),
+            'expert_test_cindices': comparison_cindices,
+            'policy_diagnostics': policy_diag,
+            'training_gate_diagnostics': bandit.training_gate_diagnostics_,
+            'training_responsibility_diagnostics': (
+                bandit.training_responsibility_diagnostics_
+            ),
             'subgroup_weights': {
                 'radiomics': np.mean(probs[:, 0]) if probs.shape[1] >= 1 else 0,
                 'pathomics': np.mean(probs[:, 1]) if probs.shape[1] >= 2 else 0,

@@ -607,6 +607,22 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             stds[name] = draws.std(1, unbiased=False, keepdim=True).clamp_min(1e-6)
         return means, stds
 
+    @staticmethod
+    def probability_diagnostics(probabilities):
+        """Summarize whether categorical assignments are truly decisive."""
+        probs = np.asarray(probabilities, dtype=np.float64)
+        entropy = -np.sum(probs * np.log(np.clip(probs, 1e-12, None)), axis=1)
+        sorted_probs = np.sort(probs, axis=1)
+        return {
+            "mean_probabilities": probs.mean(0).tolist(),
+            "mean_entropy": float(entropy.mean()),
+            "normalized_entropy": float(entropy.mean() / math.log(probs.shape[1])),
+            "mean_max_probability": float(probs.max(1).mean()),
+            "mean_top_two_margin": float(
+                (sorted_probs[:, -1] - sorted_probs[:, -2]).mean()
+            ),
+        }
+
     def _posterior_predictive_log_likelihood(self, representations, duration,
                                              event):
         """Log E_posterior[p(T,E|theta)] for every patient and expert."""
@@ -855,6 +871,12 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             posterior_responsibility.cpu().numpy()
         )
         self.training_gate_probs_ = final_gate.cpu().numpy()
+        self.training_gate_diagnostics_ = self.probability_diagnostics(
+            self.training_gate_probs_
+        )
+        self.training_responsibility_diagnostics_ = self.probability_diagnostics(
+            self.training_responsibilities_
+        )
         self.assignment_distillation_gap_ = float(np.mean(np.sum(
             self.training_responsibilities_
             * (
@@ -912,9 +934,19 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         else:
             risk = torch.sum(probs * expert_risks, dim=1)
         uncertainty = torch.stack(gate_samples).var(0, unbiased=False).mean(1)
+        soft_risk = torch.sum(probs * expert_risks, dim=1)
+        diagnostics = {
+            "expert_risks": expert_risks.cpu().numpy(),
+            "soft_risk": soft_risk.cpu().numpy(),
+            "hard_risk": expert_risks.gather(
+                1, actions.unsqueeze(1)
+            ).squeeze(1).cpu().numpy(),
+            "policy": self.probability_diagnostics(probs.cpu().numpy()),
+        }
+        self.last_prediction_diagnostics_ = diagnostics
         return (
             risk.cpu().numpy(), actions.cpu().numpy(), probs.cpu().numpy(),
-            uncertainty.cpu().numpy(),
+            uncertainty.cpu().numpy(), diagnostics,
         )
 
 
@@ -940,8 +972,9 @@ class ConditionalVariationalSurvivalPipeline:
     def transform(self, x_rad, x_path):
         x_rad = self.radiomics_scaler.transform(self._array(x_rad))
         x_path = self.pathomics_scaler.transform(self._array(x_path))
-        risk, actions, probs, uncertainty = self.model.predict(
+        risk, actions, probs, uncertainty, diagnostics = self.model.predict(
             x_rad, x_path, hard=self.hard
         )
         self.actions_, self.probs_, self.uncertainty_ = actions, probs, uncertainty
+        self.prediction_diagnostics_ = diagnostics
         return risk
