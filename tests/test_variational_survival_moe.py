@@ -103,7 +103,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         ))
         self.assertAlmostEqual(float(kl), 0.0, places=7)
 
-    def test_router_state_has_nine_interpretable_terms(self):
+    def test_router_state_has_twelve_interpretable_terms(self):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2, device="cpu"
         )
@@ -112,15 +112,19 @@ class VariationalSurvivalMoETests(unittest.TestCase):
             "P": torch.tensor([[3.0]]),
             "RP": torch.tensor([[2.0]]),
         }
-        uncertainties = {
+        hmc_uncertainties = {
             name: torch.tensor([[value]])
             for name, value in zip(risks, [1.0, 1.0, 1.0])
         }
+        cv_uncertainties = torch.full((1, 3), 2.0)
 
-        state = model._make_router_state(risks, uncertainties)
+        state = model._make_router_state(
+            risks, hmc_uncertainties, cv_uncertainties
+        )
 
-        scale = np.sqrt(2.0)
+        scale = np.sqrt(10.0)
         expected = torch.tensor([[1.0, 3.0, 2.0, 1.0, 1.0, 1.0,
+                                  2.0, 2.0, 2.0,
                                   2.0 / scale, 1.0 / scale, 1.0 / scale]],
                                 dtype=torch.float32)
         torch.testing.assert_close(state, expected)
@@ -266,7 +270,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
             router_refit_epochs=30, mcmc_samples=2, mcmc_chains=2,
             device="cpu", verbose=False,
         )
-        states = torch.randn(3, 6, 9)
+        states = torch.randn(3, 6, 12)
         responsibility = torch.zeros(6, 3)
         responsibility[:3, 0] = 1.0
         responsibility[3:, 1] = 1.0
@@ -300,6 +304,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
             n_intervals=3, max_epochs=4, patience=3,
             mc_test_samples=3, mcmc_warmup=2, mcmc_samples=3,
             mcmc_leapfrog_steps=2, router_refit_epochs=2,
+            cv_folds=2, cv_repeats=2, cv_epochs=1,
             hmc_max_rhat=1e9, hmc_min_ess=0.0,
             verbose=False, device="cpu", random_state=4,
         ).fit(x_rad, x_path, y)
@@ -313,6 +318,8 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         self.assertEqual(probs.shape, (1, 3))
         self.assertEqual(uncertainty.shape, (1,))
         self.assertEqual(diagnostics["expert_risks"].shape, (1, 3))
+        self.assertEqual(diagnostics["cv_log_risk_sd"].shape, (1, 3))
+        self.assertEqual(diagnostics["hmc_log_risk_sd"].shape, (1, 3))
         np.testing.assert_allclose(probs.sum(axis=1), 1.0, atol=1e-6)
         self.assertTrue(np.isfinite(risk).all())
 

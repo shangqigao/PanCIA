@@ -2177,13 +2177,19 @@ class SurvivalAnalyzer:
             ),
             max_epochs=model_params.get('variational_epochs', 300),
             patience=model_params.get('variational_patience', 30),
-            mc_test_samples=model_params.get('mc_test_samples', 32),
+            mc_test_samples=model_params.get('mc_test_samples', 64),
             mcmc_warmup=model_params.get('mcmc_warmup', 250),
             mcmc_samples=model_params.get('mcmc_samples', 250),
             mcmc_step_size=model_params.get('mcmc_step_size', 0.01),
             mcmc_leapfrog_steps=model_params.get('mcmc_leapfrog_steps', 10),
             mcmc_chains=model_params.get('mcmc_chains', 2),
             mcmc_max_tree_depth=model_params.get('mcmc_max_tree_depth', 6),
+            cv_folds=model_params.get('variational_cv_folds', 5),
+            cv_repeats=model_params.get('variational_cv_repeats', 5),
+            cv_epochs=model_params.get('variational_cv_epochs', 100),
+            cv_reliability_strength=model_params.get(
+                'cv_reliability_strength', 5.0
+            ),
             prior_scale=model_params.get('bayesian_head_prior_scale', 1.0),
             baseline_prior_scale=model_params.get(
                 'baseline_hazard_prior_scale', 2.0
@@ -2294,6 +2300,24 @@ class SurvivalAnalyzer:
             f"{bandit.baseline_prior_location_:.4f} "
             f"(rate={np.exp(bandit.baseline_prior_location_):.6g} per time unit)"
         )
+        cv_diag = bandit.cv_diagnostics_
+        print(
+            "  Repeated-CV reference: C-index R/P/RP="
+            + "/".join(f"{value:.4f}" for value in cv_diag['cindices'])
+            + ", reliability prior="
+            + "/".join(
+                f"{value:.3f}" for value in cv_diag['reliability_prior']
+            )
+        )
+        print(
+            "    Mean fixed CV log-risk SD R/P/RP="
+            + "/".join(f"{value:.4f}" for value in cv_diag['mean_sd'])
+            + f", fitted expert sets={cv_diag['n_models']}"
+        )
+        print(
+            f"  HMC router risk reference: common scale="
+            f"{float(bandit.hmc_risk_scale_):.4f}"
+        )
         best_terms = bandit.best_validation_terms_
         print(
             f"  Best validation loss terms (epoch {bandit.best_epoch_}): "
@@ -2371,6 +2395,7 @@ class SurvivalAnalyzer:
             'representation_normalization': (
                 bandit.representation_normalization_diagnostics_
             ),
+            'cv_diagnostics': bandit.cv_diagnostics_,
             'training_responsibilities': bandit.training_responsibilities_.tolist(),
             'training_gate_probs': bandit.training_gate_probs_.tolist(),
             'assignment_distillation_gap': bandit.assignment_distillation_gap_,
