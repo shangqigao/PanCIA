@@ -267,16 +267,57 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                                    prior_mix=0.0):
         """Tempered categorical E-step with optional prior smoothing."""
         log_joint = torch.log(gate_probs.clamp_min(1e-8)) + expert_log_likelihoods
-        responsibility = torch.softmax(log_joint / temperature, dim=1)
+        return ConditionalVariationalSurvivalMoE.responsibilities_from_log_evidence(
+            log_joint, temperature=temperature, prior=prior,
+            prior_mix=prior_mix,
+        )
+
+    @staticmethod
+    def responsibilities_from_log_evidence(log_evidence, temperature=1.0,
+                                           prior=None, prior_mix=0.0):
+        """Normalize patient/expert log evidence into responsibilities."""
+        responsibility = torch.softmax(log_evidence / temperature, dim=-1)
         if prior_mix:
             if prior is None:
-                prior = torch.full_like(responsibility, 1.0 / responsibility.shape[1])
+                prior = torch.full_like(
+                    responsibility, 1.0 / responsibility.shape[-1]
+                )
             else:
                 prior = prior.reshape(1, -1).to(responsibility)
             responsibility = (
                 (1.0 - prior_mix) * responsibility + prior_mix * prior
             )
         return responsibility.detach()
+
+    @staticmethod
+    def posterior_responsibilities_from_draws(
+        gate_draws, expert_log_likelihood_draws, temperature=1.0,
+        prior=None, prior_mix=0.0,
+    ):
+        """Bayesian E-step using matched posterior gate/likelihood draws.
+
+        Computes log E_theta[pi_k(theta) p_k(T,E|theta)] before
+        normalization, preserving posterior dependence between routing and
+        expert evidence.
+        """
+        if gate_draws.shape != expert_log_likelihood_draws.shape:
+            raise ValueError(
+                "Gate and likelihood draws must share [draw, patient, expert] shape"
+            )
+        if gate_draws.ndim != 3:
+            raise ValueError("Posterior draws must have three dimensions")
+        log_joint_draws = (
+            torch.log(gate_draws.clamp_min(1e-8))
+            + expert_log_likelihood_draws
+        )
+        log_evidence = (
+            torch.logsumexp(log_joint_draws, dim=0)
+            - math.log(gate_draws.shape[0])
+        )
+        return ConditionalVariationalSurvivalMoE.responsibilities_from_log_evidence(
+            log_evidence, temperature=temperature, prior=prior,
+            prior_mix=prior_mix,
+        )
 
     def _update_responsibilities(self, gate_probs, expert_log_likelihoods):
         return self.posterior_responsibilities(
@@ -703,28 +744,49 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             raise ValueError("Gate and expert-risk posterior draws must align")
         return torch.sum(gates * risks, dim=2).mean(0)
 
-    def _posterior_router_states(self, representations, max_draws=None):
-        """Router states for matched posterior draws of all expert heads."""
+    def _posterior_draw_e_step_inputs(self, representations, duration, event,
+                                      max_draws=None):
+        """Matched router states and log likelihoods for Bayesian E-step."""
         posterior_stds = self._posterior_log_risk_summary(representations)[1]
         available = self.posterior_samples_["shared_log_baseline_hazard"].shape[0]
         n_draws = available if max_draws is None else min(int(max_draws), available)
         draw_indices = torch.linspace(
             0, available - 1, steps=n_draws
         ).long()
-        states = []
+        states, log_likelihoods = [], []
+        widths = self.time_boundaries_[1:] - self.time_boundaries_[:-1]
+        exposure = torch.clamp(
+            duration[:, None] - self.time_boundaries_[:-1][None, :], min=0.0
+        )
+        exposure = torch.minimum(exposure, widths[None, :])
+        interval = torch.bucketize(
+            duration, self.time_boundaries_[1:-1], right=False
+        )
         for draw_index in draw_indices:
-            draw_log_risks = {}
+            draw_log_risks, draw_log_likelihoods = {}, []
+            log_h0 = self.posterior_samples_[
+                "shared_log_baseline_hazard"
+            ][draw_index].to(self.device).clamp(-12.0, 8.0)
+            baseline_cumulative = (
+                exposure * torch.exp(log_h0).unsqueeze(0)
+            ).sum(1)
             for name in self.expert_names:
                 beta = self.posterior_samples_[name]["beta"][draw_index].to(
                     self.device
                 )
-                draw_log_risks[name] = representations[name].mv(beta).clamp(
+                eta = representations[name].mv(beta).clamp(
                     -12.0, 12.0
-                ).unsqueeze(1)
+                )
+                draw_log_risks[name] = eta.unsqueeze(1)
+                draw_log_likelihoods.append(
+                    event * (log_h0[interval] + eta)
+                    - baseline_cumulative * torch.exp(eta)
+                )
             states.append(self._make_router_state(
                 draw_log_risks, posterior_stds
             ).detach())
-        return torch.stack(states)
+            log_likelihoods.append(torch.stack(draw_log_likelihoods, dim=1))
+        return torch.stack(states), torch.stack(log_likelihoods)
 
     def _refit_router(self, router_states, responsibility):
         """Distil responsibilities over uncertain draw-specific states."""
@@ -876,16 +938,18 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     self.posterior_samples_["shared_log_baseline_hazard"]
                     .mean(0).to(self.device)
                 )
-                router_states = self._posterior_router_states(
-                    frozen_representations, max_draws=self.mc_test_samples
+                router_states, draw_loglik = self._posterior_draw_e_step_inputs(
+                    frozen_representations, tensors[2], tensors[3],
+                    max_draws=self.mc_test_samples,
                 )
-                # Match deployment: integrate the router over uncertain states.
-                gate = torch.softmax(self.router(router_states), dim=2).mean(0)
-                predictive_loglik = self._posterior_predictive_log_likelihood(
-                    frozen_representations, tensors[2], tensors[3]
-                )
-                updated_responsibility = self._update_responsibilities(
-                    gate, predictive_loglik
+                gate_draws = torch.softmax(self.router(router_states), dim=2)
+                updated_responsibility = (
+                    self.posterior_responsibilities_from_draws(
+                        gate_draws, draw_loglik,
+                        temperature=self.responsibility_temperature,
+                        prior=self.reliability_prior,
+                        prior_mix=self.responsibility_prior_mix,
+                    )
                 )
                 responsibility_change = torch.mean(torch.abs(
                     updated_responsibility - posterior_responsibility

@@ -56,6 +56,42 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         self.assertGreaterEqual(float(responsibility[0, 1]), 0.06)
         torch.testing.assert_close(responsibility.sum(1), torch.ones(1))
 
+    def test_bayesian_responsibility_jointly_marginalizes_matched_draws(self):
+        gate_draws = torch.tensor([
+            [[0.8, 0.1, 0.1]],
+            [[0.2, 0.7, 0.1]],
+        ])
+        likelihood_draws = torch.log(torch.tensor([
+            [[0.9, 0.2, 0.1]],
+            [[0.1, 0.8, 0.1]],
+        ]))
+
+        result = (
+            ConditionalVariationalSurvivalMoE
+            .posterior_responsibilities_from_draws(
+                gate_draws, likelihood_draws
+            )
+        )
+
+        joint_evidence = torch.tensor([[0.37, 0.29, 0.01]])
+        expected = joint_evidence / joint_evidence.sum(1, keepdim=True)
+        torch.testing.assert_close(result, expected)
+        self.assertFalse(result.requires_grad)
+
+        # Separate posterior means give different evidence, demonstrating why
+        # E[pi*p] must not be replaced with E[pi]E[p].
+        separate = gate_draws.mean(0) * likelihood_draws.exp().mean(0)
+        self.assertFalse(torch.allclose(
+            expected, separate / separate.sum(1, keepdim=True)
+        ))
+
+    def test_bayesian_responsibility_rejects_unmatched_draws(self):
+        with self.assertRaises(ValueError):
+            ConditionalVariationalSurvivalMoE.posterior_responsibilities_from_draws(
+                torch.full((2, 1, 3), 1.0 / 3.0),
+                torch.zeros(3, 1, 3),
+            )
+
     def test_router_prior_kl_is_zero_when_gate_matches_prior(self):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, state_dim=2, hidden_dim=4,
