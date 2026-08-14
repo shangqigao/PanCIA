@@ -1,4 +1,4 @@
-"""Conditional variational mixture of survival experts.
+"""Conditional Bayesian mixture of survival experts.
 
 The model targets p(T, E | X) and intentionally does not model p(X | S).
 Training uses outcome-informed posterior responsibilities, while deployment
@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from lifelines.utils import concordance_index
-from sklearn.model_selection import KFold, train_test_split
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 
@@ -84,11 +84,11 @@ class PiecewiseExponentialExpert(nn.Module):
 
 
 class ConditionalVariationalSurvivalMoE(nn.Module):
-    """Mixture of stochastic log-risk experts for R, P and RP.
+    """Empirical-Bayes mixture of survival experts for R, P and RP.
 
     E-step:
         r_ik ∝ pi_ik(S_i) p_k(T_i,E_i | S_i^k)
-    M-step / generalized variational update:
+    M-step / generalized EM update:
         experts minimize responsibility-weighted negative log likelihood;
         router minimizes CE(stopgrad(r_i), pi_i) + KL(pi_i || prior);
         posterior log-risk uncertainty comes from HMC samples of the Bayesian
@@ -100,11 +100,10 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
     def __init__(self, rad_dim, path_dim, state_dim=None, hidden_dim=32,
                  n_intervals=8, learning_rate=1e-3,
                  beta_router_prior=0.1, reliability_prior=(1 / 3, 1 / 3, 1 / 3),
-                 max_epochs=300, patience=30, mc_train_samples=1,
+                 max_epochs=300, patience=30,
                  mc_test_samples=32, mcmc_warmup=100, mcmc_samples=200,
                  mcmc_step_size=0.01, mcmc_leapfrog_steps=10,
                  mcmc_chains=2, mcmc_max_tree_depth=8,
-                 oof_folds=5, oof_vi_epochs=100, oof_vi_samples=8,
                  prior_scale=1.0, baseline_prior_scale=2.0,
                  router_refit_epochs=100, bayesian_em_iterations=3,
                  responsibility_tolerance=1e-3,
@@ -124,7 +123,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.beta_router_prior = float(beta_router_prior)
         self.max_epochs = int(max_epochs)
         self.patience = int(patience)
-        self.mc_train_samples = int(mc_train_samples)
         self.mc_test_samples = int(mc_test_samples)
         self.mcmc_warmup = int(mcmc_warmup)
         self.mcmc_samples = int(mcmc_samples)
@@ -132,13 +130,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.mcmc_leapfrog_steps = int(mcmc_leapfrog_steps)
         self.mcmc_chains = int(mcmc_chains)
         self.mcmc_max_tree_depth = int(mcmc_max_tree_depth)
-        self.oof_folds = int(oof_folds)
-        self.oof_vi_epochs = int(oof_vi_epochs)
-        self.oof_vi_samples = int(oof_vi_samples)
         if self.mcmc_chains < 2 or self.mcmc_samples < 2:
             raise ValueError("MCMC diagnostics require at least two chains and samples")
-        if self.oof_folds < 2 or self.oof_vi_epochs < 1 or self.oof_vi_samples < 2:
-            raise ValueError("OOF VI requires >=2 folds, >=1 epoch and >=2 samples")
         self.prior_scale = float(prior_scale)
         self.baseline_prior_scale = float(baseline_prior_scale)
         self.router_refit_epochs = int(router_refit_epochs)
@@ -202,7 +195,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         scale = getattr(self, f"representation_scale_{name}")
         return (representation - mean) / scale
 
-    def _encode(self, x_rad, x_path, stochastic=False):
+    def _encode(self, x_rad, x_path):
         inputs = {"R": x_rad, "P": x_path, "RP": torch.cat([x_rad, x_path], 1)}
         representations, log_risks = {}, {}
         for name in self.expert_names:
@@ -240,7 +233,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         return normalized
 
     def _make_router_state(self, log_risks, uncertainties):
-        """Nine interpretable terms: risks, log-variances, disagreements."""
+        """Nine interpretable terms: risks, posterior SDs, disagreements."""
         risks = torch.cat([log_risks[name] for name in self.expert_names], dim=1)
         uncertainty = torch.cat(
             [uncertainties[name] for name in self.expert_names], dim=1
@@ -293,8 +286,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             prior_mix=self.responsibility_prior_mix,
         )
 
-    def _objective(self, x_rad, x_path, duration, event, stochastic=True):
-        states, representations = self._encode(x_rad, x_path, stochastic)
+    def _objective(self, x_rad, x_path, duration, event):
+        states, representations = self._encode(x_rad, x_path)
         zero_uncertainty = {name: torch.zeros_like(states[name]) + 1.0 for name in self.expert_names}
         gate = self._router_probs(states, zero_uncertainty)
         log_likelihood = self._expert_log_likelihoods(states, duration, event)
@@ -701,158 +694,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             )
         return torch.stack(predictive, dim=1)
 
-    def _log_likelihood_from_theta(self, theta, representations, duration,
-                                   event):
-        """Patient/expert log likelihood for one flattened head parameter."""
-        d = next(iter(representations.values())).shape[1]
-        log_h0 = theta[3 * d:].clamp(-12.0, 8.0)
-        widths = self.time_boundaries_[1:] - self.time_boundaries_[:-1]
-        exposure = torch.clamp(
-            duration[:, None] - self.time_boundaries_[:-1][None, :], min=0.0
-        )
-        exposure = torch.minimum(exposure, widths[None, :])
-        interval = torch.bucketize(
-            duration, self.time_boundaries_[1:-1], right=False
-        )
-        baseline_cumulative = (exposure * torch.exp(log_h0)[None, :]).sum(1)
-        likelihoods = []
-        for expert_index, name in enumerate(self.expert_names):
-            beta = theta[expert_index * d:(expert_index + 1) * d]
-            eta = representations[name].mv(beta).clamp(-12.0, 12.0)
-            likelihoods.append(
-                event * (log_h0[interval] + eta)
-                - baseline_cumulative * torch.exp(eta)
-            )
-        return torch.stack(likelihoods, dim=1)
-
-    def _oof_variational_evidence(self, representations, duration, event,
-                                  responsibilities):
-        """Cross-fitted predictive evidence from lightweight Gaussian VI heads.
-
-        Each patient's state and survival evidence are produced by a head that
-        did not use that patient's outcome. Encoders remain fixed: this stage
-        specifically removes the flexible RP head's in-sample advantage.
-        """
-        n = len(duration)
-        n_folds = min(self.oof_folds, n)
-        if n_folds < 2:
-            raise ValueError("At least two patients are required for OOF evidence")
-        d = next(iter(representations.values())).shape[1]
-        # A neutral initialization is essential: initializing a fold from the
-        # full-data head would leak held-out outcomes through its parameters.
-        initial = torch.cat([
-            torch.zeros(3 * d, device=self.device),
-            torch.full(
-                (self.n_intervals,), self.baseline_prior_location_,
-                device=self.device,
-            ),
-        ])
-        oof_means = {
-            name: torch.empty((n, 1), device=self.device)
-            for name in self.expert_names
-        }
-        oof_stds = {
-            name: torch.empty((n, 1), device=self.device)
-            for name in self.expert_names
-        }
-        oof_loglik = torch.empty((n, 3), device=self.device)
-        fold_records = []
-        splitter = KFold(n_splits=n_folds, shuffle=False)
-        for fold, (train_np, heldout_np) in enumerate(splitter.split(np.arange(n))):
-            train_idx = torch.as_tensor(train_np, device=self.device)
-            heldout_idx = torch.as_tensor(heldout_np, device=self.device)
-            fold_representations = {
-                name: value[train_idx] for name, value in representations.items()
-            }
-            mu = nn.Parameter(initial.clone())
-            rho = nn.Parameter(torch.full_like(initial, -3.0))
-            optimizer = torch.optim.Adam(
-                (mu, rho), lr=max(self.learning_rate, 1e-3)
-            )
-            generator = torch.Generator(device=self.device)
-            generator.manual_seed(
-                (0 if self.random_state is None else self.random_state)
-                + 1009 * (fold + 1)
-            )
-            final_loss = math.nan
-            for _ in range(self.oof_vi_epochs):
-                scale = F.softplus(rho).clamp_min(1e-5)
-                elbo_samples = []
-                for _ in range(min(4, self.oof_vi_samples)):
-                    epsilon = torch.randn(
-                        initial.shape, generator=generator,
-                        device=self.device, dtype=initial.dtype,
-                    )
-                    theta = mu + scale * epsilon
-                    log_posterior = self._joint_head_log_posterior(
-                        theta, fold_representations, duration[train_idx],
-                        event[train_idx], responsibilities[train_idx],
-                    )
-                    log_q = torch.distributions.Normal(mu, scale).log_prob(
-                        theta
-                    ).sum()
-                    elbo_samples.append(log_posterior - log_q)
-                loss = -torch.stack(elbo_samples).mean() / len(train_idx)
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_((mu, rho), 10.0)
-                optimizer.step()
-                final_loss = float(loss.detach())
-
-            with torch.no_grad():
-                scale = F.softplus(rho).clamp_min(1e-5)
-                heldout_representations = {
-                    name: value[heldout_idx]
-                    for name, value in representations.items()
-                }
-                draw_risks = {name: [] for name in self.expert_names}
-                draw_loglik = []
-                for _ in range(self.oof_vi_samples):
-                    theta = mu + scale * torch.randn(
-                        initial.shape, generator=generator,
-                        device=self.device, dtype=initial.dtype,
-                    )
-                    for expert_index, name in enumerate(self.expert_names):
-                        beta = theta[expert_index * d:(expert_index + 1) * d]
-                        draw_risks[name].append(
-                            heldout_representations[name].mv(beta)
-                        )
-                    draw_loglik.append(self._log_likelihood_from_theta(
-                        theta, heldout_representations, duration[heldout_idx],
-                        event[heldout_idx],
-                    ))
-                for name in self.expert_names:
-                    values = torch.stack(draw_risks[name], dim=1)
-                    oof_means[name][heldout_idx] = values.mean(1, keepdim=True)
-                    oof_stds[name][heldout_idx] = values.std(
-                        1, unbiased=False, keepdim=True
-                    ).clamp_min(1e-6)
-                values = torch.stack(draw_loglik, dim=0)
-                oof_loglik[heldout_idx] = (
-                    torch.logsumexp(values, dim=0)
-                    - math.log(self.oof_vi_samples)
-                )
-            fold_records.append({
-                "fold": fold + 1,
-                "train_size": len(train_np),
-                "heldout_size": len(heldout_np),
-                "final_vi_loss": final_loss,
-            })
-
-        sorted_loglik = torch.sort(oof_loglik, dim=1).values
-        self.oof_diagnostics_ = {
-            "scope": "survival_head",
-            "n_folds": n_folds,
-            "mean_top_two_loglik_margin": float(
-                (sorted_loglik[:, -1] - sorted_loglik[:, -2]).mean()
-            ),
-            "likelihood_winner_counts": torch.argmax(
-                oof_loglik, dim=1
-            ).bincount(minlength=3).cpu().tolist(),
-            "folds": fold_records,
-        }
-        return oof_means, oof_stds, oof_loglik
-
     @staticmethod
     def _joint_posterior_soft_risk(gate_samples, risk_samples):
         """Compute E[sum_k pi_k(theta) r_k(theta)] over posterior draws."""
@@ -862,20 +703,49 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             raise ValueError("Gate and expert-risk posterior draws must align")
         return torch.sum(gates * risks, dim=2).mean(0)
 
-    def _refit_router(self, router_state, responsibility):
+    def _posterior_router_states(self, representations, max_draws=None):
+        """Router states for matched posterior draws of all expert heads."""
+        posterior_stds = self._posterior_log_risk_summary(representations)[1]
+        available = self.posterior_samples_["shared_log_baseline_hazard"].shape[0]
+        n_draws = available if max_draws is None else min(int(max_draws), available)
+        draw_indices = torch.linspace(
+            0, available - 1, steps=n_draws
+        ).long()
+        states = []
+        for draw_index in draw_indices:
+            draw_log_risks = {}
+            for name in self.expert_names:
+                beta = self.posterior_samples_[name]["beta"][draw_index].to(
+                    self.device
+                )
+                draw_log_risks[name] = representations[name].mv(beta).clamp(
+                    -12.0, 12.0
+                ).unsqueeze(1)
+            states.append(self._make_router_state(
+                draw_log_risks, posterior_stds
+            ).detach())
+        return torch.stack(states)
+
+    def _refit_router(self, router_states, responsibility):
+        """Distil responsibilities over uncertain draw-specific states."""
+        if router_states.ndim == 2:
+            router_states = router_states.unsqueeze(0)
+        if router_states.ndim != 3:
+            raise ValueError("router_states must have shape [draw, patient, state]")
         router_optimizer = torch.optim.Adam(
             self.router.parameters(), lr=self.learning_rate
         )
         for _ in range(self.router_refit_epochs):
-            gate = torch.softmax(self.router(router_state), dim=1)
+            gate = torch.softmax(self.router(router_states), dim=2)
             router_ce = -torch.mean(torch.sum(
-                responsibility * torch.log(gate.clamp_min(1e-8)), dim=1
+                responsibility.unsqueeze(0)
+                * torch.log(gate.clamp_min(1e-8)), dim=2
             ))
             router_kl = torch.mean(torch.sum(
                 gate * (
                     torch.log(gate.clamp_min(1e-8))
-                    - torch.log(self.reliability_prior).unsqueeze(0)
-                ), dim=1
+                    - torch.log(self.reliability_prior).reshape(1, 1, -1)
+                ), dim=2
             ))
             router_loss = router_ce + self.beta_router_prior * router_kl
             router_optimizer.zero_grad()
@@ -907,15 +777,9 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         for epoch in range(self.max_epochs):
             self.train()
             optimizer.zero_grad()
-            losses = []
-            train_parts = []
-            for _ in range(self.mc_train_samples):
-                loss, parts_train = self._objective(
-                    *[tensor[train_idx] for tensor in tensors], stochastic=True
-                )
-                losses.append(loss)
-                train_parts.append(parts_train)
-            train_loss = torch.stack(losses).mean()
+            train_loss, parts_train = self._objective(
+                *[tensor[train_idx] for tensor in tensors]
+            )
             train_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.parameters(), 5.0)
             optimizer.step()
@@ -923,11 +787,11 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             self.eval()
             with torch.no_grad():
                 val_loss, parts = self._objective(
-                    *[tensor[val_idx] for tensor in tensors], stochastic=False
+                    *[tensor[val_idx] for tensor in tensors]
                 )
             value = val_loss.item()
             train_component_means = {
-                name: torch.stack([part[name] for part in train_parts]).mean().item()
+                name: parts_train[name].item()
                 for name in ("expert_nll", "router_ce", "router_kl")
             }
             record = {
@@ -968,7 +832,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                         print(f"  Early stopping at epoch {epoch + 1}")
                     break
         if best is None:
-            raise RuntimeError("Variational survival mixture produced no checkpoint")
+            raise RuntimeError("Bayesian survival mixture produced no checkpoint")
         self.load_state_dict(best)
         self.best_epoch_ = best_record["epoch"]
         self.best_validation_terms_ = best_record
@@ -976,40 +840,27 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         # the conditional posterior of each compact linear survival head.
         self.eval()
         with torch.no_grad():
-            _, representations = self._encode(tensors[0], tensors[1])
+            map_risks, representations = self._encode(tensors[0], tensors[1])
+            unit_uncertainty = {
+                name: torch.ones_like(map_risks[name])
+                for name in self.expert_names
+            }
+            map_gate = self._router_probs(map_risks, unit_uncertainty)
+            map_loglik = self._expert_log_likelihoods(
+                map_risks, tensors[2], tensors[3]
+            )
+            map_responsibility = self._update_responsibilities(
+                map_gate, map_loglik
+            )
             representations = self._fit_representation_normalization(
                 representations
             )
-        # Start from the prespecified reliability prior. Patient-specific
-        # assignments below are based only on cross-fitted expert evidence.
-        posterior_responsibility = self.reliability_prior.unsqueeze(0).repeat(
-            len(tensors[2]), 1
-        ).detach()
+        posterior_responsibility = map_responsibility
         self.bayesian_em_history_ = []
         frozen_representations = {
             name: value.detach() for name, value in representations.items()
         }
         for em_iteration in range(self.bayesian_em_iterations):
-            oof_means, oof_stds, oof_loglik = self._oof_variational_evidence(
-                frozen_representations, tensors[2], tensors[3],
-                posterior_responsibility,
-            )
-            with torch.no_grad():
-                router_state = self._make_router_state(
-                    oof_means, oof_stds
-                ).detach()
-                oof_gate = torch.softmax(self.router(router_state), dim=1)
-                updated_responsibility = self._update_responsibilities(
-                    oof_gate, oof_loglik
-                )
-                responsibility_change = torch.mean(torch.abs(
-                    updated_responsibility - posterior_responsibility
-                )).item()
-            self._refit_router(router_state, updated_responsibility)
-            posterior_responsibility = updated_responsibility
-
-            # Fit the deployable full-data posterior using responsibilities
-            # obtained strictly from held-out expert predictions.
             self.posterior_samples_, self.mcmc_diagnostics_ = {}, {}
             self._hmc_joint_head(
                 frozen_representations, tensors[2], tensors[3],
@@ -1025,6 +876,23 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     self.posterior_samples_["shared_log_baseline_hazard"]
                     .mean(0).to(self.device)
                 )
+                router_states = self._posterior_router_states(
+                    frozen_representations, max_draws=self.mc_test_samples
+                )
+                # Match deployment: integrate the router over uncertain states.
+                gate = torch.softmax(self.router(router_states), dim=2).mean(0)
+                predictive_loglik = self._posterior_predictive_log_likelihood(
+                    frozen_representations, tensors[2], tensors[3]
+                )
+                updated_responsibility = self._update_responsibilities(
+                    gate, predictive_loglik
+                )
+                responsibility_change = torch.mean(torch.abs(
+                    updated_responsibility - posterior_responsibility
+                )).item()
+
+            self._refit_router(router_states, updated_responsibility)
+            posterior_responsibility = updated_responsibility
             diagnostic = self.mcmc_diagnostics_["joint"]
             record = {
                 "iteration": em_iteration + 1,
@@ -1058,14 +926,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     f"R-hat(max)={diagnostic['max_rhat']:.3f}, "
                     f"ESS(min)={diagnostic['min_ess']:.1f}"
                 )
-                print(
-                    "    OOF evidence: winner counts R/P/RP="
-                    + "/".join(str(value) for value in self.oof_diagnostics_[
-                        "likelihood_winner_counts"
-                    ])
-                    + ", mean top-two log-likelihood margin="
-                    f"{self.oof_diagnostics_['mean_top_two_loglik_margin']:.4f}"
-                )
                 for name, values in diagnostic["predictive_diagnostics"].items():
                     print(
                         f"    Predictive {name}: R-hat(max/median)="
@@ -1083,7 +943,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         # probabilities depend on states alone and are the deployable policy.
         self.eval()
         with torch.no_grad():
-            final_gate = torch.softmax(self.router(router_state), dim=1)
+            final_gate = torch.softmax(self.router(router_states), dim=2).mean(0)
         self.training_responsibilities_ = (
             posterior_responsibility.cpu().numpy()
         )

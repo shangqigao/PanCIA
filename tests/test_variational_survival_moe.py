@@ -222,35 +222,32 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         # E[pi*r] = (10 + 20)/2 = 15, whereas E[pi]E[r] = 8.
         torch.testing.assert_close(result, torch.tensor([15.0]))
 
-    def test_oof_variational_evidence_covers_every_patient(self):
-        torch.manual_seed(8)
+    def test_router_refit_averages_loss_over_posterior_draw_states(self):
+        torch.manual_seed(5)
         model = ConditionalVariationalSurvivalMoE(
-            rad_dim=2, path_dim=2, hidden_dim=3, n_intervals=2,
-            oof_folds=3, oof_vi_epochs=2, oof_vi_samples=2,
-            mcmc_samples=2, mcmc_chains=2, device="cpu", verbose=False,
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
+            learning_rate=0.05, beta_router_prior=0.0,
+            router_refit_epochs=30, mcmc_samples=2, mcmc_chains=2,
+            device="cpu", verbose=False,
         )
-        duration = np.linspace(1.0, 12.0, 12, dtype=np.float32)
-        event = np.ones(12, dtype=np.float32)
-        model._make_boundaries(duration, event)
-        representations = {
-            name: torch.randn(12, 3) for name in model.expert_names
-        }
-        responsibilities = torch.full((12, 3), 1.0 / 3.0)
+        states = torch.randn(3, 6, 9)
+        responsibility = torch.zeros(6, 3)
+        responsibility[:3, 0] = 1.0
+        responsibility[3:, 1] = 1.0
 
-        means, stds, loglik = model._oof_variational_evidence(
-            representations, torch.tensor(duration), torch.tensor(event),
-            responsibilities,
-        )
+        def cross_entropy():
+            with torch.no_grad():
+                gate = torch.softmax(model.router(states), dim=2)
+                return -torch.mean(torch.sum(
+                    responsibility.unsqueeze(0)
+                    * torch.log(gate.clamp_min(1e-8)), dim=2
+                )).item()
 
-        self.assertEqual(model.oof_diagnostics_["scope"], "survival_head")
-        self.assertEqual(sum(
-            fold["heldout_size"] for fold in model.oof_diagnostics_["folds"]
-        ), 12)
-        self.assertTrue(torch.isfinite(loglik).all())
-        for name in model.expert_names:
-            self.assertEqual(means[name].shape, (12, 1))
-            self.assertTrue(torch.isfinite(means[name]).all())
-            self.assertTrue(torch.all(stds[name] > 0))
+        before = cross_entropy()
+        model._refit_router(states, responsibility)
+        after = cross_entropy()
+
+        self.assertLess(after, before)
 
     def test_fit_and_single_patient_prediction_do_not_require_outcome(self):
         rng = np.random.default_rng(12)
