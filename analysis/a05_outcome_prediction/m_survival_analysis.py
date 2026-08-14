@@ -2171,7 +2171,7 @@ class SurvivalAnalyzer:
             hidden_dim=model_params.get('variational_hidden_dim', 16),
             n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
-            beta_router_prior=model_params.get('router_prior_weight', 0.1),
+            beta_router_prior=model_params.get('router_prior_weight', 0.5),
             reliability_prior=model_params.get(
                 'reliability_prior', (1.0, 1.0, 1.0)
             ),
@@ -2205,7 +2205,7 @@ class SurvivalAnalyzer:
                 'responsibility_temperature', 1.0
             ),
             responsibility_prior_mix=model_params.get(
-                'responsibility_prior_mix', 0.0
+                'responsibility_prior_mix', 0.05
             ),
             hmc_target_acceptance=model_params.get(
                 'hmc_target_acceptance', 0.8
@@ -2289,11 +2289,21 @@ class SurvivalAnalyzer:
             ('Training responsibility', bandit.training_responsibility_diagnostics_),
         ):
             print(
-                f"  {label}: entropy={diagnostic['mean_entropy']:.4f} "
+                f"  {label}: mean R/P/RP="
+                + "/".join(
+                    f"{value:.3f}"
+                    for value in diagnostic['mean_probabilities']
+                )
+                + f", entropy={diagnostic['mean_entropy']:.4f} "
                 f"(normalized={diagnostic['normalized_entropy']:.3f}), "
                 f"max prob={diagnostic['mean_max_probability']:.3f}, "
                 f"top-two margin={diagnostic['mean_top_two_margin']:.3f}"
             )
+        print(
+            f"  Assignment regularization: router prior weight="
+            f"{bandit.beta_router_prior:.3f}, responsibility prior mix="
+            f"{bandit.responsibility_prior_mix:.3f}"
+        )
         print(f"  Neural initialization epochs: {len(bandit.history_)}")
         print(
             f"  Baseline prior center: log-rate="

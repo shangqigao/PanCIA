@@ -101,7 +101,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
 
     def __init__(self, rad_dim, path_dim, state_dim=None, hidden_dim=32,
                  n_intervals=8, learning_rate=1e-3,
-                 beta_router_prior=0.1, reliability_prior=(1 / 3, 1 / 3, 1 / 3),
+                 beta_router_prior=0.5, reliability_prior=(1 / 3, 1 / 3, 1 / 3),
                  max_epochs=300, patience=30,
                  mc_test_samples=32, mcmc_warmup=100, mcmc_samples=200,
                  mcmc_step_size=0.01, mcmc_leapfrog_steps=10,
