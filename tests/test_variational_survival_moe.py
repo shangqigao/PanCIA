@@ -205,6 +205,53 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         self.assertAlmostEqual(diagnostics["mean_max_probability"], 1.0 / 3.0)
         self.assertAlmostEqual(diagnostics["mean_top_two_margin"], 0.0)
 
+    def test_soft_risk_averages_joint_draw_level_mixture(self):
+        gates = [
+            torch.tensor([[1.0, 0.0, 0.0]]),
+            torch.tensor([[0.0, 1.0, 0.0]]),
+        ]
+        risks = [
+            torch.tensor([[10.0, 1.0, 0.0]]),
+            torch.tensor([[1.0, 20.0, 0.0]]),
+        ]
+
+        result = ConditionalVariationalSurvivalMoE._joint_posterior_soft_risk(
+            gates, risks
+        )
+
+        # E[pi*r] = (10 + 20)/2 = 15, whereas E[pi]E[r] = 8.
+        torch.testing.assert_close(result, torch.tensor([15.0]))
+
+    def test_oof_variational_evidence_covers_every_patient(self):
+        torch.manual_seed(8)
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=3, n_intervals=2,
+            oof_folds=3, oof_vi_epochs=2, oof_vi_samples=2,
+            mcmc_samples=2, mcmc_chains=2, device="cpu", verbose=False,
+        )
+        duration = np.linspace(1.0, 12.0, 12, dtype=np.float32)
+        event = np.ones(12, dtype=np.float32)
+        model._make_boundaries(duration, event)
+        representations = {
+            name: torch.randn(12, 3) for name in model.expert_names
+        }
+        responsibilities = torch.full((12, 3), 1.0 / 3.0)
+
+        means, stds, loglik = model._oof_variational_evidence(
+            representations, torch.tensor(duration), torch.tensor(event),
+            responsibilities,
+        )
+
+        self.assertEqual(model.oof_diagnostics_["scope"], "survival_head")
+        self.assertEqual(sum(
+            fold["heldout_size"] for fold in model.oof_diagnostics_["folds"]
+        ), 12)
+        self.assertTrue(torch.isfinite(loglik).all())
+        for name in model.expert_names:
+            self.assertEqual(means[name].shape, (12, 1))
+            self.assertTrue(torch.isfinite(means[name]).all())
+            self.assertTrue(torch.all(stds[name] > 0))
+
     def test_fit_and_single_patient_prediction_do_not_require_outcome(self):
         rng = np.random.default_rng(12)
         n = 48

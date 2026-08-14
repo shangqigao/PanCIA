@@ -2185,6 +2185,9 @@ class SurvivalAnalyzer:
             mcmc_leapfrog_steps=model_params.get('mcmc_leapfrog_steps', 10),
             mcmc_chains=model_params.get('mcmc_chains', 2),
             mcmc_max_tree_depth=model_params.get('mcmc_max_tree_depth', 6),
+            oof_folds=model_params.get('oof_folds', 5),
+            oof_vi_epochs=model_params.get('oof_vi_epochs', 100),
+            oof_vi_samples=model_params.get('oof_vi_samples', 8),
             prior_scale=model_params.get('bayesian_head_prior_scale', 1.0),
             baseline_prior_scale=model_params.get(
                 'baseline_hazard_prior_scale', 2.0
@@ -2306,8 +2309,12 @@ class SurvivalAnalyzer:
         )
         for expert_name, diagnostic in bandit.mcmc_diagnostics_.items():
             print(
-                f"  {diagnostic.get('sampler', 'MCMC')} {expert_name}: acceptance="
-                f"{diagnostic['acceptance_rate']:.3f}, "
+                f"  {diagnostic.get('sampler', 'MCMC')} {expert_name}: "
+                f"mean accept prob="
+                f"{diagnostic.get('mean_accept_probability', diagnostic['acceptance_rate']):.3f} "
+                f"(target={diagnostic.get('target_accept_probability', float('nan')):.2f}), "
+                f"state-change rate="
+                f"{diagnostic.get('state_change_rate', float('nan')):.3f}, "
                 f"divergences={diagnostic.get('divergences', 0)}, "
                 f"R-hat(max)={diagnostic['max_rhat']:.3f}, "
                 f"ESS(min)={diagnostic['min_ess']:.1f}, "
@@ -2349,6 +2356,14 @@ class SurvivalAnalyzer:
             )
         print(f"  Responsibility-to-router KL: "
               f"{bandit.assignment_distillation_gap_:.4f}")
+        oof = bandit.oof_diagnostics_
+        print(
+            f"  OOF responsibility evidence: scope={oof['scope']}, "
+            f"folds={oof['n_folds']}, winners R/P/RP="
+            + "/".join(str(value) for value in oof['likelihood_winner_counts'])
+            + f", mean top-two log-likelihood margin="
+              f"{oof['mean_top_two_loglik_margin']:.4f}"
+        )
         
         return {
             'pipeline': pipeline,
