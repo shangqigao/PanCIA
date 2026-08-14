@@ -107,7 +107,12 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                  mcmc_step_size=0.01, mcmc_leapfrog_steps=10,
                  mcmc_chains=2, mcmc_max_tree_depth=8,
                  cv_folds=5, cv_repeats=5, cv_epochs=100,
-                 cv_reliability_strength=5.0,
+                 cv_reliability_strength=10.0,
+                 cv_stability_weight=1.0,
+                 cv_gain_stability_weight=1.0,
+                 cv_min_rp_gain=0.005, cv_gain_temperature=0.01,
+                 rp_prior_max=0.5, cv_prior_floor=0.05,
+                 cv_likelihood_weight=0.5,
                  prior_scale=1.0, baseline_prior_scale=2.0,
                  router_refit_epochs=100, bayesian_em_iterations=3,
                  responsibility_tolerance=1e-3,
@@ -141,10 +146,27 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.cv_repeats = int(cv_repeats)
         self.cv_epochs = int(cv_epochs)
         self.cv_reliability_strength = float(cv_reliability_strength)
+        self.cv_stability_weight = float(cv_stability_weight)
+        self.cv_gain_stability_weight = float(cv_gain_stability_weight)
+        self.cv_min_rp_gain = float(cv_min_rp_gain)
+        self.cv_gain_temperature = float(cv_gain_temperature)
+        self.rp_prior_max = float(rp_prior_max)
+        self.cv_prior_floor = float(cv_prior_floor)
+        self.cv_likelihood_weight = float(cv_likelihood_weight)
         if self.mcmc_chains < 2 or self.mcmc_samples < 2:
             raise ValueError("MCMC diagnostics require at least two chains and samples")
         if self.cv_folds < 2 or self.cv_repeats < 2 or self.cv_epochs < 1:
             raise ValueError("CV uncertainty requires >=2 folds/repeats and >=1 epoch")
+        if self.cv_stability_weight < 0 or self.cv_gain_stability_weight < 0:
+            raise ValueError("CV stability weights must be non-negative")
+        if self.cv_gain_temperature <= 0:
+            raise ValueError("cv_gain_temperature must be positive")
+        if not 0.0 < self.rp_prior_max < 1.0:
+            raise ValueError("rp_prior_max must be in (0, 1)")
+        if not 0.0 <= self.cv_prior_floor < 1.0 / 3.0:
+            raise ValueError("cv_prior_floor must be in [0, 1/3)")
+        if not 0.0 <= self.cv_likelihood_weight <= 1.0:
+            raise ValueError("cv_likelihood_weight must be in [0, 1]")
         self.prior_scale = float(prior_scale)
         self.baseline_prior_scale = float(baseline_prior_scale)
         self.router_refit_epochs = int(router_refit_epochs)
@@ -345,7 +367,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             prior_mix=self.responsibility_prior_mix,
         )
 
-    def _objective(self, x_rad, x_path, duration, event, cv_uncertainty):
+    def _objective(self, x_rad, x_path, duration, event, cv_uncertainty,
+                   cv_loglik):
         states, representations = self._encode(x_rad, x_path)
         # HMC uncertainty does not exist during deterministic initialization;
         # only the fixed repeated-CV uncertainty is available at this stage.
@@ -354,7 +377,10 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         }
         gate = self._router_probs(states, zero_uncertainty, cv_uncertainty)
         log_likelihood = self._expert_log_likelihoods(states, duration, event)
-        responsibility = self._update_responsibilities(gate, log_likelihood)
+        assignment_loglik = self._combine_assignment_log_likelihood(
+            log_likelihood, cv_loglik
+        )
+        responsibility = self._update_responsibilities(gate, assignment_loglik)
 
         expert_nll = -torch.mean(torch.sum(responsibility * log_likelihood, dim=1))
         router_ce = -torch.mean(torch.sum(
@@ -472,6 +498,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         return {
             "encoders": copy.deepcopy(encoders).cpu().eval(),
             "experts": copy.deepcopy(experts).cpu().eval(),
+            "log_baseline_hazard": log_baseline.detach().cpu().clone(),
             "medians": np.asarray(medians, dtype=np.float32),
             "common_scale": common_scale,
         }
@@ -496,12 +523,119 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 )
         return torch.stack(predictions, dim=1)
 
+    def _cv_expert_log_likelihoods(self, model_set, x_rad, x_path,
+                                   duration, event):
+        """Held-out full survival log likelihood for all three CV experts."""
+        x_rad = x_rad.detach().cpu()
+        x_path = x_path.detach().cpu()
+        duration = duration.detach().cpu()
+        event = event.detach().cpu()
+        inputs = {
+            "R": x_rad,
+            "P": x_path,
+            "RP": torch.cat([x_rad, x_path], dim=1),
+        }
+        likelihoods = []
+        with torch.no_grad():
+            for name in self.expert_names:
+                representation = model_set["encoders"][name](inputs[name])
+                raw_log_risk = model_set["experts"][name].log_risk(
+                    representation
+                )
+                likelihoods.append(
+                    model_set["experts"][name].log_likelihood(
+                        raw_log_risk, duration, event,
+                        self.time_boundaries_.detach().cpu(),
+                        model_set["log_baseline_hazard"],
+                    )
+                )
+        return torch.stack(likelihoods, dim=1)
+
+    def _combine_assignment_log_likelihood(self, hmc_loglik, cv_loglik):
+        """Convex, patient-centered CV/HMC evidence without double counting."""
+        hmc_centered = hmc_loglik - hmc_loglik.mean(dim=-1, keepdim=True)
+        cv_centered = cv_loglik - cv_loglik.mean(dim=-1, keepdim=True)
+        while cv_centered.ndim < hmc_centered.ndim:
+            cv_centered = cv_centered.unsqueeze(0)
+        weight = self.cv_likelihood_weight
+        return (1.0 - weight) * hmc_centered + weight * cv_centered
+
+    def _build_cv_reliability_prior(self, repeat_cindices):
+        """Hierarchical prior: robust unimodal quality plus an RP hurdle."""
+        scores = np.asarray(repeat_cindices, dtype=np.float64)
+        if scores.ndim != 2 or scores.shape[1] != 3 or scores.shape[0] < 2:
+            raise ValueError("repeat_cindices must have shape [repeat>=2, 3]")
+        scores = np.where(np.isfinite(scores), scores, 0.5)
+        means = scores.mean(0)
+        stds = scores.std(0, ddof=1)
+        medians = np.median(scores, axis=0)
+        mads = np.median(np.abs(scores - medians[None, :]), axis=0)
+        robust_scores = means - self.cv_stability_weight * stds
+
+        best_unimodal_index = int(np.argmax(robust_scores[:2]))
+        paired_gains = scores[:, 2] - scores[:, best_unimodal_index]
+        gain_mean = float(paired_gains.mean())
+        gain_std = float(paired_gains.std(ddof=1))
+        gain_median = float(np.median(paired_gains))
+        gain_mad = float(np.median(np.abs(paired_gains - gain_median)))
+        conservative_gain = (
+            gain_mean - self.cv_gain_stability_weight * gain_std
+        )
+
+        # R/P share the non-fusion mass according to robust generalization.
+        unimodal_logits = (
+            self.cv_reliability_strength * robust_scores[:2]
+        )
+        unimodal_logits -= unimodal_logits.max()
+        unimodal_prior = np.exp(unimodal_logits)
+        unimodal_prior /= unimodal_prior.sum()
+
+        # RP receives substantial prior mass only after demonstrating a
+        # stable paired improvement over the best unimodal expert.
+        eligibility_logit = np.clip(
+            (conservative_gain - self.cv_min_rp_gain)
+            / self.cv_gain_temperature,
+            -60.0, 60.0,
+        )
+        fusion_eligibility = float(1.0 / (1.0 + np.exp(-eligibility_logit)))
+        rp_mass = self.rp_prior_max * fusion_eligibility
+        raw_prior = np.asarray([
+            (1.0 - rp_mass) * unimodal_prior[0],
+            (1.0 - rp_mass) * unimodal_prior[1],
+            rp_mass,
+        ], dtype=np.float64)
+        prior_np = (
+            (1.0 - 3.0 * self.cv_prior_floor) * raw_prior
+            + self.cv_prior_floor
+        ).astype(np.float32)
+        diagnostics = {
+            "repeat_cindices": scores.tolist(),
+            "repeat_cindex_mean": means.tolist(),
+            "repeat_cindex_std": stds.tolist(),
+            "repeat_cindex_median": medians.tolist(),
+            "repeat_cindex_mad": mads.tolist(),
+            "robust_cindex_score": robust_scores.tolist(),
+            "best_unimodal": self.expert_names[best_unimodal_index],
+            "rp_paired_gains": paired_gains.tolist(),
+            "rp_gain_mean": gain_mean,
+            "rp_gain_std": gain_std,
+            "rp_gain_median": gain_median,
+            "rp_gain_mad": gain_mad,
+            "rp_conservative_gain": conservative_gain,
+            "rp_fusion_eligibility": fusion_eligibility,
+            "rp_prior_mass": float(rp_mass),
+            "raw_hierarchical_prior": raw_prior.tolist(),
+            "cv_prior_floor": self.cv_prior_floor,
+            "reliability_prior": prior_np.tolist(),
+        }
+        return torch.as_tensor(prior_np, device=self.device), diagnostics
+
     def _fit_repeated_cv_state(self, x_rad, x_path, duration, event):
         """Fit repeated CV experts and return aligned OOF mean/SD state."""
         n = len(duration)
         if self.cv_folds > n:
             raise ValueError("cv_folds cannot exceed the training sample count")
-        repeat_predictions = []
+        repeat_predictions, repeat_loglikelihoods = [], []
         self.cv_models_ = []
         indices = np.arange(n)
         for repeat in range(self.cv_repeats):
@@ -511,6 +645,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 + repeat,
             )
             oof = torch.empty((n, 3), dtype=torch.float32)
+            oof_loglik = torch.empty((n, 3), dtype=torch.float32)
             for fold, (train_np, heldout_np) in enumerate(splitter.split(indices)):
                 train_idx = torch.as_tensor(train_np, device=self.device)
                 heldout_idx = torch.as_tensor(heldout_np, device=self.device)
@@ -522,36 +657,72 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 heldout_prediction = self._predict_cv_expert_set(
                     model_set, x_rad[heldout_idx], x_path[heldout_idx]
                 )
+                heldout_loglik = self._cv_expert_log_likelihoods(
+                    model_set, x_rad[heldout_idx], x_path[heldout_idx],
+                    duration[heldout_idx], event[heldout_idx],
+                )
                 oof[torch.as_tensor(heldout_np)] = heldout_prediction
+                oof_loglik[torch.as_tensor(heldout_np)] = heldout_loglik
                 self.cv_models_.append(model_set)
             repeat_predictions.append(oof)
+            repeat_loglikelihoods.append(oof_loglik)
         draws = torch.stack(repeat_predictions)
+        likelihood_draws = torch.stack(repeat_loglikelihoods)
         cv_mean = draws.mean(0)
         cv_sd = draws.std(0, unbiased=True).clamp_min(1e-6)
+        cv_loglik = torch.logsumexp(likelihood_draws, dim=0) - math.log(
+            self.cv_repeats
+        )
+        cv_loglik_sd = likelihood_draws.std(0, unbiased=True)
         event_np = event.detach().cpu().numpy().astype(bool)
         duration_np = duration.detach().cpu().numpy()
+        def safe_cindex(prediction):
+            try:
+                value = concordance_index(
+                    duration_np, -prediction, event_np
+                )
+                return float(value) if np.isfinite(value) else 0.5
+            except (ValueError, ZeroDivisionError):
+                return 0.5
+
+        repeat_cindices = np.asarray([
+            [safe_cindex(draws[repeat, :, index].numpy()) for index in range(3)]
+            for repeat in range(self.cv_repeats)
+        ], dtype=np.float32)
         cindices = np.asarray([
-            concordance_index(duration_np, -cv_mean[:, index].numpy(), event_np)
-            for index in range(3)
+            safe_cindex(cv_mean[:, index].numpy()) for index in range(3)
         ], dtype=np.float32)
         # Degenerate censoring patterns can leave no admissible pairs. Such an
         # expert contributes neutral rather than NaN prior evidence.
         cindices = np.where(np.isfinite(cindices), cindices, 0.5)
-        centered = cindices - cindices.mean()
-        prior = torch.softmax(torch.as_tensor(
-            self.cv_reliability_strength * centered, device=self.device
-        ), dim=0)
+        prior, reliability_diagnostics = self._build_cv_reliability_prior(
+            repeat_cindices
+        )
         with torch.no_grad():
             self.reliability_prior.copy_(prior)
         self.cv_diagnostics_ = {
             "cindices": cindices.tolist(),
-            "reliability_prior": prior.detach().cpu().tolist(),
             "mean_sd": cv_sd.mean(0).tolist(),
+            "mean_log_likelihood": cv_loglik.mean(0).tolist(),
+            "mean_log_likelihood_sd": cv_loglik_sd.mean(0).tolist(),
+            "likelihood_winner_counts": torch.bincount(
+                cv_loglik.argmax(1), minlength=3
+            ).tolist(),
+            "mean_likelihood_top_two_margin": float(torch.mean(
+                torch.topk(cv_loglik, 2, dim=1).values[:, 0]
+                - torch.topk(cv_loglik, 2, dim=1).values[:, 1]
+            )),
             "n_models": len(self.cv_models_),
+            **reliability_diagnostics,
         }
         self.training_cv_mean_ = cv_mean.numpy()
         self.training_cv_sd_ = cv_sd.numpy()
-        return cv_mean.to(self.device), cv_sd.to(self.device)
+        self.training_cv_log_likelihood_ = cv_loglik.numpy()
+        self.training_cv_log_likelihood_sd_ = cv_loglik_sd.numpy()
+        return (
+            cv_mean.to(self.device), cv_sd.to(self.device),
+            cv_loglik.to(self.device),
+        )
 
     def _predict_cv_state(self, x_rad, x_path):
         predictions = [
@@ -904,18 +1075,80 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
 
     @staticmethod
     def probability_diagnostics(probabilities):
-        """Summarize whether categorical assignments are truly decisive."""
+        """Separate marginal action balance from patient personalization."""
         probs = np.asarray(probabilities, dtype=np.float64)
+        if probs.ndim != 2 or probs.shape[1] != 3:
+            raise ValueError("probabilities must have shape [patient, 3]")
+        probs = np.clip(probs, 1e-12, None)
+        probs = probs / probs.sum(axis=1, keepdims=True)
         entropy = -np.sum(probs * np.log(np.clip(probs, 1e-12, None)), axis=1)
         sorted_probs = np.sort(probs, axis=1)
+        mean_probs = probs.mean(0)
+        marginal_entropy = float(-np.sum(mean_probs * np.log(mean_probs)))
+        mean_entropy = float(entropy.mean())
+        mutual_information = max(0.0, marginal_entropy - mean_entropy)
+
+        # Personalization specifically between the two competitive experts.
+        path_rp = probs[:, 1:3]
+        path_rp = path_rp / path_rp.sum(axis=1, keepdims=True)
+        path_rp_entropy = -np.sum(
+            path_rp * np.log(np.clip(path_rp, 1e-12, None)), axis=1
+        )
+        mean_path_rp = path_rp.mean(0)
+        path_rp_marginal_entropy = float(-np.sum(
+            mean_path_rp * np.log(np.clip(mean_path_rp, 1e-12, None))
+        ))
+        mean_path_rp_entropy = float(path_rp_entropy.mean())
+        path_rp_mutual_information = max(
+            0.0, path_rp_marginal_entropy - mean_path_rp_entropy
+        )
+        log_odds_rp_vs_path = np.log(path_rp[:, 1]) - np.log(path_rp[:, 0])
+        log_odds_quantiles = np.quantile(
+            log_odds_rp_vs_path, [0.05, 0.25, 0.5, 0.75, 0.95]
+        )
+        log_two = math.log(2.0)
         return {
-            "mean_probabilities": probs.mean(0).tolist(),
-            "mean_entropy": float(entropy.mean()),
-            "normalized_entropy": float(entropy.mean() / math.log(probs.shape[1])),
+            "mean_probabilities": mean_probs.tolist(),
+            "mean_entropy": mean_entropy,
+            "normalized_entropy": float(mean_entropy / math.log(probs.shape[1])),
+            "marginal_action_entropy": marginal_entropy,
+            "routing_mutual_information": mutual_information,
+            "normalized_routing_mutual_information": float(
+                mutual_information / max(marginal_entropy, 1e-12)
+            ),
             "mean_max_probability": float(probs.max(1).mean()),
             "mean_top_two_margin": float(
                 (sorted_probs[:, -1] - sorted_probs[:, -2]).mean()
             ),
+            "top_two_margin_quantiles": np.quantile(
+                sorted_probs[:, -1] - sorted_probs[:, -2],
+                [0.05, 0.25, 0.5, 0.75, 0.95],
+            ).tolist(),
+            "path_rp_mean_conditional_probabilities": mean_path_rp.tolist(),
+            "path_rp_mean_entropy": mean_path_rp_entropy,
+            "path_rp_normalized_entropy": float(
+                mean_path_rp_entropy / math.log(2.0)
+            ),
+            "path_rp_decisiveness": float(
+                1.0 - mean_path_rp_entropy / math.log(2.0)
+            ),
+            "path_rp_mutual_information": path_rp_mutual_information,
+            "path_rp_normalized_mutual_information": float(
+                path_rp_mutual_information
+                / max(path_rp_marginal_entropy, 1e-12)
+            ),
+            "rp_vs_path_log_odds_mean": float(log_odds_rp_vs_path.mean()),
+            "rp_vs_path_log_odds_std": float(log_odds_rp_vs_path.std()),
+            "rp_vs_path_log_odds_quantiles": log_odds_quantiles.tolist(),
+            "fraction_path_over_rp_odds_gt_2": float(np.mean(
+                log_odds_rp_vs_path < -log_two
+            )),
+            "fraction_rp_over_path_odds_gt_2": float(np.mean(
+                log_odds_rp_vs_path > log_two
+            )),
+            "fraction_path_rp_odds_between_half_and_two": float(np.mean(
+                np.abs(log_odds_rp_vs_path) <= log_two
+            )),
         }
 
     def _posterior_predictive_log_likelihood(self, representations, duration,
@@ -1048,7 +1281,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         tensors = [torch.as_tensor(v, device=self.device) for v in (
             x_rad, x_path, duration, event
         )]
-        _, cv_uncertainty = self._fit_repeated_cv_state(*tensors)
+        _, cv_uncertainty, cv_loglik = self._fit_repeated_cv_state(*tensors)
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         best, best_loss, best_record, stale = None, math.inf, None, 0
         self.history_ = []
@@ -1058,6 +1291,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             train_loss, parts_train = self._objective(
                 *[tensor[train_idx] for tensor in tensors],
                 cv_uncertainty[train_idx],
+                cv_loglik[train_idx],
             )
             train_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.parameters(), 5.0)
@@ -1068,6 +1302,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 val_loss, parts = self._objective(
                     *[tensor[val_idx] for tensor in tensors],
                     cv_uncertainty[val_idx],
+                    cv_loglik[val_idx],
                 )
             value = val_loss.item()
             train_component_means = {
@@ -1131,8 +1366,11 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             map_loglik = self._expert_log_likelihoods(
                 map_risks, tensors[2], tensors[3]
             )
+            map_assignment_loglik = self._combine_assignment_log_likelihood(
+                map_loglik, cv_loglik
+            )
             map_responsibility = self._update_responsibilities(
-                map_gate, map_loglik
+                map_gate, map_assignment_loglik
             )
             representations = self._fit_representation_normalization(
                 representations
@@ -1165,9 +1403,14 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     max_draws=self.mc_test_samples,
                 )
                 gate_draws = torch.softmax(self.router(router_states), dim=2)
+                assignment_draw_loglik = (
+                    self._combine_assignment_log_likelihood(
+                        draw_loglik, cv_loglik
+                    )
+                )
                 updated_responsibility = (
                     self.posterior_responsibilities_from_draws(
-                        gate_draws, draw_loglik,
+                        gate_draws, assignment_draw_loglik,
                         temperature=self.responsibility_temperature,
                         prior=self.reliability_prior,
                         prior_mix=self.responsibility_prior_mix,
@@ -1248,6 +1491,39 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             ),
             axis=1,
         )))
+        with torch.no_grad():
+            hmc_predictive_loglik = self._posterior_predictive_log_likelihood(
+                frozen_representations, tensors[2], tensors[3]
+            )
+            combined_predictive_loglik = (
+                self._combine_assignment_log_likelihood(
+                    hmc_predictive_loglik, cv_loglik
+                )
+            )
+
+        def evidence_summary(values):
+            top_two = torch.topk(values, 2, dim=1).values
+            return {
+                "mean_log_likelihood": values.mean(0).cpu().tolist(),
+                "winner_counts": torch.bincount(
+                    values.argmax(1), minlength=3
+                ).cpu().tolist(),
+                "mean_top_two_margin": float(
+                    (top_two[:, 0] - top_two[:, 1]).mean()
+                ),
+            }
+
+        cv_winner = cv_loglik.argmax(1)
+        hmc_winner = hmc_predictive_loglik.argmax(1)
+        self.assignment_evidence_diagnostics_ = {
+            "cv": evidence_summary(cv_loglik),
+            "hmc": evidence_summary(hmc_predictive_loglik),
+            "combined": evidence_summary(combined_predictive_loglik),
+            "cv_hmc_winner_disagreement": float(
+                (cv_winner != hmc_winner).float().mean()
+            ),
+            "cv_likelihood_weight": self.cv_likelihood_weight,
+        }
         self.is_fitted_ = True
         return self
 

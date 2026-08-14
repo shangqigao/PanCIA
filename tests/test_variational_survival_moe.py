@@ -103,6 +103,65 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         ))
         self.assertAlmostEqual(float(kl), 0.0, places=7)
 
+    def test_cv_prior_prefers_simpler_expert_when_rp_gain_is_unstable(self):
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2, device="cpu"
+        )
+        repeat_cindices = np.asarray([
+            [0.60, 0.66, 0.66],
+            [0.61, 0.67, 0.64],
+            [0.59, 0.65, 0.67],
+            [0.60, 0.66, 0.65],
+            [0.60, 0.66, 0.66],
+        ])
+
+        prior, diagnostics = model._build_cv_reliability_prior(
+            repeat_cindices
+        )
+
+        self.assertEqual(diagnostics["best_unimodal"], "P")
+        self.assertLess(diagnostics["rp_conservative_gain"], 0.0)
+        self.assertGreater(float(prior[1]), float(prior[2]))
+        torch.testing.assert_close(prior.sum(), torch.tensor(1.0))
+
+    def test_cv_prior_supports_rp_after_stable_incremental_gain(self):
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2, device="cpu"
+        )
+        repeat_cindices = np.asarray([
+            [0.60, 0.65, 0.68],
+            [0.61, 0.66, 0.69],
+            [0.59, 0.64, 0.67],
+            [0.60, 0.65, 0.68],
+            [0.61, 0.66, 0.69],
+        ])
+
+        prior, diagnostics = model._build_cv_reliability_prior(
+            repeat_cindices
+        )
+
+        self.assertGreater(diagnostics["rp_conservative_gain"], 0.02)
+        self.assertGreater(diagnostics["rp_fusion_eligibility"], 0.8)
+        self.assertEqual(int(torch.argmax(prior)), 2)
+        torch.testing.assert_close(prior.sum(), torch.tensor(1.0))
+
+    def test_assignment_evidence_is_centered_convex_combination(self):
+        hmc = torch.tensor([[-10.0, -12.0, -14.0]])
+        cv = torch.tensor([[-2.0, -1.0, -3.0]])
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
+            cv_likelihood_weight=0.25, device="cpu",
+        )
+
+        combined = model._combine_assignment_log_likelihood(hmc, cv)
+        expected = (
+            0.75 * (hmc - hmc.mean(1, keepdim=True))
+            + 0.25 * (cv - cv.mean(1, keepdim=True))
+        )
+
+        torch.testing.assert_close(combined, expected)
+        torch.testing.assert_close(combined.mean(1), torch.zeros(1))
+
     def test_router_state_has_twelve_interpretable_terms(self):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2, device="cpu"
@@ -244,6 +303,33 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         self.assertAlmostEqual(diagnostics["normalized_entropy"], 1.0)
         self.assertAlmostEqual(diagnostics["mean_max_probability"], 1.0 / 3.0)
         self.assertAlmostEqual(diagnostics["mean_top_two_margin"], 0.0)
+        self.assertAlmostEqual(diagnostics["routing_mutual_information"], 0.0)
+        self.assertAlmostEqual(diagnostics["path_rp_decisiveness"], 0.0)
+        self.assertAlmostEqual(diagnostics["path_rp_mutual_information"], 0.0)
+
+    def test_probability_diagnostics_detect_balanced_personalization(self):
+        probabilities = np.asarray([
+            [0.01, 0.98, 0.01],
+            [0.01, 0.01, 0.98],
+        ])
+
+        diagnostics = ConditionalVariationalSurvivalMoE.probability_diagnostics(
+            probabilities
+        )
+
+        # Marginal P/RP usage is balanced, but every patient has a decisive,
+        # different preference; mutual information must capture this.
+        np.testing.assert_allclose(
+            diagnostics["path_rp_mean_conditional_probabilities"],
+            [0.5, 0.5], atol=1e-7,
+        )
+        self.assertGreater(diagnostics["path_rp_decisiveness"], 0.9)
+        self.assertGreater(
+            diagnostics["path_rp_normalized_mutual_information"], 0.9
+        )
+        self.assertAlmostEqual(
+            diagnostics["fraction_path_rp_odds_between_half_and_two"], 0.0
+        )
 
     def test_soft_risk_averages_joint_draw_level_mixture(self):
         gates = [
