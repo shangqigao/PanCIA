@@ -2171,7 +2171,7 @@ class SurvivalAnalyzer:
             hidden_dim=model_params.get('variational_hidden_dim', 16),
             n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
-            beta_router_prior=model_params.get('router_prior_weight', 0.5),
+            beta_router_prior=model_params.get('router_prior_weight', 0.1),
             reliability_prior=model_params.get(
                 'reliability_prior', (1.0, 1.0, 1.0)
             ),
@@ -2203,7 +2203,7 @@ class SurvivalAnalyzer:
             rp_prior_max=model_params.get('rp_prior_max', 0.5),
             cv_prior_floor=model_params.get('cv_prior_floor', 0.05),
             cv_likelihood_weight=model_params.get(
-                'cv_likelihood_weight', 0.5
+                'cv_likelihood_weight', 0.0
             ),
             prior_scale=model_params.get('bayesian_head_prior_scale', 1.0),
             baseline_prior_scale=model_params.get(
@@ -2217,10 +2217,10 @@ class SurvivalAnalyzer:
                 'responsibility_tolerance', 1e-3
             ),
             responsibility_temperature=model_params.get(
-                'responsibility_temperature', 1.0
+                'responsibility_temperature', 2.0
             ),
             responsibility_prior_mix=model_params.get(
-                'responsibility_prior_mix', 0.05
+                'responsibility_prior_mix', 0.0
             ),
             hmc_target_acceptance=model_params.get(
                 'hmc_target_acceptance', 0.8
