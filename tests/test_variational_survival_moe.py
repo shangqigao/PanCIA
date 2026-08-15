@@ -96,8 +96,10 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, state_dim=2, hidden_dim=4,
             n_intervals=2, reliability_prior=(0.2, 0.6, 0.2),
-            hierarchical_prior_concentration=5.0, device="cpu"
+            hierarchical_prior_fraction=0.25,
+            population_update_rate=0.25, device="cpu"
         )
+        model._reset_dirichlet_posterior(sample_count=20)
         responsibility = torch.tensor([
             [1.0, 0.0, 0.0],
             [0.0, 0.25, 0.75],
@@ -105,16 +107,23 @@ class VariationalSurvivalMoETests(unittest.TestCase):
 
         model._update_dirichlet_posterior(responsibility)
 
-        expected = 5.0 * torch.tensor([0.2, 0.6, 0.2]) + torch.tensor(
+        prior = torch.tensor([0.2, 0.6, 0.2])
+        target_alpha = 5.0 * prior + torch.tensor(
             [1.0, 0.25, 0.75]
         )
-        torch.testing.assert_close(model.dirichlet_posterior_alpha, expected)
+        target_mean = target_alpha / target_alpha.sum()
+        expected_mean = 0.75 * prior + 0.25 * target_mean
+        torch.testing.assert_close(
+            model.dirichlet_posterior_alpha
+            / model.dirichlet_posterior_alpha.sum(),
+            expected_mean,
+        )
 
-    def test_hierarchical_prior_is_gate_intercept_not_patient_kl(self):
+    def test_router_does_not_count_population_prior_twice(self):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
             reliability_prior=(0.1, 0.7, 0.2),
-            hierarchical_prior_concentration=3.0, device="cpu"
+            hierarchical_prior_fraction=0.25, device="cpu"
         )
         states = torch.zeros(2, 12)
         with torch.no_grad():
@@ -122,9 +131,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
                 parameter.zero_()
 
         gate = model._router_probs_from_state(states)
-        expected = torch.softmax(
-            model._expected_log_population_weights(), dim=0
-        ).repeat(2, 1)
+        expected = torch.full((2, 3), 1.0 / 3.0)
 
         torch.testing.assert_close(gate, expected)
 
@@ -132,7 +139,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
             reliability_prior=(0.2, 0.6, 0.2),
-            hierarchical_prior_concentration=10.0,
+            hierarchical_prior_fraction=0.25,
             responsibility_temperature=1.0, device="cpu"
         )
         loglik = torch.tensor([[0.0, 0.0, np.log(3.0)]])

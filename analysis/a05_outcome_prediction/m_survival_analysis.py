@@ -2171,8 +2171,11 @@ class SurvivalAnalyzer:
             hidden_dim=model_params.get('variational_hidden_dim', 16),
             n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
-            hierarchical_prior_concentration=model_params.get(
-                'hierarchical_prior_concentration', 3.0
+            hierarchical_prior_fraction=model_params.get(
+                'hierarchical_prior_fraction', 0.25
+            ),
+            population_update_rate=model_params.get(
+                'population_update_rate', 0.25
             ),
             reliability_prior=model_params.get(
                 'reliability_prior', (1.0, 1.0, 1.0)
@@ -2304,7 +2307,9 @@ class SurvivalAnalyzer:
         ).detach().cpu().numpy()
         print(
             f"  Hierarchical assignment prior: concentration="
-            f"{bandit.hierarchical_prior_concentration:.3f}, posterior mean "
+            f"{bandit.hierarchical_prior_concentration_:.1f} "
+            f"({bandit.hierarchical_prior_fraction:.3f} x N), "
+            f"update rate={bandit.population_update_rate:.3f}, posterior mean "
             f"R/P/RP="
             + "/".join(f"{value:.3f}" for value in population_mean)
         )
@@ -2409,7 +2414,9 @@ class SurvivalAnalyzer:
             ),
             'cv_diagnostics': bandit.cv_diagnostics_,
             'hierarchical_assignment_prior': {
-                'concentration': bandit.hierarchical_prior_concentration,
+                'concentration': bandit.hierarchical_prior_concentration_,
+                'prior_fraction': bandit.hierarchical_prior_fraction,
+                'population_update_rate': bandit.population_update_rate,
                 'prior_alpha': (
                     bandit.dirichlet_prior_alpha.detach().cpu().tolist()
                 ),
@@ -2417,6 +2424,7 @@ class SurvivalAnalyzer:
                     bandit.dirichlet_posterior_alpha.detach().cpu().tolist()
                 ),
                 'posterior_mean': population_mean.tolist(),
+                'map_update': bandit.map_population_update_,
             },
             'training_responsibilities': bandit.training_responsibilities_.tolist(),
             'training_gate_probs': bandit.training_gate_probs_.tolist(),

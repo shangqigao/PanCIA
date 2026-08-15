@@ -92,8 +92,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         experts minimize responsibility-weighted negative log likelihood;
         router minimizes CE(stopgrad(r_i), pi_i). A hierarchical population
         assignment probability rho has a Dirichlet prior centred on repeated-CV
-        reliability. The router amortizes the outcome-informed responsibilities;
-        E[log rho] is its population intercept rather than a per-patient KL.
+        reliability. The router amortizes the outcome-informed responsibilities
+        without another population intercept or a per-patient KL penalty.
         posterior log-risk uncertainty comes from HMC samples of the Bayesian
         head. Repeated CV supplies a complementary fixed representation/
         training-instability uncertainty and an empirical reliability prior;
@@ -104,7 +104,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
 
     def __init__(self, rad_dim, path_dim, state_dim=None, hidden_dim=32,
                  n_intervals=8, learning_rate=1e-3,
-                 hierarchical_prior_concentration=3.0,
+                 hierarchical_prior_fraction=0.25,
+                 population_update_rate=0.25,
                  reliability_prior=(1 / 3, 1 / 3, 1 / 3),
                  max_epochs=300, patience=30,
                  mc_test_samples=32, mcmc_warmup=100, mcmc_samples=200,
@@ -130,11 +131,14 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.hidden_dim = int(hidden_dim)
         self.n_intervals = int(n_intervals)
         self.learning_rate = float(learning_rate)
-        self.hierarchical_prior_concentration = float(
-            hierarchical_prior_concentration
+        self.hierarchical_prior_fraction = float(
+            hierarchical_prior_fraction
         )
-        if self.hierarchical_prior_concentration <= 0:
-            raise ValueError("hierarchical_prior_concentration must be positive")
+        self.population_update_rate = float(population_update_rate)
+        if self.hierarchical_prior_fraction <= 0:
+            raise ValueError("hierarchical_prior_fraction must be positive")
+        if not 0.0 < self.population_update_rate <= 1.0:
+            raise ValueError("population_update_rate must be in (0, 1]")
         self.max_epochs = int(max_epochs)
         self.patience = int(patience)
         self.mc_test_samples = int(mc_test_samples)
@@ -197,7 +201,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.register_buffer("reliability_prior", prior / prior.sum())
         self.register_buffer(
             "dirichlet_prior_alpha",
-            self.hierarchical_prior_concentration * self.reliability_prior,
+            self.reliability_prior.clone(),
         )
         self.register_buffer(
             "dirichlet_posterior_alpha", self.dirichlet_prior_alpha.clone()
@@ -280,35 +284,54 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         return torch.digamma(alpha) - torch.digamma(alpha.sum())
 
     def _router_probs_from_state(self, router_state):
-        logits = self.router(router_state)
-        return torch.softmax(
-            logits + self._expected_log_population_weights(), dim=-1
-        )
+        # The router distils responsibilities that already contain the
+        # population term. Adding E[log rho] here would count it twice.
+        return torch.softmax(self.router(router_state), dim=-1)
 
     def _router_probs(self, log_risks, hmc_uncertainties, cv_uncertainties):
         return self._router_probs_from_state(self._make_router_state(
             log_risks, hmc_uncertainties, cv_uncertainties
         ))
 
-    def _reset_dirichlet_posterior(self):
+    def _reset_dirichlet_posterior(self, sample_count):
+        concentration = (
+            self.hierarchical_prior_fraction * float(sample_count)
+        )
+        self.hierarchical_prior_concentration_ = concentration
         with torch.no_grad():
             self.dirichlet_prior_alpha.copy_(
-                self.hierarchical_prior_concentration
-                * self.reliability_prior
+                concentration * self.reliability_prior
             )
             self.dirichlet_posterior_alpha.copy_(
                 self.dirichlet_prior_alpha
             )
 
     def _update_dirichlet_posterior(self, responsibility):
-        """Conjugate population update: alpha = kappa*p0 + sum_i r_i."""
+        """Damped conjugate population update at an EM boundary."""
         if responsibility.ndim != 2 or responsibility.shape[1] != 3:
             raise ValueError("responsibility must have shape [patient, 3]")
         with torch.no_grad():
-            self.dirichlet_posterior_alpha.copy_(
+            before = (
+                self.dirichlet_posterior_alpha
+                / self.dirichlet_posterior_alpha.sum()
+            )
+            target_alpha = (
                 self.dirichlet_prior_alpha
                 + responsibility.detach().sum(dim=0)
             )
+            target = target_alpha / target_alpha.sum()
+            after = (
+                (1.0 - self.population_update_rate) * before
+                + self.population_update_rate * target
+            )
+            self.dirichlet_posterior_alpha.copy_(
+                target_alpha.sum() * after
+            )
+        return {
+            "before": before.detach().cpu().tolist(),
+            "target": target.detach().cpu().tolist(),
+            "after": after.detach().cpu().tolist(),
+        }
 
     def _expert_log_likelihoods(self, states, duration, event):
         return torch.stack([
@@ -592,7 +615,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         ), dim=0)
         with torch.no_grad():
             self.reliability_prior.copy_(prior)
-        self._reset_dirichlet_posterior()
+        self._reset_dirichlet_posterior(n)
         self.cv_diagnostics_ = {
             "cindices": cindices.tolist(),
             "reliability_prior": prior.detach().cpu().tolist(),
@@ -1106,8 +1129,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             train_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.parameters(), 5.0)
             optimizer.step()
-            self._update_dirichlet_posterior(parts_train["responsibility"])
-
             self.eval()
             with torch.no_grad():
                 val_loss, parts = self._objective(
@@ -1160,7 +1181,9 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 map_risks, tensors[2], tensors[3]
             )
             map_responsibility = self._hierarchical_responsibilities(map_loglik)
-            self._update_dirichlet_posterior(map_responsibility)
+            self.map_population_update_ = self._update_dirichlet_posterior(
+                map_responsibility
+            )
             representations = self._fit_representation_normalization(
                 representations
             )
@@ -1200,7 +1223,9 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     updated_responsibility - posterior_responsibility
                 )).item()
 
-            self._update_dirichlet_posterior(updated_responsibility)
+            population_update = self._update_dirichlet_posterior(
+                updated_responsibility
+            )
             self._refit_router(router_states, updated_responsibility)
             posterior_responsibility = updated_responsibility
             diagnostic = self.mcmc_diagnostics_["joint"]
@@ -1220,6 +1245,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     self.dirichlet_posterior_alpha
                     / self.dirichlet_posterior_alpha.sum()
                 ).detach().cpu().tolist(),
+                "population_update": population_update,
                 **diagnostic,
             }
             self.bayesian_em_history_.append(record)
@@ -1245,6 +1271,17 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     f"divergences={diagnostic['divergences']}, "
                     f"R-hat(max)={diagnostic['max_rhat']:.3f}, "
                     f"ESS(min)={diagnostic['min_ess']:.1f}"
+                )
+                print(
+                    "    Population update before -> target -> after: "
+                    + " / ".join(
+                        "[" + ", ".join(f"{value:.3f}" for value in values) + "]"
+                        for values in (
+                            population_update["before"],
+                            population_update["target"],
+                            population_update["after"],
+                        )
+                    )
                 )
                 for name, values in diagnostic["predictive_diagnostics"].items():
                     print(
