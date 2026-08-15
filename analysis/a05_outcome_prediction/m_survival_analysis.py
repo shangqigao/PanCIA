@@ -2171,13 +2171,15 @@ class SurvivalAnalyzer:
             hidden_dim=model_params.get('variational_hidden_dim', 16),
             n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
-            beta_router_prior=model_params.get('router_prior_weight', 0.1),
+            hierarchical_prior_concentration=model_params.get(
+                'hierarchical_prior_concentration', 3.0
+            ),
             reliability_prior=model_params.get(
                 'reliability_prior', (1.0, 1.0, 1.0)
             ),
             max_epochs=model_params.get('variational_epochs', 300),
             patience=model_params.get('variational_patience', 30),
-            mc_test_samples=model_params.get('mc_test_samples', 64),
+            mc_test_samples=model_params.get('mc_test_samples', 128),
             mcmc_warmup=model_params.get('mcmc_warmup', 250),
             mcmc_samples=model_params.get('mcmc_samples', 250),
             mcmc_step_size=model_params.get('mcmc_step_size', 0.01),
@@ -2203,9 +2205,6 @@ class SurvivalAnalyzer:
             ),
             responsibility_temperature=model_params.get(
                 'responsibility_temperature', 1.0
-            ),
-            responsibility_prior_mix=model_params.get(
-                'responsibility_prior_mix', 0.0
             ),
             hmc_target_acceptance=model_params.get(
                 'hmc_target_acceptance', 0.8
@@ -2299,10 +2298,15 @@ class SurvivalAnalyzer:
                 f"max prob={diagnostic['mean_max_probability']:.3f}, "
                 f"top-two margin={diagnostic['mean_top_two_margin']:.3f}"
             )
+        population_mean = (
+            bandit.dirichlet_posterior_alpha
+            / bandit.dirichlet_posterior_alpha.sum()
+        ).detach().cpu().numpy()
         print(
-            f"  Assignment regularization: router prior weight="
-            f"{bandit.beta_router_prior:.3f}, responsibility prior mix="
-            f"{bandit.responsibility_prior_mix:.3f}"
+            f"  Hierarchical assignment prior: concentration="
+            f"{bandit.hierarchical_prior_concentration:.3f}, posterior mean "
+            f"R/P/RP="
+            + "/".join(f"{value:.3f}" for value in population_mean)
         )
         print(f"  Neural initialization epochs: {len(bandit.history_)}")
         print(
@@ -2333,9 +2337,7 @@ class SurvivalAnalyzer:
             f"  Best validation loss terms (epoch {bandit.best_epoch_}): "
             f"Total={best_terms['val_loss']:.4f}, "
             f"Expert NLL={best_terms['expert_nll']:.4f}, "
-            f"Router CE={best_terms['router_ce']:.4f}, "
-            f"Router KL={best_terms['router_kl']:.4f} "
-            f"(weighted={best_terms['weighted_router_kl']:.4f})"
+            f"Router CE={best_terms['router_ce']:.4f}"
         )
         for expert_name, diagnostic in bandit.mcmc_diagnostics_.items():
             print(
@@ -2406,6 +2408,16 @@ class SurvivalAnalyzer:
                 bandit.representation_normalization_diagnostics_
             ),
             'cv_diagnostics': bandit.cv_diagnostics_,
+            'hierarchical_assignment_prior': {
+                'concentration': bandit.hierarchical_prior_concentration,
+                'prior_alpha': (
+                    bandit.dirichlet_prior_alpha.detach().cpu().tolist()
+                ),
+                'posterior_alpha': (
+                    bandit.dirichlet_posterior_alpha.detach().cpu().tolist()
+                ),
+                'posterior_mean': population_mean.tolist(),
+            },
             'training_responsibilities': bandit.training_responsibilities_.tolist(),
             'training_gate_probs': bandit.training_gate_probs_.tolist(),
             'assignment_distillation_gap': bandit.assignment_distillation_gap_,

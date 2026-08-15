@@ -92,16 +92,58 @@ class VariationalSurvivalMoETests(unittest.TestCase):
                 torch.zeros(3, 1, 3),
             )
 
-    def test_router_prior_kl_is_zero_when_gate_matches_prior(self):
+    def test_dirichlet_population_update_uses_aggregate_responsibilities(self):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, state_dim=2, hidden_dim=4,
-            n_intervals=2, reliability_prior=(0.2, 0.6, 0.2), device="cpu"
+            n_intervals=2, reliability_prior=(0.2, 0.6, 0.2),
+            hierarchical_prior_concentration=5.0, device="cpu"
         )
-        gate = model.reliability_prior.unsqueeze(0).repeat(3, 1)
-        kl = torch.mean(torch.sum(
-            gate * (torch.log(gate) - torch.log(model.reliability_prior)), dim=1
-        ))
-        self.assertAlmostEqual(float(kl), 0.0, places=7)
+        responsibility = torch.tensor([
+            [1.0, 0.0, 0.0],
+            [0.0, 0.25, 0.75],
+        ])
+
+        model._update_dirichlet_posterior(responsibility)
+
+        expected = 5.0 * torch.tensor([0.2, 0.6, 0.2]) + torch.tensor(
+            [1.0, 0.25, 0.75]
+        )
+        torch.testing.assert_close(model.dirichlet_posterior_alpha, expected)
+
+    def test_hierarchical_prior_is_gate_intercept_not_patient_kl(self):
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
+            reliability_prior=(0.1, 0.7, 0.2),
+            hierarchical_prior_concentration=3.0, device="cpu"
+        )
+        states = torch.zeros(2, 12)
+        with torch.no_grad():
+            for parameter in model.router.parameters():
+                parameter.zero_()
+
+        gate = model._router_probs_from_state(states)
+        expected = torch.softmax(
+            model._expected_log_population_weights(), dim=0
+        ).repeat(2, 1)
+
+        torch.testing.assert_close(gate, expected)
+
+    def test_hierarchical_responsibility_combines_population_and_evidence(self):
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
+            reliability_prior=(0.2, 0.6, 0.2),
+            hierarchical_prior_concentration=10.0,
+            responsibility_temperature=1.0, device="cpu"
+        )
+        loglik = torch.tensor([[0.0, 0.0, np.log(3.0)]])
+
+        result = model._hierarchical_responsibilities(loglik)
+        expected = torch.softmax(
+            loglik + model._expected_log_population_weights(), dim=1
+        )
+
+        torch.testing.assert_close(result, expected)
+        self.assertFalse(result.requires_grad)
 
     def test_router_state_has_twelve_interpretable_terms(self):
         model = ConditionalVariationalSurvivalMoE(
@@ -266,7 +308,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         torch.manual_seed(5)
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
-            learning_rate=0.05, beta_router_prior=0.0,
+            learning_rate=0.05,
             router_refit_epochs=30, mcmc_samples=2, mcmc_chains=2,
             device="cpu", verbose=False,
         )
@@ -277,7 +319,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
 
         def cross_entropy():
             with torch.no_grad():
-                gate = torch.softmax(model.router(states), dim=2)
+                gate = model._router_probs_from_state(states)
                 return -torch.mean(torch.sum(
                     responsibility.unsqueeze(0)
                     * torch.log(gate.clamp_min(1e-8)), dim=2

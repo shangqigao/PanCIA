@@ -87,10 +87,13 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
     """Empirical-Bayes mixture of survival experts for R, P and RP.
 
     E-step:
-        r_ik ∝ pi_ik(S_i) p_k(T_i,E_i | S_i^k)
+        r_ik ∝ exp(E_q[log rho_k]) p_k(T_i,E_i | S_i^k)
     M-step / generalized EM update:
         experts minimize responsibility-weighted negative log likelihood;
-        router minimizes CE(stopgrad(r_i), pi_i) + KL(pi_i || prior);
+        router minimizes CE(stopgrad(r_i), pi_i). A hierarchical population
+        assignment probability rho has a Dirichlet prior centred on repeated-CV
+        reliability. The router amortizes the outcome-informed responsibilities;
+        E[log rho] is its population intercept rather than a per-patient KL.
         posterior log-risk uncertainty comes from HMC samples of the Bayesian
         head. Repeated CV supplies a complementary fixed representation/
         training-instability uncertainty and an empirical reliability prior;
@@ -101,7 +104,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
 
     def __init__(self, rad_dim, path_dim, state_dim=None, hidden_dim=32,
                  n_intervals=8, learning_rate=1e-3,
-                 beta_router_prior=0.5, reliability_prior=(1 / 3, 1 / 3, 1 / 3),
+                 hierarchical_prior_concentration=3.0,
+                 reliability_prior=(1 / 3, 1 / 3, 1 / 3),
                  max_epochs=300, patience=30,
                  mc_test_samples=32, mcmc_warmup=100, mcmc_samples=200,
                  mcmc_step_size=0.01, mcmc_leapfrog_steps=10,
@@ -112,7 +116,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                  router_refit_epochs=100, bayesian_em_iterations=3,
                  responsibility_tolerance=1e-3,
                  responsibility_temperature=2.0,
-                 responsibility_prior_mix=0.05,
                  hmc_target_acceptance=0.8, hmc_min_acceptance=0.1,
                  hmc_max_rhat=1.2, hmc_min_ess=10.0,
                  hmc_severe_predictive_rhat=1.5,
@@ -127,7 +130,11 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.hidden_dim = int(hidden_dim)
         self.n_intervals = int(n_intervals)
         self.learning_rate = float(learning_rate)
-        self.beta_router_prior = float(beta_router_prior)
+        self.hierarchical_prior_concentration = float(
+            hierarchical_prior_concentration
+        )
+        if self.hierarchical_prior_concentration <= 0:
+            raise ValueError("hierarchical_prior_concentration must be positive")
         self.max_epochs = int(max_epochs)
         self.patience = int(patience)
         self.mc_test_samples = int(mc_test_samples)
@@ -151,7 +158,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.bayesian_em_iterations = int(bayesian_em_iterations)
         self.responsibility_tolerance = float(responsibility_tolerance)
         self.responsibility_temperature = float(responsibility_temperature)
-        self.responsibility_prior_mix = float(responsibility_prior_mix)
         self.hmc_target_acceptance = float(hmc_target_acceptance)
         self.hmc_min_acceptance = float(hmc_min_acceptance)
         self.hmc_max_rhat = float(hmc_max_rhat)
@@ -161,8 +167,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             raise ValueError("bayesian_em_iterations must be positive")
         if self.responsibility_temperature < 1.0:
             raise ValueError("responsibility_temperature must be at least one")
-        if not 0.0 <= self.responsibility_prior_mix < 1.0:
-            raise ValueError("responsibility_prior_mix must be in [0, 1)")
         self.verbose = bool(verbose)
         self.log_every = max(1, int(log_every))
         self.random_state = random_state
@@ -191,6 +195,13 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         if prior.shape != (3,) or torch.any(prior <= 0):
             raise ValueError("reliability_prior must contain three positive values")
         self.register_buffer("reliability_prior", prior / prior.sum())
+        self.register_buffer(
+            "dirichlet_prior_alpha",
+            self.hierarchical_prior_concentration * self.reliability_prior,
+        )
+        self.register_buffer(
+            "dirichlet_posterior_alpha", self.dirichlet_prior_alpha.clone()
+        )
         for name in self.expert_names:
             self.register_buffer(
                 f"representation_mean_{name}", torch.zeros(hidden_dim)
@@ -264,12 +275,40 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         ], dim=1)
         return torch.cat([risks, hmc_sd, cv_sd, disagreements], dim=1)
 
-    def _router_probs(self, log_risks, hmc_uncertainties, cv_uncertainties):
+    def _expected_log_population_weights(self):
+        alpha = self.dirichlet_posterior_alpha.clamp_min(1e-8)
+        return torch.digamma(alpha) - torch.digamma(alpha.sum())
+
+    def _router_probs_from_state(self, router_state):
+        logits = self.router(router_state)
         return torch.softmax(
-            self.router(self._make_router_state(
-                log_risks, hmc_uncertainties, cv_uncertainties
-            )), dim=1
+            logits + self._expected_log_population_weights(), dim=-1
         )
+
+    def _router_probs(self, log_risks, hmc_uncertainties, cv_uncertainties):
+        return self._router_probs_from_state(self._make_router_state(
+            log_risks, hmc_uncertainties, cv_uncertainties
+        ))
+
+    def _reset_dirichlet_posterior(self):
+        with torch.no_grad():
+            self.dirichlet_prior_alpha.copy_(
+                self.hierarchical_prior_concentration
+                * self.reliability_prior
+            )
+            self.dirichlet_posterior_alpha.copy_(
+                self.dirichlet_prior_alpha
+            )
+
+    def _update_dirichlet_posterior(self, responsibility):
+        """Conjugate population update: alpha = kappa*p0 + sum_i r_i."""
+        if responsibility.ndim != 2 or responsibility.shape[1] != 3:
+            raise ValueError("responsibility must have shape [patient, 3]")
+        with torch.no_grad():
+            self.dirichlet_posterior_alpha.copy_(
+                self.dirichlet_prior_alpha
+                + responsibility.detach().sum(dim=0)
+            )
 
     def _expert_log_likelihoods(self, states, duration, event):
         return torch.stack([
@@ -337,12 +376,32 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             prior_mix=prior_mix,
         )
 
-    def _update_responsibilities(self, gate_probs, expert_log_likelihoods):
-        return self.posterior_responsibilities(
-            gate_probs, expert_log_likelihoods,
+    def _hierarchical_responsibilities(self, expert_log_likelihoods):
+        """Coordinate E-step under q(rho) and the survival evidence."""
+        log_evidence = (
+            expert_log_likelihoods
+            + self._expected_log_population_weights()
+        )
+        return self.responsibilities_from_log_evidence(
+            log_evidence, temperature=self.responsibility_temperature,
+        )
+
+    def _hierarchical_responsibilities_from_draws(
+        self, expert_log_likelihood_draws
+    ):
+        """Marginalize survival likelihood draws, then apply E[log rho]."""
+        if expert_log_likelihood_draws.ndim != 3:
+            raise ValueError(
+                "Likelihood draws must have shape [draw, patient, expert]"
+            )
+        predictive_log_evidence = (
+            torch.logsumexp(expert_log_likelihood_draws, dim=0)
+            - math.log(expert_log_likelihood_draws.shape[0])
+            + self._expected_log_population_weights()
+        )
+        return self.responsibilities_from_log_evidence(
+            predictive_log_evidence,
             temperature=self.responsibility_temperature,
-            prior=self.reliability_prior,
-            prior_mix=self.responsibility_prior_mix,
         )
 
     def _objective(self, x_rad, x_path, duration, event, cv_uncertainty):
@@ -354,26 +413,16 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         }
         gate = self._router_probs(states, zero_uncertainty, cv_uncertainty)
         log_likelihood = self._expert_log_likelihoods(states, duration, event)
-        responsibility = self._update_responsibilities(gate, log_likelihood)
+        responsibility = self._hierarchical_responsibilities(log_likelihood)
 
         expert_nll = -torch.mean(torch.sum(responsibility * log_likelihood, dim=1))
         router_ce = -torch.mean(torch.sum(
             responsibility * torch.log(gate.clamp_min(1e-8)), dim=1
         ))
-        router_kl = torch.mean(torch.sum(
-            gate * (
-                torch.log(gate.clamp_min(1e-8))
-                - torch.log(self.reliability_prior.clamp_min(1e-8)).unsqueeze(0)
-            ), dim=1
-        ))
-        loss = (
-            expert_nll + router_ce
-            + self.beta_router_prior * router_kl
-        )
+        loss = expert_nll + router_ce
         return loss, {
             "expert_nll": expert_nll,
             "router_ce": router_ce,
-            "router_kl": router_kl,
             "responsibility": responsibility,
             "gate": gate,
         }
@@ -543,6 +592,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         ), dim=0)
         with torch.no_grad():
             self.reliability_prior.copy_(prior)
+        self._reset_dirichlet_posterior()
         self.cv_diagnostics_ = {
             "cindices": cindices.tolist(),
             "reliability_prior": prior.detach().cpu().tolist(),
@@ -1013,18 +1063,12 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             self.router.parameters(), lr=self.learning_rate
         )
         for _ in range(self.router_refit_epochs):
-            gate = torch.softmax(self.router(router_states), dim=2)
+            gate = self._router_probs_from_state(router_states)
             router_ce = -torch.mean(torch.sum(
                 responsibility.unsqueeze(0)
                 * torch.log(gate.clamp_min(1e-8)), dim=2
             ))
-            router_kl = torch.mean(torch.sum(
-                gate * (
-                    torch.log(gate.clamp_min(1e-8))
-                    - torch.log(self.reliability_prior).reshape(1, 1, -1)
-                ), dim=2
-            ))
-            router_loss = router_ce + self.beta_router_prior * router_kl
+            router_loss = router_ce
             router_optimizer.zero_grad()
             router_loss.backward()
             router_optimizer.step()
@@ -1062,6 +1106,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             train_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.parameters(), 5.0)
             optimizer.step()
+            self._update_dirichlet_posterior(parts_train["responsibility"])
 
             self.eval()
             with torch.no_grad():
@@ -1072,22 +1117,14 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             value = val_loss.item()
             train_component_means = {
                 name: parts_train[name].item()
-                for name in ("expert_nll", "router_ce", "router_kl")
+                for name in ("expert_nll", "router_ce")
             }
             record = {
                 "epoch": epoch + 1, "train_loss": train_loss.item(),
                 "val_loss": value, "expert_nll": parts["expert_nll"].item(),
                 "router_ce": parts["router_ce"].item(),
-                "router_kl": parts["router_kl"].item(),
-                "weighted_router_kl": (
-                    self.beta_router_prior * parts["router_kl"].item()
-                ),
                 "train_expert_nll": train_component_means["expert_nll"],
                 "train_router_ce": train_component_means["router_ce"],
-                "train_router_kl": train_component_means["router_kl"],
-                "train_weighted_router_kl": (
-                    self.beta_router_prior * train_component_means["router_kl"]
-                ),
             }
             self.history_.append(record)
             if self.verbose and (
@@ -1097,9 +1134,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     f"  Epoch {epoch + 1}/{self.max_epochs}: "
                     f"Train={record['train_loss']:.4f}, Val={value:.4f}, "
                     f"Expert NLL={record['expert_nll']:.4f}, "
-                    f"Router CE={record['router_ce']:.4f}, "
-                    f"Router KL={record['router_kl']:.4f} "
-                    f"(weighted={record['weighted_router_kl']:.4f})"
+                    f"Router CE={record['router_ce']:.4f}"
                 )
             if value < best_loss - 1e-6:
                 best_loss, stale = value, 0
@@ -1121,19 +1156,11 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.eval()
         with torch.no_grad():
             map_risks, representations = self._encode(tensors[0], tensors[1])
-            zero_uncertainty = {
-                name: torch.zeros_like(map_risks[name])
-                for name in self.expert_names
-            }
-            map_gate = self._router_probs(
-                map_risks, zero_uncertainty, cv_uncertainty
-            )
             map_loglik = self._expert_log_likelihoods(
                 map_risks, tensors[2], tensors[3]
             )
-            map_responsibility = self._update_responsibilities(
-                map_gate, map_loglik
-            )
+            map_responsibility = self._hierarchical_responsibilities(map_loglik)
+            self._update_dirichlet_posterior(map_responsibility)
             representations = self._fit_representation_normalization(
                 representations
             )
@@ -1164,19 +1191,16 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     cv_uncertainty,
                     max_draws=self.mc_test_samples,
                 )
-                gate_draws = torch.softmax(self.router(router_states), dim=2)
                 updated_responsibility = (
-                    self.posterior_responsibilities_from_draws(
-                        gate_draws, draw_loglik,
-                        temperature=self.responsibility_temperature,
-                        prior=self.reliability_prior,
-                        prior_mix=self.responsibility_prior_mix,
+                    self._hierarchical_responsibilities_from_draws(
+                        draw_loglik
                     )
                 )
                 responsibility_change = torch.mean(torch.abs(
                     updated_responsibility - posterior_responsibility
                 )).item()
 
+            self._update_dirichlet_posterior(updated_responsibility)
             self._refit_router(router_states, updated_responsibility)
             posterior_responsibility = updated_responsibility
             diagnostic = self.mcmc_diagnostics_["joint"]
@@ -1192,6 +1216,10 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 "mean_responsibility_RP": float(
                     posterior_responsibility[:, 2].mean()
                 ),
+                "population_posterior_mean": (
+                    self.dirichlet_posterior_alpha
+                    / self.dirichlet_posterior_alpha.sum()
+                ).detach().cpu().tolist(),
                 **diagnostic,
             }
             self.bayesian_em_history_.append(record)
@@ -1203,6 +1231,12 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     f"{record['mean_responsibility_R']:.3f}/"
                     f"{record['mean_responsibility_P']:.3f}/"
                     f"{record['mean_responsibility_RP']:.3f}, "
+                    f"population rho R/P/RP="
+                    + "/".join(
+                        f"{value:.3f}"
+                        for value in record["population_posterior_mean"]
+                    )
+                    + ", "
                     f"mean accept prob="
                     f"{diagnostic['mean_accept_probability']:.3f} "
                     f"(target={diagnostic['target_accept_probability']:.2f}), "
@@ -1229,7 +1263,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         # probabilities depend on states alone and are the deployable policy.
         self.eval()
         with torch.no_grad():
-            final_gate = torch.softmax(self.router(router_states), dim=2).mean(0)
+            final_gate = self._router_probs_from_state(router_states).mean(0)
         self.training_responsibilities_ = (
             posterior_responsibility.cpu().numpy()
         )
