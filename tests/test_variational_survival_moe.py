@@ -141,7 +141,6 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         )
 
         self.assertGreater(diagnostics["rp_conservative_gain"], 0.02)
-        self.assertGreater(diagnostics["rp_fusion_eligibility"], 0.8)
         self.assertEqual(int(torch.argmax(prior)), 2)
         torch.testing.assert_close(prior.sum(), torch.tensor(1.0))
 
@@ -150,7 +149,8 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         cv = torch.tensor([[-2.0, -1.0, -3.0]])
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
-            cv_likelihood_weight=0.25, device="cpu",
+            cv_likelihood_weight=0.25,
+            use_cv_assignment_likelihood=True, device="cpu",
         )
 
         combined = model._combine_assignment_log_likelihood(hmc, cv)
@@ -161,6 +161,22 @@ class VariationalSurvivalMoETests(unittest.TestCase):
 
         torch.testing.assert_close(combined, expected)
         torch.testing.assert_close(combined.mean(1), torch.zeros(1))
+
+    def test_disabled_cv_assignment_restores_raw_hmc_likelihood(self):
+        hmc = torch.tensor([
+            [[-10.0, -12.0, -14.0]],
+            [[-20.0, -21.0, -25.0]],
+        ])
+        cv = torch.tensor([[-2.0, -1.0, -3.0]])
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
+            cv_likelihood_weight=0.9,
+            use_cv_assignment_likelihood=False, device="cpu",
+        )
+
+        combined = model._combine_assignment_log_likelihood(hmc, cv)
+
+        torch.testing.assert_close(combined, hmc)
 
     def test_router_state_has_twelve_interpretable_terms(self):
         model = ConditionalVariationalSurvivalMoE(

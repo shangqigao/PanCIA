@@ -101,23 +101,24 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
 
     def __init__(self, rad_dim, path_dim, state_dim=None, hidden_dim=32,
                  n_intervals=8, learning_rate=1e-3,
-                 beta_router_prior=0.5, reliability_prior=(1 / 3, 1 / 3, 1 / 3),
+                 beta_router_prior=0.1, reliability_prior=(1 / 3, 1 / 3, 1 / 3),
                  max_epochs=300, patience=30,
                  mc_test_samples=32, mcmc_warmup=100, mcmc_samples=200,
                  mcmc_step_size=0.01, mcmc_leapfrog_steps=10,
                  mcmc_chains=2, mcmc_max_tree_depth=8,
                  cv_folds=5, cv_repeats=5, cv_epochs=100,
-                 cv_reliability_strength=10.0,
+                 cv_reliability_strength=5.0,
                  cv_stability_weight=1.0,
                  cv_gain_stability_weight=1.0,
-                 cv_min_rp_gain=0.005, cv_gain_temperature=0.01,
-                 rp_prior_max=0.5, cv_prior_floor=0.05,
-                 cv_likelihood_weight=0.5,
+                 cv_min_rp_gain=0.005,
+                 cv_prior_information_weight=0.5,
+                 cv_likelihood_weight=0.0,
+                 use_cv_assignment_likelihood=False,
                  prior_scale=1.0, baseline_prior_scale=2.0,
                  router_refit_epochs=100, bayesian_em_iterations=3,
                  responsibility_tolerance=1e-3,
-                 responsibility_temperature=2.0,
-                 responsibility_prior_mix=0.05,
+                 responsibility_temperature=1.0,
+                 responsibility_prior_mix=0.0,
                  hmc_target_acceptance=0.8, hmc_min_acceptance=0.1,
                  hmc_max_rhat=1.2, hmc_min_ess=10.0,
                  hmc_severe_predictive_rhat=1.5,
@@ -149,22 +150,21 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.cv_stability_weight = float(cv_stability_weight)
         self.cv_gain_stability_weight = float(cv_gain_stability_weight)
         self.cv_min_rp_gain = float(cv_min_rp_gain)
-        self.cv_gain_temperature = float(cv_gain_temperature)
-        self.rp_prior_max = float(rp_prior_max)
-        self.cv_prior_floor = float(cv_prior_floor)
+        self.cv_prior_information_weight = float(
+            cv_prior_information_weight
+        )
         self.cv_likelihood_weight = float(cv_likelihood_weight)
+        self.use_cv_assignment_likelihood = bool(
+            use_cv_assignment_likelihood
+        )
         if self.mcmc_chains < 2 or self.mcmc_samples < 2:
             raise ValueError("MCMC diagnostics require at least two chains and samples")
         if self.cv_folds < 2 or self.cv_repeats < 2 or self.cv_epochs < 1:
             raise ValueError("CV uncertainty requires >=2 folds/repeats and >=1 epoch")
         if self.cv_stability_weight < 0 or self.cv_gain_stability_weight < 0:
             raise ValueError("CV stability weights must be non-negative")
-        if self.cv_gain_temperature <= 0:
-            raise ValueError("cv_gain_temperature must be positive")
-        if not 0.0 < self.rp_prior_max < 1.0:
-            raise ValueError("rp_prior_max must be in (0, 1)")
-        if not 0.0 <= self.cv_prior_floor < 1.0 / 3.0:
-            raise ValueError("cv_prior_floor must be in [0, 1/3)")
+        if not 0.0 <= self.cv_prior_information_weight <= 1.0:
+            raise ValueError("cv_prior_information_weight must be in [0, 1]")
         if not 0.0 <= self.cv_likelihood_weight <= 1.0:
             raise ValueError("cv_likelihood_weight must be in [0, 1]")
         self.prior_scale = float(prior_scale)
@@ -553,6 +553,10 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
 
     def _combine_assignment_log_likelihood(self, hmc_loglik, cv_loglik):
         """Convex, patient-centered CV/HMC evidence without double counting."""
+        if not self.use_cv_assignment_likelihood:
+            # Exact pre-Phase-1 path: preserve raw likelihoods, especially the
+            # relative weighting of matched posterior draws in logmeanexp.
+            return hmc_loglik
         hmc_centered = hmc_loglik - hmc_loglik.mean(dim=-1, keepdim=True)
         cv_centered = cv_loglik - cv_loglik.mean(dim=-1, keepdim=True)
         while cv_centered.ndim < hmc_centered.ndim:
@@ -561,7 +565,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         return (1.0 - weight) * hmc_centered + weight * cv_centered
 
     def _build_cv_reliability_prior(self, repeat_cindices):
-        """Hierarchical prior: robust unimodal quality plus an RP hurdle."""
+        """Soft stability-aware prior; paired RP gain is diagnostic only."""
         scores = np.asarray(repeat_cindices, dtype=np.float64)
         if scores.ndim != 2 or scores.shape[1] != 3 or scores.shape[0] < 2:
             raise ValueError("repeat_cindices must have shape [repeat>=2, 3]")
@@ -582,31 +586,17 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             gain_mean - self.cv_gain_stability_weight * gain_std
         )
 
-        # R/P share the non-fusion mass according to robust generalization.
-        unimodal_logits = (
-            self.cv_reliability_strength * robust_scores[:2]
-        )
-        unimodal_logits -= unimodal_logits.max()
-        unimodal_prior = np.exp(unimodal_logits)
-        unimodal_prior /= unimodal_prior.sum()
-
-        # RP receives substantial prior mass only after demonstrating a
-        # stable paired improvement over the best unimodal expert.
-        eligibility_logit = np.clip(
-            (conservative_gain - self.cv_min_rp_gain)
-            / self.cv_gain_temperature,
-            -60.0, 60.0,
-        )
-        fusion_eligibility = float(1.0 / (1.0 + np.exp(-eligibility_logit)))
-        rp_mass = self.rp_prior_max * fusion_eligibility
-        raw_prior = np.asarray([
-            (1.0 - rp_mass) * unimodal_prior[0],
-            (1.0 - rp_mass) * unimodal_prior[1],
-            rp_mass,
-        ], dtype=np.float64)
+        # Reliability is deliberately soft. Paired RP gain remains diagnostic
+        # and must not turn a cohort-level parsimony rule into a near-zero
+        # patient-level prior for fusion.
+        logits = self.cv_reliability_strength * robust_scores
+        logits -= logits.max()
+        performance_prior = np.exp(logits)
+        performance_prior /= performance_prior.sum()
+        information_weight = self.cv_prior_information_weight
         prior_np = (
-            (1.0 - 3.0 * self.cv_prior_floor) * raw_prior
-            + self.cv_prior_floor
+            information_weight * performance_prior
+            + (1.0 - information_weight) / 3.0
         ).astype(np.float32)
         diagnostics = {
             "repeat_cindices": scores.tolist(),
@@ -622,10 +612,11 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             "rp_gain_median": gain_median,
             "rp_gain_mad": gain_mad,
             "rp_conservative_gain": conservative_gain,
-            "rp_fusion_eligibility": fusion_eligibility,
-            "rp_prior_mass": float(rp_mass),
-            "raw_hierarchical_prior": raw_prior.tolist(),
-            "cv_prior_floor": self.cv_prior_floor,
+            "rp_gain_exceeds_minimum": bool(
+                conservative_gain > self.cv_min_rp_gain
+            ),
+            "performance_softmax_prior": performance_prior.tolist(),
+            "cv_prior_information_weight": information_weight,
             "reliability_prior": prior_np.tolist(),
         }
         return torch.as_tensor(prior_np, device=self.device), diagnostics
@@ -1522,7 +1513,13 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             "cv_hmc_winner_disagreement": float(
                 (cv_winner != hmc_winner).float().mean()
             ),
-            "cv_likelihood_weight": self.cv_likelihood_weight,
+            "cv_assignment_likelihood_enabled": (
+                self.use_cv_assignment_likelihood
+            ),
+            "cv_likelihood_weight": (
+                self.cv_likelihood_weight
+                if self.use_cv_assignment_likelihood else 0.0
+            ),
         }
         self.is_fitted_ = True
         return self

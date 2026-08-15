@@ -2188,7 +2188,7 @@ class SurvivalAnalyzer:
             cv_repeats=model_params.get('variational_cv_repeats', 5),
             cv_epochs=model_params.get('variational_cv_epochs', 100),
             cv_reliability_strength=model_params.get(
-                'cv_reliability_strength', 10.0
+                'cv_reliability_strength', 5.0
             ),
             cv_stability_weight=model_params.get(
                 'cv_stability_weight', 1.0
@@ -2197,13 +2197,14 @@ class SurvivalAnalyzer:
                 'cv_gain_stability_weight', 1.0
             ),
             cv_min_rp_gain=model_params.get('cv_min_rp_gain', 0.005),
-            cv_gain_temperature=model_params.get(
-                'cv_gain_temperature', 0.01
+            cv_prior_information_weight=model_params.get(
+                'cv_prior_information_weight', 0.5
             ),
-            rp_prior_max=model_params.get('rp_prior_max', 0.5),
-            cv_prior_floor=model_params.get('cv_prior_floor', 0.05),
             cv_likelihood_weight=model_params.get(
                 'cv_likelihood_weight', 0.0
+            ),
+            use_cv_assignment_likelihood=model_params.get(
+                'use_cv_assignment_likelihood', False
             ),
             prior_scale=model_params.get('bayesian_head_prior_scale', 1.0),
             baseline_prior_scale=model_params.get(
@@ -2217,7 +2218,7 @@ class SurvivalAnalyzer:
                 'responsibility_tolerance', 1e-3
             ),
             responsibility_temperature=model_params.get(
-                'responsibility_temperature', 2.0
+                'responsibility_temperature', 1.0
             ),
             responsibility_prior_mix=model_params.get(
                 'responsibility_prior_mix', 0.0
@@ -2385,10 +2386,9 @@ class SurvivalAnalyzer:
             f"{cv_diag['rp_gain_mean']:.4f}, SD="
             f"{cv_diag['rp_gain_std']:.4f}, conservative="
             f"{cv_diag['rp_conservative_gain']:.4f}, minimum required="
-            f"{bandit.cv_min_rp_gain:.4f}, fusion eligibility="
-            f"{cv_diag['rp_fusion_eligibility']:.3f}, raw RP prior mass="
-            f"{cv_diag['rp_prior_mass']:.3f}, prior floor="
-            f"{cv_diag['cv_prior_floor']:.3f}"
+            f"{bandit.cv_min_rp_gain:.4f}, exceeds minimum="
+            f"{cv_diag['rp_gain_exceeds_minimum']}; prior information weight="
+            f"{cv_diag['cv_prior_information_weight']:.3f}"
         )
         print(
             "    Mean fixed CV log-risk SD R/P/RP="
@@ -2419,7 +2419,9 @@ class SurvivalAnalyzer:
                 f"{values['mean_top_two_margin']:.4f}"
             )
         print(
-            f"    CV likelihood weight="
+            f"    CV assignment likelihood enabled="
+            f"{evidence_diag['cv_assignment_likelihood_enabled']}, "
+            f"effective CV likelihood weight="
             f"{evidence_diag['cv_likelihood_weight']:.3f}, "
             f"CV-HMC winner disagreement="
             f"{evidence_diag['cv_hmc_winner_disagreement']:.3f}"
