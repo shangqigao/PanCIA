@@ -2190,22 +2190,6 @@ class SurvivalAnalyzer:
             cv_reliability_strength=model_params.get(
                 'cv_reliability_strength', 5.0
             ),
-            cv_stability_weight=model_params.get(
-                'cv_stability_weight', 1.0
-            ),
-            cv_gain_stability_weight=model_params.get(
-                'cv_gain_stability_weight', 1.0
-            ),
-            cv_min_rp_gain=model_params.get('cv_min_rp_gain', 0.005),
-            cv_prior_information_weight=model_params.get(
-                'cv_prior_information_weight', 0.5
-            ),
-            cv_likelihood_weight=model_params.get(
-                'cv_likelihood_weight', 0.0
-            ),
-            use_cv_assignment_likelihood=model_params.get(
-                'use_cv_assignment_likelihood', False
-            ),
             prior_scale=model_params.get('bayesian_head_prior_scale', 1.0),
             baseline_prior_scale=model_params.get(
                 'baseline_hazard_prior_scale', 2.0
@@ -2300,33 +2284,6 @@ class SurvivalAnalyzer:
               f"max prob={policy_diag['mean_max_probability']:.3f}, "
               f"top-two margin={policy_diag['mean_top_two_margin']:.3f}"
         )
-        def print_personalization(label, diagnostic):
-            odds_quantiles = diagnostic['rp_vs_path_log_odds_quantiles']
-            margin_quantiles = diagnostic['top_two_margin_quantiles']
-            print(
-                f"    {label} personalization: routing MI="
-                f"{diagnostic['routing_mutual_information']:.4f} "
-                f"(normalized="
-                f"{diagnostic['normalized_routing_mutual_information']:.3f}), "
-                f"conditional P/RP decisiveness="
-                f"{diagnostic['path_rp_decisiveness']:.3f}, "
-                f"conditional P/RP MI="
-                f"{diagnostic['path_rp_mutual_information']:.4f} "
-                f"(normalized="
-                f"{diagnostic['path_rp_normalized_mutual_information']:.3f})"
-            )
-            print(
-                f"      P/RP confident odds (>2:1) P="
-                f"{diagnostic['fraction_path_over_rp_odds_gt_2']:.3f}, "
-                f"RP={diagnostic['fraction_rp_over_path_odds_gt_2']:.3f}, "
-                f"ambiguous={diagnostic['fraction_path_rp_odds_between_half_and_two']:.3f}; "
-                f"RP-vs-P log-odds q05/50/95="
-                f"{odds_quantiles[0]:.3f}/{odds_quantiles[2]:.3f}/"
-                f"{odds_quantiles[4]:.3f}; top-two margin q05/50/95="
-                f"{margin_quantiles[0]:.3f}/{margin_quantiles[2]:.3f}/"
-                f"{margin_quantiles[4]:.3f}"
-            )
-        print_personalization("Test gate", policy_diag)
         for label, diagnostic in (
             ('Training gate', bandit.training_gate_diagnostics_),
             ('Training responsibility', bandit.training_responsibility_diagnostics_),
@@ -2342,7 +2299,6 @@ class SurvivalAnalyzer:
                 f"max prob={diagnostic['mean_max_probability']:.3f}, "
                 f"top-two margin={diagnostic['mean_top_two_margin']:.3f}"
             )
-            print_personalization(label, diagnostic)
         print(
             f"  Assignment regularization: router prior weight="
             f"{bandit.beta_router_prior:.3f}, responsibility prior mix="
@@ -2364,67 +2320,9 @@ class SurvivalAnalyzer:
             )
         )
         print(
-            "    Repeat C-index mean R/P/RP="
-            + "/".join(
-                f"{value:.4f}"
-                for value in cv_diag['repeat_cindex_mean']
-            )
-            + ", SD="
-            + "/".join(
-                f"{value:.4f}"
-                for value in cv_diag['repeat_cindex_std']
-            )
-            + ", robust score="
-            + "/".join(
-                f"{value:.4f}"
-                for value in cv_diag['robust_cindex_score']
-            )
-        )
-        print(
-            f"    RP paired gain over best unimodal "
-            f"({cv_diag['best_unimodal']}): mean="
-            f"{cv_diag['rp_gain_mean']:.4f}, SD="
-            f"{cv_diag['rp_gain_std']:.4f}, conservative="
-            f"{cv_diag['rp_conservative_gain']:.4f}, minimum required="
-            f"{bandit.cv_min_rp_gain:.4f}, exceeds minimum="
-            f"{cv_diag['rp_gain_exceeds_minimum']}; prior information weight="
-            f"{cv_diag['cv_prior_information_weight']:.3f}"
-        )
-        print(
             "    Mean fixed CV log-risk SD R/P/RP="
             + "/".join(f"{value:.4f}" for value in cv_diag['mean_sd'])
             + f", fitted expert sets={cv_diag['n_models']}"
-        )
-        print(
-            "    Held-out CV likelihood winners R/P/RP="
-            + "/".join(
-                str(value) for value in cv_diag['likelihood_winner_counts']
-            )
-            + f", mean top-two margin="
-            f"{cv_diag['mean_likelihood_top_two_margin']:.4f}, "
-            "mean repeat SD R/P/RP="
-            + "/".join(
-                f"{value:.4f}"
-                for value in cv_diag['mean_log_likelihood_sd']
-            )
-        )
-        evidence_diag = bandit.assignment_evidence_diagnostics_
-        for evidence_name in ('cv', 'hmc', 'combined'):
-            values = evidence_diag[evidence_name]
-            print(
-                f"  Assignment evidence {evidence_name.upper()}: winners "
-                f"R/P/RP="
-                + "/".join(str(value) for value in values['winner_counts'])
-                + f", mean top-two margin="
-                f"{values['mean_top_two_margin']:.4f}"
-            )
-        print(
-            f"    CV assignment likelihood enabled="
-            f"{evidence_diag['cv_assignment_likelihood_enabled']}, "
-            f"effective CV likelihood weight="
-            f"{evidence_diag['cv_likelihood_weight']:.3f}, "
-            f"CV-HMC winner disagreement="
-            f"{evidence_diag['cv_hmc_winner_disagreement']:.3f}"
         )
         print(
             f"  HMC router risk reference: common scale="
@@ -2508,9 +2406,6 @@ class SurvivalAnalyzer:
                 bandit.representation_normalization_diagnostics_
             ),
             'cv_diagnostics': bandit.cv_diagnostics_,
-            'assignment_evidence_diagnostics': (
-                bandit.assignment_evidence_diagnostics_
-            ),
             'training_responsibilities': bandit.training_responsibilities_.tolist(),
             'training_gate_probs': bandit.training_gate_probs_.tolist(),
             'assignment_distillation_gap': bandit.assignment_distillation_gap_,
