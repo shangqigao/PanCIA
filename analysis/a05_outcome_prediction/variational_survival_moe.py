@@ -203,6 +203,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
 
     def __init__(self, rad_dim, path_dim, state_dim=None, hidden_dim=32,
                  router_hidden_dim=None,
+                 router_state_mode="risk_pair",
                  n_intervals=8, learning_rate=1e-3,
                  hierarchical_prior_fraction=0.25,
                  population_update_rate=0.25,
@@ -234,6 +235,13 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.router_hidden_dim = int(
             hidden_dim if router_hidden_dim is None else router_hidden_dim
         )
+        self.router_state_mode = str(router_state_mode)
+        state_dimensions = {"risk_pair": 3, "full_uncertainty": 12}
+        if self.router_state_mode not in state_dimensions:
+            raise ValueError(
+                "router_state_mode must be 'risk_pair' or 'full_uncertainty'"
+            )
+        self.router_state_dim = state_dimensions[self.router_state_mode]
         if self.encoder_hidden_dim < 1 or self.router_hidden_dim < 1:
             raise ValueError("encoder and router hidden dimensions must be positive")
         self.n_intervals = int(n_intervals)
@@ -301,7 +309,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             torch.full((n_intervals,), -2.0)
         )
         self.router = nn.Sequential(
-            nn.Linear(12, self.router_hidden_dim), nn.ReLU(),
+            nn.Linear(self.router_state_dim, self.router_hidden_dim), nn.ReLU(),
             nn.Linear(self.router_hidden_dim, 3),
         )
         prior = torch.as_tensor(reliability_prior, dtype=torch.float32)
@@ -373,8 +381,16 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
 
     def _make_router_state(self, log_risks, hmc_uncertainties,
                            cv_uncertainties):
-        """Twelve terms: risks, HMC SDs, fixed CV SDs, disagreements."""
+        """Construct the selected interpretable router-state ablation."""
         risks = torch.cat([log_risks[name] for name in self.expert_names], dim=1)
+        if self.router_state_mode == "risk_pair":
+            return torch.stack([
+                risks[:, 0],
+                risks[:, 1],
+                torch.abs(risks[:, 0] - risks[:, 1]),
+            ], dim=1)
+
+        # Full reference: risks, HMC SDs, fixed CV SDs and disagreements.
         hmc_sd = torch.cat(
             [hmc_uncertainties[name] for name in self.expert_names], dim=1
         )

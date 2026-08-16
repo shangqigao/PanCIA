@@ -25,7 +25,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         self.assertEqual(model.router_hidden_dim, 7)
         self.assertEqual(model.encoders["R"].output_dim, 5)
         self.assertEqual(tuple(model.experts["P"].risk_coef.shape), (5,))
-        self.assertEqual(model.router[0].in_features, 12)
+        self.assertEqual(model.router[0].in_features, 3)
         self.assertEqual(model.router[0].out_features, 7)
         self.assertEqual(model.router[2].in_features, 7)
 
@@ -174,7 +174,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
             reliability_prior=(0.1, 0.7, 0.2),
             hierarchical_prior_fraction=0.25, device="cpu"
         )
-        states = torch.zeros(2, 12)
+        states = torch.zeros(2, model.router_state_dim)
         with torch.no_grad():
             for parameter in model.router.parameters():
                 parameter.zero_()
@@ -203,7 +203,8 @@ class VariationalSurvivalMoETests(unittest.TestCase):
 
     def test_router_state_has_twelve_interpretable_terms(self):
         model = ConditionalVariationalSurvivalMoE(
-            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2, device="cpu"
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
+            router_state_mode="full_uncertainty", device="cpu"
         )
         risks = {
             "R": torch.tensor([[1.0]]),
@@ -226,6 +227,28 @@ class VariationalSurvivalMoETests(unittest.TestCase):
                                   2.0 / scale, 1.0 / scale, 1.0 / scale]],
                                 dtype=torch.float32)
         torch.testing.assert_close(state, expected)
+
+    def test_risk_pair_router_state_has_three_terms(self):
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
+            router_state_mode="risk_pair", device="cpu"
+        )
+        risks = {
+            "R": torch.tensor([[1.0], [4.0]]),
+            "P": torch.tensor([[3.0], [2.0]]),
+            "RP": torch.tensor([[100.0], [-100.0]]),
+        }
+        unused_uncertainty = {
+            name: torch.ones(2, 1) for name in model.expert_names
+        }
+
+        state = model._make_router_state(
+            risks, unused_uncertainty, torch.ones(2, 3)
+        )
+
+        expected = torch.tensor([[1.0, 3.0, 2.0], [4.0, 2.0, 2.0]])
+        torch.testing.assert_close(state, expected)
+        self.assertEqual(model.router[0].in_features, 3)
 
     def test_representation_standardization_preserves_relative_log_risk(self):
         torch.manual_seed(3)
@@ -365,6 +388,7 @@ class VariationalSurvivalMoETests(unittest.TestCase):
         model = ConditionalVariationalSurvivalMoE(
             rad_dim=2, path_dim=2, hidden_dim=4, n_intervals=2,
             learning_rate=0.05,
+            router_state_mode="full_uncertainty",
             router_refit_epochs=30, mcmc_samples=2, mcmc_chains=2,
             device="cpu", verbose=False,
         )

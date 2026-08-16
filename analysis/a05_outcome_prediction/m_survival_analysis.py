@@ -2172,6 +2172,9 @@ class SurvivalAnalyzer:
             router_hidden_dim=model_params.get(
                 'variational_router_hidden_dim', 16
             ),
+            router_state_mode=model_params.get(
+                'variational_router_state', 'risk_pair'
+            ),
             n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
             hierarchical_prior_fraction=model_params.get(
@@ -2325,7 +2328,8 @@ class SurvivalAnalyzer:
         print(
             f"  Model dimensions: encoder/HMC="
             f"{bandit.encoder_hidden_dim}, router hidden="
-            f"{bandit.router_hidden_dim}"
+            f"{bandit.router_hidden_dim}, router state="
+            f"{bandit.router_state_mode} ({bandit.router_state_dim}D)"
         )
         print(
             f"  Baseline prior center: log-rate="
@@ -2434,6 +2438,8 @@ class SurvivalAnalyzer:
             'model_dimensions': {
                 'encoder_hidden_dim': bandit.encoder_hidden_dim,
                 'router_hidden_dim': bandit.router_hidden_dim,
+                'router_state_mode': bandit.router_state_mode,
+                'router_state_dim': bandit.router_state_dim,
             },
             'best_validation_terms': bandit.best_validation_terms_,
             'mcmc_diagnostics': bandit.mcmc_diagnostics_,
