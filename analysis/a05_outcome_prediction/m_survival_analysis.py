@@ -2168,7 +2168,7 @@ class SurvivalAnalyzer:
         bandit = ConditionalVariationalSurvivalMoE(
             rad_dim=X_rad_train.shape[1],
             path_dim=X_path_train.shape[1],
-            hidden_dim=model_params.get('variational_hidden_dim', 16),
+            hidden_dim=model_params.get('variational_hidden_dim', 8),
             n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
             hierarchical_prior_fraction=model_params.get(
