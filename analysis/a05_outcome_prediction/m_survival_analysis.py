@@ -2028,19 +2028,7 @@ class SurvivalAnalyzer:
             cox_patience=model_params.get('cox_patience', 20),
             cox_l1_ratio=model_params.get('cox_l1_ratio', 0.9),
             cox_gradient_clip=model_params.get('cox_gradient_clip', 10.0),
-            min_expert_weight=model_params.get('min_expert_weight', 0.01),
-            expert_specialization_strength=model_params.get(
-                'expert_specialization_strength', 0.5
-            ),
-            target_event_ess=model_params.get('target_event_ess', 50.0),
             policy_risk_clip=model_params.get('policy_risk_clip', 5.0),
-            reliability_floor=model_params.get('reliability_floor', 0.05),
-            reliability_prior_power=model_params.get(
-                'reliability_prior_power', 1.0
-            ),
-            policy_fallback_tolerance=model_params.get(
-                'policy_fallback_tolerance', 0.0
-            ),
             rp_cost_weight=model_params.get('rp_cost_weight', 0.0),
             rp_minimum_gain=model_params.get('rp_minimum_gain', 0.01),
             rp_bootstrap_samples=model_params.get('rp_bootstrap_samples', 500),
@@ -2052,7 +2040,10 @@ class SurvivalAnalyzer:
             ),
             gumbel_anneal_rate=model_params.get('gumbel_anneal_rate', 0.95),
             loss_type=model_params.get('policy_loss_type', 'adaptive'),
-            exploration_weight=model_params.get('exploration_weight', 0.0),
+            exploration_weight=model_params.get('exploration_weight', 0.1),
+            exploration_reliability_strength=model_params.get(
+                'exploration_reliability_strength', 5.0
+            ),
             entropy_weight=model_params.get('entropy_weight', 0.05),
             uncertainty_weight=model_params.get('uncertainty_weight', 0.0),
             temperature=model_params.get('policy_temperature', 1.0),

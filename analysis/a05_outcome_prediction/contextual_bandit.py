@@ -404,7 +404,7 @@ class BayesianWeightedCoxPLLoss(nn.Module):
 
 
 class AdaptiveWeightedCoxPLLoss(nn.Module):
-    """Cox policy loss with a reliability-informed exploration prior."""
+    """Cox policy loss with a configurable exploration target."""
     
     def __init__(self,
                  initial_exploration_weight=0.3,
@@ -653,6 +653,12 @@ class TorchCoxPH:
 
     @staticmethod
     def _prepare_risk_sets(X, T, E, weights):
+        # Case-weighted partial likelihood identifies only relative weights.
+        # Fix their arbitrary global scale inside the likelihood, while the EM
+        # interface continues to pass the raw responsibilities unchanged.
+        weights = weights / weights.mean().clamp_min(
+            torch.finfo(weights.dtype).tiny
+        )
         order = torch.argsort(T, descending=True, stable=True)
         X_sorted = X[order]
         T_sorted = T[order]
@@ -840,24 +846,8 @@ class ContextualBandit:
         Consecutive low-change steps before stopping Cox optimization
     cox_l1_ratio : float, default=0.9
         Elastic-net mixing parameter used by TorchCoxPH
-    min_expert_weight : float, default=0.01
-        Minimum M-step sample weight assigned to each survival expert
-    expert_specialization_strength : float, default=0.5
-        Maximum fraction of policy weighting used in an expert M-step. The
-        remainder is uniform global-cohort weighting.
-    target_event_ess : float, default=50.0
-        Weighted event effective sample size required to use the maximum
-        expert specialization strength.
     policy_risk_clip : float, default=5.0
         Absolute clipping bound after OOF centering and common-scale conversion.
-    reliability_floor : float, default=0.05
-        Lower bound for OOF reliability used by the action penalty.
-    reliability_prior_power : float, default=1.0
-        Power applied to OOF expert reliabilities before normalizing them into
-        the exploration prior.
-    policy_fallback_tolerance : float, default=0.0
-        Maximum validation C-index deficit allowed relative to the best single
-        expert before weighted expert updates are rejected.
     rp_cost_weight : float, default=1.0
         Strength of the evidence-based penalty on RP policy probability
     rp_minimum_gain : float, default=0.01
@@ -889,13 +879,7 @@ class ContextualBandit:
                  cox_patience=20,
                  cox_l1_ratio=0.9,
                  cox_gradient_clip=10.0,
-                 min_expert_weight=0.01,
-                 expert_specialization_strength=0.5,
-                 target_event_ess=50.0,
                  policy_risk_clip=5.0,
-                 reliability_floor=0.05,
-                 reliability_prior_power=1.0,
-                 policy_fallback_tolerance=0.0,
                  rp_cost_weight=1.0,
                  rp_minimum_gain=0.01,
                  rp_bootstrap_samples=500,
@@ -906,6 +890,7 @@ class ContextualBandit:
                  gumbel_anneal_rate=0.95,
                  loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
                  exploration_weight=0.1,
+                 exploration_reliability_strength=5.0,
                  entropy_weight=0.05,
                  uncertainty_weight=0.05,
                  temperature=1.0,
@@ -929,27 +914,9 @@ class ContextualBandit:
         self.cox_patience = cox_patience
         self.cox_l1_ratio = cox_l1_ratio
         self.cox_gradient_clip = cox_gradient_clip
-        if not 0.0 <= min_expert_weight < 1.0 / 3.0:
-            raise ValueError("min_expert_weight must be in [0, 1/3)")
-        self.min_expert_weight = min_expert_weight
-        if not 0.0 <= expert_specialization_strength <= 1.0:
-            raise ValueError("expert_specialization_strength must be in [0, 1]")
-        if target_event_ess <= 0:
-            raise ValueError("target_event_ess must be positive")
-        self.expert_specialization_strength = expert_specialization_strength
-        self.target_event_ess = target_event_ess
         if policy_risk_clip <= 0:
             raise ValueError("policy_risk_clip must be positive")
         self.policy_risk_clip = float(policy_risk_clip)
-        if not 0.0 < reliability_floor <= 1.0:
-            raise ValueError("reliability_floor must be in (0, 1]")
-        self.reliability_floor = float(reliability_floor)
-        if reliability_prior_power <= 0:
-            raise ValueError("reliability_prior_power must be positive")
-        if policy_fallback_tolerance < 0:
-            raise ValueError("policy_fallback_tolerance must be non-negative")
-        self.reliability_prior_power = float(reliability_prior_power)
-        self.policy_fallback_tolerance = float(policy_fallback_tolerance)
         if rp_cost_weight < 0:
             raise ValueError("rp_cost_weight must be non-negative")
         if rp_bootstrap_samples < 0:
@@ -971,6 +938,13 @@ class ContextualBandit:
         self.gumbel_anneal_rate = gumbel_anneal_rate
         self.loss_type = loss_type
         self.exploration_weight = exploration_weight
+        if exploration_reliability_strength < 0:
+            raise ValueError(
+                "exploration_reliability_strength must be non-negative"
+            )
+        self.exploration_reliability_strength = float(
+            exploration_reliability_strength
+        )
         self.entropy_weight = entropy_weight
         self.uncertainty_weight = uncertainty_weight
         self.temperature = temperature
@@ -1008,7 +982,7 @@ class ContextualBandit:
             )
     
     def _fit_policy_risk_reference(self, risks, fit_indices, E, T):
-        """Fit OOF centres, one shared robust scale, and reliability factors."""
+        """Fit OOF centres and one common robust risk scale."""
         fit_indices = np.asarray(fit_indices, dtype=np.int64)
         E = np.asarray(E, dtype=bool).reshape(-1)
         T = np.asarray(T, dtype=np.float32).reshape(-1)
@@ -1041,25 +1015,23 @@ class ContextualBandit:
         if not np.isfinite(common_scale) or common_scale <= 1e-8:
             common_scale = 1.0
 
-        signals = {
-            name: max(0.0, cindices[name] - 0.5) for name in names
-        }
-        best_signal = max(signals.values())
-        if best_signal <= 1e-8:
-            reliability = {name: 1.0 for name in names}
-        else:
-            reliability = {
-                name: float(np.clip(
-                    signals[name] / best_signal, self.reliability_floor, 1.0
-                ))
-                for name in names
-            }
+        cindex_values = np.asarray(
+            [cindices[name] for name in names], dtype=np.float64
+        )
+        reliability_logits = (
+            self.exploration_reliability_strength * cindex_values
+        )
+        reliability_logits -= reliability_logits.max()
+        reliability = np.exp(reliability_logits)
+        reliability /= reliability.sum()
 
         return {
             'centers': centers,
             'common_scale': common_scale,
-            'reliability': reliability,
             'cindex': cindices,
+            # This population-level OOF statistic is used only as the
+            # exploration target. It never rescales risks or vetoes a policy.
+            'reliability_prior': dict(zip(names, reliability.tolist())),
             'mad': mads,
             'clip': self.policy_risk_clip,
         }
@@ -1089,13 +1061,6 @@ class ContextualBandit:
             ),
         )
 
-    def _fallback_probs(self, n_samples):
-        if self.fallback_expert_ is None:
-            return None
-        probs = np.zeros((n_samples, 3), dtype=np.float32)
-        probs[:, self.fallback_expert_] = 1.0
-        return probs
-
     @staticmethod
     def _make_policy_state(R, P, RP):
         """Build the policy state on a common expert-risk scale."""
@@ -1106,7 +1071,7 @@ class ContextualBandit:
         return concordance_index(T, -risk, E.astype(bool))
 
     def _prepare_expert_fit_weights(self, policy_weights, events):
-        """Build stable mean-one global-plus-specialist Cox weights."""
+        """Pass raw soft responsibilities to the normalized Cox objective."""
         policy_weights = np.asarray(policy_weights, dtype=np.float64).reshape(-1)
         events = np.asarray(events, dtype=bool).reshape(-1)
         if policy_weights.shape != events.shape:
@@ -1114,30 +1079,19 @@ class ContextualBandit:
         if not np.isfinite(policy_weights).all() or np.any(policy_weights < 0):
             raise ValueError("policy_weights must be finite and non-negative")
 
-        mean_weight = policy_weights.mean()
-        if mean_weight <= 0:
-            normalized = np.ones_like(policy_weights)
-        else:
-            normalized = policy_weights / mean_weight
-
-        event_weights = normalized[events]
+        event_weights = policy_weights[events]
         squared_sum = np.square(event_weights).sum()
         event_ess = (
             float(event_weights.sum() ** 2 / squared_sum)
             if squared_sum > 0 else 0.0
         )
-        specialization = self.expert_specialization_strength * min(
-            1.0, event_ess / self.target_event_ess
-        )
-        fit_weights = (1.0 - specialization) + specialization * normalized
-        # Guard against accumulated floating-point error: equal mean weight
-        # keeps the elastic-net penalty scale comparable across experts.
-        fit_weights /= fit_weights.mean()
-        return np.ascontiguousarray(fit_weights, dtype=np.float32), {
+        # Keep the EM output unchanged here. TorchCoxPH fixes the otherwise
+        # arbitrary global case-weight scale inside its likelihood; patient-to-
+        # patient responsibility ratios remain exactly those of the policy.
+        return np.ascontiguousarray(policy_weights, dtype=np.float32), {
             'event_ess': event_ess,
-            'specialization': specialization,
-            'min_weight': float(fit_weights.min()),
-            'max_weight': float(fit_weights.max()),
+            'min_weight': float(policy_weights.min()),
+            'max_weight': float(policy_weights.max()),
         }
 
     def _compute_rp_cost(self, R, P, RP, E, T, bootstrap_indices=None,
@@ -1416,7 +1370,7 @@ class ContextualBandit:
         return loss.item()
 
     def _fit_policy_network(self, S, R, P, RP, E, T, train_idx, select_idx,
-                            rp_cost, reliability, verbose=True):
+                            rp_cost, verbose=True):
         """Fit policy with a shared selection set and restore one checkpoint."""
         train_tensors = [
             torch.as_tensor(np.ascontiguousarray(values[train_idx]),
@@ -1433,14 +1387,10 @@ class ContextualBandit:
         best_checkpoint = None
         patience_counter = 0
         patience = 10
-        reliability_tensor = torch.as_tensor(
-            reliability, dtype=torch.float32, device=self.device
-        ).reshape(1, 3)
-        exploration_prior = reliability_tensor.pow(
-            self.reliability_prior_power
-        )
-        exploration_prior = exploration_prior / exploration_prior.sum(
-            dim=1, keepdim=True
+        prior_by_name = self.policy_risk_reference['reliability_prior']
+        exploration_prior = torch.tensor(
+            [[prior_by_name[name] for name in ('R', 'P', 'RP')]],
+            dtype=torch.float32, device=self.device
         )
 
         for epoch in range(self.policy_epochs):
@@ -1518,7 +1468,7 @@ class ContextualBandit:
                     f"Exploitation Loss = {exploitation_loss:.4f}, "
                     f"Exploration Loss = {exploration_loss:.4f}, "
                     f"RP Penalty = {rp_penalty.item():.4f}, "
-                    f"Prior R/P/RP = "
+                    f"Exploration target R/P/RP = "
                     f"{exploration_prior[0, 0].item():.3f}/"
                     f"{exploration_prior[0, 1].item():.3f}/"
                     f"{exploration_prior[0, 2].item():.3f}, "
@@ -1591,7 +1541,6 @@ class ContextualBandit:
         self.cindex_history = []
         self.rp_cost_history = []
         self.policies = []
-        self.fallback_expert_ = None
 
         if self.random_state is not None:
             np.random.seed(self.random_state)
@@ -1708,7 +1657,6 @@ class ContextualBandit:
                 'w_rad': self.w_rad.copy(),
                 'w_path': self.w_path.copy(),
                 'w_rp': self.w_rp.copy(),
-                'fallback_expert': self.fallback_expert_,
                 'validation_cindex': validation_cindex,
             }
 
@@ -1787,17 +1735,13 @@ class ContextualBandit:
                 print(
                     "Policy risk reference: "
                     f"common scale={ref['common_scale']:.4f}; "
-                    f"reliability R={ref['reliability']['R']:.3f}, "
-                    f"P={ref['reliability']['P']:.3f}, "
-                    f"RP={ref['reliability']['RP']:.3f}"
+                    f"OOF C-index R={ref['cindex']['R']:.3f}, "
+                    f"P={ref['cindex']['P']:.3f}, "
+                    f"RP={ref['cindex']['RP']:.3f} (diagnostic only)"
                 )
             best_val_loss = self._fit_policy_network(
                 S_for_fit, R_for_fit, P_for_fit, RP_for_fit, E_train, T_train,
                 policy_train_idx, policy_select_idx, rp_cost,
-                [
-                    self.policy_risk_reference['reliability'][name]
-                    for name in ('R', 'P', 'RP')
-                ],
                 verbose=verbose
             )
             action_weights = self._get_policy_probs(
@@ -1851,28 +1795,18 @@ class ContextualBandit:
             self._reset_policy_optimization_state()
             aligned = fit_aligned_policy(verbose=True)
             experts_updated_since_policy = False
-            # Use smooth policy responsibilities for expert specialization,
+            # Use smooth policy responsibilities for direct expert weighting,
             # even when the policy itself is trained and deployed with hard
             # actions. This prevents small logit changes from discontinuously
             # moving a patient's Cox training weight between experts.
             policy_probs = aligned['soft_probs_oof']
-            floor = self.min_expert_weight
-            m_step_probs = policy_probs * (1.0 - 3.0 * floor) + floor
-            self.w_rad = m_step_probs[:, 0]
-            self.w_path = m_step_probs[:, 1]
-            self.w_rp = m_step_probs[:, 2]
+            self.w_rad = policy_probs[:, 0]
+            self.w_path = policy_probs[:, 1]
+            self.w_rp = policy_probs[:, 2]
 
-            expert_names = ('Rad', 'Path', 'RP')
-            best_expert = aligned['best_expert']
-            best_expert_cindex = aligned['expert_val_cindices'][best_expert]
-            policy_is_safe = (
-                aligned['val_cindex'] + self.policy_fallback_tolerance
-                >= best_expert_cindex
-            )
-            self.fallback_expert_ = None if policy_is_safe else best_expert
-            selection_cindex = (
-                aligned['val_cindex'] if policy_is_safe else best_expert_cindex
-            )
+            # The policy is always retained. Expert C-indices remain
+            # diagnostics and never veto exploration or the weighted M-step.
+            selection_cindex = aligned['val_cindex']
 
             self.validation_cindex_history.append(aligned['val_cindex'])
             self.cindex_history.append(selection_cindex)
@@ -1891,11 +1825,6 @@ class ContextualBandit:
                 f"Path: {aligned['expert_val_cindices'][1]:.4f}, "
                 f"RP: {aligned['expert_val_cindices'][2]:.4f}"
             )
-            if not policy_is_safe:
-                print(
-                    f"Policy rejected: using {expert_names[best_expert]} "
-                    f"fallback and skipping the weighted M-step"
-                )
 
             previous_best = best_em_cindex
             if selection_cindex > best_em_cindex:
@@ -1905,8 +1834,6 @@ class ContextualBandit:
                 no_improvement = 0
             else:
                 no_improvement += 1
-            if not policy_is_safe:
-                break
             if no_improvement >= em_patience:
                 print("EM convergence reached on fixed selection C-index")
                 break
@@ -1928,9 +1855,8 @@ class ContextualBandit:
                 )
                 expert_fit_weights[expert_name] = fit_weights
                 print(
-                    f"  {expert_name} stabilized weights: "
+                    f"  {expert_name} direct policy weights: "
                     f"event ESS={weight_info['event_ess']:.1f}, "
-                    f"rho={weight_info['specialization']:.3f}, "
                     f"range=[{weight_info['min_weight']:.3f}, "
                     f"{weight_info['max_weight']:.3f}]"
                 )
@@ -2009,23 +1935,11 @@ class ContextualBandit:
             print("\nFinal policy normalization on the last Cox experts...")
             self._reset_policy_optimization_state()
             aligned = fit_aligned_policy(verbose=False)
-            floor = self.min_expert_weight
-            final_m_step_probs = (
-                aligned['soft_probs_oof'] * (1.0 - 3.0 * floor) + floor
-            )
+            final_m_step_probs = aligned['soft_probs_oof']
             self.w_rad = final_m_step_probs[:, 0]
             self.w_path = final_m_step_probs[:, 1]
             self.w_rp = final_m_step_probs[:, 2]
-            best_expert = aligned['best_expert']
-            best_expert_cindex = aligned['expert_val_cindices'][best_expert]
-            policy_is_safe = (
-                aligned['val_cindex'] + self.policy_fallback_tolerance
-                >= best_expert_cindex
-            )
-            self.fallback_expert_ = None if policy_is_safe else best_expert
-            selection_cindex = (
-                aligned['val_cindex'] if policy_is_safe else best_expert_cindex
-            )
+            selection_cindex = aligned['val_cindex']
             self.validation_cindex_history.append(aligned['val_cindex'])
             self.cindex_history.append(selection_cindex)
             self.objective_history.append(-aligned['val_loss'])
@@ -2046,7 +1960,6 @@ class ContextualBandit:
         self.w_rad = best_em_checkpoint['w_rad']
         self.w_path = best_em_checkpoint['w_path']
         self.w_rp = best_em_checkpoint['w_rp']
-        self.fallback_expert_ = best_em_checkpoint['fallback_expert']
 
         print(
             f"\nEM completed. Best selected validation C-index: "
@@ -2070,7 +1983,7 @@ class ContextualBandit:
         Returns
         -------
         risk_scores : ndarray
-            Selected OOF-centred, reliability-shrunk relative risk
+            Selected OOF-centred, common-scale relative risk
         actions : ndarray
             Selected actions for each patient
         probs : ndarray
@@ -2083,11 +1996,6 @@ class ContextualBandit:
         RP = self._predict_risk(self.cox_rp, X_rp)
 
         R, P, RP = self._normalize_expert_risks(R, P, RP)
-        fallback_probs = self._fallback_probs(len(R))
-        if fallback_probs is not None:
-            actions = np.full(len(R), self.fallback_expert_, dtype=np.int64)
-            risk_all = np.column_stack([R, P, RP])
-            return risk_all[:, self.fallback_expert_], actions, fallback_probs
         S = self._make_policy_state(R, P, RP)
         
         # Get policy probabilities
@@ -2116,9 +2024,6 @@ class ContextualBandit:
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
         R, P, RP = self._normalize_expert_risks(R, P, RP)
-        fallback_probs = self._fallback_probs(len(R))
-        if fallback_probs is not None:
-            return fallback_probs
         S = self._make_policy_state(R, P, RP)
         return self._get_policy_probs(S)
     
@@ -2132,10 +2037,6 @@ class ContextualBandit:
         RP = self._predict_risk(self.cox_rp, X_rp)
 
         R, P, RP = self._normalize_expert_risks(R, P, RP)
-        fallback_probs = self._fallback_probs(len(R))
-        if fallback_probs is not None:
-            risk_all = np.column_stack([R, P, RP])
-            return risk_all[:, self.fallback_expert_], fallback_probs
         S = self._make_policy_state(R, P, RP)
         probs = self._get_policy_probs(S)
         
@@ -2224,5 +2125,3 @@ class ContextualBanditPipeline:
     
     def get_objective_history(self):
         return self.bandit.objective_history
-
-

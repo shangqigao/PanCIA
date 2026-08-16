@@ -1,55 +1,14 @@
 """Focused tests for TorchCoxPH without importing the monolithic analysis module."""
 
-import ast
-from pathlib import Path
 import unittest
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from lifelines.utils import concordance_index
-from sklearn.preprocessing import StandardScaler
-
-
-def _load_cox_classes():
-    """Load Cox classes so optional PanCIA dependencies are not required."""
-    source_path = (
-        Path(__file__).parents[1]
-        / "analysis"
-        / "a05_outcome_prediction"
-        / "m_survival_analysis.py"
-    )
-    tree = ast.parse(source_path.read_text())
-    class_nodes = [
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef)
-        and node.name in {
-            "PolicyNetwork", "WeightedCoxPLLoss", "TorchCoxPH",
-            "ContextualBandit", "ContextualBanditPipeline"
-        }
-    ]
-    namespace = {
-        "np": np,
-        "torch": torch,
-        "nn": nn,
-        "F": F,
-        "optim": optim,
-        "StandardScaler": StandardScaler,
-        "concordance_index": concordance_index,
-    }
-    module = ast.Module(body=class_nodes, type_ignores=[])
-    exec(compile(module, str(source_path), "exec"), namespace)
-    return (
-        namespace["TorchCoxPH"],
-        namespace["ContextualBandit"],
-        namespace["ContextualBanditPipeline"],
-    )
-
-
-TorchCoxPH, ContextualBandit, ContextualBanditPipeline = _load_cox_classes()
+from analysis.a05_outcome_prediction.contextual_bandit import (
+    ContextualBandit,
+    ContextualBanditPipeline,
+    TorchCoxPH,
+)
 
 
 def _synthetic_survival(seed=7, n_samples=80, n_features=6):
@@ -182,12 +141,8 @@ class TorchCoxPHTests(unittest.TestCase):
         np.testing.assert_allclose(state[:, 3], np.abs(R - P))
         self.assertTrue(np.isfinite(state).all())
 
-    def test_expert_fit_weights_are_mean_one_and_ess_adaptive(self):
-        bandit = ContextualBandit(
-            expert_specialization_strength=0.5,
-            target_event_ess=4.0,
-            device="cpu",
-        )
+    def test_expert_fit_weights_are_direct_policy_responsibilities(self):
+        bandit = ContextualBandit(device="cpu")
         policy_weights = np.array([0.1, 0.2, 0.8, 0.9], dtype=np.float32)
 
         high_ess_weights, high_info = bandit._prepare_expert_fit_weights(
@@ -197,11 +152,9 @@ class TorchCoxPHTests(unittest.TestCase):
             policy_weights, np.array([True, False, False, False])
         )
 
-        self.assertAlmostEqual(float(high_ess_weights.mean()), 1.0, places=6)
-        self.assertAlmostEqual(float(low_ess_weights.mean()), 1.0, places=6)
-        self.assertGreater(high_info['specialization'], low_info['specialization'])
-        self.assertLess(np.ptp(low_ess_weights), np.ptp(high_ess_weights))
-        self.assertGreater(low_ess_weights.min(), 0.0)
+        np.testing.assert_allclose(high_ess_weights, policy_weights)
+        np.testing.assert_allclose(low_ess_weights, policy_weights)
+        self.assertGreater(high_info['event_ess'], low_info['event_ess'])
 
     def test_uniform_policy_produces_uniform_expert_fit_weights(self):
         bandit = ContextualBandit(device="cpu")
@@ -210,7 +163,7 @@ class TorchCoxPHTests(unittest.TestCase):
             np.array([True] * 5 + [False] * 5),
         )
 
-        np.testing.assert_allclose(weights, np.ones(10, dtype=np.float32))
+        np.testing.assert_allclose(weights, np.full(10, 0.2, dtype=np.float32))
         self.assertAlmostEqual(info['event_ess'], 5.0)
 
     def test_weighted_breslow_loss_with_ties_matches_manual_value(self):
@@ -221,10 +174,28 @@ class TorchCoxPHTests(unittest.TestCase):
         beta = torch.tensor([0.5])
 
         actual = TorchCoxPH._breslow_negative_log_likelihood(beta, X, T, E, W)
-        denominator = torch.exp(torch.tensor(0.5)) + 2 * torch.exp(torch.tensor(1.0))
+        # TorchCoxPH fixes the arbitrary case-weight scale at mean weight one.
+        denominator = (
+            torch.exp(torch.tensor(0.5))
+            + 2 * torch.exp(torch.tensor(1.0))
+        ) / W.mean()
         expected = -(0.5 + 2 * 1.0 - 3 * torch.log(denominator)) / 3
 
         torch.testing.assert_close(actual, expected)
+
+    def test_weighted_breslow_loss_is_invariant_to_global_weight_scale(self):
+        X = torch.tensor([[0.2], [0.8], [-0.4], [1.1]])
+        T = torch.tensor([4.0, 3.0, 2.0, 1.0])
+        E = torch.tensor([1.0, 0.0, 1.0, 1.0])
+        W = torch.tensor([0.15, 0.35, 0.70, 0.25])
+        beta = torch.tensor([0.6])
+
+        raw = TorchCoxPH._breslow_negative_log_likelihood(beta, X, T, E, W)
+        scaled = TorchCoxPH._breslow_negative_log_likelihood(
+            beta, X, T, E, 17.0 * W
+        )
+
+        torch.testing.assert_close(raw, scaled)
 
     def test_fit_recovers_risk_order_and_supports_warm_start(self):
         X, T, E, true_beta = _synthetic_survival()
@@ -275,7 +246,7 @@ class TorchCoxPHTests(unittest.TestCase):
 
         loss = TorchCoxPH._breslow_negative_log_likelihood(beta, X, T, E, W)
         self.assertTrue(torch.isfinite(loss).item())
-        self.assertAlmostEqual(loss.item(), 0.0, places=6)
+        self.assertAlmostEqual(loss.item(), float(np.log(3.0)), places=6)
 
     def test_all_censored_or_zero_weighted_events_are_rejected(self):
         X = np.ones((4, 2), dtype=np.float32)
@@ -376,9 +347,10 @@ class TorchCoxPHTests(unittest.TestCase):
         self.assertEqual(single.shape, (1,))
         self.assertAlmostEqual(single[0], batch[5], places=6)
         self.assertTrue(np.isfinite(single).all())
-        self.assertEqual(reference["reliability"]["P"], 1.0)
-        self.assertGreater(reference["reliability"]["P"],
-                           reference["reliability"]["R"])
+        prior = reference["reliability_prior"]
+        self.assertAlmostEqual(sum(prior.values()), 1.0, places=6)
+        self.assertGreater(prior["P"], prior["R"])
+        self.assertGreater(reference["cindex"]["P"], reference["cindex"]["R"])
         extremes = bandit._apply_policy_risk_reference(
             np.array([-1e6, 1e6], dtype=np.float32), "P", reference
         )
@@ -402,42 +374,9 @@ class TorchCoxPHTests(unittest.TestCase):
             risks["P"], "P", reference
         )
 
-        # All three rankings have equal reliability, so the shared scale must
-        # preserve P's fourfold raw dispersion relative to R.
+        # The shared scale preserves P's fourfold raw dispersion relative to R.
         self.assertAlmostEqual(
             float(np.std(transformed_p) / np.std(transformed_r)), 4.0, places=5
-        )
-
-    def test_fallback_expert_overrides_hard_and_soft_policy_predictions(self):
-        class FakeModel:
-            def __init__(self, risk):
-                self.risk = np.asarray(risk, dtype=np.float32)
-
-            def predict_log_partial_hazard(self, X):
-                return self.risk[:len(X)]
-
-        bandit = ContextualBandit(device="cpu")
-        bandit.cox_rad = FakeModel([1.0, 2.0])
-        bandit.cox_path = FakeModel([3.0, 4.0])
-        bandit.cox_rp = FakeModel([5.0, 6.0])
-        bandit.policy_risk_reference = {
-            "centers": {"R": 0.0, "P": 0.0, "RP": 0.0},
-            "common_scale": 1.0,
-            "reliability": {"R": 1.0, "P": 1.0, "RP": 1.0},
-            "clip": 10.0,
-        }
-        bandit.fallback_expert_ = 1
-        X = np.zeros((2, 1), dtype=np.float32)
-
-        hard_risk, actions, hard_probs = bandit.predict_risk(X, X)
-        soft_risk, soft_probs = bandit.get_weighted_risk(X, X)
-
-        np.testing.assert_allclose(hard_risk, [3.0, 4.0])
-        np.testing.assert_allclose(soft_risk, hard_risk)
-        np.testing.assert_array_equal(actions, [1, 1])
-        np.testing.assert_array_equal(hard_probs, soft_probs)
-        np.testing.assert_array_equal(
-            soft_probs, [[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]]
         )
 
     def test_rp_cost_is_zero_only_for_reliable_improvement(self):
