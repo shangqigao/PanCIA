@@ -1080,7 +1080,7 @@ class ContextualBandit:
         return concordance_index(T, -risk, E.astype(bool))
 
     def _prepare_expert_fit_weights(self, policy_weights, events):
-        """Pass raw soft responsibilities to the normalized Cox objective."""
+        """Pass the floored hard policy weights to the Cox objective."""
         policy_weights = np.asarray(policy_weights, dtype=np.float64).reshape(-1)
         events = np.asarray(events, dtype=bool).reshape(-1)
         if policy_weights.shape != events.shape:
@@ -1392,7 +1392,6 @@ class ContextualBandit:
             for values in (S, R, P, RP, E, T)
         ]
         best_val_loss = float('inf')
-        best_val_cindex = -np.inf
         best_checkpoint = None
         patience_counter = 0
         patience = 10
@@ -1434,20 +1433,11 @@ class ContextualBandit:
                     components['total_loss'].item() - exploitation_loss
                 )
 
-            # Select epochs by the complete regularized objective so adequate
-            # exploration is retained. C-index only breaks effectively tied
-            # validation losses.
-            loss_tolerance = 1e-6
-            improved = (
-                val_loss < best_val_loss - loss_tolerance
-                or (
-                    abs(val_loss - best_val_loss) <= loss_tolerance
-                    and val_cindex > best_val_cindex
-                )
-            )
+            # Historical policy selection: validation loss is the only epoch
+            # selection criterion. C-index remains a diagnostic.
+            improved = val_loss < best_val_loss
             if improved:
                 best_val_loss = val_loss
-                best_val_cindex = val_cindex
                 best_checkpoint = {
                     'policy': {
                         key: value.detach().cpu().clone()
@@ -1792,9 +1782,9 @@ class ContextualBandit:
             print(f"Training policy network for {self.policy_epochs} epochs...")
             aligned = fit_aligned_policy(verbose=True)
             experts_updated_since_policy = False
-            # Original M-step construction: deterministic soft probabilities
-            # on full-fit states, followed by a small uniform floor.
-            policy_probs = aligned['soft_probs']
+            # July-22 M-step: deterministic one-hot full-fit assignments,
+            # followed by a small uniform floor.
+            policy_probs = aligned['probs']
             floor = self.min_expert_weight
             policy_probs = policy_probs * (1.0 - 3.0 * floor) + floor
             self.w_rad = policy_probs[:, 0]
@@ -1928,7 +1918,7 @@ class ContextualBandit:
         if experts_updated_since_policy:
             print("\nFinal policy normalization on the last Cox experts...")
             aligned = fit_aligned_policy(verbose=False)
-            final_m_step_probs = aligned['soft_probs']
+            final_m_step_probs = aligned['probs']
             floor = self.min_expert_weight
             final_m_step_probs = (
                 final_m_step_probs * (1.0 - 3.0 * floor) + floor
