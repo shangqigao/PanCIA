@@ -2028,6 +2028,7 @@ class SurvivalAnalyzer:
             cox_patience=model_params.get('cox_patience', 20),
             cox_l1_ratio=model_params.get('cox_l1_ratio', 0.9),
             cox_gradient_clip=model_params.get('cox_gradient_clip', 10.0),
+            min_expert_weight=model_params.get('min_expert_weight', 0.01),
             policy_risk_clip=model_params.get('policy_risk_clip', 5.0),
             rp_cost_weight=model_params.get('rp_cost_weight', 0.0),
             rp_minimum_gain=model_params.get('rp_minimum_gain', 0.01),

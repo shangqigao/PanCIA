@@ -86,7 +86,7 @@ class TorchCoxPHTests(unittest.TestCase):
             device="cpu",
         )
         bandit._init_policy_network()
-        states = torch.randn(12, 4)
+        states = torch.randn(12, 3)
         actions, soft_probs = bandit._policy_outputs(states, stochastic=True)
 
         torch.testing.assert_close(actions.sum(dim=1), torch.ones(12))
@@ -117,7 +117,7 @@ class TorchCoxPHTests(unittest.TestCase):
             hard_policy=True, loss_type="weighted", device="cpu"
         )
         bandit._init_policy_network()
-        states = np.random.default_rng(4).normal(size=(10, 4)).astype(np.float32)
+        states = np.random.default_rng(4).normal(size=(10, 3)).astype(np.float32)
 
         soft = bandit._get_policy_probs(states, hard=False)
         hard = bandit._get_policy_probs(states, hard=True)
@@ -125,7 +125,7 @@ class TorchCoxPHTests(unittest.TestCase):
         np.testing.assert_array_equal(np.argmax(hard, axis=1), np.argmax(soft, axis=1))
         np.testing.assert_allclose(hard.sum(axis=1), 1.0)
 
-    def test_policy_state_contains_all_risks_and_unimodal_difference(self):
+    def test_policy_state_uses_original_unimodal_risk_triplet(self):
         rng = np.random.default_rng(9)
         bandit = ContextualBandit(device="cpu")
         R = rng.normal(size=20).astype(np.float32)
@@ -134,11 +134,10 @@ class TorchCoxPHTests(unittest.TestCase):
 
         state = bandit._make_policy_state(R, P, RP)
 
-        self.assertEqual(state.shape, (20, 4))
+        self.assertEqual(state.shape, (20, 3))
         np.testing.assert_allclose(state[:, 0], R)
         np.testing.assert_allclose(state[:, 1], P)
-        np.testing.assert_allclose(state[:, 2], RP)
-        np.testing.assert_allclose(state[:, 3], np.abs(R - P))
+        np.testing.assert_allclose(state[:, 2], np.abs(R - P))
         self.assertTrue(np.isfinite(state).all())
 
     def test_expert_fit_weights_are_direct_policy_responsibilities(self):
@@ -174,16 +173,15 @@ class TorchCoxPHTests(unittest.TestCase):
         beta = torch.tensor([0.5])
 
         actual = TorchCoxPH._breslow_negative_log_likelihood(beta, X, T, E, W)
-        # TorchCoxPH fixes the arbitrary case-weight scale at mean weight one.
         denominator = (
             torch.exp(torch.tensor(0.5))
             + 2 * torch.exp(torch.tensor(1.0))
-        ) / W.mean()
+        )
         expected = -(0.5 + 2 * 1.0 - 3 * torch.log(denominator)) / 3
 
         torch.testing.assert_close(actual, expected)
 
-    def test_weighted_breslow_loss_is_invariant_to_global_weight_scale(self):
+    def test_original_weighted_breslow_objective_retains_weight_scale(self):
         X = torch.tensor([[0.2], [0.8], [-0.4], [1.1]])
         T = torch.tensor([4.0, 3.0, 2.0, 1.0])
         E = torch.tensor([1.0, 0.0, 1.0, 1.0])
@@ -195,7 +193,7 @@ class TorchCoxPHTests(unittest.TestCase):
             beta, X, T, E, 17.0 * W
         )
 
-        torch.testing.assert_close(raw, scaled)
+        torch.testing.assert_close(scaled, raw + torch.log(torch.tensor(17.0)))
 
     def test_fit_recovers_risk_order_and_supports_warm_start(self):
         X, T, E, true_beta = _synthetic_survival()
@@ -246,7 +244,7 @@ class TorchCoxPHTests(unittest.TestCase):
 
         loss = TorchCoxPH._breslow_negative_log_likelihood(beta, X, T, E, W)
         self.assertTrue(torch.isfinite(loss).item())
-        self.assertAlmostEqual(loss.item(), float(np.log(3.0)), places=6)
+        self.assertAlmostEqual(loss.item(), 0.0, places=6)
 
     def test_all_censored_or_zero_weighted_events_are_rejected(self):
         X = np.ones((4, 2), dtype=np.float32)
@@ -355,9 +353,8 @@ class TorchCoxPHTests(unittest.TestCase):
             np.array([-1e6, 1e6], dtype=np.float32), "P", reference
         )
         self.assertTrue(np.isfinite(extremes).all())
-        np.testing.assert_allclose(extremes, [-5.0, 5.0])
 
-    def test_policy_risk_reference_uses_one_common_scale(self):
+    def test_policy_risk_reference_uses_separate_expert_z_scores(self):
         times = np.arange(1, 21, dtype=np.float32)
         events = np.ones(20, dtype=bool)
         base = np.linspace(-1.0, 1.0, 20, dtype=np.float32)
@@ -374,9 +371,9 @@ class TorchCoxPHTests(unittest.TestCase):
             risks["P"], "P", reference
         )
 
-        # The shared scale preserves P's fourfold raw dispersion relative to R.
+        # Historical normalization maps every expert to unit variance.
         self.assertAlmostEqual(
-            float(np.std(transformed_p) / np.std(transformed_r)), 4.0, places=5
+            float(np.std(transformed_p) / np.std(transformed_r)), 1.0, places=5
         )
 
     def test_rp_cost_is_zero_only_for_reliable_improvement(self):

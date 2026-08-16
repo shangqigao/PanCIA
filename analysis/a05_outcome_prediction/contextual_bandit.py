@@ -653,12 +653,6 @@ class TorchCoxPH:
 
     @staticmethod
     def _prepare_risk_sets(X, T, E, weights):
-        # Case-weighted partial likelihood identifies only relative weights.
-        # Fix their arbitrary global scale inside the likelihood, while the EM
-        # interface continues to pass the raw responsibilities unchanged.
-        weights = weights / weights.mean().clamp_min(
-            torch.finfo(weights.dtype).tiny
-        )
         order = torch.argsort(T, descending=True, stable=True)
         X_sorted = X[order]
         T_sorted = T[order]
@@ -879,6 +873,7 @@ class ContextualBandit:
                  cox_patience=20,
                  cox_l1_ratio=0.9,
                  cox_gradient_clip=10.0,
+                 min_expert_weight=0.01,
                  policy_risk_clip=5.0,
                  rp_cost_weight=1.0,
                  rp_minimum_gain=0.01,
@@ -914,6 +909,9 @@ class ContextualBandit:
         self.cox_patience = cox_patience
         self.cox_l1_ratio = cox_l1_ratio
         self.cox_gradient_clip = cox_gradient_clip
+        if not 0.0 <= min_expert_weight < 1.0 / 3.0:
+            raise ValueError("min_expert_weight must be in [0, 1/3)")
+        self.min_expert_weight = float(min_expert_weight)
         if policy_risk_clip <= 0:
             raise ValueError("policy_risk_clip must be positive")
         self.policy_risk_clip = float(policy_risk_clip)
@@ -981,39 +979,36 @@ class ContextualBandit:
                 max_exploration_weight=0.5,
             )
     
-    def _fit_policy_risk_reference(self, risks, fit_indices, E, T):
-        """Fit OOF centres and one common robust risk scale."""
+    def _fit_policy_risk_reference(self, risks, fit_indices, E, T,
+                                   reliability_risks=None):
+        """Fit separate full-risk z-scores and an OOF reliability prior."""
         fit_indices = np.asarray(fit_indices, dtype=np.int64)
         E = np.asarray(E, dtype=bool).reshape(-1)
         T = np.asarray(T, dtype=np.float32).reshape(-1)
         names = ('R', 'P', 'RP')
-        selected = {}
         centers = {}
-        mads = {}
+        scales = {}
         cindices = {}
+
+        if reliability_risks is None:
+            reliability_risks = risks
 
         for name in names:
             values = np.asarray(risks[name], dtype=np.float32).reshape(-1)
             if len(values) != len(T):
                 raise ValueError("OOF risks and survival outcomes must align")
-            values = values[fit_indices]
-            if values.size < 2 or not np.isfinite(values).all():
-                raise ValueError("Policy risk reference requires finite OOF risks")
-            selected[name] = values
-            centers[name] = float(np.median(values))
-            mads[name] = float(np.median(np.abs(values - centers[name])))
+            fit_values = values[fit_indices]
+            if fit_values.size < 2 or not np.isfinite(fit_values).all():
+                raise ValueError("Policy risk reference requires finite risks")
+            centers[name] = float(np.mean(fit_values))
+            scales[name] = max(float(np.std(fit_values)), 1e-6)
+            reliability_values = np.asarray(
+                reliability_risks[name], dtype=np.float32
+            ).reshape(-1)
             cindices[name] = float(self._risk_cindex(
-                values, E[fit_indices], T[fit_indices]
+                reliability_values[fit_indices],
+                E[fit_indices], T[fit_indices]
             ))
-
-        common_scale = 1.4826 * float(np.median(list(mads.values())))
-        if not np.isfinite(common_scale) or common_scale <= 1e-8:
-            pooled_centered = np.concatenate([
-                selected[name] - centers[name] for name in names
-            ])
-            common_scale = float(np.std(pooled_centered))
-        if not np.isfinite(common_scale) or common_scale <= 1e-8:
-            common_scale = 1.0
 
         cindex_values = np.asarray(
             [cindices[name] for name in names], dtype=np.float64
@@ -1027,13 +1022,11 @@ class ContextualBandit:
 
         return {
             'centers': centers,
-            'common_scale': common_scale,
+            'scales': scales,
             'cindex': cindices,
             # This population-level OOF statistic is used only as the
             # exploration target. It never rescales risks or vetoes a policy.
             'reliability_prior': dict(zip(names, reliability.tolist())),
-            'mad': mads,
-            'clip': self.policy_risk_clip,
         }
 
     @staticmethod
@@ -1042,10 +1035,9 @@ class ContextualBandit:
         risk = np.asarray(risk, dtype=np.float32)
         if not np.isfinite(risk).all():
             raise ValueError("Risk values must be finite")
-        centered = risk - reference['centers'][expert_name]
-        transformed = centered / reference['common_scale']
-        return np.clip(
-            transformed, -reference['clip'], reference['clip']
+        return (
+            (risk - reference['centers'][expert_name])
+            / reference['scales'][expert_name]
         ).astype(np.float32)
 
     def _normalize_expert_risks(self, R, P, RP):
@@ -1063,8 +1055,8 @@ class ContextualBandit:
 
     @staticmethod
     def _make_policy_state(R, P, RP):
-        """Build the policy state on a common expert-risk scale."""
-        return np.column_stack([R, P, RP, np.abs(R - P)]).astype(np.float32)
+        """Build the original compact policy state."""
+        return np.column_stack([R, P, np.abs(R - P)]).astype(np.float32)
 
     @staticmethod
     def _risk_cindex(risk, E, T):
@@ -1491,7 +1483,7 @@ class ContextualBandit:
     def _init_policy_network(self):
         """Initialize the policy network and optimizer."""
         self.policy_network = PolicyNetwork(
-            input_dim=4,
+            input_dim=3,
             hidden_dim=self.hidden_dim,
             output_dim=3,
             dropout_rate=0.1
@@ -1688,25 +1680,19 @@ class ContextualBandit:
                 'P': self.cox_path.oof_risk_,
                 'RP': self.cox_rp.oof_risk_,
             }
+            raw_full = {
+                'R': self.R_curr,
+                'P': self.P_curr,
+                'RP': self.RP_curr,
+            }
             self.policy_risk_reference = self._fit_policy_risk_reference(
-                raw_oof, policy_train_idx, E_train, T_train
+                raw_full, policy_train_idx, E_train, T_train,
+                reliability_risks=raw_oof
             )
 
-            # The policy is trained and validated entirely on OOF expert risks.
-            # OOF risks also produce M-step responsibilities. Full-fit risks
-            # are retained for synchronized diagnostics and final prediction,
-            # not for weighting their own training observations.
-            R_for_fit = self._apply_policy_risk_reference(
-                raw_oof['R'], 'R', self.policy_risk_reference
-            )
-            P_for_fit = self._apply_policy_risk_reference(
-                raw_oof['P'], 'P', self.policy_risk_reference
-            )
-            RP_for_fit = self._apply_policy_risk_reference(
-                raw_oof['RP'], 'RP', self.policy_risk_reference
-            )
-            S_for_fit = self._make_policy_state(R_for_fit, P_for_fit, RP_for_fit)
-
+            # Original hybrid construction: train the policy on current
+            # full-fit risks and substitute OOF risks only on the held-out
+            # policy-selection subset.
             R_policy = self._apply_policy_risk_reference(
                 self.R_curr, 'R', self.policy_risk_reference
             )
@@ -1717,6 +1703,17 @@ class ContextualBandit:
                 self.RP_curr, 'RP', self.policy_risk_reference
             )
             S_policy = self._make_policy_state(R_policy, P_policy, RP_policy)
+            R_for_fit = R_policy.copy()
+            P_for_fit = P_policy.copy()
+            RP_for_fit = RP_policy.copy()
+            for name, target in (
+                ('R', R_for_fit), ('P', P_for_fit), ('RP', RP_for_fit)
+            ):
+                transformed_oof = self._apply_policy_risk_reference(
+                    raw_oof[name], name, self.policy_risk_reference
+                )
+                target[policy_select_idx] = transformed_oof[policy_select_idx]
+            S_for_fit = self._make_policy_state(R_for_fit, P_for_fit, RP_for_fit)
 
             self.rp_cost_history.append(rp_cost)
             if verbose:
@@ -1734,7 +1731,10 @@ class ContextualBandit:
                 ref = self.policy_risk_reference
                 print(
                     "Policy risk reference: "
-                    f"common scale={ref['common_scale']:.4f}; "
+                    "separate full-fit z-scales "
+                    f"R/P/RP={ref['scales']['R']:.4f}/"
+                    f"{ref['scales']['P']:.4f}/"
+                    f"{ref['scales']['RP']:.4f}; "
                     f"OOF C-index R={ref['cindex']['R']:.3f}, "
                     f"P={ref['cindex']['P']:.3f}, "
                     f"RP={ref['cindex']['RP']:.3f} (diagnostic only)"
@@ -1748,7 +1748,6 @@ class ContextualBandit:
                 S_policy, hard=self.hard_policy
             )
             soft_probs = self._get_policy_probs(S_policy, hard=False)
-            soft_probs_oof = self._get_policy_probs(S_for_fit, hard=False)
             action_select = self._get_policy_probs(
                 S_for_fit[policy_select_idx], hard=self.hard_policy
             )
@@ -1775,7 +1774,6 @@ class ContextualBandit:
                 'RP': RP_policy,
                 'probs': action_weights,
                 'soft_probs': soft_probs,
-                'soft_probs_oof': soft_probs_oof,
                 'rp_cost': rp_cost,
                 'val_loss': best_val_loss,
                 'val_cindex': selection_cindex,
@@ -1795,11 +1793,11 @@ class ContextualBandit:
             self._reset_policy_optimization_state()
             aligned = fit_aligned_policy(verbose=True)
             experts_updated_since_policy = False
-            # Use smooth policy responsibilities for direct expert weighting,
-            # even when the policy itself is trained and deployed with hard
-            # actions. This prevents small logit changes from discontinuously
-            # moving a patient's Cox training weight between experts.
-            policy_probs = aligned['soft_probs_oof']
+            # Original M-step construction: deterministic soft probabilities
+            # on full-fit states, followed by a small uniform floor.
+            policy_probs = aligned['soft_probs']
+            floor = self.min_expert_weight
+            policy_probs = policy_probs * (1.0 - 3.0 * floor) + floor
             self.w_rad = policy_probs[:, 0]
             self.w_path = policy_probs[:, 1]
             self.w_rp = policy_probs[:, 2]
@@ -1935,7 +1933,11 @@ class ContextualBandit:
             print("\nFinal policy normalization on the last Cox experts...")
             self._reset_policy_optimization_state()
             aligned = fit_aligned_policy(verbose=False)
-            final_m_step_probs = aligned['soft_probs_oof']
+            final_m_step_probs = aligned['soft_probs']
+            floor = self.min_expert_weight
+            final_m_step_probs = (
+                final_m_step_probs * (1.0 - 3.0 * floor) + floor
+            )
             self.w_rad = final_m_step_probs[:, 0]
             self.w_path = final_m_step_probs[:, 1]
             self.w_rp = final_m_step_probs[:, 2]
