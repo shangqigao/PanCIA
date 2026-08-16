@@ -1575,14 +1575,14 @@ class ContextualBandit:
         print(f"Training Radiomic model...")
         self.cox_rad, _ = self.train_survival_model(
             X_rad, T_train, E_train, alpha_range=self.alpha_range,
-            model_key='radiomics', alpha_selection_indices=policy_train_idx
+            model_key='radiomics'
         )
         R_train = self._predict_risk(self.cox_rad, X_rad)
         
         print(f"Training Pathomic model...")
         self.cox_path, _ = self.train_survival_model(
             X_path, T_train, E_train, alpha_range=self.alpha_range,
-            model_key='pathomics', alpha_selection_indices=policy_train_idx
+            model_key='pathomics'
         )
         P_train = self._predict_risk(self.cox_path, X_path)
         
@@ -1590,7 +1590,7 @@ class ContextualBandit:
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         self.cox_rp, _ = self.train_survival_model(
             X_rp, T_train, E_train, alpha_range=self.alpha_range,
-            model_key='radiopathomics', alpha_selection_indices=policy_train_idx
+            model_key='radiopathomics'
         )
         RP_train = self._predict_risk(self.cox_rp, X_rp)
         
@@ -1862,8 +1862,7 @@ class ContextualBandit:
             print(f"  Weighted Radiomic model...")
             self.cox_rad, _ = self.train_survival_model(
                 X_rad, T_train, E_train, weights=expert_fit_weights['Rad'],
-                alpha_range=self.alpha_range, model_key='radiomics',
-                alpha_selection_indices=policy_train_idx
+                alpha_range=self.alpha_range, model_key='radiomics'
             )
             R_new = self._predict_risk(self.cox_rad, X_rad)
             
@@ -1871,8 +1870,7 @@ class ContextualBandit:
             print(f"  Weighted Pathomic model...")
             self.cox_path, _ = self.train_survival_model(
                 X_path, T_train, E_train, weights=expert_fit_weights['Path'],
-                alpha_range=self.alpha_range, model_key='pathomics',
-                alpha_selection_indices=policy_train_idx
+                alpha_range=self.alpha_range, model_key='pathomics'
             )
             P_new = self._predict_risk(self.cox_path, X_path)
             
@@ -1880,8 +1878,7 @@ class ContextualBandit:
             print(f"  Weighted Fusion (RP) model...")
             self.cox_rp, _ = self.train_survival_model(
                 X_rp, T_train, E_train, weights=expert_fit_weights['RP'],
-                alpha_range=self.alpha_range, model_key='radiopathomics',
-                alpha_selection_indices=policy_train_idx
+                alpha_range=self.alpha_range, model_key='radiopathomics'
             )
             RP_new = self._predict_risk(self.cox_rp, X_rp)
             
