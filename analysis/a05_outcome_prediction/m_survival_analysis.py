@@ -2011,9 +2011,9 @@ class SurvivalAnalyzer:
 
         bandit = ContextualBandit(
             alpha_range=model_params.get(
-                'alpha_range', [0.001, 0.01, 0.1, 1.0, 10.0]
+                'alpha_range', [0.001, 0.01, 0.1, 1.0]
             ),
-            max_iterations=model_params.get('em_max_iterations', 10),
+            max_iterations=model_params.get('em_max_iterations', 20),
             convergence_threshold=model_params.get(
                 'convergence_threshold', 0.001
             ),
@@ -2046,7 +2046,7 @@ class SurvivalAnalyzer:
             uncertainty_weight=model_params.get('uncertainty_weight', 0.0),
             temperature=model_params.get('policy_temperature', 1.0),
             device=model_params.get('device', 'cuda'),
-            random_state=model_params.get('random_state', split_idx),
+            random_state=model_params.get('random_state', 42),
         )
         pipeline = ContextualBanditPipeline(
             bandit, use_soft_ensemble=False
@@ -2233,7 +2233,7 @@ class SurvivalAnalyzer:
             verbose=model_params.get('variational_verbose', True),
             log_every=model_params.get('variational_log_every', 10),
             device=model_params.get('device', 'cuda'),
-            random_state=model_params.get('random_state', split_idx),
+            random_state=model_params.get('random_state', 42),
         )
         pipeline = ConditionalVariationalSurvivalPipeline(
             bandit, hard=True,
