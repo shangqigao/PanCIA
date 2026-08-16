@@ -2168,7 +2168,10 @@ class SurvivalAnalyzer:
         bandit = ConditionalVariationalSurvivalMoE(
             rad_dim=X_rad_train.shape[1],
             path_dim=X_path_train.shape[1],
-            hidden_dim=model_params.get('variational_hidden_dim', 8),
+            hidden_dim=model_params.get('variational_hidden_dim', 32),
+            router_hidden_dim=model_params.get(
+                'variational_router_hidden_dim', 8
+            ),
             n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
             hierarchical_prior_fraction=model_params.get(
@@ -2223,7 +2226,12 @@ class SurvivalAnalyzer:
             device=model_params.get('device', 'cuda'),
             random_state=model_params.get('random_state', split_idx),
         )
-        pipeline = ConditionalVariationalSurvivalPipeline(bandit, hard=True)
+        pipeline = ConditionalVariationalSurvivalPipeline(
+            bandit, hard=True,
+            embedding_knn_neighbors=model_params.get(
+                'embedding_knn_neighbors', 20
+            ),
+        )
 
         # Fit
         pipeline.fit(X_rad_train, X_path_train, tr_y)
@@ -2315,6 +2323,11 @@ class SurvivalAnalyzer:
         )
         print(f"  Neural initialization epochs: {len(bandit.history_)}")
         print(
+            f"  Model dimensions: encoder/HMC="
+            f"{bandit.encoder_hidden_dim}, router hidden="
+            f"{bandit.router_hidden_dim}"
+        )
+        print(
             f"  Baseline prior center: log-rate="
             f"{bandit.baseline_prior_location_:.4f} "
             f"(rate={np.exp(bandit.baseline_prior_location_):.6g} per time unit)"
@@ -2333,6 +2346,18 @@ class SurvivalAnalyzer:
             + "/".join(f"{value:.4f}" for value in cv_diag['mean_sd'])
             + f", fitted expert sets={cv_diag['n_models']}"
         )
+        for modality, diagnostic in (
+            pipeline.embedding_distance_diagnostics_.items()
+        ):
+            print(
+                f"  Embedding cosine KNN {modality} "
+                f"(K={diagnostic['n_neighbors']}): distance q05/50/95="
+                f"{diagnostic['distance_q05']:.4f}/"
+                f"{diagnostic['distance_q50']:.4f}/"
+                f"{diagnostic['distance_q95']:.4f}, concentration="
+                f"{diagnostic['distance_concentration']:.3f}, max hub count="
+                f"{diagnostic['neighbour_occurrence_max']}"
+            )
         print(
             f"  HMC router risk reference: common scale="
             f"{float(bandit.hmc_risk_scale_):.4f}"
@@ -2406,6 +2431,10 @@ class SurvivalAnalyzer:
             'duration': te_y["duration"].tolist(),
             'training_history': bandit.history_,
             'best_epoch': bandit.best_epoch_,
+            'model_dimensions': {
+                'encoder_hidden_dim': bandit.encoder_hidden_dim,
+                'router_hidden_dim': bandit.router_hidden_dim,
+            },
             'best_validation_terms': bandit.best_validation_terms_,
             'mcmc_diagnostics': bandit.mcmc_diagnostics_,
             'bayesian_em_history': bandit.bayesian_em_history_,
@@ -2413,6 +2442,12 @@ class SurvivalAnalyzer:
                 bandit.representation_normalization_diagnostics_
             ),
             'cv_diagnostics': bandit.cv_diagnostics_,
+            'embedding_distance_diagnostics': (
+                pipeline.embedding_distance_diagnostics_
+            ),
+            'test_embedding_knn_percentiles': (
+                test_diagnostics['embedding_knn_percentiles'].tolist()
+            ),
             'hierarchical_assignment_prior': {
                 'concentration': bandit.hierarchical_prior_concentration_,
                 'prior_fraction': bandit.hierarchical_prior_fraction,

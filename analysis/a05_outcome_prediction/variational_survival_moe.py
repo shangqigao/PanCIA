@@ -20,6 +20,105 @@ from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import StandardScaler
 
 
+class CosineKNNPercentileScorer:
+    """Training-reference cosine neighbourhood support for normalized embeddings."""
+
+    def __init__(self, n_neighbors=20, eps=1e-8):
+        self.n_neighbors = int(n_neighbors)
+        self.eps = float(eps)
+        if self.n_neighbors < 1:
+            raise ValueError("n_neighbors must be positive")
+
+    def _normalize(self, values):
+        values = np.ascontiguousarray(values, dtype=np.float32)
+        if values.ndim != 2:
+            raise ValueError("embeddings must be a two-dimensional array")
+        if not np.isfinite(values).all():
+            raise ValueError("embeddings must contain only finite values")
+        norms = np.linalg.norm(values, axis=1, keepdims=True)
+        return values / np.maximum(norms, self.eps), norms.reshape(-1)
+
+    @staticmethod
+    def _nearest(similarity, n_neighbors):
+        indices = np.argpartition(
+            -similarity, kth=n_neighbors - 1, axis=1
+        )[:, :n_neighbors]
+        selected_similarity = np.take_along_axis(similarity, indices, axis=1)
+        distances = np.clip(1.0 - selected_similarity, 0.0, 2.0)
+        return indices, distances
+
+    def _percentiles(self, distances):
+        ranks = np.searchsorted(
+            self.sorted_training_distances_, distances, side="right"
+        )
+        # Mid-ranks avoid exact zero/one values for later transformations.
+        return np.clip(
+            (ranks.astype(np.float32) - 0.5)
+            / len(self.sorted_training_distances_),
+            0.5 / len(self.sorted_training_distances_),
+            1.0 - 0.5 / len(self.sorted_training_distances_),
+        )
+
+    def fit(self, embeddings):
+        reference, norms = self._normalize(embeddings)
+        n_samples = len(reference)
+        if n_samples < 2:
+            raise ValueError("at least two training embeddings are required")
+        self.n_neighbors_ = min(self.n_neighbors, n_samples - 1)
+        similarity = np.clip(reference @ reference.T, -1.0, 1.0)
+        # Leave the patient itself out of its training neighbourhood.
+        np.fill_diagonal(similarity, -np.inf)
+        indices, neighbour_distances = self._nearest(
+            similarity, self.n_neighbors_
+        )
+        training_distances = neighbour_distances.mean(axis=1)
+        self.reference_ = reference
+        self.training_distances_ = training_distances.astype(np.float32)
+        self.sorted_training_distances_ = np.sort(self.training_distances_)
+        self.training_percentiles_ = self._percentiles(
+            self.training_distances_
+        )
+
+        quantiles = np.quantile(
+            self.training_distances_, [0.05, 0.5, 0.95]
+        )
+        occurrence = np.bincount(
+            indices.reshape(-1), minlength=n_samples
+        )
+        self.diagnostics_ = {
+            "n_reference": n_samples,
+            "n_neighbors": self.n_neighbors_,
+            "distance_mean": float(self.training_distances_.mean()),
+            "distance_std": float(self.training_distances_.std()),
+            "distance_q05": float(quantiles[0]),
+            "distance_q50": float(quantiles[1]),
+            "distance_q95": float(quantiles[2]),
+            "distance_concentration": float(
+                (quantiles[2] - quantiles[0])
+                / max(abs(float(quantiles[1])), self.eps)
+            ),
+            "neighbour_occurrence_median": float(np.median(occurrence)),
+            "neighbour_occurrence_max": int(occurrence.max()),
+            "zero_norm_embeddings": int(np.sum(norms <= self.eps)),
+        }
+        return self
+
+    def fit_transform(self, embeddings):
+        self.fit(embeddings)
+        return self.training_percentiles_.copy()
+
+    def transform(self, embeddings):
+        if not hasattr(self, "reference_"):
+            raise RuntimeError("CosineKNNPercentileScorer must be fitted first")
+        query, _ = self._normalize(embeddings)
+        similarity = np.clip(query @ self.reference_.T, -1.0, 1.0)
+        _, neighbour_distances = self._nearest(
+            similarity, self.n_neighbors_
+        )
+        distances = neighbour_distances.mean(axis=1)
+        return self._percentiles(distances).astype(np.float32)
+
+
 class RiskRepresentationEncoder(nn.Module):
     """Deterministic representation; uncertainty lives in the Bayesian head."""
 
@@ -103,6 +202,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
     expert_names = ("R", "P", "RP")
 
     def __init__(self, rad_dim, path_dim, state_dim=None, hidden_dim=32,
+                 router_hidden_dim=None,
                  n_intervals=8, learning_rate=1e-3,
                  hierarchical_prior_fraction=0.25,
                  population_update_rate=0.25,
@@ -128,7 +228,14 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.state_dim = 1
         self.rad_dim = int(rad_dim)
         self.path_dim = int(path_dim)
-        self.hidden_dim = int(hidden_dim)
+        self.encoder_hidden_dim = int(hidden_dim)
+        # Compatibility alias for older code that inspected hidden_dim.
+        self.hidden_dim = self.encoder_hidden_dim
+        self.router_hidden_dim = int(
+            hidden_dim if router_hidden_dim is None else router_hidden_dim
+        )
+        if self.encoder_hidden_dim < 1 or self.router_hidden_dim < 1:
+            raise ValueError("encoder and router hidden dimensions must be positive")
         self.n_intervals = int(n_intervals)
         self.learning_rate = float(learning_rate)
         self.hierarchical_prior_fraction = float(
@@ -180,20 +287,22 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         )
 
         self.encoders = nn.ModuleDict({
-            "R": RiskRepresentationEncoder(rad_dim, hidden_dim),
-            "P": RiskRepresentationEncoder(path_dim, hidden_dim),
-            "RP": RiskRepresentationEncoder(rad_dim + path_dim, hidden_dim),
+            "R": RiskRepresentationEncoder(rad_dim, self.encoder_hidden_dim),
+            "P": RiskRepresentationEncoder(path_dim, self.encoder_hidden_dim),
+            "RP": RiskRepresentationEncoder(
+                rad_dim + path_dim, self.encoder_hidden_dim
+            ),
         })
         self.experts = nn.ModuleDict({
-            name: PiecewiseExponentialExpert(hidden_dim)
+            name: PiecewiseExponentialExpert(self.encoder_hidden_dim)
             for name in self.expert_names
         })
         self.shared_log_baseline_hazard = nn.Parameter(
             torch.full((n_intervals,), -2.0)
         )
         self.router = nn.Sequential(
-            nn.Linear(12, hidden_dim), nn.ReLU(),
-            nn.Linear(hidden_dim, 3),
+            nn.Linear(12, self.router_hidden_dim), nn.ReLU(),
+            nn.Linear(self.router_hidden_dim, 3),
         )
         prior = torch.as_tensor(reliability_prior, dtype=torch.float32)
         if prior.shape != (3,) or torch.any(prior <= 0):
@@ -208,10 +317,12 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         )
         for name in self.expert_names:
             self.register_buffer(
-                f"representation_mean_{name}", torch.zeros(hidden_dim)
+                f"representation_mean_{name}",
+                torch.zeros(self.encoder_hidden_dim)
             )
             self.register_buffer(
-                f"representation_scale_{name}", torch.ones(hidden_dim)
+                f"representation_scale_{name}",
+                torch.ones(self.encoder_hidden_dim)
             )
         self.representation_normalized_ = False
         self.to(self.device)
@@ -493,11 +604,13 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             "RP": self.rad_dim + self.path_dim,
         }
         encoders = nn.ModuleDict({
-            name: RiskRepresentationEncoder(input_dims[name], self.hidden_dim)
+            name: RiskRepresentationEncoder(
+                input_dims[name], self.encoder_hidden_dim
+            )
             for name in self.expert_names
         }).to(self.device)
         experts = nn.ModuleDict({
-            name: PiecewiseExponentialExpert(self.hidden_dim)
+            name: PiecewiseExponentialExpert(self.encoder_hidden_dim)
             for name in self.expert_names
         }).to(self.device)
         log_baseline = nn.Parameter(torch.full(
@@ -1401,11 +1514,17 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
 
 
 class ConditionalVariationalSurvivalPipeline:
-    def __init__(self, model, hard=True):
+    def __init__(self, model, hard=True, embedding_knn_neighbors=20):
         self.model = model
         self.hard = hard
         self.radiomics_scaler = StandardScaler()
         self.pathomics_scaler = StandardScaler()
+        self.radiomics_embedding_support = CosineKNNPercentileScorer(
+            embedding_knn_neighbors
+        )
+        self.pathomics_embedding_support = CosineKNNPercentileScorer(
+            embedding_knn_neighbors
+        )
 
     @staticmethod
     def _array(x):
@@ -1414,17 +1533,35 @@ class ConditionalVariationalSurvivalPipeline:
         )
 
     def fit(self, x_rad, x_path, y):
-        x_rad = self.radiomics_scaler.fit_transform(self._array(x_rad))
-        x_path = self.pathomics_scaler.fit_transform(self._array(x_path))
+        x_rad_raw, x_path_raw = self._array(x_rad), self._array(x_path)
+        self.training_embedding_percentiles_ = np.column_stack([
+            self.radiomics_embedding_support.fit_transform(x_rad_raw),
+            self.pathomics_embedding_support.fit_transform(x_path_raw),
+        ]).astype(np.float32)
+        self.embedding_distance_diagnostics_ = {
+            "radiomics": self.radiomics_embedding_support.diagnostics_,
+            "pathomics": self.pathomics_embedding_support.diagnostics_,
+        }
+        x_rad = self.radiomics_scaler.fit_transform(x_rad_raw)
+        x_path = self.pathomics_scaler.fit_transform(x_path_raw)
         self.model.fit(x_rad, x_path, y)
         return self
 
     def transform(self, x_rad, x_path):
-        x_rad = self.radiomics_scaler.transform(self._array(x_rad))
-        x_path = self.pathomics_scaler.transform(self._array(x_path))
+        x_rad_raw, x_path_raw = self._array(x_rad), self._array(x_path)
+        self.embedding_percentiles_ = np.column_stack([
+            self.radiomics_embedding_support.transform(x_rad_raw),
+            self.pathomics_embedding_support.transform(x_path_raw),
+        ]).astype(np.float32)
+        x_rad = self.radiomics_scaler.transform(x_rad_raw)
+        x_path = self.pathomics_scaler.transform(x_path_raw)
         risk, actions, probs, uncertainty, diagnostics = self.model.predict(
             x_rad, x_path, hard=self.hard
         )
         self.actions_, self.probs_, self.uncertainty_ = actions, probs, uncertainty
+        diagnostics["embedding_knn_percentiles"] = self.embedding_percentiles_
+        diagnostics["embedding_distance_reference"] = (
+            self.embedding_distance_diagnostics_
+        )
         self.prediction_diagnostics_ = diagnostics
         return risk

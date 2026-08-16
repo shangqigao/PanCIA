@@ -9,11 +9,60 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from analysis.a05_outcome_prediction.variational_survival_moe import (
     ConditionalVariationalSurvivalMoE,
+    CosineKNNPercentileScorer,
     PiecewiseExponentialExpert,
 )
 
 
 class VariationalSurvivalMoETests(unittest.TestCase):
+    def test_encoder_and_router_hidden_dimensions_are_independent(self):
+        model = ConditionalVariationalSurvivalMoE(
+            rad_dim=3, path_dim=4, hidden_dim=5, router_hidden_dim=7,
+            n_intervals=2, device="cpu"
+        )
+
+        self.assertEqual(model.encoder_hidden_dim, 5)
+        self.assertEqual(model.router_hidden_dim, 7)
+        self.assertEqual(model.encoders["R"].output_dim, 5)
+        self.assertEqual(tuple(model.experts["P"].risk_coef.shape), (5,))
+        self.assertEqual(model.router[0].in_features, 12)
+        self.assertEqual(model.router[0].out_features, 7)
+        self.assertEqual(model.router[2].in_features, 7)
+
+    def test_cosine_knn_uses_leave_one_out_training_neighbours(self):
+        embeddings = np.asarray([
+            [16.0, 0.0],
+            [0.0, 16.0],
+            [-16.0, 0.0],
+            [0.0, -16.0],
+        ], dtype=np.float32)
+
+        scorer = CosineKNNPercentileScorer(n_neighbors=1)
+        percentiles = scorer.fit_transform(embeddings)
+
+        # Every non-self nearest neighbour is orthogonal (cosine distance 1).
+        np.testing.assert_allclose(scorer.training_distances_, 1.0)
+        self.assertEqual(percentiles.shape, (4,))
+        self.assertEqual(scorer.diagnostics_["n_neighbors"], 1)
+
+    def test_cosine_knn_is_scale_invariant_and_supports_one_test_case(self):
+        embeddings = np.asarray([
+            [1.0, 0.0], [0.8, 0.2], [0.0, 1.0], [-1.0, 0.0]
+        ], dtype=np.float32)
+        scaled = embeddings * np.asarray([[2.0], [7.0], [3.0], [11.0]])
+        query = np.asarray([[0.9, 0.1]], dtype=np.float32)
+
+        first = CosineKNNPercentileScorer(2).fit(embeddings)
+        second = CosineKNNPercentileScorer(2).fit(scaled)
+
+        np.testing.assert_allclose(
+            first.training_distances_, second.training_distances_, atol=1e-6
+        )
+        percentile = first.transform(query)
+        self.assertEqual(percentile.shape, (1,))
+        self.assertGreater(float(percentile[0]), 0.0)
+        self.assertLess(float(percentile[0]), 1.0)
+
     def test_piecewise_exponential_likelihood_handles_events_and_censoring(self):
         expert = PiecewiseExponentialExpert(representation_dim=1)
         log_baseline = torch.zeros(2)
