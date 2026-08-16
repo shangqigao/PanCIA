@@ -1499,14 +1499,7 @@ class ContextualBandit:
         self._reset_policy_optimization_state()
 
     def _reset_policy_optimization_state(self):
-        """Reset E-step optimization state without resetting policy weights.
-
-        Expert OOF predictions, and therefore the policy optimization problem,
-        change after every M-step.  A fresh optimizer avoids carrying Adam
-        moments from the previous problem, while resetting the loss schedule
-        and Gumbel temperature restores the intended exploration schedule for
-        each E-step.
-        """
+        """Initialize policy optimization state once at the start of a fit."""
         self.policy_optimizer = optim.Adam(
             self.policy_network.parameters(),
             lr=self.learning_rate,
@@ -1797,7 +1790,6 @@ class ContextualBandit:
         for iteration in range(self.max_iterations):
             print(f"\n--- EM Iteration {iteration + 1} ---")
             print(f"Training policy network for {self.policy_epochs} epochs...")
-            self._reset_policy_optimization_state()
             aligned = fit_aligned_policy(verbose=True)
             experts_updated_since_policy = False
             # Original M-step construction: deterministic soft probabilities
@@ -1938,7 +1930,6 @@ class ContextualBandit:
         # M-step. It is skipped when convergence stopped before another M-step.
         if experts_updated_since_policy:
             print("\nFinal policy normalization on the last Cox experts...")
-            self._reset_policy_optimization_state()
             aligned = fit_aligned_policy(verbose=False)
             final_m_step_probs = aligned['soft_probs']
             floor = self.min_expert_weight
