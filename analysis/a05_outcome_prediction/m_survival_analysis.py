@@ -2042,9 +2042,6 @@ class SurvivalAnalyzer:
             gumbel_anneal_rate=model_params.get('gumbel_anneal_rate', 0.95),
             loss_type=model_params.get('policy_loss_type', 'adaptive'),
             exploration_weight=model_params.get('exploration_weight', 0.1),
-            exploration_reliability_strength=model_params.get(
-                'exploration_reliability_strength', 5.0
-            ),
             entropy_weight=model_params.get('entropy_weight', 0.05),
             uncertainty_weight=model_params.get('uncertainty_weight', 0.0),
             temperature=model_params.get('policy_temperature', 1.0),

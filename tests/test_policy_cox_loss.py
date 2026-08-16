@@ -52,7 +52,7 @@ class PolicyCoxLossTests(unittest.TestCase):
         self.assertEqual(loss_fn.step_count, 0)
         self.assertEqual(loss_fn.loss_history, [])
 
-    def test_adaptive_loss_has_no_risk_variance_penalty(self):
+    def test_adaptive_loss_contains_historical_exploration_terms(self):
         loss_fn = AdaptiveWeightedCoxPLLoss(initial_exploration_weight=0.2)
         probs = torch.full((4, 3), 1.0 / 3.0)
         risk = torch.tensor([0.2, -0.1, 0.5, 0.0])
@@ -64,37 +64,41 @@ class PolicyCoxLossTests(unittest.TestCase):
             return_components=True,
         )
 
-        self.assertNotIn("uncertainty_bonus", components)
-        self.assertNotIn("uncertainty_value", components)
+        self.assertIn("entropy_bonus", components)
+        self.assertIn("diversity_bonus", components)
+        self.assertIn("uncertainty_bonus", components)
         torch.testing.assert_close(
             components["total_loss"],
-            components["cox_loss"] + components["prior_penalty"],
+            components["cox_loss"]
+            + components["entropy_bonus"]
+            + components["diversity_bonus"]
+            + components["uncertainty_bonus"],
         )
 
-    def test_adaptive_exploration_follows_reliability_prior(self):
+    def test_adaptive_exploration_prefers_uniform_soft_probabilities(self):
         loss_fn = AdaptiveWeightedCoxPLLoss(initial_exploration_weight=0.2)
         risk = torch.tensor([0.2, -0.1, 0.5, 0.0])
         events = torch.tensor([1.0, 0.0, 1.0, 1.0])
         times = torch.tensor([4.0, 3.0, 2.0, 1.0])
-        prior = torch.tensor([[0.2, 0.6, 0.2]])
-        matched = prior.repeat(4, 1)
-        mismatched = torch.tensor([[0.6, 0.2, 0.2]]).repeat(4, 1)
+        uniform = torch.full((4, 3), 1.0 / 3.0)
+        concentrated = torch.tensor([[0.98, 0.01, 0.01]]).repeat(4, 1)
 
-        matched_parts = loss_fn(
-            matched, risk, risk, risk, events, times,
-            return_components=True, exploration_prior=prior,
+        uniform_parts = loss_fn(
+            uniform, risk, risk, risk, events, times,
+            return_components=True,
         )
-        mismatched_parts = loss_fn(
-            mismatched, risk, risk, risk, events, times,
-            return_components=True, exploration_prior=prior,
+        concentrated_parts = loss_fn(
+            concentrated, risk, risk, risk, events, times,
+            return_components=True,
         )
 
         self.assertLess(
-            matched_parts["prior_penalty"].item(),
-            mismatched_parts["prior_penalty"].item(),
+            uniform_parts["entropy_bonus"].item(),
+            concentrated_parts["entropy_bonus"].item(),
         )
-        torch.testing.assert_close(
-            matched_parts["exploration_prior"], prior.squeeze(0)
+        self.assertLess(
+            uniform_parts["diversity_bonus"].item(),
+            concentrated_parts["diversity_bonus"].item(),
         )
 
     def test_policy_cox_loss_is_invariant_within_tied_time_groups(self):

@@ -345,9 +345,6 @@ class TorchCoxPHTests(unittest.TestCase):
         self.assertEqual(single.shape, (1,))
         self.assertAlmostEqual(single[0], batch[5], places=6)
         self.assertTrue(np.isfinite(single).all())
-        prior = reference["reliability_prior"]
-        self.assertAlmostEqual(sum(prior.values()), 1.0, places=6)
-        self.assertGreater(prior["P"], prior["R"])
         self.assertGreater(reference["cindex"]["P"], reference["cindex"]["R"])
         extremes = bandit._apply_policy_risk_reference(
             np.array([-1e6, 1e6], dtype=np.float32), "P", reference

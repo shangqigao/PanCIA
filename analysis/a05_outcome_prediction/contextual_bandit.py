@@ -404,7 +404,7 @@ class BayesianWeightedCoxPLLoss(nn.Module):
 
 
 class AdaptiveWeightedCoxPLLoss(nn.Module):
-    """Cox policy loss with a configurable exploration target."""
+    """Historical adaptive entropy/diversity/disagreement exploration."""
     
     def __init__(self,
                  initial_exploration_weight=0.3,
@@ -441,8 +441,38 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         self.best_loss = float('inf')
         
     def update_exploration_weight(self, loss_value):
-        """Keep the single prior-regularization weight fixed."""
+        """Increase exploration on plateaus and decay it otherwise."""
+        self.step_count += 1
+        value = loss_value.item() if torch.is_tensor(loss_value) else loss_value
+        self.loss_history.append(value)
+        if len(self.loss_history) > 1:
+            improvement = self.loss_history[-2] - self.loss_history[-1]
+            if abs(improvement) < self.plateau_threshold:
+                self.plateau_counter += 1
+            else:
+                self.plateau_counter = 0
+            if self.plateau_counter >= self.plateau_patience:
+                self.exploration_weight = min(
+                    self.max_exploration_weight,
+                    self.exploration_weight * 1.2,
+                )
+                self.plateau_counter = 0
+            else:
+                self.exploration_weight = max(
+                    self.min_exploration_weight,
+                    self.exploration_weight * 0.99,
+                )
         return self.exploration_weight
+
+    @staticmethod
+    def compute_action_diversity(probs):
+        avg_probs = probs.mean(dim=0)
+        uniform = torch.ones_like(avg_probs) / avg_probs.shape[0]
+        return torch.sum(
+            avg_probs * (
+                torch.log(avg_probs + 1e-8) - torch.log(uniform + 1e-8)
+            )
+        )
     
     def forward(self, probs, R, P, RP, E, T, return_components=False,
                 regularization_probs=None, exploration_prior=None):
@@ -461,32 +491,40 @@ class AdaptiveWeightedCoxPLLoss(nn.Module):
         
         cox_loss = WeightedCoxPLLoss.compute_cox_loss(h_weighted, E, T)
         
-        if exploration_prior is None:
-            exploration_prior = torch.full(
-                (1, reg_probs.shape[1]), 1.0 / reg_probs.shape[1],
-                device=reg_probs.device, dtype=reg_probs.dtype
-            )
-        exploration_prior = exploration_prior / exploration_prior.sum(
-            dim=1, keepdim=True
-        ).clamp_min(1e-8)
-        prior_cross_entropy = -torch.sum(
-            exploration_prior * torch.log(reg_probs.clamp_min(1e-8)), dim=1
+        entropy = -torch.sum(
+            reg_probs * torch.log(reg_probs + 1e-8), dim=1
         ).mean()
-        prior_penalty = self.exploration_weight * prior_cross_entropy
+        entropy_bonus = -self.exploration_weight * entropy
+        diversity = self.compute_action_diversity(reg_probs)
+        diversity_bonus = self.exploration_weight * 0.1 * diversity
+
+        risk_all = torch.stack([R, P, RP], dim=1)
+        expected_risk = (reg_probs * risk_all).sum(dim=1, keepdim=True)
+        variance = torch.sum(
+            reg_probs * (risk_all - expected_risk).square(), dim=1
+        )
+        uncertainty_bonus = (
+            self.exploration_weight * 0.1 * variance.mean()
+        )
         
         # ============================================================
         # COMBINE
         # ============================================================
         
-        total_loss = cox_loss + prior_penalty
+        total_loss = (
+            cox_loss + entropy_bonus + diversity_bonus + uncertainty_bonus
+        )
         
         if return_components:
             return {
                 'total_loss': total_loss,
                 'cox_loss': cox_loss,
-                'prior_penalty': prior_penalty,
-                'prior_cross_entropy': prior_cross_entropy,
-                'exploration_prior': exploration_prior.squeeze(0),
+                'entropy_bonus': entropy_bonus,
+                'entropy_value': entropy,
+                'diversity_bonus': diversity_bonus,
+                'diversity_value': diversity,
+                'uncertainty_bonus': uncertainty_bonus,
+                'uncertainty_value': variance.mean(),
                 'exploration_weight': self.exploration_weight
             }
         
@@ -885,7 +923,6 @@ class ContextualBandit:
                  gumbel_anneal_rate=0.95,
                  loss_type='adaptive',  # 'weighted', 'bayesian', 'adaptive', 'ensemble'
                  exploration_weight=0.1,
-                 exploration_reliability_strength=5.0,
                  entropy_weight=0.05,
                  uncertainty_weight=0.05,
                  temperature=1.0,
@@ -936,13 +973,6 @@ class ContextualBandit:
         self.gumbel_anneal_rate = gumbel_anneal_rate
         self.loss_type = loss_type
         self.exploration_weight = exploration_weight
-        if exploration_reliability_strength < 0:
-            raise ValueError(
-                "exploration_reliability_strength must be non-negative"
-            )
-        self.exploration_reliability_strength = float(
-            exploration_reliability_strength
-        )
         self.entropy_weight = entropy_weight
         self.uncertainty_weight = uncertainty_weight
         self.temperature = temperature
@@ -1010,23 +1040,10 @@ class ContextualBandit:
                 E[fit_indices], T[fit_indices]
             ))
 
-        cindex_values = np.asarray(
-            [cindices[name] for name in names], dtype=np.float64
-        )
-        reliability_logits = (
-            self.exploration_reliability_strength * cindex_values
-        )
-        reliability_logits -= reliability_logits.max()
-        reliability = np.exp(reliability_logits)
-        reliability /= reliability.sum()
-
         return {
             'centers': centers,
             'scales': scales,
             'cindex': cindices,
-            # This population-level OOF statistic is used only as the
-            # exploration target. It never rescales risks or vetoes a policy.
-            'reliability_prior': dict(zip(names, reliability.tolist())),
         }
 
     @staticmethod
@@ -1379,16 +1396,9 @@ class ContextualBandit:
         best_checkpoint = None
         patience_counter = 0
         patience = 10
-        prior_by_name = self.policy_risk_reference['reliability_prior']
-        exploration_prior = torch.tensor(
-            [[prior_by_name[name] for name in ('R', 'P', 'RP')]],
-            dtype=torch.float32, device=self.device
-        )
-
         for epoch in range(self.policy_epochs):
             train_loss = self._train_policy_epoch(
-                *train_tensors, rp_cost=rp_cost,
-                exploration_prior=exploration_prior
+                *train_tensors, rp_cost=rp_cost
             )
 
             self.policy_network.eval()
@@ -1403,7 +1413,6 @@ class ContextualBandit:
                     action_select, R_select, P_select, RP_select,
                     E_select, T_select, return_components=True,
                     regularization_probs=soft_select,
-                    exploration_prior=exploration_prior,
                 )
                 rp_penalty = (
                     self.rp_cost_weight * rp_cost
@@ -1460,10 +1469,8 @@ class ContextualBandit:
                     f"Exploitation Loss = {exploitation_loss:.4f}, "
                     f"Exploration Loss = {exploration_loss:.4f}, "
                     f"RP Penalty = {rp_penalty.item():.4f}, "
-                    f"Exploration target R/P/RP = "
-                    f"{exploration_prior[0, 0].item():.3f}/"
-                    f"{exploration_prior[0, 1].item():.3f}/"
-                    f"{exploration_prior[0, 2].item():.3f}, "
+                    f"Exploration Weight = "
+                    f"{self.policy_loss_fn.exploration_weight:.4f}, "
                     f"Gumbel T = {self.gumbel_temperature:.3f}"
                 )
 
