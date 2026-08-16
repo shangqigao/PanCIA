@@ -2058,6 +2058,17 @@ class SurvivalAnalyzer:
         risk_scores = pipeline.transform(te_X_radio, te_X_patho)
         actions = pipeline.actions_.copy()
         probs = pipeline.probs_.copy()
+
+        # Reference prediction using the same fitted experts and policy
+        # probabilities, but without collapsing them to a hard action.
+        pipeline.use_soft_ensemble = True
+        soft_risk_scores = pipeline.transform(te_X_radio, te_X_patho)
+        soft_cindex = float(concordance_index(
+            te_y['duration'], -soft_risk_scores,
+            te_y['event'].astype(bool)
+        ))
+        pipeline.use_soft_ensemble = False
+
         raw_risk_scores = pipeline.transform(raw_te_X_radio, raw_te_X_patho)
         pipeline.actions_, pipeline.probs_ = actions, probs
         pipeline.risk_scores_ = risk_scores
@@ -2067,6 +2078,10 @@ class SurvivalAnalyzer:
         )
         print(f"\nFinal Results:")
         print(f"  C-index: {scores_dict.get('C-index', 0):.4f}")
+        print(
+            f"  Test C-index hard/soft: "
+            f"{scores_dict.get('C-index', 0):.4f}/{soft_cindex:.4f}"
+        )
         print(f"  Policy action distribution: "
               f"Rad: {np.sum(actions == 0)}, "
               f"Path: {np.sum(actions == 1)}, "
@@ -2075,6 +2090,7 @@ class SurvivalAnalyzer:
         return {
             'pipeline': pipeline,
             'risk_scores': risk_scores,
+            'soft_risk_scores': soft_risk_scores,
             'raw_risk_scores': raw_risk_scores,
             'scores': scores_dict,
             'times': times,
@@ -2086,6 +2102,7 @@ class SurvivalAnalyzer:
             'cindex_history': bandit.cindex_history,
             'actions': actions.tolist(),
             'policy_probs': probs.tolist(),
+            'soft_cindex': soft_cindex,
             'subgroup_weights': {
                 'radiomics': float(np.mean(probs[:, 0])),
                 'pathomics': float(np.mean(probs[:, 1])),
