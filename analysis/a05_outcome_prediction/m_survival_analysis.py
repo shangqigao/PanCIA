@@ -2017,9 +2017,9 @@ class SurvivalAnalyzer:
             convergence_threshold=model_params.get(
                 'convergence_threshold', 0.001
             ),
-            hidden_dim=model_params.get('policy_hidden_dim', 16),
+            hidden_dim=model_params.get('policy_hidden_dim', 8),
             learning_rate=model_params.get('policy_learning_rate', 0.01),
-            batch_size=model_params.get('policy_batch_size', 32),
+            batch_size=model_params.get('policy_batch_size', 64),
             policy_epochs=model_params.get('policy_epochs', 50),
             cv_folds=model_params.get('cox_cv_folds', 5),
             cox_learning_rate=model_params.get('cox_learning_rate', 0.05),
@@ -2052,7 +2052,7 @@ class SurvivalAnalyzer:
             ),
             gumbel_anneal_rate=model_params.get('gumbel_anneal_rate', 0.95),
             loss_type=model_params.get('policy_loss_type', 'adaptive'),
-            exploration_weight=model_params.get('exploration_weight', 0.1),
+            exploration_weight=model_params.get('exploration_weight', 0.0),
             entropy_weight=model_params.get('entropy_weight', 0.05),
             uncertainty_weight=model_params.get('uncertainty_weight', 0.0),
             temperature=model_params.get('policy_temperature', 1.0),
@@ -2565,8 +2565,8 @@ class SurvivalAnalyzer:
                 # 'Strategy3_Separate_Fusion': lambda s, idx, op, mp: self.strategy_3_separate_fusion(s, idx, op, mp, fusion_method),
                 # 'Strategy4_PCA_Separate_Fusion': lambda s, idx, op, mp: self.strategy_4_pca_separate_fusion(s, idx, op, mp, n_pca_components, fusion_method),
                 # 'Strategy5_Domain_Adaptation_Fusion': lambda s, idx, op, mp: self.strategy_5_domain_adaptation_fusion(s, idx, op, mp),
-                # 'Strategy6_Contextual_Bandit_Fusion': lambda s, idx, op, mp: self.strategy_6_EM_Contextual_Bandit(s, idx, op, mp),
-                'Strategy7_Variational_Survival_MoE': lambda s, idx, op, mp: self.strategy_7_variational_survival_moe(s, idx, op, mp),
+                'Strategy6_Contextual_Bandit_Fusion': lambda s, idx, op, mp: self.strategy_6_EM_Contextual_Bandit(s, idx, op, mp),
+                # 'Strategy7_Variational_Survival_MoE': lambda s, idx, op, mp: self.strategy_7_variational_survival_moe(s, idx, op, mp),
             }
         else:
             raise ValueError(f"{omics} is not supported yet")
