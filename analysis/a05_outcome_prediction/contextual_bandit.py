@@ -1072,8 +1072,15 @@ class ContextualBandit:
 
     @staticmethod
     def _make_policy_state(R, P, RP):
-        """Build the original compact policy state."""
-        return np.column_stack([R, P, np.abs(R - P)]).astype(np.float32)
+        """Build six-dimensional expert-risk and disagreement geometry."""
+        return np.column_stack([
+            R,
+            P,
+            RP,
+            np.abs(R - P),
+            np.abs(R - RP),
+            np.abs(P - RP),
+        ]).astype(np.float32)
 
     @staticmethod
     def _risk_cindex(risk, E, T):
@@ -1480,7 +1487,7 @@ class ContextualBandit:
     def _init_policy_network(self):
         """Initialize the policy network and optimizer."""
         self.policy_network = PolicyNetwork(
-            input_dim=3,
+            input_dim=6,
             hidden_dim=self.hidden_dim,
             output_dim=3,
             dropout_rate=0.1
