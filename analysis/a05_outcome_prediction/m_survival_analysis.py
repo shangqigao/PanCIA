@@ -2049,7 +2049,8 @@ class SurvivalAnalyzer:
             random_state=model_params.get('random_state', 42),
         )
         pipeline = ContextualBanditPipeline(
-            bandit, use_soft_ensemble=False
+            bandit, use_soft_ensemble=False,
+            scale_features=model_params.get('bandit_scale_features', False)
         )
         pipeline.fit(tr_X_radio, tr_X_patho, tr_y)
 

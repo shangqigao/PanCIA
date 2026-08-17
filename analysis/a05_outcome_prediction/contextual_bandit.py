@@ -2038,16 +2038,28 @@ class ContextualBanditPipeline:
     Pipeline wrapper for Contextual Bandit with survival prediction.
     """
     
-    def __init__(self, bandit, use_soft_ensemble=False,
+    def __init__(self, bandit, use_soft_ensemble=False, scale_features=False,
                  radiomics_scaler=None, pathomics_scaler=None):
         self.bandit = bandit
         self.use_soft_ensemble = use_soft_ensemble
-        self.radiomics_scaler = (
-            StandardScaler() if radiomics_scaler is None else radiomics_scaler
+        # Supplying a custom scaler is an explicit request to enable scaling.
+        self.scale_features = bool(
+            scale_features
+            or radiomics_scaler is not None
+            or pathomics_scaler is not None
         )
-        self.pathomics_scaler = (
-            StandardScaler() if pathomics_scaler is None else pathomics_scaler
-        )
+        if self.scale_features:
+            self.radiomics_scaler = (
+                StandardScaler() if radiomics_scaler is None
+                else radiomics_scaler
+            )
+            self.pathomics_scaler = (
+                StandardScaler() if pathomics_scaler is None
+                else pathomics_scaler
+            )
+        else:
+            self.radiomics_scaler = None
+            self.pathomics_scaler = None
         self.risk_scores_ = None
         self.actions_ = None
         self.probs_ = None
@@ -2058,10 +2070,12 @@ class ContextualBanditPipeline:
         return np.ascontiguousarray(values, dtype=np.float32)
 
     def _transform_inputs(self, X_rad, X_path):
-        if not hasattr(self.radiomics_scaler, 'mean_'):
-            raise RuntimeError("ContextualBanditPipeline must be fitted first")
         X_rad = self._as_feature_matrix(X_rad)
         X_path = self._as_feature_matrix(X_path)
+        if not self.scale_features:
+            return X_rad, X_path
+        if not hasattr(self.radiomics_scaler, 'mean_'):
+            raise RuntimeError("ContextualBanditPipeline must be fitted first")
         return (
             np.ascontiguousarray(
                 self.radiomics_scaler.transform(X_rad), dtype=np.float32
@@ -2074,6 +2088,9 @@ class ContextualBanditPipeline:
     def fit(self, X_rad, X_path, y):
         X_rad = self._as_feature_matrix(X_rad)
         X_path = self._as_feature_matrix(X_path)
+        if not self.scale_features:
+            self.bandit.fit(X_rad, X_path, y)
+            return self
         X_rad_scaled = np.ascontiguousarray(
             self.radiomics_scaler.fit_transform(X_rad), dtype=np.float32
         )

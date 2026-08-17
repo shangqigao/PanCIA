@@ -60,7 +60,7 @@ class TorchCoxPHTests(unittest.TestCase):
         X_rad = np.array([[0.0, 10.0], [2.0, 14.0], [4.0, 18.0]])
         X_path = np.array([[100.0], [200.0], [300.0]])
         bandit = RecordingBandit()
-        pipeline = ContextualBanditPipeline(bandit)
+        pipeline = ContextualBanditPipeline(bandit, scale_features=True)
         pipeline.fit(X_rad, X_path, None)
 
         np.testing.assert_allclose(bandit.fit_rad.mean(axis=0), 0.0, atol=1e-7)
@@ -75,6 +75,34 @@ class TorchCoxPHTests(unittest.TestCase):
         np.testing.assert_array_equal(pipeline.pathomics_scaler.mean_, path_mean_before)
         np.testing.assert_allclose(bandit.test_rad, [[2.4494898, 2.4494898]])
         np.testing.assert_allclose(bandit.test_path, [[2.4494898]])
+
+    def test_pipeline_does_not_scale_features_by_default(self):
+        class RecordingBandit:
+            def fit(self, X_rad, X_path, y):
+                self.fit_rad = X_rad.copy()
+                self.fit_path = X_path.copy()
+
+            def predict_risk(self, X_rad, X_path):
+                self.test_rad = X_rad.copy()
+                self.test_path = X_path.copy()
+                n = len(X_rad)
+                return np.zeros(n), np.zeros(n, dtype=int), np.tile(
+                    [1.0, 0.0, 0.0], (n, 1)
+                )
+
+        X_rad = np.array([[2.0, 10.0], [4.0, 20.0]])
+        X_path = np.array([[100.0], [300.0]])
+        bandit = RecordingBandit()
+        pipeline = ContextualBanditPipeline(bandit)
+        pipeline.fit(X_rad, X_path, None)
+        pipeline.transform(X_rad[:1], X_path[:1])
+
+        np.testing.assert_allclose(bandit.fit_rad, X_rad)
+        np.testing.assert_allclose(bandit.fit_path, X_path)
+        np.testing.assert_allclose(bandit.test_rad, X_rad[:1])
+        np.testing.assert_allclose(bandit.test_path, X_path[:1])
+        self.assertIsNone(pipeline.radiomics_scaler)
+        self.assertIsNone(pipeline.pathomics_scaler)
 
     def test_straight_through_gumbel_is_one_hot_and_has_gradients(self):
         torch.manual_seed(3)
