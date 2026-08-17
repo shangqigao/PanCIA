@@ -2017,6 +2017,16 @@ class SurvivalAnalyzer:
             convergence_threshold=model_params.get(
                 'convergence_threshold', 0.001
             ),
+            action_convergence_threshold=model_params.get(
+                'action_convergence_threshold', 0.01
+            ),
+            soft_convergence_threshold=model_params.get(
+                'soft_convergence_threshold', 0.01
+            ),
+            em_convergence_patience=model_params.get(
+                'em_convergence_patience', 2
+            ),
+            min_em_iterations=model_params.get('min_em_iterations', 2),
             hidden_dim=model_params.get('policy_hidden_dim', 8),
             learning_rate=model_params.get('policy_learning_rate', 0.01),
             batch_size=model_params.get('policy_batch_size', 64),

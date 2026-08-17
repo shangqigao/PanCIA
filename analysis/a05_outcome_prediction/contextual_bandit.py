@@ -857,7 +857,8 @@ class ContextualBandit:
     max_iterations : int, default=10
         Maximum number of EM iterations
     convergence_threshold : float, default=0.001
-        Minimum improvement in C-index for convergence
+        Retained for backward compatibility; outer EM convergence uses action
+        or soft-probability change thresholds.
     hidden_dim : int, default=16
         Hidden layer dimension for policy network
     learning_rate : float, default=0.01
@@ -900,6 +901,10 @@ class ContextualBandit:
                  alpha_range=None,
                  max_iterations=10,
                  convergence_threshold=0.001,
+                 action_convergence_threshold=0.01,
+                 soft_convergence_threshold=0.01,
+                 em_convergence_patience=2,
+                 min_em_iterations=2,
                  hidden_dim=16,
                  learning_rate=0.01,
                  batch_size=32,
@@ -935,6 +940,20 @@ class ContextualBandit:
         )
         self.max_iterations = max_iterations
         self.convergence_threshold = convergence_threshold
+        if not 0.0 <= action_convergence_threshold <= 1.0:
+            raise ValueError("action_convergence_threshold must be in [0, 1]")
+        if not 0.0 <= soft_convergence_threshold <= 1.0:
+            raise ValueError("soft_convergence_threshold must be in [0, 1]")
+        if em_convergence_patience < 1 or min_em_iterations < 1:
+            raise ValueError("EM patience and minimum iterations must be positive")
+        self.action_convergence_threshold = float(
+            action_convergence_threshold
+        )
+        self.soft_convergence_threshold = float(
+            soft_convergence_threshold
+        )
+        self.em_convergence_patience = int(em_convergence_patience)
+        self.min_em_iterations = int(min_em_iterations)
         self.hidden_dim = hidden_dim
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -1085,6 +1104,24 @@ class ContextualBandit:
     @staticmethod
     def _risk_cindex(risk, E, T):
         return concordance_index(T, -risk, E.astype(bool))
+
+    @staticmethod
+    def _policy_convergence_metric(previous_probs, current_probs, hard_policy):
+        """Return hard action-change rate or soft total-variation change."""
+        previous_probs = np.asarray(previous_probs, dtype=np.float64)
+        current_probs = np.asarray(current_probs, dtype=np.float64)
+        if previous_probs.shape != current_probs.shape:
+            raise ValueError("Policy probabilities must have matching shapes")
+        if previous_probs.ndim != 2 or previous_probs.shape[1] != 3:
+            raise ValueError("Policy probabilities must have shape [patient, 3]")
+        if hard_policy:
+            return float(np.mean(
+                np.argmax(previous_probs, axis=1)
+                != np.argmax(current_probs, axis=1)
+            ))
+        return float(np.mean(
+            0.5 * np.abs(current_probs - previous_probs).sum(axis=1)
+        ))
 
     def _prepare_expert_fit_weights(self, policy_weights, events):
         """Pass the floored hard policy weights to the Cox objective."""
@@ -1624,8 +1661,9 @@ class ContextualBandit:
         self.validation_cindex_history = []
         best_em_checkpoint = None
         best_em_cindex = -np.inf
-        no_improvement = 0
-        em_patience = 2
+        previous_convergence_probs = None
+        convergence_counter = 0
+        self.em_convergence_history_ = []
         experts_updated_since_policy = True
 
         def capture_checkpoint(validation_cindex):
@@ -1820,16 +1858,50 @@ class ContextualBandit:
                 f"RP: {aligned['expert_val_cindices'][2]:.4f}"
             )
 
-            previous_best = best_em_cindex
-            if selection_cindex > best_em_cindex:
-                best_em_cindex = selection_cindex
-                best_em_checkpoint = capture_checkpoint(selection_cindex)
-            if selection_cindex > previous_best + self.convergence_threshold:
-                no_improvement = 0
+            best_em_cindex = max(best_em_cindex, selection_cindex)
+            # Keep the latest synchronized state. Selection C-index is now
+            # diagnostic only and never selects or rejects an EM checkpoint.
+            best_em_checkpoint = capture_checkpoint(selection_cindex)
+
+            convergence_probs = (
+                aligned['probs'] if self.hard_policy
+                else aligned['soft_probs']
+            )
+            if previous_convergence_probs is None:
+                convergence_value = None
+                print("EM convergence: awaiting the next policy evaluation")
             else:
-                no_improvement += 1
-            if no_improvement >= em_patience:
-                print("EM convergence reached on fixed selection C-index")
+                convergence_value = self._policy_convergence_metric(
+                    previous_convergence_probs, convergence_probs,
+                    self.hard_policy,
+                )
+                threshold = (
+                    self.action_convergence_threshold if self.hard_policy
+                    else self.soft_convergence_threshold
+                )
+                metric_name = (
+                    "hard action-change rate" if self.hard_policy
+                    else "soft probability TV"
+                )
+                converged = convergence_value <= threshold
+                convergence_counter = (
+                    convergence_counter + 1 if converged else 0
+                )
+                print(
+                    f"EM convergence: {metric_name}={convergence_value:.5f} "
+                    f"(threshold={threshold:.5f}, "
+                    f"stable={convergence_counter}/"
+                    f"{self.em_convergence_patience})"
+                )
+            self.em_convergence_history_.append(convergence_value)
+            previous_convergence_probs = convergence_probs.copy()
+
+            completed_m_steps = iteration
+            if (
+                completed_m_steps >= self.min_em_iterations
+                and convergence_counter >= self.em_convergence_patience
+            ):
+                print("EM convergence reached on policy assignments")
                 break
 
             # ============================================================
@@ -1937,9 +2009,8 @@ class ContextualBandit:
             self.validation_cindex_history.append(aligned['val_cindex'])
             self.cindex_history.append(selection_cindex)
             self.objective_history.append(-aligned['val_loss'])
-            if selection_cindex > best_em_cindex:
-                best_em_cindex = selection_cindex
-                best_em_checkpoint = capture_checkpoint(selection_cindex)
+            best_em_cindex = max(best_em_cindex, selection_cindex)
+            best_em_checkpoint = capture_checkpoint(selection_cindex)
 
         if best_em_checkpoint is None:
             raise RuntimeError("EM did not produce a valid synchronized checkpoint")
@@ -1956,7 +2027,7 @@ class ContextualBandit:
         self.w_rp = best_em_checkpoint['w_rp']
 
         print(
-            f"\nEM completed. Best selected validation C-index: "
+            f"\nEM completed. Maximum diagnostic selection C-index: "
             f"{best_em_cindex:.4f}"
         )
         print(f"Aligned policy evaluations: {len(self.validation_cindex_history)}")

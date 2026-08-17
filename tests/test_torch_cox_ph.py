@@ -171,6 +171,26 @@ class TorchCoxPHTests(unittest.TestCase):
         np.testing.assert_allclose(state[:, 5], np.abs(P - RP))
         self.assertTrue(np.isfinite(state).all())
 
+    def test_policy_convergence_matches_hard_or_soft_responsibilities(self):
+        previous = np.array([
+            [0.51, 0.49, 0.00],
+            [0.20, 0.70, 0.10],
+        ])
+        current = np.array([
+            [0.49, 0.51, 0.00],
+            [0.25, 0.65, 0.10],
+        ])
+
+        hard_change = ContextualBandit._policy_convergence_metric(
+            previous, current, hard_policy=True
+        )
+        soft_change = ContextualBandit._policy_convergence_metric(
+            previous, current, hard_policy=False
+        )
+
+        self.assertAlmostEqual(hard_change, 0.5)
+        self.assertAlmostEqual(soft_change, 0.035)
+
     def test_expert_fit_weights_are_direct_policy_responsibilities(self):
         bandit = ContextualBandit(device="cpu")
         policy_weights = np.array([0.1, 0.2, 0.8, 0.9], dtype=np.float32)
