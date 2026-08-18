@@ -2017,6 +2017,9 @@ class SurvivalAnalyzer:
             convergence_threshold=model_params.get(
                 'convergence_threshold', 0.001
             ),
+            em_cindex_min_delta=model_params.get(
+                'em_cindex_min_delta', 0.002
+            ),
             action_convergence_threshold=model_params.get(
                 'action_convergence_threshold', 0.01
             ),
@@ -2109,6 +2112,12 @@ class SurvivalAnalyzer:
             'duration': te_y["duration"].tolist(),
             'objective_history': bandit.objective_history,
             'cindex_history': bandit.cindex_history,
+            'full_oof_hard_cindex_history': (
+                bandit.full_oof_hard_cindex_history_
+            ),
+            'full_oof_soft_cindex_history': (
+                bandit.full_oof_soft_cindex_history_
+            ),
             'actions': actions.tolist(),
             'policy_probs': probs.tolist(),
             'soft_cindex': soft_cindex,
