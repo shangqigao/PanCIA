@@ -1828,9 +1828,8 @@ class ContextualBandit:
                 reliability_risks=aligned_oof
             )
 
-            # Original hybrid construction: train the policy on current
-            # full-fit risks and substitute OOF risks only on the held-out
-            # policy-selection subset.
+            # Full-fit risks remain the deployment-style state used to obtain
+            # M-step actions and, later, test predictions.
             R_policy = self._apply_policy_risk_reference(
                 self.R_curr, 'R', self.policy_risk_reference
             )
@@ -1841,13 +1840,14 @@ class ContextualBandit:
                 self.RP_curr, 'RP', self.policy_risk_reference
             )
             S_policy = self._make_policy_state(R_policy, P_policy)
-            R_for_fit = R_policy.copy()
-            P_for_fit = P_policy.copy()
-            RP_for_fit = RP_policy.copy()
-            for name, target in (
-                ('R', R_for_fit), ('P', P_for_fit), ('RP', RP_for_fit)
-            ):
-                target[policy_select_idx] = aligned_oof[name][policy_select_idx]
+
+            # Stacking-style policy learning: every training and selection
+            # patient is represented by predictions from a Cox fold model
+            # that did not see that patient. The exploitation loss therefore
+            # cannot reuse survival information through a full-fit expert.
+            R_for_fit = aligned_oof['R'].copy()
+            P_for_fit = aligned_oof['P'].copy()
+            RP_for_fit = aligned_oof['RP'].copy()
             S_for_fit = self._make_policy_state(R_for_fit, P_for_fit)
 
             self.rp_cost_history.append(rp_cost)
@@ -1887,6 +1887,10 @@ class ContextualBandit:
                     + ", ".join(center_ranges)
                     + "; common-scale range="
                     f"[{scale_values.min():.3f},{scale_values.max():.3f}]"
+                )
+                print(
+                    "Policy optimization source: fold-aligned OOF states "
+                    "and OOF exploitation risks"
                 )
             best_val_loss = self._fit_policy_network(
                 S_for_fit, R_for_fit, P_for_fit, RP_for_fit, E_train, T_train,
