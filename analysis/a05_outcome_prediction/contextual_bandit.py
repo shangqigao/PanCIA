@@ -21,11 +21,11 @@ class PolicyNetwork(nn.Module):
     """
     Neural network policy that outputs probabilities for each action.
     
-    Input: State vector [R, P, |R-P|] on a shared robust risk scale
+    Input: State vector [R, P] on a shared robust risk scale
     Output: Softmax probabilities for actions [Rad, Path, RP]
     """
     
-    def __init__(self, input_dim=3, hidden_dim=16, output_dim=3, dropout_rate=0.1):
+    def __init__(self, input_dim=2, hidden_dim=16, output_dim=3, dropout_rate=0.1):
         super(PolicyNetwork, self).__init__()
         
         self.network = nn.Sequential(
@@ -1162,11 +1162,10 @@ class ContextualBandit:
 
     @staticmethod
     def _make_policy_state(R, P):
-        """Build the compact [R, P, |R-P|] policy state."""
+        """Build the compact [R, P] policy state."""
         return np.column_stack([
             R,
             P,
-            np.abs(R - P),
         ]).astype(np.float32)
 
     @staticmethod
@@ -1182,7 +1181,7 @@ class ContextualBandit:
             raise ValueError("Full-fit and OOF states must have equal shape")
 
         components = {}
-        for column, name in enumerate(('R', 'P', '|R-P|')):
+        for column, name in enumerate(('R', 'P')):
             full_values = full_state[:, column]
             oof_values = oof_state[:, column]
             full_ranks = pd.Series(full_values).rank(
@@ -1661,7 +1660,7 @@ class ContextualBandit:
     def _init_policy_network(self):
         """Initialize the policy network and optimizer."""
         self.policy_network = PolicyNetwork(
-            input_dim=3,
+            input_dim=2,
             hidden_dim=self.hidden_dim,
             output_dim=3,
             dropout_rate=0.1
