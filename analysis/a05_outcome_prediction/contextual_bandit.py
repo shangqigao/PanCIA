@@ -1111,6 +1111,55 @@ class ContextualBandit:
             ),
         )
 
+    def _get_fold_aligned_oof_risks(self):
+        """Align OOF fold predictions with fold-training centres/scales."""
+        models = {
+            'R': self.cox_rad,
+            'P': self.cox_path,
+            'RP': self.cox_rp,
+        }
+        required = ('oof_raw_risk_', 'oof_train_center_',
+                    'oof_train_mad_', 'oof_train_std_')
+        for name, model in models.items():
+            if any(getattr(model, attr, None) is None for attr in required):
+                raise RuntimeError(
+                    f"Fold-normalization metadata are missing for {name}"
+                )
+
+        mads = np.column_stack([
+            models[name].oof_train_mad_ for name in ('R', 'P', 'RP')
+        ]).astype(np.float64)
+        stds = np.column_stack([
+            models[name].oof_train_std_ for name in ('R', 'P', 'RP')
+        ]).astype(np.float64)
+        common_scale = 1.4826 * np.median(mads, axis=1)
+        fallback_scale = np.median(stds, axis=1)
+        invalid = ~np.isfinite(common_scale) | (common_scale <= 1e-8)
+        common_scale[invalid] = fallback_scale[invalid]
+        invalid = ~np.isfinite(common_scale) | (common_scale <= 1e-8)
+        common_scale[invalid] = 1.0
+        self.oof_fold_common_scale_ = common_scale.astype(np.float32)
+        self.oof_fold_center_ = {
+            name: np.asarray(
+                models[name].oof_train_center_, dtype=np.float32
+            ).copy()
+            for name in ('R', 'P', 'RP')
+        }
+
+        aligned = {}
+        for name, model in models.items():
+            raw = np.asarray(model.oof_raw_risk_, dtype=np.float64)
+            center = np.asarray(model.oof_train_center_, dtype=np.float64)
+            values = (raw - center) / common_scale
+            if not np.isfinite(values).all():
+                raise RuntimeError(
+                    f"Non-finite fold-aligned OOF risks for {name}"
+                )
+            aligned[name] = values.astype(np.float32)
+            # Keep the public OOF field aligned for downstream diagnostics.
+            model.oof_risk_ = aligned[name].copy()
+        return aligned
+
     @staticmethod
     def _make_policy_state(R, P):
         """Build the compact [R, P, |R-P|] policy state."""
@@ -1267,6 +1316,10 @@ class ContextualBandit:
         best_alpha = None
         best_concordance = -1
         best_oof_risk = None
+        best_oof_raw_risk = None
+        best_oof_center = None
+        best_oof_mad = None
+        best_oof_std = None
         n_samples = len(T)
         indices = np.arange(n_samples)
         if alpha_selection_indices is None:
@@ -1290,6 +1343,9 @@ class ContextualBandit:
         for alpha in alpha_range:
             try:
                 oof_risk = np.full(n_samples, np.nan, dtype=np.float32)
+                oof_center = np.full(n_samples, np.nan, dtype=np.float32)
+                oof_mad = np.full(n_samples, np.nan, dtype=np.float32)
+                oof_std = np.full(n_samples, np.nan, dtype=np.float32)
                 
                 # Preserve the existing contiguous-fold CV construction.
                 for fold in range(self.cv_folds):
@@ -1316,25 +1372,53 @@ class ContextualBandit:
                     
                     # Validate
                     try:
+                        train_risk = model.predict_log_partial_hazard(
+                            X[train_idx]
+                        )
+                        fold_center = float(np.median(train_risk))
+                        fold_mad = float(np.median(np.abs(
+                            train_risk - fold_center
+                        )))
+                        fold_std = float(np.std(train_risk))
                         risk_scores = model.predict_log_partial_hazard(X[val_idx])
                         oof_risk[val_idx] = risk_scores
+                        oof_center[val_idx] = fold_center
+                        oof_mad[val_idx] = fold_mad
+                        oof_std[val_idx] = fold_std
                     except Exception:
                         continue
 
                 score_idx = alpha_selection_indices[
                     np.isfinite(oof_risk[alpha_selection_indices])
+                    & np.isfinite(oof_center[alpha_selection_indices])
                 ]
                 if len(score_idx) < 2:
                     continue
+                fold_scale = 1.4826 * oof_mad
+                invalid_scale = (
+                    ~np.isfinite(fold_scale) | (fold_scale <= 1e-8)
+                )
+                fold_scale[invalid_scale] = oof_std[invalid_scale]
+                invalid_scale = (
+                    ~np.isfinite(fold_scale) | (fold_scale <= 1e-8)
+                )
+                fold_scale[invalid_scale] = 1.0
+                aligned_oof_risk = (
+                    (oof_risk - oof_center) / fold_scale
+                ).astype(np.float32)
                 mean_cv_score = concordance_index(
-                    T[score_idx], -oof_risk[score_idx],
+                    T[score_idx], -aligned_oof_risk[score_idx],
                     E[score_idx].astype(bool)
                 )
                 
                 if mean_cv_score > best_concordance:
                     best_concordance = mean_cv_score
                     best_alpha = alpha
-                    best_oof_risk = oof_risk.copy()
+                    best_oof_risk = aligned_oof_risk.copy()
+                    best_oof_raw_risk = oof_risk.copy()
+                    best_oof_center = oof_center.copy()
+                    best_oof_mad = oof_mad.copy()
+                    best_oof_std = oof_std.copy()
                     
             except Exception as e:
                 print(f"  Alpha={alpha} failed: {e}")
@@ -1353,6 +1437,10 @@ class ContextualBandit:
         )
         self._cox_warm_starts[full_key] = model.coef_.copy()
         model.oof_risk_ = best_oof_risk
+        model.oof_raw_risk_ = best_oof_raw_risk
+        model.oof_train_center_ = best_oof_center
+        model.oof_train_mad_ = best_oof_mad
+        model.oof_train_std_ = best_oof_std
         model.cv_concordance_ = best_concordance
         
         return model, best_alpha
@@ -1715,16 +1803,10 @@ class ContextualBandit:
         def prepare_rp_cost():
             if self.rp_cost_weight == 0:
                 return 0.0, None
-            oof_risks = (
-                self.cox_rad.oof_risk_,
-                self.cox_path.oof_risk_,
-                self.cox_rp.oof_risk_,
-            )
-            if any(risk is None for risk in oof_risks):
-                raise RuntimeError("OOF expert risks are required for RP cost")
-            R_oof, P_oof, RP_oof = oof_risks
-            if not all(np.isfinite(risk).all() for risk in oof_risks):
-                raise RuntimeError("OOF expert risks contain non-finite values")
+            aligned_oof = self._get_fold_aligned_oof_risks()
+            R_oof = aligned_oof['R']
+            P_oof = aligned_oof['P']
+            RP_oof = aligned_oof['RP']
             return self._compute_rp_cost(
                 R_oof[policy_train_idx], P_oof[policy_train_idx],
                 RP_oof[policy_train_idx], E_train[policy_train_idx],
@@ -1735,11 +1817,7 @@ class ContextualBandit:
         def fit_aligned_policy(verbose=True):
             rp_cost, rp_cost_info = prepare_rp_cost()
 
-            raw_oof = {
-                'R': self.cox_rad.oof_risk_,
-                'P': self.cox_path.oof_risk_,
-                'RP': self.cox_rp.oof_risk_,
-            }
+            aligned_oof = self._get_fold_aligned_oof_risks()
             raw_full = {
                 'R': self.R_curr,
                 'P': self.P_curr,
@@ -1747,7 +1825,7 @@ class ContextualBandit:
             }
             self.policy_risk_reference = self._fit_policy_risk_reference(
                 raw_full, policy_train_idx, E_train, T_train,
-                reliability_risks=raw_oof
+                reliability_risks=aligned_oof
             )
 
             # Original hybrid construction: train the policy on current
@@ -1769,10 +1847,7 @@ class ContextualBandit:
             for name, target in (
                 ('R', R_for_fit), ('P', P_for_fit), ('RP', RP_for_fit)
             ):
-                transformed_oof = self._apply_policy_risk_reference(
-                    raw_oof[name], name, self.policy_risk_reference
-                )
-                target[policy_select_idx] = transformed_oof[policy_select_idx]
+                target[policy_select_idx] = aligned_oof[name][policy_select_idx]
             S_for_fit = self._make_policy_state(R_for_fit, P_for_fit)
 
             self.rp_cost_history.append(rp_cost)
@@ -1800,6 +1875,19 @@ class ContextualBandit:
                     f"P={ref['cindex']['P']:.3f}, "
                     f"RP={ref['cindex']['RP']:.3f} (diagnostic only)"
                 )
+                scale_values = self.oof_fold_common_scale_
+                center_ranges = []
+                for name in ('R', 'P', 'RP'):
+                    values = self.oof_fold_center_[name]
+                    center_ranges.append(
+                        f"{name}=[{values.min():.3f},{values.max():.3f}]"
+                    )
+                print(
+                    "OOF fold alignment: training-centre ranges "
+                    + ", ".join(center_ranges)
+                    + "; common-scale range="
+                    f"[{scale_values.min():.3f},{scale_values.max():.3f}]"
+                )
             best_val_loss = self._fit_policy_network(
                 S_for_fit, R_for_fit, P_for_fit, RP_for_fit, E_train, T_train,
                 policy_train_idx, policy_select_idx, rp_cost,
@@ -1823,7 +1911,7 @@ class ContextualBandit:
             )
             expert_val_cindices = np.array([
                 self._risk_cindex(
-                    raw_oof[name][policy_select_idx],
+                    aligned_oof[name][policy_select_idx],
                     E_train[policy_select_idx], T_train[policy_select_idx]
                 )
                 for name in ('R', 'P', 'RP')
@@ -1834,15 +1922,9 @@ class ContextualBandit:
             # corresponding OOF state. This is used only as a low-variance
             # computational stopping/checkpoint proxy; policy epoch selection
             # remains based on the fixed policy-selection subset above.
-            R_oof = self._apply_policy_risk_reference(
-                raw_oof['R'], 'R', self.policy_risk_reference
-            )
-            P_oof = self._apply_policy_risk_reference(
-                raw_oof['P'], 'P', self.policy_risk_reference
-            )
-            RP_oof = self._apply_policy_risk_reference(
-                raw_oof['RP'], 'RP', self.policy_risk_reference
-            )
+            R_oof = aligned_oof['R']
+            P_oof = aligned_oof['P']
+            RP_oof = aligned_oof['RP']
             S_oof = self._make_policy_state(R_oof, P_oof)
             hard_oof_probs = self._get_policy_probs(S_oof, hard=True)
             soft_oof_probs = self._get_policy_probs(S_oof, hard=False)
@@ -2025,9 +2107,10 @@ class ContextualBandit:
             # EVALUATE AND CHECK CONVERGENCE
             # ============================================================
             
+            post_mstep_oof = self._get_fold_aligned_oof_risks()
             post_mstep_oof_cindices = np.array([
-                self._risk_cindex(model.oof_risk_, E_train, T_train)
-                for model in (self.cox_rad, self.cox_path, self.cox_rp)
+                self._risk_cindex(post_mstep_oof[name], E_train, T_train)
+                for name in ('R', 'P', 'RP')
             ])
             self.training_cindex_history.append(
                 float(np.max(post_mstep_oof_cindices))
