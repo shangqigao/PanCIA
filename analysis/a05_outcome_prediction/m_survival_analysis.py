@@ -2118,6 +2118,9 @@ class SurvivalAnalyzer:
             'full_oof_soft_cindex_history': (
                 bandit.full_oof_soft_cindex_history_
             ),
+            'full_oof_state_gap_history': (
+                bandit.full_oof_state_gap_history_
+            ),
             'actions': actions.tolist(),
             'policy_probs': probs.tolist(),
             'soft_cindex': soft_cindex,

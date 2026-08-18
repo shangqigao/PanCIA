@@ -1174,6 +1174,36 @@ class ContextualBandit:
         return concordance_index(T, -risk, E.astype(bool))
 
     @staticmethod
+    def _paired_state_gap(full_state, oof_state):
+        """Summarize paired full-fit versus OOF policy-state differences."""
+        full_state = np.asarray(full_state, dtype=np.float64)
+        oof_state = np.asarray(oof_state, dtype=np.float64)
+        if full_state.shape != oof_state.shape:
+            raise ValueError("Full-fit and OOF states must have equal shape")
+
+        components = {}
+        for column, name in enumerate(('R', 'P', '|R-P|')):
+            full_values = full_state[:, column]
+            oof_values = oof_state[:, column]
+            full_ranks = pd.Series(full_values).rank(
+                method='average'
+            ).to_numpy(dtype=np.float64)
+            oof_ranks = pd.Series(oof_values).rank(
+                method='average'
+            ).to_numpy(dtype=np.float64)
+            if np.std(full_ranks) <= 1e-12 or np.std(oof_ranks) <= 1e-12:
+                spearman = np.nan
+            else:
+                spearman = float(np.corrcoef(full_ranks, oof_ranks)[0, 1])
+            components[name] = {
+                'spearman': spearman,
+                'median_abs_delta': float(np.median(np.abs(
+                    full_values - oof_values
+                ))),
+            }
+        return components
+
+    @staticmethod
     def _policy_convergence_metric(previous_probs, current_probs, hard_policy):
         """Return hard action-change rate or soft total-variation change."""
         previous_probs = np.asarray(previous_probs, dtype=np.float64)
@@ -1774,6 +1804,7 @@ class ContextualBandit:
         self.em_convergence_history_ = []
         self.full_oof_hard_cindex_history_ = []
         self.full_oof_soft_cindex_history_ = []
+        self.full_oof_state_gap_history_ = []
         experts_updated_since_policy = True
 
         def capture_checkpoint(validation_cindex, full_oof_hard_cindex,
@@ -1897,10 +1928,10 @@ class ContextualBandit:
                 policy_train_idx, policy_select_idx, rp_cost,
                 verbose=verbose
             )
-            action_weights = self._get_policy_probs(
+            full_action_weights = self._get_policy_probs(
                 S_policy, hard=self.hard_policy
             )
-            soft_probs = self._get_policy_probs(S_policy, hard=False)
+            full_soft_probs = self._get_policy_probs(S_policy, hard=False)
             action_select = self._get_policy_probs(
                 S_for_fit[policy_select_idx], hard=self.hard_policy
             )
@@ -1929,7 +1960,7 @@ class ContextualBandit:
             R_oof = aligned_oof['R']
             P_oof = aligned_oof['P']
             RP_oof = aligned_oof['RP']
-            S_oof = self._make_policy_state(R_oof, P_oof)
+            S_oof = S_for_fit
             hard_oof_probs = self._get_policy_probs(S_oof, hard=True)
             soft_oof_probs = self._get_policy_probs(S_oof, hard=False)
             oof_risk_matrix = np.column_stack([R_oof, P_oof, RP_oof])
@@ -1941,13 +1972,43 @@ class ContextualBandit:
             full_oof_soft_cindex = self._risk_cindex(
                 soft_oof_risk, E_train, T_train
             )
+            state_gap = self._paired_state_gap(S_policy, S_oof)
+            action_agreement = float(np.mean(
+                np.argmax(full_action_weights, axis=1)
+                == np.argmax(hard_oof_probs, axis=1)
+            ))
+            probability_tv = float(np.mean(
+                0.5 * np.abs(
+                    full_soft_probs - soft_oof_probs
+                ).sum(axis=1)
+            ))
+            state_gap['policy'] = {
+                'action_agreement': action_agreement,
+                'soft_probability_tv': probability_tv,
+            }
+            if verbose:
+                component_text = ", ".join(
+                    f"{name}: rho={values['spearman']:.3f}, "
+                    f"median|delta|={values['median_abs_delta']:.3f}"
+                    for name, values in state_gap.items()
+                    if name != 'policy'
+                )
+                print(
+                    "Full-fit vs OOF state gap - " + component_text
+                    + f"; action agreement={action_agreement:.3f}, "
+                    f"soft TV={probability_tv:.3f}"
+                )
             return {
                 'S': S_policy,
+                'S_oof': S_oof,
                 'R': R_policy,
                 'P': P_policy,
                 'RP': RP_policy,
-                'probs': action_weights,
-                'soft_probs': soft_probs,
+                # Cross-fitted assignments drive the weighted M-step.
+                'probs': hard_oof_probs,
+                'soft_probs': soft_oof_probs,
+                'full_probs': full_action_weights,
+                'full_soft_probs': full_soft_probs,
                 'rp_cost': rp_cost,
                 'val_loss': best_val_loss,
                 'val_cindex': selection_cindex,
@@ -1955,6 +2016,7 @@ class ContextualBandit:
                 'best_expert': int(np.argmax(expert_val_cindices)),
                 'full_oof_hard_cindex': full_oof_hard_cindex,
                 'full_oof_soft_cindex': full_oof_soft_cindex,
+                'state_gap': state_gap,
             }
 
         # ============================================================
@@ -1968,8 +2030,8 @@ class ContextualBandit:
             print(f"Training policy network for {self.policy_epochs} epochs...")
             aligned = fit_aligned_policy(verbose=True)
             experts_updated_since_policy = False
-            # July-22 M-step: deterministic one-hot full-fit assignments,
-            # followed by a small uniform floor.
+            # Cross-fitted deterministic one-hot assignments, followed by a
+            # small uniform floor, drive the weighted expert M-step.
             policy_probs = aligned['probs']
             floor = self.min_expert_weight
             policy_probs = policy_probs * (1.0 - 3.0 * floor) + floor
@@ -2002,6 +2064,7 @@ class ContextualBandit:
             soft_oof_cindex = aligned['full_oof_soft_cindex']
             self.full_oof_hard_cindex_history_.append(hard_oof_cindex)
             self.full_oof_soft_cindex_history_.append(soft_oof_cindex)
+            self.full_oof_state_gap_history_.append(aligned['state_gap'])
             self.em_convergence_history_.append(hard_oof_cindex)
             best_selection_cindex = max(
                 best_selection_cindex, selection_cindex
@@ -2126,8 +2189,8 @@ class ContextualBandit:
                 f"RP: {post_mstep_oof_cindices[2]:.4f}"
             )
             
-            # Print mutually exclusive policy assignments. The M-step still
-            # uses the complete soft weights above.
+            # Print the mutually exclusive cross-fitted assignments used by
+            # the weighted expert M-step (after applying the uniform floor).
             expert_weights = np.column_stack([
                 self.w_rad, self.w_path, self.w_rp
             ])
@@ -2161,6 +2224,7 @@ class ContextualBandit:
             soft_oof_cindex = aligned['full_oof_soft_cindex']
             self.full_oof_hard_cindex_history_.append(hard_oof_cindex)
             self.full_oof_soft_cindex_history_.append(soft_oof_cindex)
+            self.full_oof_state_gap_history_.append(aligned['state_gap'])
             self.em_convergence_history_.append(hard_oof_cindex)
             best_selection_cindex = max(
                 best_selection_cindex, selection_cindex
