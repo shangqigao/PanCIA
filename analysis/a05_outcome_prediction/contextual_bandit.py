@@ -859,8 +859,8 @@ class ContextualBandit:
     convergence_threshold : float, default=0.001
         Retained for backward compatibility.
     em_cindex_min_delta : float, default=0.002
-        Minimum improvement in the full-OOF hard system C-index that resets
-        outer-EM early-stopping patience.
+        Minimum improvement in personalized C-index on the fixed policy
+        selection subset that resets outer-EM early-stopping patience.
     hidden_dim : int, default=16
         Hidden layer dimension for policy network
     learning_rate : float, default=0.01
@@ -1356,6 +1356,8 @@ class ContextualBandit:
         alpha_selection_indices = np.asarray(
             alpha_selection_indices, dtype=np.int64
         )
+        alpha_selection_mask = np.zeros(n_samples, dtype=bool)
+        alpha_selection_mask[alpha_selection_indices] = True
 
         def make_model(alpha):
             return TorchCoxPH(
@@ -1375,6 +1377,7 @@ class ContextualBandit:
                 oof_center = np.full(n_samples, np.nan, dtype=np.float32)
                 oof_mad = np.full(n_samples, np.nan, dtype=np.float32)
                 oof_std = np.full(n_samples, np.nan, dtype=np.float32)
+                fold_cindices = []
                 
                 # Preserve the existing contiguous-fold CV construction.
                 for fold in range(self.cv_folds):
@@ -1414,14 +1417,24 @@ class ContextualBandit:
                         oof_center[val_idx] = fold_center
                         oof_mad[val_idx] = fold_mad
                         oof_std[val_idx] = fold_std
+                        fold_score_idx = val_idx[
+                            alpha_selection_mask[val_idx]
+                        ]
+                        if len(fold_score_idx) >= 2:
+                            try:
+                                fold_cindices.append(float(
+                                    concordance_index(
+                                        T[fold_score_idx],
+                                        -oof_risk[fold_score_idx],
+                                        E[fold_score_idx].astype(bool),
+                                    )
+                                ))
+                            except Exception:
+                                pass
                     except Exception:
                         continue
 
-                score_idx = alpha_selection_indices[
-                    np.isfinite(oof_risk[alpha_selection_indices])
-                    & np.isfinite(oof_center[alpha_selection_indices])
-                ]
-                if len(score_idx) < 2:
+                if not fold_cindices:
                     continue
                 fold_scale = 1.4826 * oof_mad
                 invalid_scale = (
@@ -1435,10 +1448,10 @@ class ContextualBandit:
                 aligned_oof_risk = (
                     (oof_risk - oof_center) / fold_scale
                 ).astype(np.float32)
-                mean_cv_score = concordance_index(
-                    T[score_idx], -aligned_oof_risk[score_idx],
-                    E[score_idx].astype(bool)
-                )
+                # Alpha selection compares patients only within the same
+                # validation fold, so arbitrary Cox offsets never enter the
+                # model-selection score.
+                mean_cv_score = float(np.mean(fold_cindices))
                 
                 if mean_cv_score > best_concordance:
                     best_concordance = mean_cv_score
@@ -1729,9 +1742,9 @@ class ContextualBandit:
         
         N_train = len(T_train)
 
-        # Use one fixed 80/20 split for policy epoch selection. Outer-EM
-        # stopping and synchronized checkpointing use the full-OOF system
-        # C-index; the external test fold remains untouched.
+        # Use one fixed 80/20 split for policy epoch selection, outer-EM
+        # stopping, and synchronized checkpointing. The external test fold
+        # remains untouched.
         indices = np.arange(N_train)
         policy_train_idx, policy_select_idx = train_test_split(
             indices, test_size=0.2, random_state=self.random_state
@@ -1795,6 +1808,7 @@ class ContextualBandit:
         self.policy_select_indices_ = policy_select_idx.copy()
         self.training_cindex_history = []
         self.validation_cindex_history = []
+        self.validation_soft_cindex_history = []
         best_em_checkpoint = None
         best_em_cindex = -np.inf
         patience_reference_cindex = -np.inf
@@ -1806,7 +1820,8 @@ class ContextualBandit:
         self.full_oof_state_gap_history_ = []
         experts_updated_since_policy = True
 
-        def capture_checkpoint(validation_cindex, full_oof_hard_cindex,
+        def capture_checkpoint(validation_cindex, validation_soft_cindex,
+                               full_oof_hard_cindex,
                                full_oof_soft_cindex):
             return {
                 'cox_rad': copy.deepcopy(self.cox_rad),
@@ -1826,6 +1841,7 @@ class ContextualBandit:
                 'w_path': self.w_path.copy(),
                 'w_rp': self.w_rp.copy(),
                 'validation_cindex': validation_cindex,
+                'validation_soft_cindex': validation_soft_cindex,
                 'full_oof_hard_cindex': full_oof_hard_cindex,
                 'full_oof_soft_cindex': full_oof_soft_cindex,
             }
@@ -1833,13 +1849,10 @@ class ContextualBandit:
         def prepare_rp_cost():
             if self.rp_cost_weight == 0:
                 return 0.0, None
-            aligned_oof = self._get_fold_aligned_oof_risks()
-            R_oof = aligned_oof['R']
-            P_oof = aligned_oof['P']
-            RP_oof = aligned_oof['RP']
             return self._compute_rp_cost(
-                R_oof[policy_train_idx], P_oof[policy_train_idx],
-                RP_oof[policy_train_idx], E_train[policy_train_idx],
+                self.R_curr[policy_train_idx],
+                self.P_curr[policy_train_idx],
+                self.RP_curr[policy_train_idx], E_train[policy_train_idx],
                 T_train[policy_train_idx],
                 bootstrap_indices=fixed_bootstrap_indices
             )
@@ -1858,8 +1871,9 @@ class ContextualBandit:
                 reliability_risks=aligned_oof
             )
 
-            # Full-fit risks remain the deployment-style state used to obtain
-            # M-step actions and, later, test predictions.
+            # One full-fit state domain is used consistently for policy
+            # optimization, policy epoch selection, the weighted M-step, and
+            # later test prediction.
             R_policy = self._apply_policy_risk_reference(
                 self.R_curr, 'R', self.policy_risk_reference
             )
@@ -1871,14 +1885,10 @@ class ContextualBandit:
             )
             S_policy = self._make_policy_state(R_policy, P_policy)
 
-            # Stacking-style policy learning: every training and selection
-            # patient is represented by predictions from a Cox fold model
-            # that did not see that patient. The exploitation loss therefore
-            # cannot reuse survival information through a full-fit expert.
-            R_for_fit = aligned_oof['R'].copy()
-            P_for_fit = aligned_oof['P'].copy()
-            RP_for_fit = aligned_oof['RP'].copy()
-            S_for_fit = self._make_policy_state(R_for_fit, P_for_fit)
+            R_for_fit = R_policy
+            P_for_fit = P_policy
+            RP_for_fit = RP_policy
+            S_for_fit = S_policy
 
             self.rp_cost_history.append(rp_cost)
             if verbose:
@@ -1887,7 +1897,7 @@ class ContextualBandit:
                 else:
                     print(
                         f"RP evidence cost: {rp_cost:.4f} "
-                        f"(OOF C-index R={rp_cost_info['cindex_rad']:.4f}, "
+                        f"(full-fit C-index R={rp_cost_info['cindex_rad']:.4f}, "
                         f"P={rp_cost_info['cindex_path']:.4f}, "
                         f"RP={rp_cost_info['cindex_rp']:.4f}; "
                         f"lower gains RP-R={rp_cost_info['lower_gain_vs_rad']:.4f}, "
@@ -1919,8 +1929,8 @@ class ContextualBandit:
                     f"[{scale_values.min():.3f},{scale_values.max():.3f}]"
                 )
                 print(
-                    "Policy optimization source: fold-aligned OOF states "
-                    "and OOF exploitation risks"
+                    "Policy optimization source: full-fit states and "
+                    "full-fit exploitation risks"
                 )
             best_val_loss = self._fit_policy_network(
                 S_for_fit, R_for_fit, P_for_fit, RP_for_fit, E_train, T_train,
@@ -1943,23 +1953,32 @@ class ContextualBandit:
                 T_train[policy_select_idx], -normalized_select_risk,
                 E_train[policy_select_idx].astype(bool)
             )
+            soft_select_risk = (
+                full_soft_probs[policy_select_idx, 0]
+                * R_for_fit[policy_select_idx]
+                + full_soft_probs[policy_select_idx, 1]
+                * P_for_fit[policy_select_idx]
+                + full_soft_probs[policy_select_idx, 2]
+                * RP_for_fit[policy_select_idx]
+            )
+            selection_soft_cindex = concordance_index(
+                T_train[policy_select_idx], -soft_select_risk,
+                E_train[policy_select_idx].astype(bool)
+            )
             expert_val_cindices = np.array([
                 self._risk_cindex(
-                    aligned_oof[name][policy_select_idx],
+                    risk[policy_select_idx],
                     E_train[policy_select_idx], T_train[policy_select_idx]
                 )
-                for name in ('R', 'P', 'RP')
+                for risk in (R_for_fit, P_for_fit, RP_for_fit)
             ], dtype=np.float64)
 
-            # Full-OOF system prediction: Cox risks are out of fold for every
-            # patient, while the already selected policy is evaluated on the
-            # corresponding OOF state. This is used only as a low-variance
-            # computational stopping/checkpoint proxy; policy epoch selection
-            # remains based on the fixed policy-selection subset above.
+            # Full-OOF system prediction remains a diagnostic only. It does
+            # not train/select the policy or select an EM checkpoint.
             R_oof = aligned_oof['R']
             P_oof = aligned_oof['P']
             RP_oof = aligned_oof['RP']
-            S_oof = S_for_fit
+            S_oof = self._make_policy_state(R_oof, P_oof)
             hard_oof_probs = self._get_policy_probs(S_oof, hard=True)
             soft_oof_probs = self._get_policy_probs(S_oof, hard=False)
             oof_risk_matrix = np.column_stack([R_oof, P_oof, RP_oof])
@@ -2003,14 +2022,15 @@ class ContextualBandit:
                 'R': R_policy,
                 'P': P_policy,
                 'RP': RP_policy,
-                # Cross-fitted assignments drive the weighted M-step.
-                'probs': hard_oof_probs,
-                'soft_probs': soft_oof_probs,
+                # Full-fit assignments drive the weighted M-step.
+                'probs': full_action_weights,
+                'soft_probs': full_soft_probs,
                 'full_probs': full_action_weights,
                 'full_soft_probs': full_soft_probs,
                 'rp_cost': rp_cost,
                 'val_loss': best_val_loss,
                 'val_cindex': selection_cindex,
+                'val_soft_cindex': selection_soft_cindex,
                 'expert_val_cindices': expert_val_cindices,
                 'best_expert': int(np.argmax(expert_val_cindices)),
                 'full_oof_hard_cindex': full_oof_hard_cindex,
@@ -2029,8 +2049,8 @@ class ContextualBandit:
             print(f"Training policy network for {self.policy_epochs} epochs...")
             aligned = fit_aligned_policy(verbose=True)
             experts_updated_since_policy = False
-            # Cross-fitted deterministic one-hot assignments, followed by a
-            # small uniform floor, drive the weighted expert M-step.
+            # Full-fit deterministic one-hot assignments, followed by a small
+            # uniform floor, drive the weighted expert M-step.
             policy_probs = aligned['probs']
             floor = self.min_expert_weight
             policy_probs = policy_probs * (1.0 - 3.0 * floor) + floor
@@ -2041,8 +2061,12 @@ class ContextualBandit:
             # The policy is always retained. Expert C-indices remain
             # diagnostics and never veto exploration or the weighted M-step.
             selection_cindex = aligned['val_cindex']
+            selection_soft_cindex = aligned['val_soft_cindex']
 
             self.validation_cindex_history.append(aligned['val_cindex'])
+            self.validation_soft_cindex_history.append(
+                selection_soft_cindex
+            )
             self.cindex_history.append(selection_cindex)
             self.objective_history.append(-aligned['val_loss'])
             self.policies.append({
@@ -2052,9 +2076,13 @@ class ContextualBandit:
             self.models_rad.append(self.cox_rad)
             self.models_path.append(self.cox_path)
             self.models_rp.append(self.cox_rp)
-            print(f"Aligned selection C-index: {aligned['val_cindex']:.4f}")
             print(
-                "Selection expert C-indices - "
+                "Personalized full-fit selection C-index - "
+                f"Hard: {selection_cindex:.4f}, "
+                f"Soft: {selection_soft_cindex:.4f}"
+            )
+            print(
+                "Full-fit selection expert C-indices - "
                 f"Rad: {aligned['expert_val_cindices'][0]:.4f}, "
                 f"Path: {aligned['expert_val_cindices'][1]:.4f}, "
                 f"RP: {aligned['expert_val_cindices'][2]:.4f}"
@@ -2064,20 +2092,21 @@ class ContextualBandit:
             self.full_oof_hard_cindex_history_.append(hard_oof_cindex)
             self.full_oof_soft_cindex_history_.append(soft_oof_cindex)
             self.full_oof_state_gap_history_.append(aligned['state_gap'])
-            self.em_convergence_history_.append(hard_oof_cindex)
+            self.em_convergence_history_.append(selection_cindex)
             best_selection_cindex = max(
                 best_selection_cindex, selection_cindex
             )
 
-            improvement = hard_oof_cindex - patience_reference_cindex
+            improvement = selection_cindex - patience_reference_cindex
             checkpoint_improved = (
                 best_em_checkpoint is None
-                or hard_oof_cindex > best_em_cindex
+                or selection_cindex > best_em_cindex
             )
             if checkpoint_improved:
-                best_em_cindex = hard_oof_cindex
+                best_em_cindex = selection_cindex
                 best_em_checkpoint = capture_checkpoint(
-                    selection_cindex, hard_oof_cindex, soft_oof_cindex
+                    selection_cindex, selection_soft_cindex,
+                    hard_oof_cindex, soft_oof_cindex
                 )
 
             meaningful_improvement = (
@@ -2085,7 +2114,7 @@ class ContextualBandit:
                 or improvement > self.em_cindex_min_delta
             )
             if meaningful_improvement:
-                patience_reference_cindex = hard_oof_cindex
+                patience_reference_cindex = selection_cindex
                 no_improvement_counter = 0
             else:
                 no_improvement_counter += 1
@@ -2096,8 +2125,12 @@ class ContextualBandit:
             print(
                 "Full OOF system C-index - "
                 f"Hard: {hard_oof_cindex:.4f}, "
-                f"Soft: {soft_oof_cindex:.4f}; "
-                f"hard improvement={improvement_text}, "
+                f"Soft: {soft_oof_cindex:.4f} (diagnostic only)"
+            )
+            print(
+                "Personalized selection C-index checkpoint - "
+                f"current={selection_cindex:.4f}, "
+                f"improvement={improvement_text}, "
                 f"patience={no_improvement_counter}/"
                 f"{self.em_convergence_patience}"
             )
@@ -2108,7 +2141,8 @@ class ContextualBandit:
                 and no_improvement_counter >= self.em_convergence_patience
             ):
                 print(
-                    "EM early stopping: full-OOF hard C-index did not improve "
+                    "EM early stopping: personalized selection C-index did "
+                    "not improve "
                     f"by more than {self.em_cindex_min_delta:.4f}"
                 )
                 break
@@ -2216,7 +2250,11 @@ class ContextualBandit:
             self.w_path = final_m_step_probs[:, 1]
             self.w_rp = final_m_step_probs[:, 2]
             selection_cindex = aligned['val_cindex']
+            selection_soft_cindex = aligned['val_soft_cindex']
             self.validation_cindex_history.append(aligned['val_cindex'])
+            self.validation_soft_cindex_history.append(
+                selection_soft_cindex
+            )
             self.cindex_history.append(selection_cindex)
             self.objective_history.append(-aligned['val_loss'])
             hard_oof_cindex = aligned['full_oof_hard_cindex']
@@ -2224,21 +2262,24 @@ class ContextualBandit:
             self.full_oof_hard_cindex_history_.append(hard_oof_cindex)
             self.full_oof_soft_cindex_history_.append(soft_oof_cindex)
             self.full_oof_state_gap_history_.append(aligned['state_gap'])
-            self.em_convergence_history_.append(hard_oof_cindex)
+            self.em_convergence_history_.append(selection_cindex)
             best_selection_cindex = max(
                 best_selection_cindex, selection_cindex
             )
             if (
                 best_em_checkpoint is None
-                or hard_oof_cindex > best_em_cindex
+                or selection_cindex > best_em_cindex
             ):
-                best_em_cindex = hard_oof_cindex
+                best_em_cindex = selection_cindex
                 best_em_checkpoint = capture_checkpoint(
-                    selection_cindex, hard_oof_cindex, soft_oof_cindex
+                    selection_cindex, selection_soft_cindex,
+                    hard_oof_cindex, soft_oof_cindex
                 )
             print(
-                "Final full OOF system C-index - "
-                f"Hard: {hard_oof_cindex:.4f}, Soft: {soft_oof_cindex:.4f}"
+                "Final personalized selection C-index - "
+                f"Hard: {selection_cindex:.4f}, "
+                f"Soft: {selection_soft_cindex:.4f}; full OOF diagnostic "
+                f"Hard/Soft={hard_oof_cindex:.4f}/{soft_oof_cindex:.4f}"
             )
 
         if best_em_checkpoint is None:
@@ -2254,6 +2295,12 @@ class ContextualBandit:
         self.w_rad = best_em_checkpoint['w_rad']
         self.w_path = best_em_checkpoint['w_path']
         self.w_rp = best_em_checkpoint['w_rp']
+        self.best_personalized_selection_cindex_ = best_em_checkpoint[
+            'validation_cindex'
+        ]
+        self.best_personalized_selection_soft_cindex_ = best_em_checkpoint[
+            'validation_soft_cindex'
+        ]
         self.best_full_oof_hard_cindex_ = best_em_checkpoint[
             'full_oof_hard_cindex'
         ]
@@ -2262,13 +2309,15 @@ class ContextualBandit:
         ]
 
         print(
-            f"\nEM completed. Best checkpoint full-OOF C-index - "
-            f"Hard: {self.best_full_oof_hard_cindex_:.4f}, "
-            f"Soft: {self.best_full_oof_soft_cindex_:.4f}"
+            f"\nEM completed. Best checkpoint personalized selection "
+            "C-index - "
+            f"Hard: {self.best_personalized_selection_cindex_:.4f}, "
+            f"Soft: {self.best_personalized_selection_soft_cindex_:.4f}"
         )
         print(
-            f"Maximum diagnostic selection C-index: "
-            f"{best_selection_cindex:.4f}"
+            "Best checkpoint full-OOF diagnostic C-index - "
+            f"Hard: {self.best_full_oof_hard_cindex_:.4f}, "
+            f"Soft: {self.best_full_oof_soft_cindex_:.4f}"
         )
         print(f"Aligned policy evaluations: {len(self.validation_cindex_history)}")
         

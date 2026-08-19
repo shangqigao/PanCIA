@@ -2112,6 +2112,15 @@ class SurvivalAnalyzer:
             'duration': te_y["duration"].tolist(),
             'objective_history': bandit.objective_history,
             'cindex_history': bandit.cindex_history,
+            'best_personalized_selection_cindex': (
+                bandit.best_personalized_selection_cindex_
+            ),
+            'best_personalized_selection_soft_cindex': (
+                bandit.best_personalized_selection_soft_cindex_
+            ),
+            'selection_soft_cindex_history': (
+                bandit.validation_soft_cindex_history
+            ),
             'full_oof_hard_cindex_history': (
                 bandit.full_oof_hard_cindex_history_
             ),
