@@ -1069,8 +1069,6 @@ class ContextualBandit:
                 E[fit_indices], T[fit_indices]
             ))
 
-        # A single scale preserves genuine differences in expert-risk spread.
-        # The median expert MAD is robust to one unusually dispersed expert.
         common_scale = 1.4826 * float(np.median(list(mads.values())))
         if not np.isfinite(common_scale) or common_scale <= 1e-8:
             pooled_centered = np.concatenate([
@@ -1083,7 +1081,6 @@ class ContextualBandit:
         return {
             'centers': centers,
             'common_scale': common_scale,
-            # Preserve a simple compatibility view for saved diagnostics.
             'scales': {name: common_scale for name in names},
             'mad': mads,
             'cindex': cindices,
@@ -1145,7 +1142,6 @@ class ContextualBandit:
             ).copy()
             for name in ('R', 'P', 'RP')
         }
-
         aligned = {}
         for name, model in models.items():
             raw = np.asarray(model.oof_raw_risk_, dtype=np.float64)
@@ -1222,7 +1218,7 @@ class ContextualBandit:
         ))
 
     def _prepare_expert_fit_weights(self, policy_weights, events):
-        """Pass the floored hard policy weights to the Cox objective."""
+        """Pass direct soft policy responsibilities to the Cox objective."""
         policy_weights = np.asarray(policy_weights, dtype=np.float64).reshape(-1)
         events = np.asarray(events, dtype=bool).reshape(-1)
         if policy_weights.shape != events.shape:
@@ -2047,7 +2043,7 @@ class ContextualBandit:
                 'R': R_policy,
                 'P': P_policy,
                 'RP': RP_policy,
-                # Full-fit assignments drive the weighted M-step.
+                # Full-fit policy outputs are returned for the M-step.
                 'probs': full_action_weights,
                 'soft_probs': full_soft_probs,
                 'full_probs': full_action_weights,
@@ -2076,11 +2072,10 @@ class ContextualBandit:
             print(f"Training policy network for {self.policy_epochs} epochs...")
             aligned = fit_aligned_policy(verbose=True)
             experts_updated_since_policy = False
-            # Full-fit deterministic one-hot assignments, followed by a small
-            # uniform floor, drive the weighted expert M-step.
-            policy_probs = aligned['probs']
-            floor = self.min_expert_weight
-            policy_probs = policy_probs * (1.0 - 3.0 * floor) + floor
+            # Direct full-fit softmax responsibilities drive the weighted
+            # expert M-step. They are already positive and row-normalized, so
+            # no additional probability floor is applied.
+            policy_probs = aligned['soft_probs']
             self.w_rad = policy_probs[:, 0]
             self.w_path = policy_probs[:, 1]
             self.w_rp = policy_probs[:, 2]
@@ -2266,8 +2261,8 @@ class ContextualBandit:
                 f"RP: {post_mstep_oof_cindices[2]:.4f}"
             )
             
-            # Print the mutually exclusive cross-fitted assignments used by
-            # the weighted expert M-step (after applying the uniform floor).
+            # Report argmax groups for interpretation; the M-step itself uses
+            # the complete soft responsibility vector for every patient.
             expert_weights = np.column_stack([
                 self.w_rad, self.w_path, self.w_rp
             ])
@@ -2285,11 +2280,7 @@ class ContextualBandit:
         if experts_updated_since_policy:
             print("\nFinal policy normalization on the last Cox experts...")
             aligned = fit_aligned_policy(verbose=False)
-            final_m_step_probs = aligned['probs']
-            floor = self.min_expert_weight
-            final_m_step_probs = (
-                final_m_step_probs * (1.0 - 3.0 * floor) + floor
-            )
+            final_m_step_probs = aligned['soft_probs']
             self.w_rad = final_m_step_probs[:, 0]
             self.w_path = final_m_step_probs[:, 1]
             self.w_rp = final_m_step_probs[:, 2]
