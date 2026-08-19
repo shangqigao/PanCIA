@@ -1218,7 +1218,7 @@ class ContextualBandit:
         ))
 
     def _prepare_expert_fit_weights(self, policy_weights, events):
-        """Pass direct soft policy responsibilities to the Cox objective."""
+        """Pass floored hard policy responsibilities to the Cox objective."""
         policy_weights = np.asarray(policy_weights, dtype=np.float64).reshape(-1)
         events = np.asarray(events, dtype=bool).reshape(-1)
         if policy_weights.shape != events.shape:
@@ -2072,10 +2072,11 @@ class ContextualBandit:
             print(f"Training policy network for {self.policy_epochs} epochs...")
             aligned = fit_aligned_policy(verbose=True)
             experts_updated_since_policy = False
-            # Direct full-fit softmax responsibilities drive the weighted
-            # expert M-step. They are already positive and row-normalized, so
-            # no additional probability floor is applied.
-            policy_probs = aligned['soft_probs']
+            # Deterministic full-fit one-hot assignments followed by a small
+            # uniform floor drive the weighted expert M-step.
+            policy_probs = aligned['probs']
+            floor = self.min_expert_weight
+            policy_probs = policy_probs * (1.0 - 3.0 * floor) + floor
             self.w_rad = policy_probs[:, 0]
             self.w_path = policy_probs[:, 1]
             self.w_rp = policy_probs[:, 2]
@@ -2261,8 +2262,8 @@ class ContextualBandit:
                 f"RP: {post_mstep_oof_cindices[2]:.4f}"
             )
             
-            # Report argmax groups for interpretation; the M-step itself uses
-            # the complete soft responsibility vector for every patient.
+            # Report the mutually exclusive assignments used by the M-step
+            # before application of the uniform probability floor.
             expert_weights = np.column_stack([
                 self.w_rad, self.w_path, self.w_rp
             ])
@@ -2280,7 +2281,11 @@ class ContextualBandit:
         if experts_updated_since_policy:
             print("\nFinal policy normalization on the last Cox experts...")
             aligned = fit_aligned_policy(verbose=False)
-            final_m_step_probs = aligned['soft_probs']
+            final_m_step_probs = aligned['probs']
+            floor = self.min_expert_weight
+            final_m_step_probs = (
+                final_m_step_probs * (1.0 - 3.0 * floor) + floor
+            )
             self.w_rad = final_m_step_probs[:, 0]
             self.w_path = final_m_step_probs[:, 1]
             self.w_rp = final_m_step_probs[:, 2]
