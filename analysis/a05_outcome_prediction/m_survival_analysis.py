@@ -2121,6 +2121,18 @@ class SurvivalAnalyzer:
             'selection_soft_cindex_history': (
                 bandit.validation_soft_cindex_history
             ),
+            'best_selection_oof_hard_cindex': (
+                bandit.best_selection_oof_hard_cindex_
+            ),
+            'best_selection_oof_soft_cindex': (
+                bandit.best_selection_oof_soft_cindex_
+            ),
+            'selection_oof_hard_cindex_history': (
+                bandit.selection_oof_hard_cindex_history_
+            ),
+            'selection_oof_soft_cindex_history': (
+                bandit.selection_oof_soft_cindex_history_
+            ),
             'full_oof_hard_cindex_history': (
                 bandit.full_oof_hard_cindex_history_
             ),
