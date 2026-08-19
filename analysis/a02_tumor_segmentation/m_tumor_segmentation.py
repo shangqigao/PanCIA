@@ -377,7 +377,7 @@ if __name__ == "__main__":
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--model', default="BiomedParse", choices=["SegVol", "BiomedParse"], type=str)
+    parser.add_argument('--model', default="BiomedParse", choices=["SegVol", "BiomedParse", "VoxTell"], type=str)
     args = parser.parse_args()
 
     save_dir = pathlib.Path(args.save_dir) / args.model

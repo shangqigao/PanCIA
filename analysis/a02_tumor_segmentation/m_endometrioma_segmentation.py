@@ -105,17 +105,19 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
     """
 
     # Build model config
-    opt = load_opt_from_config_files([os.path.join(relative_path, "configs/radiology_segmentation/biomedparse_inference.yaml")])
+    # opt = load_opt_from_config_files([os.path.join(relative_path, "configs/radiology_segmentation/biomedparse_inference.yaml")])
+    opt = load_opt_from_config_files([os.path.join(relative_path, "configs/radiology_segmentation/pancia_bayes_inference.yaml")])
     opt = init_distributed(opt)
 
     # Load model from pretrained weights
     if seg_obj == 'endometrioma':
-        opt['LoRA'] = True
-        pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/Endometriosis_LoRA')
+        # opt['LoRA'] = True
+        # pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/Endometriosis_LoRA')
+        opt['LoRA'] = False
+        pretrained_pth = os.path.join(relative_path, 'output_bayes_endometriosis/pancia_bayes_seg_lang.yaml_conf~/run_3/00041860/default/model_state_dict.pt')
     else:
         opt['LoRA'] = False
         pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/biomedparse_v1.pt')
-    # pretrained_pth = os.path.join(relative_path, 'checkpoints/Bayes_BiomedParse/Bayes_PanCancer/model_state_dict.pt')
 
     if device == 'gpu':
         if not opt.get('LoRA', False):
