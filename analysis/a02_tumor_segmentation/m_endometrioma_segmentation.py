@@ -114,7 +114,7 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
         # opt['LoRA'] = True
         # pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/Endometriosis_LoRA')
         opt['LoRA'] = False
-        pretrained_pth = os.path.join(relative_path, 'output_bayes_endometriosis/pancia_bayes_seg_lang.yaml_conf~/run_3/00041860/default/model_state_dict.pt')
+        pretrained_pth = os.path.join(relative_path, 'output_bayes_endometriosis/pancia_bayes_seg_lang.yaml_conf~/run_5/00033488/default/model_state_dict.pt')
     else:
         opt['LoRA'] = False
         pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/biomedparse_v1.pt')
