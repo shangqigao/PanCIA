@@ -8,32 +8,15 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 relative_path = os.path.join(script_dir, '../../')
 sys.path.append(relative_path)
 
-import json
-import torch
 import pathlib
 import argparse
 import logging
 import numpy as np
-import nibabel as nib
-from PIL import Image
-
-logging.getLogger("modeling").setLevel(logging.ERROR)
-from modeling.BaseModel import BaseModel
-from modeling import build_model
-from utilities.distributed import init_distributed
-from utilities.arguments import load_opt_from_config_files
-from utilities.constants import BIOMED_CLASSES, CT_SITES
-
-from inference_utils.inference import interactive_infer_image
-from inference_utils.processing_utils import read_dicom
-from inference_utils.processing_utils import read_nifti_inplane
 
 from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_MAMAMIA_info
 from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_TCGA_radiology_info
-from analysis.a02_tumor_segmentation.m_post_processing import remove_inconsistent_objects
-from peft import LoraConfig, get_peft_model
-
-from tiatoolbox import logger
+from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_CPTAC_radiology_info
+logger = logging.getLogger(__name__)
 
 def extract_radiology_segmentation(
         dataset,
@@ -51,6 +34,8 @@ def extract_radiology_segmentation(
         prompt_ensemble=False,
         save_radiomics=False,
         zoom_in=False,
+        voxtell_model_root=None,
+        device=None,
         skip_exist=False
     ):
     """extract segmentation from radiology images
@@ -81,7 +66,22 @@ def extract_radiology_segmentation(
             prompt_ensemble=prompt_ensemble,
             save_radiomics=save_radiomics,
             zoom_in=zoom_in,
+            device=device or "gpu",
             skip_exist=skip_exist
+        )
+    elif model_mode == "VoxTell":
+        extract_VoxTell_segmentation(
+            dataset=dataset,
+            seg_obj=seg_obj,
+            img_paths=img_paths,
+            save_dir=save_dir,
+            format=img_format,
+            site=site,
+            model_root=voxtell_model_root,
+            keep_largest=keep_largest,
+            prompt_ensemble=prompt_ensemble,
+            device=device,
+            skip_exist=skip_exist,
         )
     else:
         raise ValueError(f"Invalid model mode: {model_mode}")
@@ -101,10 +101,28 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
         meta_list (list): a list of imaging metadata, 
             such as 'field_strength', 'bilateral', 'scanner_manufacturer'
         prompt_ensemble: if true, use prompt ensemble
-        beta_params: the parameters of Beta distribution, 
+        beta_params: the parameters of Beta distribution,
             if provided, it would be used to compute p-values of segmented objects
             if p-value is less than alpha, i.e., 0.05, the object would be removed
     """
+
+    # BiomedParse is installed in a separate environment. Keep its imports local
+    # so selecting VoxTell does not require any BiomedParse dependencies.
+    import json
+    import nibabel as nib
+    import torch
+    from PIL import Image
+    from peft import LoraConfig, get_peft_model
+
+    logging.getLogger("modeling").setLevel(logging.ERROR)
+    from modeling.BaseModel import BaseModel
+    from modeling import build_model
+    from utilities.distributed import init_distributed
+    from utilities.arguments import load_opt_from_config_files
+    from utilities.constants import BIOMED_CLASSES, CT_SITES
+    from inference_utils.inference import interactive_infer_image
+    from inference_utils.processing_utils import read_dicom, read_nifti_inplane
+    from analysis.a02_tumor_segmentation.m_post_processing import remove_inconsistent_objects
 
     # Build model config
     opt = load_opt_from_config_files([os.path.join(relative_path, "configs/radiology_segmentation/biomedparse_inference.yaml")])
@@ -219,23 +237,16 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
             pred_mask = (1*(pred_prob > 0.5)).astype(np.uint8)
 
             if zoom_in:
-                # Find coordinates where mask == 1
                 ys, xs = np.where(np.squeeze(pred_mask) == 1)
                 min_size = 256
                 if len(xs) > 0 and len(ys) > 0:
                     x_min, x_max = np.min(xs), np.max(xs)
                     y_min, y_max = np.min(ys), np.max(ys)
                     H, W = img.shape[:2]
-
-                    # Current width and height
                     box_w = x_max - x_min + 1
                     box_h = y_max - y_min + 1
-
-                    # How much to expand
                     pad_w = max(0, min_size - box_w)
                     pad_h = max(0, min_size - box_h)
-
-                    # Pad equally on both sides
                     x_min = max(0, x_min - pad_w // 2)
                     x_max = min(W - 1, x_max + (pad_w - pad_w // 2))
                     y_min = max(0, y_min - pad_h // 2)
@@ -252,7 +263,7 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
                     pred_mask[:, y_min:y_max+1, x_min:x_max+1] = zoom_pred_mask
             mask_3d.append(pred_mask)
 
-            if save_radiomics: 
+            if save_radiomics:
                 slice_feat = np.mean(np.stack(ensemble_feat, axis=0), axis=0, keepdims=True)
                 feat_4d.append(slice_feat)
         
@@ -307,17 +318,128 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
                 radiomic_feat = radiomic_feat[final_mask > 0]
                 save_feat_path = f"{save_dir}/{img_name}_radiomics.npy"
                 logger.info(f"Saving radiomic features to {save_feat_path}")
-                np.save(save_feat_path, radiomic_feat)       
+                np.save(save_feat_path, radiomic_feat)
 
     return
 
+
 def load_beta_params(modality, site, target):
+    import json
+
     beta_path = os.path.join(relative_path, 'analysis/tumor_segmentation/Beta_params.json')
     with open(beta_path, 'r') as f:
         data = json.load(f)
         beta_params = data[f"{modality}-{site}"][target]
 
     return beta_params
+
+
+def extract_VoxTell_segmentation(
+        dataset,
+        seg_obj,
+        img_paths,
+        save_dir,
+        format='nifti',
+        site='kidney',
+        model_root=None,
+        keep_largest=False,
+        prompt_ensemble=False,
+        device=None,
+        skip_exist=False,
+    ):
+    """Segment NIfTI volumes with VoxTell v1.1 using free-text prompts.
+
+    ``model_root`` is the directory that contains the ``voxtell_v1.1`` model
+    directory. The checkpoint is downloaded there only when the required model
+    files are missing.
+    """
+
+    # VoxTell is installed in a separate environment. Keep every backend-specific
+    # import local so BiomedParse can run without VoxTell (and vice versa).
+    import torch
+    from huggingface_hub import snapshot_download
+    from nnunetv2.imageio.nibabel_reader_writer import NibabelIOWithReorient
+    from voxtell.inference.predictor import VoxTellPredictor
+    from analysis.a02_tumor_segmentation.m_post_processing import keep_largest_components
+
+    if prompt_ensemble:
+        raise ValueError("prompt_ensemble is currently supported only by BiomedParse")
+
+    if model_root is None:
+        model_root = os.path.join(relative_path, "checkpoints", "VoxTell")
+    model_root = pathlib.Path(model_root).expanduser().resolve()
+    model_dir = model_root / "voxtell_v1.1"
+    required_files = (
+        model_dir / "plans.json",
+        model_dir / "fold_0" / "checkpoint_final.pth",
+    )
+
+    if all(path.is_file() for path in required_files):
+        logger.info("Using existing VoxTell v1.1 model at %s", model_dir)
+    else:
+        logger.info("Downloading VoxTell v1.1 model to %s", model_root)
+        model_root.mkdir(parents=True, exist_ok=True)
+        snapshot_download(
+            repo_id="mrokuss/VoxTell",
+            allow_patterns="voxtell_v1.1/*",
+            local_dir=str(model_root),
+        )
+        missing = [str(path) for path in required_files if not path.is_file()]
+        if missing:
+            raise RuntimeError(
+                "VoxTell v1.1 download completed without required files: "
+                + ", ".join(missing)
+            )
+
+    if device is None:
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    torch_device = torch.device(device)
+    predictor = VoxTellPredictor(model_dir=str(model_dir), device=torch_device)
+    reader_writer = NibabelIOWithReorient()
+
+    if isinstance(format, str):
+        format = [format] * len(img_paths)
+    if isinstance(site, str):
+        site = [site] * len(img_paths)
+
+    save_dir = pathlib.Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    for idx, img_path in enumerate(img_paths):
+        logger.info("Segmenting image: %s/%s...", idx + 1, len(img_paths))
+        if format[idx] != "nifti":
+            raise ValueError("VoxTell currently supports only NIfTI input")
+        if isinstance(img_path, list):
+            if len(img_path) != 1:
+                raise ValueError(
+                    "VoxTell currently supports one NIfTI volume per case, not multi-phase input"
+                )
+            img_path = img_path[0]
+
+        if '/MAMA-MIA/' in str(img_path):
+            img_name = pathlib.Path(img_path).name.replace("_0001.nii.gz", "")
+        elif f'/{dataset}_NIFTI/' in str(img_path):
+            img_name = str(img_path).split(f'/{dataset}_NIFTI/')[-1].replace(".nii.gz", "")
+        else:
+            img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+
+        save_mask_path = save_dir / f"{img_name}_{seg_obj}.nii.gz"
+        if save_mask_path.exists() and skip_exist:
+            logger.info("%s has existed, skip!", save_mask_path.name)
+            continue
+
+        text_prompt = f"{site[idx]} {seg_obj}"
+        logger.info("Using VoxTell prompt: %s", text_prompt)
+        image, properties = reader_writer.read_images([str(img_path)])
+        prediction = predictor.predict_single_image(image, [text_prompt])
+        mask = np.asarray(prediction[0], dtype=np.uint8)
+        if keep_largest:
+            mask = keep_largest_components(mask)
+
+        logger.info("Saving predicted segmentation to %s", save_mask_path)
+        reader_writer.write_seg(mask, str(save_mask_path), properties)
+
+    return
 
 def create_prompts(meta_data):
     keys = ['view', 'slice_index', 'modality', 'site', 'target']
@@ -367,6 +489,10 @@ def create_prompts(meta_data):
     return basic_prompts + meta_prompts
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(message)s",
+    )
     ## argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument('--radiology', default="/home/s/sg2162/projects/TCIA_NIFTI/image")
@@ -378,6 +504,18 @@ if __name__ == "__main__":
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
     parser.add_argument('--model', default="BiomedParse", choices=["SegVol", "BiomedParse", "VoxTell"], type=str)
+    parser.add_argument(
+        '--voxtell_model_root',
+        default=os.path.join(relative_path, 'checkpoints', 'VoxTell'),
+        type=str,
+        help='Directory containing voxtell_v1.1; downloads the model here if missing',
+    )
+    parser.add_argument(
+        '--device',
+        default=None,
+        type=str,
+        help='VoxTell torch device, e.g. cuda:0 or cpu (default: auto-detect)',
+    )
     args = parser.parse_args()
 
     save_dir = pathlib.Path(args.save_dir) / args.model
@@ -396,7 +534,7 @@ if __name__ == "__main__":
             seg_obj=args.seg_obj
         )
     elif args.dataset == 'CPTAC':
-        dataset_info = prepare_TCGA_radiology_info(
+        dataset_info = prepare_CPTAC_radiology_info(
             img_json=args.radiology,
             img_format=args.format,
             seg_obj=args.seg_obj
@@ -423,5 +561,7 @@ if __name__ == "__main__":
         prompt_ensemble=False,
         save_radiomics=False,
         zoom_in=False,
+        voxtell_model_root=args.voxtell_model_root,
+        device=args.device,
         skip_exist=True
     )
