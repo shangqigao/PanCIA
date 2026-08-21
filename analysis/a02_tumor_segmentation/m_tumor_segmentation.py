@@ -437,6 +437,7 @@ def extract_VoxTell_segmentation(
             mask = keep_largest_components(mask)
 
         logger.info("Saving predicted segmentation to %s", save_mask_path)
+        os.makedirs(os.path.dirname(save_mask_path), exist_ok=True)
         reader_writer.write_seg(mask, str(save_mask_path), properties)
 
     return
