@@ -21,11 +21,11 @@ class PolicyNetwork(nn.Module):
     """
     Neural network policy that outputs probabilities for each action.
     
-    Input: State vector [R, P, |R-P|] on a shared robust risk scale
+    Input: [R, P, |R-P|, standardized radiomic/pathomic KNN percentiles]
     Output: Softmax probabilities for actions [Rad, Path, RP]
     """
     
-    def __init__(self, input_dim=3, hidden_dim=16, output_dim=3, dropout_rate=0.1):
+    def __init__(self, input_dim=5, hidden_dim=16, output_dim=3, dropout_rate=0.1):
         super(PolicyNetwork, self).__init__()
         
         self.network = nn.Sequential(
@@ -883,6 +883,8 @@ class ContextualBandit:
         Required lower-confidence-bound C-index gain for cost-free RP use
     rp_bootstrap_samples : int, default=500
         Paired bootstrap samples used to estimate RP performance evidence
+    embedding_knn_k : int, default=20
+        Neighbours used for modality-specific cosine-distance states
     hard_policy : bool, default=False
         Train Cox risk with straight-through one-hot Gumbel-Softmax actions
     gumbel_temperature : float, default=1.0
@@ -914,6 +916,7 @@ class ContextualBandit:
                  rp_minimum_gain=0.01,
                  rp_bootstrap_samples=500,
                  rp_confidence=0.95,
+                 embedding_knn_k=20,
                  hard_policy=False,
                  gumbel_temperature=1.0,
                  gumbel_min_temperature=0.1,
@@ -961,6 +964,9 @@ class ContextualBandit:
         self.rp_minimum_gain = rp_minimum_gain
         self.rp_bootstrap_samples = rp_bootstrap_samples
         self.rp_confidence = rp_confidence
+        if embedding_knn_k < 1:
+            raise ValueError("embedding_knn_k must be positive")
+        self.embedding_knn_k = int(embedding_knn_k)
         if gumbel_temperature <= 0 or gumbel_min_temperature <= 0:
             raise ValueError("Gumbel temperatures must be positive")
         if not 0.0 < gumbel_anneal_rate <= 1.0:
@@ -1131,13 +1137,127 @@ class ContextualBandit:
         return aligned
 
     @staticmethod
-    def _make_policy_state(R, P):
-        """Build the compact [R, P, |R-P|] policy state."""
+    def _l2_normalize_embeddings(X):
+        X = np.ascontiguousarray(X, dtype=np.float32)
+        norms = np.linalg.norm(X, axis=1, keepdims=True)
+        return X / np.maximum(norms, 1e-8)
+
+    def _cosine_knn_distances(self, queries, reference,
+                              self_reference=False, chunk_size=1024):
+        """Mean cosine distance to K neighbours, optionally excluding self."""
+        queries = self._l2_normalize_embeddings(queries)
+        reference = self._l2_normalize_embeddings(reference)
+        if self_reference and len(queries) != len(reference):
+            raise ValueError("Self-reference KNN requires equal query/reference size")
+        available = len(reference) - int(self_reference)
+        if available < 1:
+            raise ValueError("Embedding KNN requires at least two training samples")
+        k = min(self.embedding_knn_k, available)
+        output = np.empty(len(queries), dtype=np.float32)
+        for start in range(0, len(queries), chunk_size):
+            end = min(start + chunk_size, len(queries))
+            distances = 1.0 - queries[start:end] @ reference.T
+            if self_reference:
+                rows = np.arange(end - start)
+                distances[rows, np.arange(start, end)] = np.inf
+            nearest = np.partition(distances, kth=k - 1, axis=1)[:, :k]
+            output[start:end] = nearest.mean(axis=1)
+        return output
+
+    @staticmethod
+    def _distance_percentiles(distances, sorted_reference):
+        """Map distances to the empirical CDF of training KNN distances."""
+        distances = np.asarray(distances, dtype=np.float32)
+        sorted_reference = np.asarray(sorted_reference, dtype=np.float32)
+        ranks = np.searchsorted(sorted_reference, distances, side='right')
+        return (ranks / len(sorted_reference)).astype(np.float32)
+
+    @staticmethod
+    def _standardize_distance_percentiles(percentiles):
+        """Center Uniform(0, 1) percentiles and give them unit variance."""
+        percentiles = np.asarray(percentiles, dtype=np.float32)
+        return ((percentiles - 0.5) * np.sqrt(12.0)).astype(np.float32)
+
+    def _fit_embedding_distance_state(self, X_rad, X_path):
+        """Fit all-training reference banks and leave-one-out distance states."""
+        self.embedding_reference_rad_ = self._l2_normalize_embeddings(X_rad)
+        self.embedding_reference_path_ = self._l2_normalize_embeddings(X_path)
+        rad_distance = self._cosine_knn_distances(
+            self.embedding_reference_rad_, self.embedding_reference_rad_,
+            self_reference=True,
+        )
+        path_distance = self._cosine_knn_distances(
+            self.embedding_reference_path_, self.embedding_reference_path_,
+            self_reference=True,
+        )
+        self.embedding_distance_reference_rad_ = np.sort(rad_distance)
+        self.embedding_distance_reference_path_ = np.sort(path_distance)
+        self.embedding_distance_state_ = np.column_stack([
+            self._standardize_distance_percentiles(
+                self._distance_percentiles(
+                    rad_distance, self.embedding_distance_reference_rad_
+                )
+            ),
+            self._standardize_distance_percentiles(
+                self._distance_percentiles(
+                    path_distance, self.embedding_distance_reference_path_
+                )
+            ),
+        ]).astype(np.float32)
+        return rad_distance, path_distance
+
+    def _transform_embedding_distance_state(self, X_rad, X_path):
+        """Compute standardized test percentiles against training embeddings."""
+        if not hasattr(self, 'embedding_reference_rad_'):
+            raise RuntimeError("Embedding distance reference is not fitted")
+        rad_distance = self._cosine_knn_distances(
+            X_rad, self.embedding_reference_rad_
+        )
+        path_distance = self._cosine_knn_distances(
+            X_path, self.embedding_reference_path_
+        )
+        return np.column_stack([
+            self._standardize_distance_percentiles(
+                self._distance_percentiles(
+                    rad_distance, self.embedding_distance_reference_rad_
+                )
+            ),
+            self._standardize_distance_percentiles(
+                self._distance_percentiles(
+                    path_distance, self.embedding_distance_reference_path_
+                )
+            ),
+        ]).astype(np.float32)
+
+    @staticmethod
+    def _make_policy_state(R, P, embedding_distance_state):
+        """Build risks plus standardized radiomic/pathomic KNN percentiles."""
+        embedding_distance_state = np.asarray(
+            embedding_distance_state, dtype=np.float32
+        )
+        if embedding_distance_state.shape != (len(R), 2):
+            raise ValueError("embedding_distance_state must have shape [N, 2]")
         return np.column_stack([
             R,
             P,
             np.abs(R - P),
+            embedding_distance_state,
         ]).astype(np.float32)
+
+    @staticmethod
+    def _policy_state_statistics(state):
+        """Format distribution diagnostics for each policy-state column."""
+        state = np.asarray(state, dtype=np.float64)
+        names = ('R', 'P', '|R-P|', 'KNN-R', 'KNN-P')
+        summaries = []
+        for column, name in enumerate(names):
+            values = state[:, column]
+            q05, q50, q95 = np.quantile(values, [0.05, 0.50, 0.95])
+            summaries.append(
+                f"{name}: mean={values.mean():.3f}, SD={values.std():.3f}, "
+                f"q05/50/95={q05:.3f}/{q50:.3f}/{q95:.3f}"
+            )
+        return "; ".join(summaries)
 
     @staticmethod
     def _risk_cindex(risk, E, T):
@@ -1152,7 +1272,9 @@ class ContextualBandit:
             raise ValueError("Full-fit and OOF states must have equal shape")
 
         components = {}
-        for column, name in enumerate(('R', 'P', '|R-P|')):
+        for column, name in enumerate(
+            ('R', 'P', '|R-P|', 'KNN-R', 'KNN-P')
+        ):
             full_values = full_state[:, column]
             oof_values = oof_state[:, column]
             full_ranks = pd.Series(full_values).rank(
@@ -1477,7 +1599,7 @@ class ContextualBandit:
         Parameters
         ----------
         S : ndarray
-            State matrix (n_samples, 3): [R, P, |R-P|].
+            State matrix (n_samples, 5), including two KNN percentiles.
             
         Returns
         -------
@@ -1636,7 +1758,7 @@ class ContextualBandit:
     def _init_policy_network(self):
         """Initialize the policy network and optimizer."""
         self.policy_network = PolicyNetwork(
-            input_dim=3,
+            input_dim=5,
             hidden_dim=self.hidden_dim,
             output_dim=3,
             dropout_rate=0.1
@@ -1704,6 +1826,20 @@ class ContextualBandit:
         E_train = np.ascontiguousarray(E_train, dtype=np.float32)
         
         N_train = len(T_train)
+
+        rad_knn_distance, path_knn_distance = (
+            self._fit_embedding_distance_state(X_rad, X_path)
+        )
+        for name, distances in (
+            ('radiomics', rad_knn_distance),
+            ('pathomics', path_knn_distance),
+        ):
+            q05, q50, q95 = np.quantile(distances, [0.05, 0.50, 0.95])
+            print(
+                f"Embedding cosine KNN {name} (K="
+                f"{min(self.embedding_knn_k, N_train - 1)}): "
+                f"distance q05/50/95={q05:.4f}/{q50:.4f}/{q95:.4f}"
+            )
 
         # Use one fixed 80/20 split for policy epoch selection. Full-OOF hard
         # C-index controls outer-EM stopping and synchronized checkpointing;
@@ -1854,7 +1990,9 @@ class ContextualBandit:
             RP_policy = self._apply_policy_risk_reference(
                 self.RP_curr, 'RP', self.policy_risk_reference
             )
-            S_policy = self._make_policy_state(R_policy, P_policy)
+            S_policy = self._make_policy_state(
+                R_policy, P_policy, self.embedding_distance_state_
+            )
 
             R_for_fit = R_policy
             P_for_fit = P_policy
@@ -1864,7 +2002,9 @@ class ContextualBandit:
             R_oof = aligned_oof['R']
             P_oof = aligned_oof['P']
             RP_oof = aligned_oof['RP']
-            S_oof = self._make_policy_state(R_oof, P_oof)
+            S_oof = self._make_policy_state(
+                R_oof, P_oof, self.embedding_distance_state_
+            )
 
             self.rp_cost_history.append(rp_cost)
             if verbose:
@@ -1908,6 +2048,14 @@ class ContextualBandit:
                     "Policy optimization source: full-fit training states/"
                     "risks; epoch selection source: fold-aligned OOF "
                     "states/risks"
+                )
+                print(
+                    "Full-fit policy state statistics - "
+                    + self._policy_state_statistics(S_policy)
+                )
+                print(
+                    "OOF policy state statistics - "
+                    + self._policy_state_statistics(S_oof)
                 )
             best_val_loss = self._fit_policy_network(
                 S_for_fit, R_for_fit, P_for_fit, RP_for_fit, E_train, T_train,
@@ -2375,7 +2523,10 @@ class ContextualBandit:
         RP = self._predict_risk(self.cox_rp, X_rp)
 
         R, P, RP = self._normalize_expert_risks(R, P, RP)
-        S = self._make_policy_state(R, P)
+        distance_state = self._transform_embedding_distance_state(
+            X_rad, X_path
+        )
+        S = self._make_policy_state(R, P, distance_state)
         
         # Get policy probabilities
         probs = self._get_policy_probs(S)
@@ -2403,7 +2554,10 @@ class ContextualBandit:
         X_rp = np.concatenate([X_rad, X_path], axis=1)
         RP = self._predict_risk(self.cox_rp, X_rp)
         R, P, RP = self._normalize_expert_risks(R, P, RP)
-        S = self._make_policy_state(R, P)
+        distance_state = self._transform_embedding_distance_state(
+            X_rad, X_path
+        )
+        S = self._make_policy_state(R, P, distance_state)
         return self._get_policy_probs(S)
     
     def get_weighted_risk(self, X_rad, X_path):
@@ -2416,7 +2570,10 @@ class ContextualBandit:
         RP = self._predict_risk(self.cox_rp, X_rp)
 
         R, P, RP = self._normalize_expert_risks(R, P, RP)
-        S = self._make_policy_state(R, P)
+        distance_state = self._transform_embedding_distance_state(
+            X_rad, X_path
+        )
+        S = self._make_policy_state(R, P, distance_state)
         probs = self._get_policy_probs(S)
         
         # Weighted risk = sum(prob * risk)

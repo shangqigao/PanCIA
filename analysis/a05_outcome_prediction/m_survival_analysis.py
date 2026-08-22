@@ -2036,6 +2036,7 @@ class SurvivalAnalyzer:
             rp_minimum_gain=model_params.get('rp_minimum_gain', 0.01),
             rp_bootstrap_samples=model_params.get('rp_bootstrap_samples', 500),
             rp_confidence=model_params.get('rp_confidence', 0.95),
+            embedding_knn_k=model_params.get('embedding_knn_k', 20),
             hard_policy=True,
             gumbel_temperature=model_params.get('gumbel_temperature', 1.0),
             gumbel_min_temperature=model_params.get(

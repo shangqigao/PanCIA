@@ -114,7 +114,7 @@ class TorchCoxPHTests(unittest.TestCase):
             device="cpu",
         )
         bandit._init_policy_network()
-        states = torch.randn(12, 6)
+        states = torch.randn(12, 5)
         actions, soft_probs = bandit._policy_outputs(states, stochastic=True)
 
         torch.testing.assert_close(actions.sum(dim=1), torch.ones(12))
@@ -145,7 +145,7 @@ class TorchCoxPHTests(unittest.TestCase):
             hard_policy=True, loss_type="weighted", device="cpu"
         )
         bandit._init_policy_network()
-        states = np.random.default_rng(4).normal(size=(10, 6)).astype(np.float32)
+        states = np.random.default_rng(4).normal(size=(10, 5)).astype(np.float32)
 
         soft = bandit._get_policy_probs(states, hard=False)
         hard = bandit._get_policy_probs(states, hard=True)
@@ -158,17 +158,15 @@ class TorchCoxPHTests(unittest.TestCase):
         bandit = ContextualBandit(device="cpu")
         R = rng.normal(size=20).astype(np.float32)
         P = rng.normal(size=20).astype(np.float32)
-        RP = rng.normal(size=20).astype(np.float32)
+        distance_state = rng.uniform(size=(20, 2)).astype(np.float32)
 
-        state = bandit._make_policy_state(R, P, RP)
+        state = bandit._make_policy_state(R, P, distance_state)
 
-        self.assertEqual(state.shape, (20, 6))
+        self.assertEqual(state.shape, (20, 5))
         np.testing.assert_allclose(state[:, 0], R)
         np.testing.assert_allclose(state[:, 1], P)
-        np.testing.assert_allclose(state[:, 2], RP)
-        np.testing.assert_allclose(state[:, 3], np.abs(R - P))
-        np.testing.assert_allclose(state[:, 4], np.abs(R - RP))
-        np.testing.assert_allclose(state[:, 5], np.abs(P - RP))
+        np.testing.assert_allclose(state[:, 2], np.abs(R - P))
+        np.testing.assert_allclose(state[:, 3:], distance_state)
         self.assertTrue(np.isfinite(state).all())
 
     def test_policy_convergence_matches_hard_or_soft_responsibilities(self):
