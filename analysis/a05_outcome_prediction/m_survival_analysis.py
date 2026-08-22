@@ -2014,17 +2014,8 @@ class SurvivalAnalyzer:
                 'alpha_range', [0.001, 0.01, 0.1, 1.0]
             ),
             max_iterations=model_params.get('em_max_iterations', 20),
-            convergence_threshold=model_params.get(
-                'convergence_threshold', 0.001
-            ),
             em_cindex_min_delta=model_params.get(
                 'em_cindex_min_delta', 0.002
-            ),
-            action_convergence_threshold=model_params.get(
-                'action_convergence_threshold', 0.01
-            ),
-            soft_convergence_threshold=model_params.get(
-                'soft_convergence_threshold', 0.01
             ),
             em_convergence_patience=model_params.get(
                 'em_convergence_patience', 2
@@ -2032,7 +2023,6 @@ class SurvivalAnalyzer:
             min_em_iterations=model_params.get('min_em_iterations', 2),
             hidden_dim=model_params.get('policy_hidden_dim', 8),
             learning_rate=model_params.get('policy_learning_rate', 0.01),
-            batch_size=model_params.get('policy_batch_size', 64),
             policy_epochs=model_params.get('policy_epochs', 50),
             cv_folds=model_params.get('cox_cv_folds', 5),
             cox_learning_rate=model_params.get('cox_learning_rate', 0.05),
@@ -2042,7 +2032,6 @@ class SurvivalAnalyzer:
             cox_l1_ratio=model_params.get('cox_l1_ratio', 0.9),
             cox_gradient_clip=model_params.get('cox_gradient_clip', 10.0),
             min_expert_weight=model_params.get('min_expert_weight', 0.01),
-            policy_risk_clip=model_params.get('policy_risk_clip', 5.0),
             rp_cost_weight=model_params.get('rp_cost_weight', 0.0),
             rp_minimum_gain=model_params.get('rp_minimum_gain', 0.01),
             rp_bootstrap_samples=model_params.get('rp_bootstrap_samples', 500),

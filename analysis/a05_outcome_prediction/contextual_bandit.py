@@ -856,8 +856,6 @@ class ContextualBandit:
         Elastic-net penalty range for Cox models
     max_iterations : int, default=10
         Maximum number of EM iterations
-    convergence_threshold : float, default=0.001
-        Retained for backward compatibility.
     em_cindex_min_delta : float, default=0.002
         Minimum full-OOF hard C-index improvement that resets outer-EM
         early-stopping patience.
@@ -865,8 +863,6 @@ class ContextualBandit:
         Hidden layer dimension for policy network
     learning_rate : float, default=0.01
         Learning rate for policy network
-    batch_size : int, default=32
-        Retained for compatibility; policy Cox training uses full risk sets
     policy_epochs : int, default=50
         Number of epochs for policy training per EM iteration
     cv_folds : int, default=5
@@ -881,8 +877,6 @@ class ContextualBandit:
         Consecutive low-change steps before stopping Cox optimization
     cox_l1_ratio : float, default=0.9
         Elastic-net mixing parameter used by TorchCoxPH
-    policy_risk_clip : float, default=5.0
-        Absolute clipping bound after OOF centering and common-scale conversion.
     rp_cost_weight : float, default=1.0
         Strength of the evidence-based penalty on RP policy probability
     rp_minimum_gain : float, default=0.01
@@ -902,15 +896,11 @@ class ContextualBandit:
     def __init__(self, 
                  alpha_range=None,
                  max_iterations=10,
-                 convergence_threshold=0.001,
                  em_cindex_min_delta=0.002,
-                 action_convergence_threshold=0.01,
-                 soft_convergence_threshold=0.01,
                  em_convergence_patience=2,
                  min_em_iterations=2,
                  hidden_dim=16,
                  learning_rate=0.01,
-                 batch_size=32,
                  policy_epochs=50,
                  cv_folds=5,
                  cox_learning_rate=0.05,
@@ -920,7 +910,6 @@ class ContextualBandit:
                  cox_l1_ratio=0.9,
                  cox_gradient_clip=10.0,
                  min_expert_weight=0.01,
-                 policy_risk_clip=5.0,
                  rp_cost_weight=1.0,
                  rp_minimum_gain=0.01,
                  rp_bootstrap_samples=500,
@@ -942,27 +931,15 @@ class ContextualBandit:
             if alpha_range is None else list(alpha_range)
         )
         self.max_iterations = max_iterations
-        self.convergence_threshold = convergence_threshold
         if em_cindex_min_delta < 0:
             raise ValueError("em_cindex_min_delta must be non-negative")
         self.em_cindex_min_delta = float(em_cindex_min_delta)
-        if not 0.0 <= action_convergence_threshold <= 1.0:
-            raise ValueError("action_convergence_threshold must be in [0, 1]")
-        if not 0.0 <= soft_convergence_threshold <= 1.0:
-            raise ValueError("soft_convergence_threshold must be in [0, 1]")
         if em_convergence_patience < 1 or min_em_iterations < 1:
             raise ValueError("EM patience and minimum iterations must be positive")
-        self.action_convergence_threshold = float(
-            action_convergence_threshold
-        )
-        self.soft_convergence_threshold = float(
-            soft_convergence_threshold
-        )
         self.em_convergence_patience = int(em_convergence_patience)
         self.min_em_iterations = int(min_em_iterations)
         self.hidden_dim = hidden_dim
         self.learning_rate = learning_rate
-        self.batch_size = batch_size
         self.policy_epochs = policy_epochs
         self.cv_folds = cv_folds
         self.cox_learning_rate = cox_learning_rate
@@ -974,9 +951,6 @@ class ContextualBandit:
         if not 0.0 <= min_expert_weight < 1.0 / 3.0:
             raise ValueError("min_expert_weight must be in [0, 1/3)")
         self.min_expert_weight = float(min_expert_weight)
-        if policy_risk_clip <= 0:
-            raise ValueError("policy_risk_clip must be positive")
-        self.policy_risk_clip = float(policy_risk_clip)
         if rp_cost_weight < 0:
             raise ValueError("rp_cost_weight must be non-negative")
         if rp_bootstrap_samples < 0:
@@ -1353,8 +1327,6 @@ class ContextualBandit:
         alpha_selection_indices = np.asarray(
             alpha_selection_indices, dtype=np.int64
         )
-        alpha_selection_mask = np.zeros(n_samples, dtype=bool)
-        alpha_selection_mask[alpha_selection_indices] = True
 
         def make_model(alpha):
             return TorchCoxPH(
@@ -1374,7 +1346,6 @@ class ContextualBandit:
                 oof_center = np.full(n_samples, np.nan, dtype=np.float32)
                 oof_mad = np.full(n_samples, np.nan, dtype=np.float32)
                 oof_std = np.full(n_samples, np.nan, dtype=np.float32)
-                fold_cindices = []
                 
                 # Preserve the existing contiguous-fold CV construction.
                 for fold in range(self.cv_folds):
@@ -1414,24 +1385,14 @@ class ContextualBandit:
                         oof_center[val_idx] = fold_center
                         oof_mad[val_idx] = fold_mad
                         oof_std[val_idx] = fold_std
-                        fold_score_idx = val_idx[
-                            alpha_selection_mask[val_idx]
-                        ]
-                        if len(fold_score_idx) >= 2:
-                            try:
-                                fold_cindices.append(float(
-                                    concordance_index(
-                                        T[fold_score_idx],
-                                        -oof_risk[fold_score_idx],
-                                        E[fold_score_idx].astype(bool),
-                                    )
-                                ))
-                            except Exception:
-                                pass
                     except Exception:
                         continue
 
-                if not fold_cindices:
+                score_idx = alpha_selection_indices[
+                    np.isfinite(oof_risk[alpha_selection_indices])
+                    & np.isfinite(oof_center[alpha_selection_indices])
+                ]
+                if len(score_idx) < 2:
                     continue
                 fold_scale = 1.4826 * oof_mad
                 invalid_scale = (
@@ -1445,10 +1406,10 @@ class ContextualBandit:
                 aligned_oof_risk = (
                     (oof_risk - oof_center) / fold_scale
                 ).astype(np.float32)
-                # Alpha selection compares patients only within the same
-                # validation fold, so arbitrary Cox offsets never enter the
-                # model-selection score.
-                mean_cv_score = float(np.mean(fold_cindices))
+                mean_cv_score = concordance_index(
+                    T[score_idx], -aligned_oof_risk[score_idx],
+                    E[score_idx].astype(bool)
+                )
                 
                 if mean_cv_score > best_concordance:
                     best_concordance = mean_cv_score
@@ -1856,10 +1817,13 @@ class ContextualBandit:
         def prepare_rp_cost():
             if self.rp_cost_weight == 0:
                 return 0.0, None
+            aligned_oof = self._get_fold_aligned_oof_risks()
+            R_oof = aligned_oof['R']
+            P_oof = aligned_oof['P']
+            RP_oof = aligned_oof['RP']
             return self._compute_rp_cost(
-                self.R_curr[policy_train_idx],
-                self.P_curr[policy_train_idx],
-                self.RP_curr[policy_train_idx], E_train[policy_train_idx],
+                R_oof[policy_train_idx], P_oof[policy_train_idx],
+                RP_oof[policy_train_idx], E_train[policy_train_idx],
                 T_train[policy_train_idx],
                 bootstrap_indices=fixed_bootstrap_indices
             )
@@ -1909,7 +1873,7 @@ class ContextualBandit:
                 else:
                     print(
                         f"RP evidence cost: {rp_cost:.4f} "
-                        f"(full-fit C-index R={rp_cost_info['cindex_rad']:.4f}, "
+                        f"(OOF C-index R={rp_cost_info['cindex_rad']:.4f}, "
                         f"P={rp_cost_info['cindex_path']:.4f}, "
                         f"RP={rp_cost_info['cindex_rp']:.4f}; "
                         f"lower gains RP-R={rp_cost_info['lower_gain_vs_rad']:.4f}, "

@@ -407,7 +407,7 @@ class TorchCoxPHTests(unittest.TestCase):
         events = np.ones(20, dtype=bool)
         base = np.linspace(-1.0, 1.0, 20, dtype=np.float32)
         risks = {"R": base, "P": 4.0 * base, "RP": 2.0 * base}
-        bandit = ContextualBandit(device="cpu", policy_risk_clip=100.0)
+        bandit = ContextualBandit(device="cpu")
         reference = bandit._fit_policy_risk_reference(
             risks, np.arange(20), events, times
         )
