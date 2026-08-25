@@ -2273,6 +2273,9 @@ class SurvivalAnalyzer:
             embedding_knn_neighbors=model_params.get(
                 'embedding_knn_neighbors', 20
             ),
+            use_standard_scaler=model_params.get(
+                'variational_use_standard_scaler', False
+            ),
         )
 
         # Fit
@@ -2389,6 +2392,48 @@ class SurvivalAnalyzer:
             + "/".join(f"{value:.4f}" for value in cv_diag['mean_sd'])
             + f", fitted expert sets={cv_diag['n_models']}"
         )
+        print(
+            "    Repeat C-index mean R/P/RP="
+            + "/".join(
+                f"{value:.4f}" for value in cv_diag['repeat_cindex_mean']
+            )
+            + ", SD="
+            + "/".join(
+                f"{value:.4f}" for value in cv_diag['repeat_cindex_sd']
+            )
+            + ", robust score="
+            + "/".join(
+                f"{value:.4f}" for value in cv_diag['robust_scores']
+            )
+        )
+        print(
+            "    Fold alignment centres R/P/RP="
+            + "/".join(
+                f"[{low:.3f},{high:.3f}]"
+                for low, high in zip(
+                    cv_diag['fold_median_min'], cv_diag['fold_median_max']
+                )
+            )
+            + f", common scale=[{cv_diag['fold_common_scale_min']:.3f},"
+              f"{cv_diag['fold_common_scale_max']:.3f}]"
+        )
+        print(
+            "    CV vs full-fit aligned risk gap "
+            "R/P/RP (corr, RMSE, median |gap|, p95 |gap|): "
+            + "; ".join(
+                f"{name}=({values['correlation']:.3f},"
+                f"{values['rmse']:.3f},"
+                f"{values['median_absolute_gap']:.3f},"
+                f"{values['p95_absolute_gap']:.3f})"
+                for name, values in (
+                    bandit.cv_full_fit_gap_diagnostics_.items()
+                )
+            )
+        )
+        print(
+            "  Strategy 7 input StandardScaler: "
+            + ("enabled" if pipeline.use_standard_scaler else "disabled")
+        )
         for modality, diagnostic in (
             pipeline.embedding_distance_diagnostics_.items()
         ):
@@ -2487,6 +2532,9 @@ class SurvivalAnalyzer:
                 bandit.representation_normalization_diagnostics_
             ),
             'cv_diagnostics': bandit.cv_diagnostics_,
+            'cv_full_fit_gap_diagnostics': (
+                bandit.cv_full_fit_gap_diagnostics_
+            ),
             'embedding_distance_diagnostics': (
                 pipeline.embedding_distance_diagnostics_
             ),
@@ -2604,8 +2652,8 @@ class SurvivalAnalyzer:
                 # 'Strategy3_Separate_Fusion': lambda s, idx, op, mp: self.strategy_3_separate_fusion(s, idx, op, mp, fusion_method),
                 # 'Strategy4_PCA_Separate_Fusion': lambda s, idx, op, mp: self.strategy_4_pca_separate_fusion(s, idx, op, mp, n_pca_components, fusion_method),
                 # 'Strategy5_Domain_Adaptation_Fusion': lambda s, idx, op, mp: self.strategy_5_domain_adaptation_fusion(s, idx, op, mp),
-                'Strategy6_Contextual_Bandit_Fusion': lambda s, idx, op, mp: self.strategy_6_EM_Contextual_Bandit(s, idx, op, mp),
-                # 'Strategy7_Variational_Survival_MoE': lambda s, idx, op, mp: self.strategy_7_variational_survival_moe(s, idx, op, mp),
+                # 'Strategy6_Contextual_Bandit_Fusion': lambda s, idx, op, mp: self.strategy_6_EM_Contextual_Bandit(s, idx, op, mp),
+                'Strategy7_Variational_Survival_MoE': lambda s, idx, op, mp: self.strategy_7_variational_survival_moe(s, idx, op, mp),
             }
         else:
             raise ValueError(f"{omics} is not supported yet")
