@@ -352,7 +352,12 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         return log_risks, representations
 
     def _fit_representation_normalization(self, representations):
-        """Standardize H before joint inference with one shared baseline."""
+        """Scale H without changing any expert's fitted log-risk.
+
+        Expert-specific centering would remove distinct risk offsets that one
+        shared baseline cannot absorb. Scale-only normalization preserves
+        ``H @ beta`` exactly after the compensating coefficient transform.
+        """
         if self.representation_normalized_:
             raise RuntimeError("Representation normalization is already fitted")
         normalized = {}
@@ -361,20 +366,28 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             for name in self.expert_names:
                 raw = representations[name]
                 mean = raw.mean(0)
-                scale = raw.std(0, unbiased=False).clamp_min(1e-6)
+                # Root-mean-square scaling controls magnitude without the
+                # expert-specific centering that would alter log-risk offsets.
+                scale = raw.square().mean(0).sqrt().clamp_min(1e-6)
                 expert = self.experts[name]
                 old_beta = expert.risk_coef.detach().clone()
-                removed_risk_offset = torch.dot(mean, old_beta)
 
-                getattr(self, f"representation_mean_{name}").copy_(mean)
+                getattr(self, f"representation_mean_{name}").zero_()
                 getattr(self, f"representation_scale_{name}").copy_(scale)
                 expert.risk_coef.copy_(scale * old_beta)
-                normalized[name] = (raw - mean) / scale
+                normalized[name] = raw / scale
+                preserved_risk = normalized[name].mv(expert.risk_coef)
+                original_risk = raw.mv(old_beta)
                 self.representation_normalization_diagnostics_[name] = {
                     "raw_mean_abs_max": float(mean.abs().max()),
                     "raw_scale_min": float(scale.min()),
                     "raw_scale_max": float(scale.max()),
-                    "removed_log_risk_offset": float(removed_risk_offset),
+                    "removed_log_risk_offset": 0.0,
+                    "centering_applied": False,
+                    "scale_method": "root_mean_square",
+                    "max_abs_log_risk_change": float(
+                        (preserved_risk - original_risk).abs().max()
+                    ),
                 }
         self.representation_normalized_ = True
         return normalized
@@ -554,40 +567,16 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             temperature=self.responsibility_temperature,
         )
 
-    @staticmethod
-    def _align_log_risks(log_risks, medians, common_scale):
-        return {
-            name: (log_risks[name] - medians[index]) / common_scale
-            for index, name in enumerate(("R", "P", "RP"))
-        }
-
-    def _map_router_reference(self, x_rad, x_path):
-        """Training-reference alignment for deterministic router states."""
-        with torch.no_grad():
-            log_risks, _ = self._encode(x_rad, x_path)
-            medians = torch.stack([
-                log_risks[name].median() for name in self.expert_names
-            ])
-            centered = [
-                log_risks[name] - medians[index]
-                for index, name in enumerate(self.expert_names)
-            ]
-            scale = self._robust_common_scale(centered)
-        return medians.detach(), scale.detach()
-
-    def _objective(self, x_rad, x_path, duration, event, cv_uncertainty,
-                   router_risk_reference):
+    def _objective(self, x_rad, x_path, duration, event, cv_uncertainty):
         states, representations = self._encode(x_rad, x_path)
         # HMC uncertainty does not exist during deterministic initialization;
         # only the fixed repeated-CV uncertainty is available at this stage.
         zero_uncertainty = {
             name: torch.zeros_like(states[name]) for name in self.expert_names
         }
-        medians, common_scale = router_risk_reference
-        router_states = self._align_log_risks(states, medians, common_scale)
         # The generalized-EM router update must not reshape expert risks.
         router_states = {
-            name: value.detach() for name, value in router_states.items()
+            name: value.detach() for name, value in states.items()
         }
         gate = self._router_probs(
             router_states, zero_uncertainty, cv_uncertainty
@@ -633,13 +622,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.baseline_prior_location_ = float(np.log(event_rate))
         with torch.no_grad():
             self.shared_log_baseline_hazard.fill_(self.baseline_prior_location_)
-
-    @staticmethod
-    def _robust_common_scale(centered_risks):
-        pooled = torch.cat([value.reshape(-1) for value in centered_risks])
-        median = pooled.median()
-        mad = (pooled - median).abs().median()
-        return (1.4826 * mad).clamp_min(1e-3)
 
     def _train_cv_expert_set(self, x_rad, x_path, duration, event, train_idx,
                              seed):
@@ -692,24 +674,17 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             )
             optimizer.step()
 
-        with torch.no_grad():
-            train_risks = []
-            medians = []
-            for name in self.expert_names:
-                risk = experts[name].log_risk(encoders[name](inputs[name]))
-                median = risk.median()
-                medians.append(float(median))
-                train_risks.append(risk - median)
-            common_scale = float(self._robust_common_scale(train_risks))
         return {
             "encoders": copy.deepcopy(encoders).cpu().eval(),
             "experts": copy.deepcopy(experts).cpu().eval(),
-            "medians": np.asarray(medians, dtype=np.float32),
-            "common_scale": common_scale,
+            "log_baseline": log_baseline.detach().cpu().clone(),
+            "time_boundaries": self.time_boundaries_.detach().cpu().clone(),
+            "risk_horizon": float(self.risk_horizon_),
         }
 
     @staticmethod
     def _predict_cv_expert_set(model_set, x_rad, x_path):
+        """Predict log cumulative hazard at the common training horizon."""
         x_rad = x_rad.detach().cpu()
         x_path = x_path.detach().cpu()
         inputs = {
@@ -717,26 +692,35 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             "P": x_path,
             "RP": torch.cat([x_rad, x_path], dim=1),
         }
+        boundaries = model_set["time_boundaries"]
+        widths = boundaries[1:] - boundaries[:-1]
+        exposure = torch.clamp(
+            model_set["risk_horizon"] - boundaries[:-1], min=0.0
+        )
+        exposure = torch.minimum(exposure, widths)
+        log_h0 = model_set["log_baseline"].clamp(-12.0, 8.0)
+        log_baseline_cumulative = torch.log(
+            torch.sum(exposure * torch.exp(log_h0)).clamp_min(1e-12)
+        )
         predictions = []
         with torch.no_grad():
-            for index, name in enumerate(("R", "P", "RP")):
+            for name in ("R", "P", "RP"):
                 representation = model_set["encoders"][name](inputs[name])
-                risk = model_set["experts"][name].log_risk(representation)
-                predictions.append(
-                    (risk - model_set["medians"][index])
-                    / model_set["common_scale"]
-                )
+                eta = model_set["experts"][name].log_risk(
+                    representation
+                ).clamp(-12.0, 12.0)
+                predictions.append(log_baseline_cumulative + eta)
         return torch.stack(predictions, dim=1)
 
     def _fit_repeated_cv_state(self, x_rad, x_path, duration, event):
-        """Fit repeated CV experts and return aligned OOF mean/SD state."""
+        """Fit repeated CV experts and return OOF log-cumulative-hazard state."""
         n = len(duration)
         if self.cv_folds > n:
             raise ValueError("cv_folds cannot exceed the training sample count")
         repeat_predictions = []
         self.cv_models_ = []
         self.cv_models_by_repeat_ = []
-        fold_medians, fold_scales = [], []
+        fold_log_baseline_cumulative = []
         repeat_cindices = []
         indices = np.arange(n)
         for repeat in range(self.cv_repeats):
@@ -761,8 +745,19 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 oof[torch.as_tensor(heldout_np)] = heldout_prediction
                 self.cv_models_.append(model_set)
                 repeat_models.append(model_set)
-                fold_medians.append(model_set["medians"])
-                fold_scales.append(model_set["common_scale"])
+                boundaries = model_set["time_boundaries"]
+                widths = boundaries[1:] - boundaries[:-1]
+                exposure = torch.clamp(
+                    model_set["risk_horizon"] - boundaries[:-1], min=0.0
+                )
+                exposure = torch.minimum(exposure, widths)
+                fold_log_baseline_cumulative.append(float(torch.log(
+                    torch.sum(
+                        exposure * torch.exp(
+                            model_set["log_baseline"].clamp(-12.0, 8.0)
+                        )
+                    ).clamp_min(1e-12)
+                )))
             repeat_predictions.append(oof)
             self.cv_models_by_repeat_.append(repeat_models)
             event_np = event.detach().cpu().numpy().astype(bool)
@@ -791,10 +786,11 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         )
         repeat_mean = repeat_cindices.mean(0)
         repeat_sd = repeat_cindices.std(0, ddof=1)
-        # A soft robustness adjustment: reward discrimination that is stable
-        # across resampled training folds, without imposing an RP hurdle.
-        robust_scores = repeat_mean - repeat_sd
-        centered = robust_scores - robust_scores.mean()
+        # Reliability reflects mean repeated-CV discrimination only. Repeat
+        # SD remains a diagnostic and a patient-level uncertainty source, but
+        # does not alter the population prior.
+        reliability_scores = repeat_mean
+        centered = reliability_scores - reliability_scores.mean()
         prior = torch.softmax(torch.as_tensor(
             self.cv_reliability_strength * centered, device=self.device
         ), dim=0)
@@ -805,14 +801,17 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             "cindices": cindices.tolist(),
             "repeat_cindex_mean": repeat_mean.tolist(),
             "repeat_cindex_sd": repeat_sd.tolist(),
-            "robust_scores": robust_scores.tolist(),
+            "reliability_scores": reliability_scores.tolist(),
             "reliability_prior": prior.detach().cpu().tolist(),
             "mean_sd": cv_sd.mean(0).tolist(),
             "n_models": len(self.cv_models_),
-            "fold_median_min": np.min(fold_medians, axis=0).tolist(),
-            "fold_median_max": np.max(fold_medians, axis=0).tolist(),
-            "fold_common_scale_min": float(np.min(fold_scales)),
-            "fold_common_scale_max": float(np.max(fold_scales)),
+            "fold_log_baseline_cumulative_min": float(
+                np.min(fold_log_baseline_cumulative)
+            ),
+            "fold_log_baseline_cumulative_max": float(
+                np.max(fold_log_baseline_cumulative)
+            ),
+            "risk_horizon": float(self.risk_horizon_),
         }
         self.training_cv_draws_ = draws.numpy()
         self.training_cv_mean_ = cv_mean.numpy()
@@ -821,58 +820,55 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
 
     def _predict_cv_state(self, x_rad, x_path):
         # Match training's repeat-level uncertainty: one draw per repeat.
-        # At deployment each repeat prediction is the ensemble mean of that
-        # repeat's fold models, because no test patient has a held-out fold.
+        # At deployment each repeat prediction is the log of the arithmetic
+        # mean cumulative hazard across that repeat's fold models, because no
+        # test patient has a held-out fold.
         repeat_predictions = []
         for model_sets in self.cv_models_by_repeat_:
             fold_predictions = [
                 self._predict_cv_expert_set(model_set, x_rad, x_path)
                 for model_set in model_sets
             ]
-            repeat_predictions.append(torch.stack(fold_predictions).mean(0))
+            fold_log_hazards = torch.stack(fold_predictions)
+            repeat_predictions.append(
+                torch.logsumexp(fold_log_hazards, dim=0)
+                - math.log(len(fold_predictions))
+            )
         draws = torch.stack(repeat_predictions)
         return draws.mean(0).to(self.device), draws.std(
             0, unbiased=True
         ).clamp_min(1e-6).to(self.device)
 
-    def _fit_hmc_risk_reference(self, representations):
-        """Align posterior log-risks without erasing expert reliability.
-
-        A separate median removes each expert's non-identifiable risk offset;
-        one pooled robust scale preserves between-expert dispersion. CV and
-        HMC uncertainty therefore enter the router in comparable units.
-        """
-        posterior_means, _ = self._posterior_log_risk_summary(representations)
-        medians = torch.stack([
-            posterior_means[name].median() for name in self.expert_names
-        ])
-        centered = [
-            posterior_means[name] - medians[index]
-            for index, name in enumerate(self.expert_names)
-        ]
-        self.hmc_risk_medians_ = medians.detach()
-        self.hmc_risk_scale_ = self._robust_common_scale(centered).detach()
-
-    def _aligned_hmc_risks(self, raw_log_risks):
-        return {
-            name: (
-                raw_log_risks[name] - self.hmc_risk_medians_[index]
-            ) / self.hmc_risk_scale_
-            for index, name in enumerate(self.expert_names)
-        }
-
-    def _aligned_hmc_uncertainties(self, raw_uncertainties):
-        return {
-            name: raw_uncertainties[name] / self.hmc_risk_scale_
-            for name in self.expert_names
-        }
+    def _posterior_log_cumulative_hazard_mean(self, representations):
+        """Posterior mean log cumulative hazard at the risk horizon."""
+        baseline_draws = self.posterior_samples_[
+            "shared_log_baseline_hazard"
+        ].to(self.device).clamp(-12.0, 8.0)
+        widths = self.time_boundaries_[1:] - self.time_boundaries_[:-1]
+        exposure = torch.clamp(
+            self.risk_horizon_ - self.time_boundaries_[:-1], min=0.0
+        )
+        exposure = torch.minimum(exposure, widths)
+        log_baseline_cumulative = torch.log(
+            (exposure.unsqueeze(0) * torch.exp(baseline_draws))
+            .sum(1).clamp_min(1e-12)
+        )
+        means = {}
+        for name in self.expert_names:
+            beta = self.posterior_samples_[name]["beta"].to(self.device)
+            eta = representations[name].matmul(beta.T).clamp(-12.0, 12.0)
+            means[name] = (
+                eta + log_baseline_cumulative.unsqueeze(0)
+            ).mean(1, keepdim=True)
+        return means
 
     def _diagnose_cv_full_fit_gap(self, representations):
-        """Compare cross-fitted CV risks with aligned full-fit HMC risks."""
-        posterior_means, _ = self._posterior_log_risk_summary(representations)
-        aligned = self._aligned_hmc_risks(posterior_means)
+        """Compare CV and full-fit posterior log cumulative hazards."""
+        posterior_means = self._posterior_log_cumulative_hazard_mean(
+            representations
+        )
         full_fit = torch.cat(
-            [aligned[name] for name in self.expert_names], dim=1
+            [posterior_means[name] for name in self.expert_names], dim=1
         ).detach().cpu().numpy()
         cv_mean = np.asarray(self.training_cv_mean_, dtype=np.float32)
         diagnostics = {}
@@ -1257,7 +1253,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                                       cv_uncertainty, max_draws=None):
         """Matched router states and log likelihoods for Bayesian E-step."""
         posterior_stds = self._posterior_log_risk_summary(representations)[1]
-        router_stds = self._aligned_hmc_uncertainties(posterior_stds)
+        router_stds = posterior_stds
         available = self.posterior_samples_["shared_log_baseline_hazard"].shape[0]
         n_draws = available if max_draws is None else min(int(max_draws), available)
         draw_indices = torch.linspace(
@@ -1292,9 +1288,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     event * (log_h0[interval] + eta)
                     - baseline_cumulative * torch.exp(eta)
                 )
-            router_log_risks = self._aligned_hmc_risks(draw_log_risks)
             states.append(self._make_router_state(
-                router_log_risks, router_stds, cv_uncertainty
+                draw_log_risks, router_stds, cv_uncertainty
             ).detach())
             log_likelihoods.append(torch.stack(draw_log_likelihoods, dim=1))
         return torch.stack(states), torch.stack(log_likelihoods)
@@ -1345,26 +1340,18 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         for epoch in range(self.max_epochs):
             self.train()
             optimizer.zero_grad()
-            router_reference = self._map_router_reference(
-                tensors[0][train_idx], tensors[1][train_idx]
-            )
             train_loss, parts_train = self._objective(
                 *[tensor[train_idx] for tensor in tensors],
                 cv_uncertainty[train_idx],
-                router_reference,
             )
             train_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.parameters(), 5.0)
             optimizer.step()
             self.eval()
             with torch.no_grad():
-                router_reference = self._map_router_reference(
-                    tensors[0][train_idx], tensors[1][train_idx]
-                )
                 val_loss, parts = self._objective(
                     *[tensor[val_idx] for tensor in tensors],
                     cv_uncertainty[val_idx],
-                    router_reference,
                 )
             value = val_loss.item()
             train_component_means = {
@@ -1439,7 +1426,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     self.posterior_samples_["shared_log_baseline_hazard"]
                     .mean(0).to(self.device)
                 )
-                self._fit_hmc_risk_reference(frozen_representations)
                 self._diagnose_cv_full_fit_gap(frozen_representations)
                 router_states, draw_loglik = self._posterior_draw_e_step_inputs(
                     frozen_representations, tensors[2], tensors[3],
@@ -1568,7 +1554,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             _, posterior_stds = self._posterior_log_risk_summary(
                 representations
             )
-            router_stds = self._aligned_hmc_uncertainties(posterior_stds)
+            router_stds = posterior_stds
             available = self.posterior_samples_["shared_log_baseline_hazard"].shape[0]
             draw_indices = torch.linspace(
                 0, available - 1, steps=min(mc_samples, available)
@@ -1590,9 +1576,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     eta = representations[name].mv(beta).clamp(-12.0, 12.0)
                     draw_log_risks[name] = eta.unsqueeze(1)
                     draw_hazards.append(baseline * torch.exp(eta))
-                router_log_risks = self._aligned_hmc_risks(draw_log_risks)
                 gate = self._router_probs(
-                    router_log_risks, router_stds, cv_uncertainty
+                    draw_log_risks, router_stds, cv_uncertainty
                 )
                 risks = torch.stack(draw_hazards, dim=1)
                 gate_samples.append(gate)
@@ -1618,8 +1603,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             "hard_risk": expert_risks.gather(
                 1, actions.unsqueeze(1)
             ).squeeze(1).cpu().numpy(),
-            "cv_mean_log_risk": cv_mean.cpu().numpy(),
-            "cv_log_risk_sd": cv_uncertainty.cpu().numpy(),
+            "cv_mean_log_cumulative_hazard": cv_mean.cpu().numpy(),
+            "cv_log_cumulative_hazard_sd": cv_uncertainty.cpu().numpy(),
             "hmc_log_risk_sd": torch.cat([
                 router_stds[name] for name in self.expert_names
             ], dim=1).cpu().numpy(),

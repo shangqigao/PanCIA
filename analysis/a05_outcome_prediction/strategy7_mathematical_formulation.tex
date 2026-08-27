@@ -1,0 +1,388 @@
+% Required preamble packages:
+% \usepackage{amsmath,amssymb}
+% \usepackage{tikz}
+% \usetikzlibrary{positioning,arrows.meta}
+
+\section{Hierarchical Bayesian Survival Mixture with Amortized Expert Selection}
+\label{sec:strategy7}
+
+\subsection{Problem setting}
+
+For patient $i\in\{1,\ldots,N\}$, let $X_i^R$ and $X_i^P$ denote the
+radiomic and pathomic foundation-model embeddings, respectively. The observed
+survival outcome is $Y_i=(T_i,E_i)$, where $T_i\geq 0$ is the observed time and
+$E_i\in\{0,1\}$ is the event indicator. We consider three candidate experts,
+indexed by
+\begin{equation}
+    \mathcal{K}=\{R,P,RP\},
+\end{equation}
+corresponding to radiomics, pathomics, and their multimodal fusion. A latent
+variable $Z_i\in\mathcal{K}$ indicates which expert is responsible for patient
+$i$. The objective is to learn both a survival model and a deployable,
+patient-specific selection rule without modelling the high-dimensional
+embedding distribution $p(X)$.
+
+The expert representations are deterministic functions of the observed
+embeddings:
+\begin{align}
+    H_i^R &= f_R(X_i^R;\omega_R), \\
+    H_i^P &= f_P(X_i^P;\omega_P), \\
+    H_i^{RP} &= f_{RP}([X_i^R,X_i^P];\omega_{RP}).
+\end{align}
+The encoder parameters $\omega=\{\omega_R,\omega_P,\omega_{RP}\}$ are treated
+as point estimates. Before Bayesian inference, each representation coordinate
+is standardized using statistics estimated from the training cohort,
+\begin{equation}
+    \widetilde H_{ikd}=\frac{H_{ikd}-\mu_{kd}}{\sigma_{kd}},
+\end{equation}
+with a corresponding reparameterization of the survival coefficients so that
+the fitted linear predictors are preserved up to an expert-specific constant
+absorbed by the shared baseline hazard.
+
+\subsection{Conditional graphical model}
+
+Let $\rho=(\rho_R,\rho_P,\rho_{RP})$ denote the population proportions of the
+three experts. Conditional on the observed embeddings, the model factorizes as
+\begin{align}
+&p(\rho,\boldsymbol{\beta},\boldsymbol{\lambda}_0,
+        \boldsymbol{Z},\boldsymbol{Y}\mid\boldsymbol{X}) \nonumber\\
+&\quad =p(\rho)\,p(\boldsymbol{\lambda}_0)
+    \prod_{k\in\mathcal K}p(\beta_k)
+    \prod_{i=1}^{N}
+    p(Z_i\mid\rho)
+    p(Y_i\mid X_i,Z_i,\boldsymbol{\beta},\boldsymbol{\lambda}_0),
+\label{eq:conditional-factorization}
+\end{align}
+where $\boldsymbol{\beta}=\{\beta_k:k\in\mathcal K\}$ and
+$\boldsymbol{\lambda}_0=(\lambda_{01},\ldots,\lambda_{0J})$. The corresponding
+graphical model is shown in Fig.~\ref{fig:strategy7-pgm}. The router is an
+amortized inference model and is therefore represented separately from the
+conditional generative model.
+
+\begin{figure}[t]
+    \centering
+    \begin{tikzpicture}[
+        node distance=1.25cm and 1.45cm,
+        latent/.style={circle,draw,minimum size=8mm},
+        observed/.style={circle,draw,fill=gray!20,minimum size=8mm},
+        deterministic/.style={rectangle,draw,rounded corners,minimum height=7mm},
+        inference/.style={rectangle,draw,dashed,rounded corners,minimum height=7mm},
+        >=stealth
+    ]
+        \node[deterministic] (cv) {$\mathcal D_{\mathrm{CV}}$};
+        \node[latent,right=of cv] (rho) {$\rho$};
+        \node[latent,right=of rho] (z) {$Z_i$};
+        \node[observed,right=of z] (y) {$Y_i$};
+        \node[observed,below=of z] (x) {$X_i$};
+        \node[deterministic,right=of x] (h) {$H_i^k$};
+        \node[latent,above=of y] (beta) {$\beta_k$};
+        \node[latent,below=of y] (base) {$\lambda_0$};
+        \node[deterministic,below=of h] (state) {$S_i$};
+        \node[inference,right=of state] (router) {$\pi_\phi(Z_i\mid S_i)$};
+        \node[inference,above=of router] (resp) {$r_i$};
+
+        \draw[->] (cv) -- node[above] {$p^{\mathrm{CV}}$} (rho);
+        \draw[->] (rho) -- (z);
+        \draw[->] (z) -- (y);
+        \draw[->] (x) -- (h);
+        \draw[->] (h) -- (y);
+        \draw[->] (beta) -- (y);
+        \draw[->] (base) -- (y);
+        \draw[->,dashed] (h) -- (state);
+        \draw[->,dashed] (beta) -- (state);
+        \draw[->,dashed] (state) -- (router);
+        \draw[->,dashed] (y) -- (resp);
+        \draw[->,dashed] (rho) -- (resp);
+        \draw[->,dashed] (resp) -- node[right] {distillation} (router);
+    \end{tikzpicture}
+    \caption{Conditional graphical model and amortized inference mechanism.
+    Solid arrows describe the conditional generative model for survival;
+    dashed arrows describe responsibility estimation and router distillation.
+    The plate over patients is omitted for visual clarity.}
+    \label{fig:strategy7-pgm}
+\end{figure}
+
+\subsection{Piecewise-exponential survival experts}
+
+Time is partitioned into $J$ intervals by
+$0=b_0<b_1<\cdots<b_J$. Expert $k$ assigns patient $i$ the log-risk
+\begin{equation}
+    \eta_{ik}=\widetilde H_i^{k\top}\beta_k.
+\end{equation}
+Within interval $j$, its hazard is
+\begin{equation}
+    \lambda_{ik}(t)=\lambda_{0j}\exp(\eta_{ik}),
+    \qquad b_{j-1}\leq t<b_j,
+\end{equation}
+where the baseline hazard $\lambda_{0j}$ is shared by all experts. Sharing the
+baseline prevents expert assignment from being driven by arbitrary differences
+in baseline calibration.
+
+Let
+\begin{equation}
+    a_{ij}=\max\!\left\{0,\min(T_i,b_j)-b_{j-1}\right\}
+\end{equation}
+be the exposure of patient $i$ in interval $j$, and let $j(i)$ denote the
+interval containing $T_i$. The individual expert log-likelihood is
+\begin{equation}
+    \ell_{ik}
+    =E_i\left\{\log\lambda_{0,j(i)}+\eta_{ik}\right\}
+    -\exp(\eta_{ik})\sum_{j=1}^{J}a_{ij}\lambda_{0j}.
+\label{eq:piecewise-loglik}
+\end{equation}
+Consequently, both events and right-censored observations contribute a proper
+individual likelihood.
+
+The Bayesian survival heads use the priors
+\begin{align}
+    \beta_k &\sim \mathcal N(0,\tau_\beta^2 I), \\
+    \log\lambda_{0j} &\sim \mathcal N(\mu_0,\tau_0^2).
+\end{align}
+
+\subsection{Repeated-CV empirical reliability}
+
+Repeated cross-validation is used to estimate population reliability and
+training-set instability. For repeat $b\in\{1,\ldots,B\}$, let $C_k^{(b)}$ be
+the out-of-fold concordance index of expert $k$. We define the robust score
+\begin{equation}
+    g_k=\frac{1}{B}\sum_{b=1}^{B}C_k^{(b)}
+        -\operatorname{SD}_{b}\!\left(C_k^{(b)}\right),
+\end{equation}
+and the soft empirical reliability distribution
+\begin{equation}
+    p_k^{\mathrm{CV}}
+    =\frac{\exp\{\gamma(g_k-\bar g)\}}
+    {\sum_{l\in\mathcal K}\exp\{\gamma(g_l-\bar g)\}},
+\label{eq:cv-reliability}
+\end{equation}
+where $\gamma>0$ controls the influence of reliability differences. This
+criterion rewards both discrimination and stability, without imposing a hard
+penalty on the fusion expert.
+
+To compare predictions across folds, fold $b$ stores an expert-specific
+training median $m_k^{(b)}$ and one common robust scale $s^{(b)}$. Its aligned
+held-out prediction is
+\begin{equation}
+    \widetilde\eta_{ik}^{(b)}
+    =\frac{\eta_{ik}^{(b)}-m_k^{(b)}}{s^{(b)}}.
+\end{equation}
+The fixed CV uncertainty is
+\begin{equation}
+    u_{ik}^{\mathrm{CV}}
+    =\operatorname{SD}_{b}\!\left(\widetilde\eta_{ik}^{(b)}\right).
+\end{equation}
+For a new patient, predictions are first averaged over folds within each repeat,
+and uncertainty is then evaluated across repeat-level predictions.
+
+Because Eq.~\eqref{eq:cv-reliability} is estimated from the outer-training
+cohort rather than specified externally, it should be interpreted as an
+empirical-Bayes prior centre or data-dependent regularizer.
+
+\subsection{Hierarchical assignment prior}
+
+The population expert proportions follow
+\begin{equation}
+    \rho\sim\operatorname{Dirichlet}(\alpha_0),
+    \qquad
+    \alpha_{0k}=\kappa N p_k^{\mathrm{CV}},
+\label{eq:dirichlet-prior}
+\end{equation}
+where $\kappa>0$ controls the effective concentration of the population prior.
+Conditional assignments satisfy
+\begin{equation}
+    Z_i\mid\rho\sim\operatorname{Categorical}(\rho).
+\end{equation}
+For $q(\rho)=\operatorname{Dirichlet}(\alpha)$,
+\begin{equation}
+    \mathbb E_q[\log\rho_k]
+    =\psi(\alpha_k)-\psi\!\left(\sum_{l\in\mathcal K}\alpha_l\right).
+\label{eq:expected-log-rho}
+\end{equation}
+
+\subsection{Tempered assignment responsibilities}
+
+Let $r_{ik}=q(Z_i=k)$, with $r_{ik}\geq0$ and
+$\sum_{k\in\mathcal K}r_{ik}=1$. Given expert evidence $A_{ik}$, the assignment
+update is
+\begin{equation}
+    r_{ik}
+    =\frac{\exp\left([A_{ik}+\mathbb E_q(\log\rho_k)]/\tau_r\right)}
+    {\sum_{l\in\mathcal K}
+    \exp\left([A_{il}+\mathbb E_q(\log\rho_l)]/\tau_r\right)},
+\label{eq:responsibility}
+\end{equation}
+where $\tau_r\geq1$ is the responsibility temperature. This is the maximizer of
+the tempered local free energy
+\begin{equation}
+    \mathcal F_r
+    =\sum_{i=1}^{N}\sum_{k\in\mathcal K}
+       r_{ik}\{A_{ik}+\mathbb E_q[\log\rho_k]\}
+      +\tau_r\sum_{i=1}^{N}\mathcal H(r_i),
+\end{equation}
+where $\mathcal H(r_i)=-\sum_k r_{ik}\log r_{ik}$. Hence, increasing $\tau_r$
+discourages premature assignment collapse.
+
+During neural initialization, $A_{ik}=\ell_{ik}^{\mathrm{MAP}}$. During the
+Bayesian stage, posterior-predictive evidence is used:
+\begin{equation}
+    A_{ik}
+    =\log\left\{
+       \frac{1}{Q}\sum_{q=1}^{Q}\exp(\ell_{ik}^{(q)})
+      \right\},
+\label{eq:posterior-predictive-evidence}
+\end{equation}
+where $q$ indexes matched posterior draws of the survival coefficients and
+shared baseline.
+
+The undamped conjugate population update is
+\begin{equation}
+    \alpha_k^\star=\alpha_{0k}+\sum_{i=1}^{N}r_{ik}.
+\end{equation}
+For stability, a damped update is applied,
+\begin{equation}
+    \alpha\leftarrow(1-\delta)\alpha+\delta\alpha^\star,
+\label{eq:damped-dirichlet}
+\end{equation}
+where $\delta\in(0,1]$ is the population update rate.
+
+\subsection{Neural initialization}
+
+The encoders, point-estimate survival heads, shared baseline, and router are
+initialized using a generalized-EM objective. The expert component is
+\begin{equation}
+    \mathcal L_{\mathrm{expert}}^{\mathrm{init}}
+    =-\frac{1}{N}\sum_{i=1}^{N}\sum_{k\in\mathcal K}
+      \operatorname{sg}(r_{ik})\ell_{ik}^{\mathrm{MAP}},
+\label{eq:initial-expert-loss}
+\end{equation}
+where $\operatorname{sg}(\cdot)$ denotes the stop-gradient operator.
+
+The raw expert risks in Eq.~\eqref{eq:piecewise-loglik} remain unaltered. A
+separately aligned copy is supplied to the router. If $m_k$ is the training
+median of expert $k$ and $s$ is a common robust scale, define
+\begin{equation}
+    \bar\eta_{ik}=\frac{\eta_{ik}-m_k}{s}.
+\end{equation}
+The default router state is
+\begin{equation}
+    S_i=\left(
+       \bar\eta_{iR},\bar\eta_{iP},
+       |\bar\eta_{iR}-\bar\eta_{iP}|
+    \right)^\top.
+\label{eq:risk-pair-state}
+\end{equation}
+The router $\pi_\phi(k\mid S_i)$ is initialized by minimizing
+\begin{equation}
+    \mathcal L_{\mathrm{router}}^{\mathrm{init}}
+    =-\frac{1}{N}\sum_{i=1}^{N}\sum_{k\in\mathcal K}
+      \operatorname{sg}(r_{ik})
+      \log\pi_\phi\!\left(k\mid\operatorname{sg}(S_i)\right).
+\label{eq:initial-router-loss}
+\end{equation}
+Consequently, the router loss does not modify the expert risks or encoders. The
+total initialization criterion is
+\begin{equation}
+    \mathcal L_{\mathrm{init}}
+    =\mathcal L_{\mathrm{expert}}^{\mathrm{init}}
+     +\mathcal L_{\mathrm{router}}^{\mathrm{init}}.
+\end{equation}
+
+\subsection{Conditional Bayesian survival-head update}
+
+After initialization, the encoders are frozen. Given responsibilities
+$\boldsymbol r$, the compact survival heads and shared baseline have conditional
+posterior
+\begin{align}
+&p(\boldsymbol\beta,\boldsymbol\lambda_0
+      \mid\boldsymbol H,\boldsymbol Y,\boldsymbol r) \nonumber\\
+&\quad\propto
+ p(\boldsymbol\lambda_0)
+ \prod_{k\in\mathcal K}p(\beta_k)
+ \prod_{i=1}^{N}\prod_{k\in\mathcal K}
+ p(Y_i\mid H_i^k,\beta_k,\boldsymbol\lambda_0)^{r_{ik}}.
+\label{eq:conditional-hmc-posterior}
+\end{align}
+The fractional likelihood in Eq.~\eqref{eq:conditional-hmc-posterior} is the
+expected complete-data likelihood under $q(\boldsymbol Z)$. We sample this
+posterior jointly using the No-U-Turn Sampler. Posterior log-risk uncertainty is
+defined as
+\begin{equation}
+    u_{ik}^{\mathrm{HMC}}
+    =\operatorname{SD}_{q}\!\left(
+       \widetilde H_i^{k\top}\beta_k^{(q)}
+      \right).
+\end{equation}
+
+The conditional HMC step, Eqs.~\eqref{eq:posterior-predictive-evidence}--
+\eqref{eq:responsibility}, and the damped population update in
+Eq.~\eqref{eq:damped-dirichlet} are alternated until the mean absolute change in
+responsibilities is below a prespecified tolerance or a maximum number of
+iterations is reached.
+
+\subsection{Amortized router}
+
+Responsibilities use the observed survival outcome and are therefore
+unavailable at deployment. We learn an outcome-free approximation using
+\begin{equation}
+    \pi_\phi(k\mid S_i)
+    =\operatorname{softmax}_k\{g_\phi(S_i)\}.
+\end{equation}
+Given posterior-draw states $S_i^{(q)}$, the router is refitted by minimizing
+\begin{equation}
+    \mathcal L_{\mathrm{distill}}
+    =-\frac{1}{QN}
+      \sum_{q=1}^{Q}\sum_{i=1}^{N}\sum_{k\in\mathcal K}
+      r_{ik}\log\pi_\phi(k\mid S_i^{(q)}).
+\label{eq:router-distillation}
+\end{equation}
+Thus, $r_i$ is an outcome-informed posterior assignment, whereas
+$\pi_\phi(\cdot\mid S_i)$ is its deployable amortized approximation. They need
+not be equal for an individual patient.
+
+An optional uncertainty-aware state augments the three aligned expert risks
+with $u^{\mathrm{HMC}}$, $u^{\mathrm{CV}}$, and pairwise disagreements scaled by
+their combined uncertainty. The default implementation uses the compact state
+in Eq.~\eqref{eq:risk-pair-state} to limit router variance.
+
+\subsection{Prediction}
+
+For a new patient, let $S_*^{(q)}$ be the state computed using posterior draw
+$q$, and define
+\begin{equation}
+    \bar\pi_{*k}=\frac{1}{Q}\sum_{q=1}^{Q}
+       \pi_\phi(k\mid S_*^{(q)}).
+\end{equation}
+Hard deployment selects
+\begin{equation}
+    k_*^\star=\arg\max_{k\in\mathcal K}\bar\pi_{*k}.
+\end{equation}
+At prediction horizon $t^*$, its cumulative-hazard score is
+\begin{equation}
+    \widehat R_*^{\mathrm{hard}}(t^*)
+    =\frac{1}{Q}\sum_{q=1}^{Q}
+       \Lambda_{*,k_*^\star}^{(q)}(t^*).
+\label{eq:hard-prediction}
+\end{equation}
+For comparison, the posterior-coherent soft prediction is
+\begin{equation}
+    \widehat R_*^{\mathrm{soft}}(t^*)
+    =\frac{1}{Q}\sum_{q=1}^{Q}\sum_{k\in\mathcal K}
+       \pi_\phi(k\mid S_*^{(q)})
+       \Lambda_{*k}^{(q)}(t^*).
+\label{eq:soft-prediction}
+\end{equation}
+Equation~\eqref{eq:soft-prediction} uses matched posterior draws and therefore
+retains dependence between router probabilities and expert risks.
+
+\subsection{Inference interpretation}
+
+The resulting procedure is an empirical-Bayes hierarchical survival mixture
+with conditional HMC and amortized assignment. It is not a fully Bayesian
+end-to-end neural model: the encoders are point estimates, the CV reliability
+distribution is data-derived, $q(Z)$ is represented by tempered
+responsibilities, and only the compact survival heads and shared baseline are
+sampled. Conditional on these approximations, each component has a distinct
+interpretation: repeated CV quantifies training-set instability, HMC quantifies
+within-model posterior uncertainty, the Dirichlet hierarchy regularizes
+population assignment, and the router converts outcome-informed training
+assignments into an outcome-free deployment rule.

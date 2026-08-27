@@ -2388,7 +2388,7 @@ class SurvivalAnalyzer:
             )
         )
         print(
-            "    Mean fixed CV log-risk SD R/P/RP="
+            "    Mean fixed CV log cumulative-hazard SD R/P/RP="
             + "/".join(f"{value:.4f}" for value in cv_diag['mean_sd'])
             + f", fitted expert sets={cv_diag['n_models']}"
         )
@@ -2401,24 +2401,19 @@ class SurvivalAnalyzer:
             + "/".join(
                 f"{value:.4f}" for value in cv_diag['repeat_cindex_sd']
             )
-            + ", robust score="
+            + ", reliability score (mean only)="
             + "/".join(
-                f"{value:.4f}" for value in cv_diag['robust_scores']
+                f"{value:.4f}" for value in cv_diag['reliability_scores']
             )
         )
         print(
-            "    Fold alignment centres R/P/RP="
-            + "/".join(
-                f"[{low:.3f},{high:.3f}]"
-                for low, high in zip(
-                    cv_diag['fold_median_min'], cv_diag['fold_median_max']
-                )
-            )
-            + f", common scale=[{cv_diag['fold_common_scale_min']:.3f},"
-              f"{cv_diag['fold_common_scale_max']:.3f}]"
+            "    Fold log cumulative-baseline range at horizon "
+            f"{cv_diag['risk_horizon']:.3f}: "
+            f"[{cv_diag['fold_log_baseline_cumulative_min']:.3f},"
+            f"{cv_diag['fold_log_baseline_cumulative_max']:.3f}]"
         )
         print(
-            "    CV vs full-fit aligned risk gap "
+            "    CV vs full-fit log cumulative-hazard gap "
             "R/P/RP (corr, RMSE, median |gap|, p95 |gap|): "
             + "; ".join(
                 f"{name}=({values['correlation']:.3f},"
@@ -2446,10 +2441,6 @@ class SurvivalAnalyzer:
                 f"{diagnostic['distance_concentration']:.3f}, max hub count="
                 f"{diagnostic['neighbour_occurrence_max']}"
             )
-        print(
-            f"  HMC router risk reference: common scale="
-            f"{float(bandit.hmc_risk_scale_):.4f}"
-        )
         best_terms = bandit.best_validation_terms_
         print(
             f"  Best validation loss terms (epoch {bandit.best_epoch_}): "
@@ -2501,8 +2492,8 @@ class SurvivalAnalyzer:
                 f"  H normalization {expert_name}: raw scale range="
                 f"[{diagnostic['raw_scale_min']:.4f}, "
                 f"{diagnostic['raw_scale_max']:.4f}], "
-                f"removed risk offset="
-                f"{diagnostic['removed_log_risk_offset']:.4f}"
+                f"RMS scale-only normalization, max |risk change|="
+                f"{diagnostic['max_abs_log_risk_change']:.2e}"
             )
         print(f"  Responsibility-to-router KL: "
               f"{bandit.assignment_distillation_gap_:.4f}")
