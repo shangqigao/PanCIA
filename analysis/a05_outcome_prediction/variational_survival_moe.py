@@ -215,7 +215,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                  cv_folds=5, cv_repeats=5, cv_epochs=100,
                  cv_reliability_strength=5.0,
                  prior_scale=1.0, baseline_prior_scale=2.0,
-                 router_refit_epochs=100, bayesian_em_iterations=3,
+                 router_refit_epochs=100, router_refit_patience=15,
+                 bayesian_em_iterations=3,
                  responsibility_tolerance=1e-3,
                  responsibility_temperature=2.0,
                  hmc_target_acceptance=0.8, hmc_min_acceptance=0.1,
@@ -274,6 +275,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.prior_scale = float(prior_scale)
         self.baseline_prior_scale = float(baseline_prior_scale)
         self.router_refit_epochs = int(router_refit_epochs)
+        self.router_refit_patience = int(router_refit_patience)
         self.bayesian_em_iterations = int(bayesian_em_iterations)
         self.responsibility_tolerance = float(responsibility_tolerance)
         self.responsibility_temperature = float(responsibility_temperature)
@@ -284,6 +286,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.hmc_severe_predictive_rhat = float(hmc_severe_predictive_rhat)
         if self.bayesian_em_iterations < 1:
             raise ValueError("bayesian_em_iterations must be positive")
+        if self.router_refit_epochs < 1 or self.router_refit_patience < 1:
+            raise ValueError("router refit epochs and patience must be positive")
         if self.responsibility_temperature < 1.0:
             raise ValueError("responsibility_temperature must be at least one")
         self.verbose = bool(verbose)
@@ -514,12 +518,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         gate_draws, expert_log_likelihood_draws, temperature=1.0,
         prior=None, prior_mix=0.0,
     ):
-        """Bayesian E-step using matched posterior gate/likelihood draws.
-
-        Computes log E_theta[pi_k(theta) p_k(T,E|theta)] before
-        normalization, preserving posterior dependence between routing and
-        expert evidence.
-        """
+        """Variational E-step using expected matched-draw log evidence."""
         if gate_draws.shape != expert_log_likelihood_draws.shape:
             raise ValueError(
                 "Gate and likelihood draws must share [draw, patient, expert] shape"
@@ -530,10 +529,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             torch.log(gate_draws.clamp_min(1e-8))
             + expert_log_likelihood_draws
         )
-        log_evidence = (
-            torch.logsumexp(log_joint_draws, dim=0)
-            - math.log(gate_draws.shape[0])
-        )
+        log_evidence = log_joint_draws.mean(dim=0)
         return ConditionalVariationalSurvivalMoE.responsibilities_from_log_evidence(
             log_evidence, temperature=temperature, prior=prior,
             prior_mix=prior_mix,
@@ -552,18 +548,17 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
     def _hierarchical_responsibilities_from_draws(
         self, expert_log_likelihood_draws
     ):
-        """Marginalize survival likelihood draws, then apply E[log rho]."""
+        """Coordinate update using E_q[log likelihood] and E_q[log rho]."""
         if expert_log_likelihood_draws.ndim != 3:
             raise ValueError(
                 "Likelihood draws must have shape [draw, patient, expert]"
             )
-        predictive_log_evidence = (
-            torch.logsumexp(expert_log_likelihood_draws, dim=0)
-            - math.log(expert_log_likelihood_draws.shape[0])
+        expected_log_evidence = (
+            expert_log_likelihood_draws.mean(dim=0)
             + self._expected_log_population_weights()
         )
         return self.responsibilities_from_log_evidence(
-            predictive_log_evidence,
+            expected_log_evidence,
             temperature=self.responsibility_temperature,
         )
 
@@ -1294,25 +1289,68 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             log_likelihoods.append(torch.stack(draw_log_likelihoods, dim=1))
         return torch.stack(states), torch.stack(log_likelihoods)
 
-    def _refit_router(self, router_states, responsibility):
-        """Distil responsibilities over uncertain draw-specific states."""
+    def _refit_router(self, router_states, responsibility, train_idx, val_idx):
+        """Distil responsibilities with fixed validation early stopping."""
         if router_states.ndim == 2:
             router_states = router_states.unsqueeze(0)
         if router_states.ndim != 3:
             raise ValueError("router_states must have shape [draw, patient, state]")
+        train_idx = torch.as_tensor(
+            train_idx, dtype=torch.long, device=router_states.device
+        )
+        val_idx = torch.as_tensor(
+            val_idx, dtype=torch.long, device=router_states.device
+        )
+        if train_idx.numel() == 0 or val_idx.numel() == 0:
+            raise ValueError("router train and validation sets must be non-empty")
         router_optimizer = torch.optim.Adam(
             self.router.parameters(), lr=self.learning_rate
         )
-        for _ in range(self.router_refit_epochs):
-            gate = self._router_probs_from_state(router_states)
-            router_ce = -torch.mean(torch.sum(
-                responsibility.unsqueeze(0)
-                * torch.log(gate.clamp_min(1e-8)), dim=2
+        best_state, best_val, best_epoch, stale = None, math.inf, 0, 0
+        history = []
+        for epoch in range(self.router_refit_epochs):
+            self.router.train()
+            train_gate = self._router_probs_from_state(
+                router_states[:, train_idx]
+            )
+            train_ce = -torch.mean(torch.sum(
+                responsibility[train_idx].unsqueeze(0)
+                * torch.log(train_gate.clamp_min(1e-8)), dim=2
             ))
-            router_loss = router_ce
             router_optimizer.zero_grad()
-            router_loss.backward()
+            train_ce.backward()
             router_optimizer.step()
+            self.router.eval()
+            with torch.no_grad():
+                val_gate = self._router_probs_from_state(
+                    router_states[:, val_idx]
+                )
+                val_ce = -torch.mean(torch.sum(
+                    responsibility[val_idx].unsqueeze(0)
+                    * torch.log(val_gate.clamp_min(1e-8)), dim=2
+                ))
+            value = float(val_ce)
+            history.append({
+                "epoch": epoch + 1,
+                "train_ce": float(train_ce.detach()),
+                "val_ce": value,
+            })
+            if value < best_val - 1e-6:
+                best_val, best_epoch, stale = value, epoch + 1, 0
+                best_state = copy.deepcopy(self.router.state_dict())
+            else:
+                stale += 1
+                if stale >= self.router_refit_patience:
+                    break
+        if best_state is None:
+            raise RuntimeError("Router refit produced no validation checkpoint")
+        self.router.load_state_dict(best_state)
+        return {
+            "best_epoch": best_epoch,
+            "best_val_ce": best_val,
+            "epochs_run": len(history),
+            "history": history,
+        }
 
     def fit(self, x_rad, x_path, y, validation_fraction=0.2):
         if self.representation_normalized_:
@@ -1407,6 +1445,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             )
         posterior_responsibility = map_responsibility
         self.bayesian_em_history_ = []
+        self.router_refit_history_ = []
         frozen_representations = {
             name: value.detach() for name, value in representations.items()
         }
@@ -1444,7 +1483,10 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             population_update = self._update_dirichlet_posterior(
                 updated_responsibility
             )
-            self._refit_router(router_states, updated_responsibility)
+            router_refit = self._refit_router(
+                router_states, updated_responsibility, train_idx, val_idx
+            )
+            self.router_refit_history_.append(router_refit)
             posterior_responsibility = updated_responsibility
             diagnostic = self.mcmc_diagnostics_["joint"]
             record = {
@@ -1464,6 +1506,9 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     / self.dirichlet_posterior_alpha.sum()
                 ).detach().cpu().tolist(),
                 "population_update": population_update,
+                "router_refit_best_epoch": router_refit["best_epoch"],
+                "router_refit_best_val_ce": router_refit["best_val_ce"],
+                "router_refit_epochs_run": router_refit["epochs_run"],
                 **diagnostic,
             }
             self.bayesian_em_history_.append(record)
@@ -1489,6 +1534,12 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     f"divergences={diagnostic['divergences']}, "
                     f"R-hat(max)={diagnostic['max_rhat']:.3f}, "
                     f"ESS(min)={diagnostic['min_ess']:.1f}"
+                )
+                print(
+                    "    Router refit: best epoch="
+                    f"{router_refit['best_epoch']}/"
+                    f"{router_refit['epochs_run']}, validation CE="
+                    f"{router_refit['best_val_ce']:.4f}"
                 )
                 print(
                     "    Population update before -> target -> after: "

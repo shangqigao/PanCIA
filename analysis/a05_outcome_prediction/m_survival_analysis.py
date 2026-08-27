@@ -2245,6 +2245,9 @@ class SurvivalAnalyzer:
                 'baseline_hazard_prior_scale', 2.0
             ),
             router_refit_epochs=model_params.get('router_refit_epochs', 100),
+            router_refit_patience=model_params.get(
+                'router_refit_patience', 15
+            ),
             bayesian_em_iterations=model_params.get(
                 'bayesian_em_iterations', 2
             ),
@@ -2519,6 +2522,7 @@ class SurvivalAnalyzer:
             'best_validation_terms': bandit.best_validation_terms_,
             'mcmc_diagnostics': bandit.mcmc_diagnostics_,
             'bayesian_em_history': bandit.bayesian_em_history_,
+            'router_refit_history': bandit.router_refit_history_,
             'representation_normalization': (
                 bandit.representation_normalization_diagnostics_
             ),
