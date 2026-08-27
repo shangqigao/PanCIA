@@ -562,34 +562,17 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             temperature=self.responsibility_temperature,
         )
 
-    def _objective(self, x_rad, x_path, duration, event, cv_uncertainty):
-        states, representations = self._encode(x_rad, x_path)
-        # HMC uncertainty does not exist during deterministic initialization;
-        # only the fixed repeated-CV uncertainty is available at this stage.
-        zero_uncertainty = {
-            name: torch.zeros_like(states[name]) for name in self.expert_names
-        }
-        # The generalized-EM router update must not reshape expert risks.
-        router_states = {
-            name: value.detach() for name, value in states.items()
-        }
-        gate = self._router_probs(
-            router_states, zero_uncertainty, cv_uncertainty
-        )
+    def _pretraining_objective(self, x_rad, x_path, duration, event):
+        """Equal-weight survival pretraining without assignments or router."""
+        states, _ = self._encode(x_rad, x_path)
         log_likelihood = self._expert_log_likelihoods(states, duration, event)
-        responsibility = self._hierarchical_responsibilities(log_likelihood)
-        target = responsibility.detach()
-
-        expert_nll = -torch.mean(torch.sum(target * log_likelihood, dim=1))
-        router_ce = -torch.mean(torch.sum(
-            target * torch.log(gate.clamp_min(1e-8)), dim=1
-        ))
-        loss = expert_nll + router_ce
+        per_expert_nll = -log_likelihood.mean(dim=0)
+        loss = per_expert_nll.mean()
         return loss, {
-            "expert_nll": expert_nll,
-            "router_ce": router_ce,
-            "responsibility": responsibility,
-            "gate": gate,
+            "expert_nll": loss,
+            "expert_nll_R": per_expert_nll[0],
+            "expert_nll_P": per_expert_nll[1],
+            "expert_nll_RP": per_expert_nll[2],
         }
 
     def _make_boundaries(self, duration, event):
@@ -1303,10 +1286,11 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         )
         if train_idx.numel() == 0 or val_idx.numel() == 0:
             raise ValueError("router train and validation sets must be non-empty")
+        start_state = copy.deepcopy(self.router.state_dict())
         router_optimizer = torch.optim.Adam(
             self.router.parameters(), lr=self.learning_rate
         )
-        best_state, best_val, best_epoch, stale = None, math.inf, 0, 0
+        best_val, best_epoch, stale = math.inf, 0, 0
         history = []
         for epoch in range(self.router_refit_epochs):
             self.router.train()
@@ -1337,18 +1321,35 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             })
             if value < best_val - 1e-6:
                 best_val, best_epoch, stale = value, epoch + 1, 0
-                best_state = copy.deepcopy(self.router.state_dict())
             else:
                 stale += 1
                 if stale >= self.router_refit_patience:
                     break
-        if best_state is None:
+        if best_epoch == 0:
             raise RuntimeError("Router refit produced no validation checkpoint")
-        self.router.load_state_dict(best_state)
+        # The split selects the stopping time only. Refit from the identical
+        # pre-EM router state on every patient for that selected duration.
+        self.router.load_state_dict(start_state)
+        all_optimizer = torch.optim.Adam(
+            self.router.parameters(), lr=self.learning_rate
+        )
+        self.router.train()
+        all_ce = None
+        for _ in range(best_epoch):
+            all_gate = self._router_probs_from_state(router_states)
+            all_ce = -torch.mean(torch.sum(
+                responsibility.unsqueeze(0)
+                * torch.log(all_gate.clamp_min(1e-8)), dim=2
+            ))
+            all_optimizer.zero_grad()
+            all_ce.backward()
+            all_optimizer.step()
+        self.router.eval()
         return {
             "best_epoch": best_epoch,
             "best_val_ce": best_val,
             "epochs_run": len(history),
+            "all_data_final_ce": float(all_ce.detach()),
             "history": history,
         }
 
@@ -1372,36 +1373,41 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             x_rad, x_path, duration, event
         )]
         _, cv_uncertainty = self._fit_repeated_cv_state(*tensors)
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        best, best_loss, best_record, stale = None, math.inf, None, 0
+        # Preserve the identical expert initialization for the all-data refit.
+        initial_encoders = copy.deepcopy(self.encoders.state_dict())
+        initial_experts = copy.deepcopy(self.experts.state_dict())
+        initial_baseline = self.shared_log_baseline_hazard.detach().clone()
+        expert_parameters = [
+            *self.encoders.parameters(), *self.experts.parameters(),
+            self.shared_log_baseline_hazard,
+        ]
+        optimizer = torch.optim.Adam(
+            expert_parameters, lr=self.learning_rate
+        )
+        best_loss, best_record, stale = math.inf, None, 0
         self.history_ = []
         for epoch in range(self.max_epochs):
             self.train()
             optimizer.zero_grad()
-            train_loss, parts_train = self._objective(
+            train_loss, parts_train = self._pretraining_objective(
                 *[tensor[train_idx] for tensor in tensors],
-                cv_uncertainty[train_idx],
             )
             train_loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.parameters(), 5.0)
+            torch.nn.utils.clip_grad_norm_(expert_parameters, 5.0)
             optimizer.step()
             self.eval()
             with torch.no_grad():
-                val_loss, parts = self._objective(
+                val_loss, parts = self._pretraining_objective(
                     *[tensor[val_idx] for tensor in tensors],
-                    cv_uncertainty[val_idx],
                 )
             value = val_loss.item()
-            train_component_means = {
-                name: parts_train[name].item()
-                for name in ("expert_nll", "router_ce")
-            }
             record = {
                 "epoch": epoch + 1, "train_loss": train_loss.item(),
                 "val_loss": value, "expert_nll": parts["expert_nll"].item(),
-                "router_ce": parts["router_ce"].item(),
-                "train_expert_nll": train_component_means["expert_nll"],
-                "train_router_ce": train_component_means["router_ce"],
+                "train_expert_nll": parts_train["expert_nll"].item(),
+                "expert_nll_R": parts["expert_nll_R"].item(),
+                "expert_nll_P": parts["expert_nll_P"].item(),
+                "expert_nll_RP": parts["expert_nll_RP"].item(),
             }
             self.history_.append(record)
             if self.verbose and (
@@ -1410,12 +1416,13 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 print(
                     f"  Epoch {epoch + 1}/{self.max_epochs}: "
                     f"Train={record['train_loss']:.4f}, Val={value:.4f}, "
-                    f"Expert NLL={record['expert_nll']:.4f}, "
-                    f"Router CE={record['router_ce']:.4f}"
+                    f"Expert NLL R/P/RP="
+                    f"{record['expert_nll_R']:.4f}/"
+                    f"{record['expert_nll_P']:.4f}/"
+                    f"{record['expert_nll_RP']:.4f}"
                 )
             if value < best_loss - 1e-6:
                 best_loss, stale = value, 0
-                best = copy.deepcopy(self.state_dict())
                 best_record = record.copy()
             else:
                 stale += 1
@@ -1423,11 +1430,38 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     if self.verbose:
                         print(f"  Early stopping at epoch {epoch + 1}")
                     break
-        if best is None:
+        if best_record is None:
             raise RuntimeError("Bayesian survival mixture produced no checkpoint")
-        self.load_state_dict(best)
         self.best_epoch_ = best_record["epoch"]
         self.best_validation_terms_ = best_record
+        # Refit the experts, but not the router, on the complete cohort using
+        # the validation-selected stopping time as the training hyperparameter.
+        self.encoders.load_state_dict(initial_encoders)
+        self.experts.load_state_dict(initial_experts)
+        with torch.no_grad():
+            self.shared_log_baseline_hazard.copy_(initial_baseline)
+        expert_parameters = [
+            *self.encoders.parameters(), *self.experts.parameters(),
+            self.shared_log_baseline_hazard,
+        ]
+        refit_optimizer = torch.optim.Adam(
+            expert_parameters, lr=self.learning_rate
+        )
+        self.all_data_refit_history_ = []
+        for epoch in range(self.best_epoch_):
+            self.train()
+            refit_optimizer.zero_grad()
+            refit_loss, refit_parts = self._pretraining_objective(*tensors)
+            refit_loss.backward()
+            torch.nn.utils.clip_grad_norm_(expert_parameters, 5.0)
+            refit_optimizer.step()
+            self.all_data_refit_history_.append({
+                "epoch": epoch + 1,
+                "expert_nll": float(refit_parts["expert_nll"].detach()),
+                "expert_nll_R": float(refit_parts["expert_nll_R"].detach()),
+                "expert_nll_P": float(refit_parts["expert_nll_P"].detach()),
+                "expert_nll_RP": float(refit_parts["expert_nll_RP"].detach()),
+            })
         # Empirical-Bayes stage: freeze learned representations, then sample
         # the conditional posterior of each compact linear survival head.
         self.eval()
@@ -1437,9 +1471,16 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 map_risks, tensors[2], tensors[3]
             )
             map_responsibility = self._hierarchical_responsibilities(map_loglik)
-            self.map_population_update_ = self._update_dirichlet_posterior(
-                map_responsibility
+            prior_mean = (
+                self.dirichlet_posterior_alpha
+                / self.dirichlet_posterior_alpha.sum()
             )
+            self.map_population_update_ = {
+                "applied": False,
+                "reason": "MAP responsibilities initialize HMC only",
+                "before": prior_mean.detach().cpu().tolist(),
+                "after": prior_mean.detach().cpu().tolist(),
+            }
             representations = self._fit_representation_normalization(
                 representations
             )
@@ -1539,7 +1580,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     "    Router refit: best epoch="
                     f"{router_refit['best_epoch']}/"
                     f"{router_refit['epochs_run']}, validation CE="
-                    f"{router_refit['best_val_ce']:.4f}"
+                    f"{router_refit['best_val_ce']:.4f}, all-data final CE="
+                    f"{router_refit['all_data_final_ce']:.4f}"
                 )
                 print(
                     "    Population update before -> target -> after: "

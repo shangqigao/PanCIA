@@ -2369,7 +2369,12 @@ class SurvivalAnalyzer:
             f"R/P/RP="
             + "/".join(f"{value:.3f}" for value in population_mean)
         )
-        print(f"  Neural initialization epochs: {len(bandit.history_)}")
+        print(
+            f"  Expert pretraining: selection ran {len(bandit.history_)} "
+            f"epochs, selected epoch={bandit.best_epoch_}, all-data refit="
+            f"{len(bandit.all_data_refit_history_)} epochs; router not "
+            f"initialized before Bayesian EM"
+        )
         print(
             f"  Model dimensions: encoder/HMC="
             f"{bandit.encoder_hidden_dim}, router hidden="
@@ -2446,10 +2451,12 @@ class SurvivalAnalyzer:
             )
         best_terms = bandit.best_validation_terms_
         print(
-            f"  Best validation loss terms (epoch {bandit.best_epoch_}): "
-            f"Total={best_terms['val_loss']:.4f}, "
-            f"Expert NLL={best_terms['expert_nll']:.4f}, "
-            f"Router CE={best_terms['router_ce']:.4f}"
+            f"  Best expert-pretraining validation NLL "
+            f"(epoch {bandit.best_epoch_}): mean="
+            f"{best_terms['expert_nll']:.4f}, R/P/RP="
+            f"{best_terms['expert_nll_R']:.4f}/"
+            f"{best_terms['expert_nll_P']:.4f}/"
+            f"{best_terms['expert_nll_RP']:.4f}"
         )
         for expert_name, diagnostic in bandit.mcmc_diagnostics_.items():
             print(
@@ -2512,6 +2519,7 @@ class SurvivalAnalyzer:
             'event': te_y["event"].astype(int).tolist(),
             'duration': te_y["duration"].tolist(),
             'training_history': bandit.history_,
+            'all_data_refit_history': bandit.all_data_refit_history_,
             'best_epoch': bandit.best_epoch_,
             'model_dimensions': {
                 'encoder_hidden_dim': bandit.encoder_hidden_dim,
