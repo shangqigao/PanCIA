@@ -2212,7 +2212,7 @@ class SurvivalAnalyzer:
                 'variational_router_hidden_dim', 16
             ),
             router_state_mode=model_params.get(
-                'variational_router_state', 'risk_pair'
+                'variational_router_state', 'full_uncertainty'
             ),
             n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
@@ -2274,7 +2274,7 @@ class SurvivalAnalyzer:
                 'embedding_knn_neighbors', 20
             ),
             use_standard_scaler=model_params.get(
-                'variational_use_standard_scaler', False
+                'variational_use_standard_scaler', True
             ),
         )
 
