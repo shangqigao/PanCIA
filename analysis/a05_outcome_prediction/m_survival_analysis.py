@@ -2212,7 +2212,7 @@ class SurvivalAnalyzer:
                 'variational_router_hidden_dim', 16
             ),
             router_state_mode=model_params.get(
-                'variational_router_state', 'full_uncertainty'
+                'variational_router_state', 'risk_hmc_uncertainty'
             ),
             n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
@@ -2380,16 +2380,6 @@ class SurvivalAnalyzer:
             f"{bandit.encoder_hidden_dim}, router hidden="
             f"{bandit.router_hidden_dim}, router state="
             f"{bandit.router_state_mode} ({bandit.router_state_dim}D)"
-        )
-        state_norm = bandit.router_state_normalization_diagnostics_
-        print(
-            "  Router-state normalization: median/IQR fitted on first "
-            "posterior EM states and frozen; raw median range="
-            f"[{min(state_norm['median']):.4f}, "
-            f"{max(state_norm['median']):.4f}], IQR scale range="
-            f"[{min(state_norm['iqr_scale']):.4f}, "
-            f"{max(state_norm['iqr_scale']):.4f}], constant dimensions="
-            f"{state_norm['constant_dimensions']}"
         )
         print(
             f"  Baseline prior center: log-rate="

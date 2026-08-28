@@ -237,10 +237,15 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             hidden_dim if router_hidden_dim is None else router_hidden_dim
         )
         self.router_state_mode = str(router_state_mode)
-        state_dimensions = {"risk_pair": 3, "full_uncertainty": 12}
+        state_dimensions = {
+            "risk_pair": 3,
+            "risk_hmc_uncertainty": 6,
+            "full_uncertainty": 12,
+        }
         if self.router_state_mode not in state_dimensions:
             raise ValueError(
-                "router_state_mode must be 'risk_pair' or 'full_uncertainty'"
+                "router_state_mode must be 'risk_pair', "
+                "'risk_hmc_uncertainty', or 'full_uncertainty'"
             )
         self.router_state_dim = state_dimensions[self.router_state_mode]
         if self.encoder_hidden_dim < 1 or self.router_hidden_dim < 1:
@@ -315,19 +320,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.router = nn.Sequential(
             nn.Linear(self.router_state_dim, self.router_hidden_dim), nn.ReLU(),
             nn.Linear(self.router_hidden_dim, 3),
-        )
-        # Router-state normalization is deliberately separate from expert
-        # representation/risk normalization. It changes only the numerical
-        # coordinates seen by the gate and therefore leaves the survival
-        # likelihood and shared-baseline interpretation untouched.
-        self.register_buffer(
-            "router_state_center", torch.zeros(self.router_state_dim)
-        )
-        self.register_buffer(
-            "router_state_scale", torch.ones(self.router_state_dim)
-        )
-        self.register_buffer(
-            "router_state_normalization_fitted", torch.tensor(False)
         )
         prior = torch.as_tensor(reliability_prior, dtype=torch.float32)
         if prior.shape != (3,) or torch.any(prior <= 0):
@@ -424,6 +416,9 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         hmc_sd = torch.cat(
             [hmc_uncertainties[name] for name in self.expert_names], dim=1
         )
+        if self.router_state_mode == "risk_hmc_uncertainty":
+            return torch.cat([risks, hmc_sd], dim=1)
+
         cv_sd = cv_uncertainties.to(risks).clamp_min(1e-6)
         total_variance = hmc_sd.square() + cv_sd.square()
         disagreements = torch.stack([
@@ -440,50 +435,10 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         alpha = self.dirichlet_posterior_alpha.clamp_min(1e-8)
         return torch.digamma(alpha) - torch.digamma(alpha.sum())
 
-    def _fit_router_state_normalization(self, router_state):
-        """Fit one frozen robust transform from first-EM router states."""
-        if bool(self.router_state_normalization_fitted.item()):
-            raise RuntimeError("Router-state normalization is already fitted")
-        if router_state.shape[-1] != self.router_state_dim:
-            raise ValueError("Unexpected final dimension for router state")
-        flat = router_state.detach().reshape(-1, self.router_state_dim)
-        quantiles = torch.quantile(
-            flat, torch.tensor([0.05, 0.25, 0.50, 0.75, 0.95],
-                               device=flat.device), dim=0
-        )
-        center = quantiles[2]
-        iqr = quantiles[3] - quantiles[1]
-        # A constant coordinate contains no scale information. Leaving its
-        # scale at one avoids amplifying floating-point noise by 1 / epsilon.
-        scale = torch.where(iqr > 1e-6, iqr, torch.ones_like(iqr))
-        with torch.no_grad():
-            self.router_state_center.copy_(center)
-            self.router_state_scale.copy_(scale)
-        self.router_state_normalization_fitted.fill_(True)
-        self.router_state_normalization_diagnostics_ = {
-            "method": "median_iqr",
-            "scope": "first_posterior_em_all_patients_and_draws",
-            "q05": quantiles[0].cpu().tolist(),
-            "median": center.cpu().tolist(),
-            "q95": quantiles[4].cpu().tolist(),
-            "iqr_scale": scale.cpu().tolist(),
-            "constant_dimensions": torch.nonzero(
-                iqr <= 1e-6, as_tuple=False
-            ).flatten().cpu().tolist(),
-        }
-
-    def _normalize_router_state(self, router_state):
-        if not bool(self.router_state_normalization_fitted.item()):
-            return router_state
-        return (
-            router_state - self.router_state_center
-        ) / self.router_state_scale
-
     def _router_probs_from_state(self, router_state):
         # The router distils responsibilities that already contain the
         # population term. Adding E[log rho] here would count it twice.
-        normalized_state = self._normalize_router_state(router_state)
-        return torch.softmax(self.router(normalized_state), dim=-1)
+        return torch.softmax(self.router(router_state), dim=-1)
 
     def _router_probs(self, log_risks, hmc_uncertainties, cv_uncertainties):
         return self._router_probs_from_state(self._make_router_state(
@@ -1565,8 +1520,6 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     cv_uncertainty,
                     max_draws=self.mc_test_samples,
                 )
-                if not bool(self.router_state_normalization_fitted.item()):
-                    self._fit_router_state_normalization(router_states)
                 updated_responsibility = (
                     self._hierarchical_responsibilities_from_draws(
                         draw_loglik
