@@ -2277,7 +2277,7 @@ class SurvivalAnalyzer:
                 'embedding_knn_neighbors', 20
             ),
             use_standard_scaler=model_params.get(
-                'variational_use_standard_scaler', True
+                'variational_use_standard_scaler', False
             ),
         )
 
