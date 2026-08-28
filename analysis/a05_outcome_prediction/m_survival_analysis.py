@@ -2381,6 +2381,16 @@ class SurvivalAnalyzer:
             f"{bandit.router_hidden_dim}, router state="
             f"{bandit.router_state_mode} ({bandit.router_state_dim}D)"
         )
+        state_norm = bandit.router_state_normalization_diagnostics_
+        print(
+            "  Router-state normalization: median/IQR fitted on first "
+            "posterior EM states and frozen; raw median range="
+            f"[{min(state_norm['median']):.4f}, "
+            f"{max(state_norm['median']):.4f}], IQR scale range="
+            f"[{min(state_norm['iqr_scale']):.4f}, "
+            f"{max(state_norm['iqr_scale']):.4f}], constant dimensions="
+            f"{state_norm['constant_dimensions']}"
+        )
         print(
             f"  Baseline prior center: log-rate="
             f"{bandit.baseline_prior_location_:.4f} "
