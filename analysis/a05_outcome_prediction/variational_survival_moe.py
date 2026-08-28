@@ -240,14 +240,15 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         state_dimensions = {
             "risk_pair": 3,
             "risk_hmc_uncertainty": 6,
+            "risk_hmc_disagreement": 9,
             "risk_hmc_cv_uncertainty": 9,
             "full_uncertainty": 12,
         }
         if self.router_state_mode not in state_dimensions:
             raise ValueError(
                 "router_state_mode must be 'risk_pair', "
-                "'risk_hmc_uncertainty', 'risk_hmc_cv_uncertainty', or "
-                "'full_uncertainty'"
+                "'risk_hmc_uncertainty', 'risk_hmc_disagreement', "
+                "'risk_hmc_cv_uncertainty', or 'full_uncertainty'"
             )
         self.router_state_dim = state_dimensions[self.router_state_mode]
         if self.encoder_hidden_dim < 1 or self.router_hidden_dim < 1:
@@ -420,6 +421,18 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         )
         if self.router_state_mode == "risk_hmc_uncertainty":
             return torch.cat([risks, hmc_sd], dim=1)
+
+        if self.router_state_mode == "risk_hmc_disagreement":
+            hmc_variance = hmc_sd.square()
+            hmc_disagreements = torch.stack([
+                torch.abs(risks[:, 0] - risks[:, 1])
+                / torch.sqrt(hmc_variance[:, 0] + hmc_variance[:, 1] + 1e-8),
+                torch.abs(risks[:, 0] - risks[:, 2])
+                / torch.sqrt(hmc_variance[:, 0] + hmc_variance[:, 2] + 1e-8),
+                torch.abs(risks[:, 1] - risks[:, 2])
+                / torch.sqrt(hmc_variance[:, 1] + hmc_variance[:, 2] + 1e-8),
+            ], dim=1)
+            return torch.cat([risks, hmc_sd, hmc_disagreements], dim=1)
 
         cv_sd = cv_uncertainties.to(risks).clamp_min(1e-6)
         if self.router_state_mode == "risk_hmc_cv_uncertainty":

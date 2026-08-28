@@ -2212,7 +2212,7 @@ class SurvivalAnalyzer:
                 'variational_router_hidden_dim', 16
             ),
             router_state_mode=model_params.get(
-                'variational_router_state', 'risk_hmc_cv_uncertainty'
+                'variational_router_state', 'risk_hmc_disagreement'
             ),
             n_intervals=model_params.get('survival_intervals', 4),
             learning_rate=model_params.get('variational_learning_rate', 1e-3),
