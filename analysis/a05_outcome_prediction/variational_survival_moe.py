@@ -243,12 +243,14 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             "risk_hmc_disagreement": 9,
             "risk_hmc_cv_uncertainty": 9,
             "full_uncertainty": 12,
+            "full_uncertainty_knn": 14,
         }
         if self.router_state_mode not in state_dimensions:
             raise ValueError(
                 "router_state_mode must be 'risk_pair', "
                 "'risk_hmc_uncertainty', 'risk_hmc_disagreement', "
-                "'risk_hmc_cv_uncertainty', or 'full_uncertainty'"
+                "'risk_hmc_cv_uncertainty', 'full_uncertainty', or "
+                "'full_uncertainty_knn'"
             )
         self.router_state_dim = state_dimensions[self.router_state_mode]
         if self.encoder_hidden_dim < 1 or self.router_hidden_dim < 1:
@@ -405,7 +407,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         return normalized
 
     def _make_router_state(self, log_risks, hmc_uncertainties,
-                           cv_uncertainties):
+                           cv_uncertainties, embedding_percentiles=None):
         """Construct the selected interpretable router-state ablation."""
         risks = torch.cat([log_risks[name] for name in self.expert_names], dim=1)
         if self.router_state_mode == "risk_pair":
@@ -447,7 +449,22 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             torch.abs(risks[:, 1] - risks[:, 2])
             / torch.sqrt(total_variance[:, 1] + total_variance[:, 2] + 1e-8),
         ], dim=1)
-        return torch.cat([risks, hmc_sd, cv_sd, disagreements], dim=1)
+        full_state = torch.cat([risks, hmc_sd, cv_sd, disagreements], dim=1)
+        if self.router_state_mode == "full_uncertainty":
+            return full_state
+        if embedding_percentiles is None:
+            raise ValueError(
+                "full_uncertainty_knn requires radiology/pathology KNN "
+                "percentiles"
+            )
+        percentiles = torch.as_tensor(
+            embedding_percentiles, dtype=risks.dtype, device=risks.device
+        )
+        if percentiles.shape != (risks.shape[0], 2):
+            raise ValueError(
+                "embedding_percentiles must have shape [patient, 2]"
+            )
+        return torch.cat([full_state, percentiles], dim=1)
 
     def _expected_log_population_weights(self):
         alpha = self.dirichlet_posterior_alpha.clamp_min(1e-8)
@@ -458,9 +475,11 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         # population term. Adding E[log rho] here would count it twice.
         return torch.softmax(self.router(router_state), dim=-1)
 
-    def _router_probs(self, log_risks, hmc_uncertainties, cv_uncertainties):
+    def _router_probs(self, log_risks, hmc_uncertainties, cv_uncertainties,
+                      embedding_percentiles=None):
         return self._router_probs_from_state(self._make_router_state(
-            log_risks, hmc_uncertainties, cv_uncertainties
+            log_risks, hmc_uncertainties, cv_uncertainties,
+            embedding_percentiles,
         ))
 
     def _reset_dirichlet_posterior(self, sample_count):
@@ -1254,7 +1273,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         return torch.sum(gates * risks, dim=2).mean(0)
 
     def _posterior_draw_e_step_inputs(self, representations, duration, event,
-                                      cv_uncertainty, max_draws=None):
+                                      cv_uncertainty, embedding_percentiles,
+                                      max_draws=None):
         """Matched router states and log likelihoods for Bayesian E-step."""
         posterior_stds = self._posterior_log_risk_summary(representations)[1]
         router_stds = posterior_stds
@@ -1293,7 +1313,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     - baseline_cumulative * torch.exp(eta)
                 )
             states.append(self._make_router_state(
-                draw_log_risks, router_stds, cv_uncertainty
+                draw_log_risks, router_stds, cv_uncertainty,
+                embedding_percentiles,
             ).detach())
             log_likelihoods.append(torch.stack(draw_log_likelihoods, dim=1))
         return torch.stack(states), torch.stack(log_likelihoods)
@@ -1379,7 +1400,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
             "history": history,
         }
 
-    def fit(self, x_rad, x_path, y, validation_fraction=0.2):
+    def fit(self, x_rad, x_path, y, validation_fraction=0.2,
+            embedding_percentiles=None):
         if self.representation_normalized_:
             raise RuntimeError("Create a new model instance before refitting")
         if self.random_state is not None:
@@ -1398,6 +1420,22 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         tensors = [torch.as_tensor(v, device=self.device) for v in (
             x_rad, x_path, duration, event
         )]
+        if embedding_percentiles is not None:
+            embedding_percentiles = torch.as_tensor(
+                np.asarray(embedding_percentiles, dtype=np.float32),
+                device=self.device,
+            )
+        if (
+            self.router_state_mode == "full_uncertainty_knn"
+            and (
+                embedding_percentiles is None
+                or embedding_percentiles.shape != (len(duration), 2)
+            )
+        ):
+            raise ValueError(
+                "full_uncertainty_knn requires embedding_percentiles with "
+                "shape [patient, 2]"
+            )
         _, cv_uncertainty = self._fit_repeated_cv_state(*tensors)
         # Preserve the identical expert initialization for the all-data refit.
         initial_encoders = copy.deepcopy(self.encoders.state_dict())
@@ -1535,7 +1573,7 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                 self._diagnose_cv_full_fit_gap(frozen_representations)
                 router_states, draw_loglik = self._posterior_draw_e_step_inputs(
                     frozen_representations, tensors[2], tensors[3],
-                    cv_uncertainty,
+                    cv_uncertainty, embedding_percentiles,
                     max_draws=self.mc_test_samples,
                 )
                 updated_responsibility = (
@@ -1659,12 +1697,29 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
         self.is_fitted_ = True
         return self
 
-    def predict(self, x_rad, x_path, hard=True, mc_samples=None):
+    def predict(self, x_rad, x_path, hard=True, mc_samples=None,
+                embedding_percentiles=None):
         if not getattr(self, "is_fitted_", False):
             raise RuntimeError("Model must be fitted before prediction")
         mc_samples = self.mc_test_samples if mc_samples is None else int(mc_samples)
         x_rad = torch.as_tensor(np.asarray(x_rad, dtype=np.float32), device=self.device)
         x_path = torch.as_tensor(np.asarray(x_path, dtype=np.float32), device=self.device)
+        if embedding_percentiles is not None:
+            embedding_percentiles = torch.as_tensor(
+                np.asarray(embedding_percentiles, dtype=np.float32),
+                device=self.device,
+            )
+        if (
+            self.router_state_mode == "full_uncertainty_knn"
+            and (
+                embedding_percentiles is None
+                or embedding_percentiles.shape != (len(x_rad), 2)
+            )
+        ):
+            raise ValueError(
+                "full_uncertainty_knn requires embedding_percentiles with "
+                "shape [patient, 2]"
+            )
         gate_samples, risk_samples = [], []
         self.eval()
         with torch.no_grad():
@@ -1696,7 +1751,8 @@ class ConditionalVariationalSurvivalMoE(nn.Module):
                     draw_log_risks[name] = eta.unsqueeze(1)
                     draw_hazards.append(baseline * torch.exp(eta))
                 gate = self._router_probs(
-                    draw_log_risks, router_stds, cv_uncertainty
+                    draw_log_risks, router_stds, cv_uncertainty,
+                    embedding_percentiles,
                 )
                 risks = torch.stack(draw_hazards, dim=1)
                 gate_samples.append(gate)
@@ -1776,7 +1832,10 @@ class ConditionalVariationalSurvivalPipeline:
             x_path = self.pathomics_scaler.fit_transform(x_path_raw)
         else:
             x_rad, x_path = x_rad_raw, x_path_raw
-        self.model.fit(x_rad, x_path, y)
+        self.model.fit(
+            x_rad, x_path, y,
+            embedding_percentiles=self.training_embedding_percentiles_,
+        )
         return self
 
     def transform(self, x_rad, x_path):
@@ -1791,7 +1850,8 @@ class ConditionalVariationalSurvivalPipeline:
         else:
             x_rad, x_path = x_rad_raw, x_path_raw
         risk, actions, probs, uncertainty, diagnostics = self.model.predict(
-            x_rad, x_path, hard=self.hard
+            x_rad, x_path, hard=self.hard,
+            embedding_percentiles=self.embedding_percentiles_,
         )
         self.actions_, self.probs_, self.uncertainty_ = actions, probs, uncertainty
         diagnostics["embedding_knn_percentiles"] = self.embedding_percentiles_
