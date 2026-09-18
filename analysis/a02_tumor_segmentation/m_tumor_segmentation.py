@@ -41,6 +41,9 @@ def extract_radiology_segmentation(
         ts_task=None,
         ts_fast=False,
         ts_extra_tasks=None,
+        ts_roi_subset=None,
+        ts_threads=4,
+        ts_body_seg=False,
     ):
     """extract segmentation from radiology images
     Args:
@@ -104,6 +107,10 @@ def extract_radiology_segmentation(
             task=ts_task,
             fast=ts_fast,
             extra_tasks=ts_extra_tasks,
+            roi_subset=ts_roi_subset,
+            nr_threads_resample=ts_threads,
+            nr_threads_save=ts_threads,
+            body_seg=ts_body_seg,
         )
     else:
         raise ValueError(f"Invalid model mode: {model_mode}")
@@ -484,6 +491,10 @@ def extract_TotalSegmentator_segmentation(
         task=None,
         fast=False,
         extra_tasks=None,
+        roi_subset=None,
+        nr_threads_resample=4,
+        nr_threads_save=4,
+        body_seg=False,
     ):
     """Segment anatomy in NIfTI volumes with TotalSegmentator (multi-label, no prompts).
 
@@ -507,6 +518,13 @@ def extract_TotalSegmentator_segmentation(
         extra_tasks: optional list of additional TS tasks run on the same image (``body``, ``lung_vessels``,
             ``tissue_types`` [licensed], ``abdominal_muscles`` [licensed], ...).
         device: ``gpu``, ``gpu:N``, ``cuda:N``, ``cpu`` or ``mps`` (default: auto).
+        roi_subset: optional list of TS class names; TS then runs only the sub-models covering them
+            (big speed-up when a handful of anchors is enough).
+        nr_threads_resample / nr_threads_save: CPU threads for TS resampling and saving (TS defaults 1 / 6).
+        body_seg: crop to the body region first (faster on scans with a lot of air / table).
+
+    Speed notes: ``total`` = 5 nnU-Net models at 1.5 mm plus CPU resampling, so ~1 min/scan on a GPU is
+    normal; ``fast=True`` (3 mm, one model) is ~5-10x quicker; ``roi_subset`` skips unneeded sub-models.
     """
     import json
     import csv
@@ -554,27 +572,34 @@ def extract_TotalSegmentator_segmentation(
     save_dir.mkdir(parents=True, exist_ok=True)
 
     def _structure_table(mask_img, label_names):
-        """Per-label volume / centroid / z-extent / boundary contact in patient (RAS) coordinates."""
+        """Per-label volume / centroid / z-extent / boundary contact in patient (RAS) coordinates.
+        Single pass over the volume: bincount (volumes), find_objects (bboxes), center_of_mass (centroids)."""
+        from scipy import ndimage
         data = np.asanyarray(mask_img.dataobj)
+        if data.dtype.kind not in "iu":
+            data = np.rint(data).astype(np.int32)
         affine = mask_img.affine
         vox_ml = float(abs(np.linalg.det(affine[:3, :3]))) / 1000.0
-        rows = []
-        labels = np.unique(data)
+        counts = np.bincount(data.ravel())
+        labels = np.nonzero(counts)[0]
         labels = labels[labels > 0]
+        if labels.size == 0:
+            return []
+        objs = ndimage.find_objects(data)                      # index i -> slices for label i+1 (None if absent)
+        coms = ndimage.center_of_mass(np.ones_like(data, dtype=np.uint8), data, labels.tolist())
         shape = np.array(data.shape)
-        for lab in labels:
-            idx = np.argwhere(data == lab)
-            if idx.size == 0:
+        rows = []
+        for lab, com in zip(labels, coms):
+            sl = objs[int(lab) - 1]
+            if sl is None:
                 continue
-            n = idx.shape[0]
-            centroid_vox = idx.mean(axis=0)
-            centroid_ras = affine[:3, :3] @ centroid_vox + affine[:3, 3]
-            # z extent in mm: transform bbox corners
-            mins, maxs = idx.min(axis=0), idx.max(axis=0)
+            mins = np.array([x.start for x in sl]); maxs = np.array([x.stop - 1 for x in sl])
+            centroid_ras = affine[:3, :3] @ np.asarray(com, dtype=float) + affine[:3, 3]
             corners = np.array([[x, y, z] for x in (mins[0], maxs[0]) for y in (mins[1], maxs[1]) for z in (mins[2], maxs[2])], dtype=float)
             corners_ras = (affine[:3, :3] @ corners.T).T + affine[:3, 3]
             touches = bool(np.any(mins == 0) or np.any(maxs == shape - 1))
-            rows.append(dict(label=int(lab), name=label_names.get(int(lab), str(int(lab))), n_voxels=int(n),
+            n = int(counts[lab])
+            rows.append(dict(label=int(lab), name=label_names.get(int(lab), str(int(lab))), n_voxels=n,
                              volume_ml=round(n * vox_ml, 3),
                              centroid_x_mm=round(float(centroid_ras[0]), 2), centroid_y_mm=round(float(centroid_ras[1]), 2), centroid_z_mm=round(float(centroid_ras[2]), 2),
                              zmin_mm=round(float(corners_ras[:, 2].min()), 2), zmax_mm=round(float(corners_ras[:, 2].max()), 2),
@@ -614,6 +639,8 @@ def extract_TotalSegmentator_segmentation(
         totalsegmentator(
             str(img_path), str(save_mask_path),
             ml=True, task=img_task, fast=fast, device=ts_device,
+            roi_subset=roi_subset, body_seg=body_seg,
+            nr_thr_resamp=nr_threads_resample, nr_thr_saving=nr_threads_save,
             quiet=True, verbose=False, skip_saving=False,
         )
 
@@ -640,7 +667,8 @@ def extract_TotalSegmentator_segmentation(
                 continue
             logger.info("Running extra TotalSegmentator task: %s", extra)
             try:
-                totalsegmentator(str(img_path), str(extra_path), ml=True, task=extra, fast=fast, device=ts_device, quiet=True, verbose=False)
+                totalsegmentator(str(img_path), str(extra_path), ml=True, task=extra, fast=fast, device=ts_device,
+                                 nr_thr_resamp=nr_threads_resample, nr_thr_saving=nr_threads_save, quiet=True, verbose=False)
             except Exception as exc:  # licensed tasks raise without a licence key
                 logger.warning("Extra task %s failed for %s: %s", extra, img_name, exc)
 
@@ -734,6 +762,9 @@ if __name__ == "__main__":
         help='TotalSegmentator task; default picks total (CT) or total_mr (MR) per image',
     )
     parser.add_argument('--ts_fast', action='store_true', help='TotalSegmentator 3 mm fast model')
+    parser.add_argument('--ts_roi_subset', default=None, nargs='*', help='Only these TS classes (runs only the needed sub-models)')
+    parser.add_argument('--ts_threads', default=4, type=int, help='CPU threads for TS resampling/saving (match your Slurm --cpus-per-task)')
+    parser.add_argument('--ts_body_seg', action='store_true', help='Crop to body region before segmenting')
     parser.add_argument(
         '--ts_extra_tasks',
         default=None,
@@ -792,4 +823,7 @@ if __name__ == "__main__":
         ts_task=args.ts_task,
         ts_fast=args.ts_fast,
         ts_extra_tasks=args.ts_extra_tasks,
+        ts_roi_subset=args.ts_roi_subset,
+        ts_threads=args.ts_threads,
+        ts_body_seg=args.ts_body_seg,
     )
