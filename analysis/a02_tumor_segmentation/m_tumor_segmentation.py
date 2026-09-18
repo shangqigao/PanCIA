@@ -246,6 +246,7 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
             ensemble_prob = []
             ensemble_feat = []
             for prompt in prompts:
+                logger.info("Using BiomedParse prompt: %s", prompt)
                 if save_radiomics:
                     pred_prob, feature = interactive_infer_image(model, Image.fromarray(img), prompt, resize_mask=True, return_feature=True)
                     ensemble_feat.append(np.transpose(feature, (1, 2, 0)))
@@ -450,7 +451,10 @@ def extract_VoxTell_segmentation(
             logger.info("%s has existed, skip!", save_mask_path.name)
             continue
 
-        text_prompt = f"{site[idx]} {seg_obj}"
+        if seg_obj == "tumor":
+            text_prompt = f"{site[idx]} {seg_obj}"
+        else:
+            text_prompt = f"{site[idx]}"
         logger.info("Using VoxTell prompt: %s", text_prompt)
         image, properties = reader_writer.read_images([str(img_path)])
         prediction = predictor.predict_single_image(image, [text_prompt])
