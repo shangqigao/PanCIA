@@ -1,0 +1,103 @@
+version: 0.1.0
+regions:
+- id: thorax
+  span:
+  - T1
+  - T12
+  defined_by:
+  - ribs
+  - sternum
+  - lungs
+  - heart
+  peritoneal: null
+- id: mediastinum
+  span:
+  - T1
+  - T10
+  defined_by:
+  - between lungs; contains heart, aorta, oesophagus, trachea
+  peritoneal: null
+- id: upper_abdomen
+  span:
+  - T10
+  - L2
+  defined_by:
+  - diaphragm dome to renal hilum
+  peritoneal: mixed
+- id: retroperitoneum
+  span:
+  - T12
+  - L5
+  defined_by:
+  - 'posterior to peritoneum: kidneys, adrenals, aorta, IVC, psoas, pancreas, duodenum'
+  peritoneal: retro
+- id: peritoneal_cavity
+  span:
+  - T10
+  - S1
+  defined_by:
+  - liver, spleen, stomach, small bowel, transverse/sigmoid colon, omentum
+  peritoneal: intra
+- id: pelvis_true
+  span:
+  - S1
+  - coccyx
+  defined_by:
+  - 'below pelvic brim (promontory / iliopectineal line): bladder, uterus/prostate, rectum'
+  peritoneal: mixed
+- id: pelvis_false
+  span:
+  - L5
+  - S1
+  defined_by:
+  - iliac fossae above pelvic brim
+  peritoneal: intra
+- id: porta_hepatis
+  span:
+  - T12
+  - L1
+  defined_by:
+  - between liver hilum and portal vein / common bile duct / hepatic artery
+  peritoneal: intra
+- id: renal_hilum
+  span:
+  - L1
+  - L2
+  defined_by:
+  - medial kidney between renal pelvis and aorta/IVC
+  peritoneal: retro
+- id: perivesical_space
+  span:
+  - S3
+  - coccyx
+  defined_by:
+  - fat around bladder, bounded by pubis and peritoneal reflection
+  peritoneal: extra
+- id: presacral_space
+  span:
+  - S1
+  - coccyx
+  defined_by:
+  - between rectum/mesorectum and sacrum
+  peritoneal: extra
+- id: parametrial_space
+  span:
+  - S3
+  - coccyx
+  defined_by:
+  - lateral to cervix, medial to obturator internus, between bladder and rectum
+  peritoneal: extra
+- id: axilla
+  span:
+  - T2
+  - T5
+  defined_by:
+  - lateral to pectoralis minor, medial to humerus
+  peritoneal: null
+- id: neck
+  span:
+  - C1
+  - T1
+  defined_by:
+  - skull base to clavicles
+  peritoneal: null

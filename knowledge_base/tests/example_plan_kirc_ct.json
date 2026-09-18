@@ -1,0 +1,1565 @@
+{
+ "frame": {
+  "span": [
+   "T11",
+   "L4"
+  ],
+  "method": "ts_vertebrae",
+  "confidence": "high"
+ },
+ "anchors_found": [
+  {
+   "entity": "vertebra_T11",
+   "side": null,
+   "ts_name": "vertebrae_T11",
+   "volume_ml": 30,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": false
+  },
+  {
+   "entity": "vertebra_T12",
+   "side": null,
+   "ts_name": "vertebrae_T12",
+   "volume_ml": 30,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": false
+  },
+  {
+   "entity": "vertebra_L1",
+   "side": null,
+   "ts_name": "vertebrae_L1",
+   "volume_ml": 30,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": false
+  },
+  {
+   "entity": "vertebra_L2",
+   "side": null,
+   "ts_name": "vertebrae_L2",
+   "volume_ml": 30,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": false
+  },
+  {
+   "entity": "vertebra_L3",
+   "side": null,
+   "ts_name": "vertebrae_L3",
+   "volume_ml": 30,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": false
+  },
+  {
+   "entity": "vertebra_L4",
+   "side": null,
+   "ts_name": "vertebrae_L4",
+   "volume_ml": 30,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": false
+  },
+  {
+   "entity": "kidney",
+   "side": "left",
+   "ts_name": "kidney_left",
+   "volume_ml": 160,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "kidney",
+   "side": "right",
+   "ts_name": "kidney_right",
+   "volume_ml": 150,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "liver",
+   "side": null,
+   "ts_name": "liver",
+   "volume_ml": 1500,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "spleen",
+   "side": null,
+   "ts_name": "spleen",
+   "volume_ml": 200,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "aorta",
+   "side": null,
+   "ts_name": "aorta",
+   "volume_ml": 60,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "inferior_vena_cava",
+   "side": null,
+   "ts_name": "inferior_vena_cava",
+   "volume_ml": 40,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "pancreas",
+   "side": null,
+   "ts_name": "pancreas",
+   "volume_ml": 70,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "adrenal",
+   "side": "left",
+   "ts_name": "adrenal_gland_left",
+   "volume_ml": 5,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "colon",
+   "side": null,
+   "ts_name": "colon",
+   "volume_ml": 400,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "psoas",
+   "side": "left",
+   "ts_name": "iliopsoas_left",
+   "volume_ml": 200,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "psoas",
+   "side": "right",
+   "ts_name": "iliopsoas_right",
+   "volume_ml": 200,
+   "truncated": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true
+  },
+  {
+   "entity": "urinary_bladder",
+   "side": null,
+   "ts_name": "urinary_bladder",
+   "volume_ml": 5,
+   "truncated": false,
+   "plausible": false,
+   "why": [
+    "volume 5 ml outside [10,1600]"
+   ],
+   "is_anchor": true
+  }
+ ],
+ "anchors_expected": [
+  "spine",
+  "aorta",
+  "inferior_vena_cava",
+  "lung",
+  "liver",
+  "gallbladder",
+  "spleen",
+  "stomach",
+  "duodenum",
+  "pancreas",
+  "adrenal",
+  "kidney",
+  "small_bowel",
+  "colon",
+  "iliopsoas",
+  "psoas",
+  "subcutaneous_fat",
+  "visceral_fat",
+  "skeletal_muscle"
+ ],
+ "anchors_missing": [
+  {
+   "entity": "lung",
+   "side": "left",
+   "gate": {
+    "kind": "region",
+    "region": "thorax"
+   },
+   "ts_has_class": true
+  },
+  {
+   "entity": "lung",
+   "side": "right",
+   "gate": {
+    "kind": "region",
+    "region": "thorax"
+   },
+   "ts_has_class": true
+  },
+  {
+   "entity": "gallbladder",
+   "side": null,
+   "gate": {
+    "kind": "spatial_prior",
+    "constraints": [
+     {
+      "landmark": "liver",
+      "relation": "inferior_surface_of",
+      "dist_mm": [
+       0,
+       10
+      ],
+      "sides": [
+       null
+      ]
+     }
+    ],
+    "fallback_region": null
+   },
+   "ts_has_class": true
+  },
+  {
+   "entity": "stomach",
+   "side": null,
+   "gate": {
+    "kind": "spatial_prior",
+    "constraints": [
+     {
+      "landmark": "liver",
+      "relation": "left_of",
+      "dist_mm": [
+       0,
+       20
+      ],
+      "sides": [
+       null
+      ]
+     },
+     {
+      "landmark": "spleen",
+      "relation": "medial_to",
+      "dist_mm": [
+       0,
+       30
+      ],
+      "sides": [
+       null
+      ]
+     }
+    ],
+    "fallback_region": "peritoneal_cavity"
+   },
+   "ts_has_class": true
+  },
+  {
+   "entity": "duodenum",
+   "side": null,
+   "gate": {
+    "kind": "spatial_prior",
+    "constraints": [
+     {
+      "landmark": "pancreas",
+      "relation": "lateral_to_head_of",
+      "dist_mm": [
+       0,
+       10
+      ],
+      "sides": [
+       null
+      ]
+     }
+    ],
+    "fallback_region": null
+   },
+   "ts_has_class": true
+  },
+  {
+   "entity": "adrenal",
+   "side": "right",
+   "gate": {
+    "kind": "spatial_prior",
+    "constraints": [
+     {
+      "landmark": "kidney",
+      "relation": "superior_medial_to",
+      "dist_mm": [
+       0,
+       20
+      ],
+      "sides": [
+       "left",
+       "right"
+      ]
+     }
+    ],
+    "fallback_region": "retroperitoneum"
+   },
+   "ts_has_class": true
+  },
+  {
+   "entity": "small_bowel",
+   "side": null,
+   "gate": {
+    "kind": "region",
+    "region": "peritoneal_cavity"
+   },
+   "ts_has_class": true
+  },
+  {
+   "entity": "iliopsoas",
+   "side": "left",
+   "gate": {
+    "kind": "region",
+    "region": null
+   },
+   "ts_has_class": true
+  },
+  {
+   "entity": "iliopsoas",
+   "side": "right",
+   "gate": {
+    "kind": "region",
+    "region": null
+   },
+   "ts_has_class": true
+  },
+  {
+   "entity": "subcutaneous_fat",
+   "side": null,
+   "gate": {
+    "kind": "region",
+    "region": null
+   },
+   "ts_has_class": false
+  },
+  {
+   "entity": "visceral_fat",
+   "side": null,
+   "gate": {
+    "kind": "region",
+    "region": null
+   },
+   "ts_has_class": false
+  },
+  {
+   "entity": "skeletal_muscle",
+   "side": null,
+   "gate": {
+    "kind": "region",
+    "region": null
+   },
+   "ts_has_class": false
+  }
+ ],
+ "anchors_absent_candidates": [
+  "gallbladder",
+  "adrenal"
+ ],
+ "prompts": [
+  {
+   "entity": "kidney",
+   "side": "left",
+   "terms": [
+    "clear cell renal cell carcinoma in the left kidney",
+    "renal cell carcinoma in the left kidney",
+    "left kidney tumor"
+   ],
+   "wave": 2,
+   "list": "T",
+   "gate": {
+    "kind": "inside",
+    "anchor": "kidney",
+    "dilate_mm": 20
+   },
+   "priority": 1,
+   "reason": [
+    "tumour prompt on host"
+   ],
+   "relation": null,
+   "from_anchor": null
+  },
+  {
+   "entity": "renal_cortex",
+   "side": "left",
+   "terms": [
+    "left renal cortex"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -has_part-> renal_cortex (hop 1)",
+    "staging: confined,location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "renal_medulla",
+   "side": "left",
+   "terms": [
+    "left renal medulla"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -has_part-> renal_medulla (hop 1)",
+    "staging: confined,location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "renal_pelvis",
+   "side": "left",
+   "terms": [
+    "left renal pelvis",
+    "left renal collecting system"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -has_part-> renal_pelvis (hop 1)",
+    "staging: confined,location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "adrenal",
+   "side": "left",
+   "terms": [
+    "left adrenal gland",
+    "left suprarenal gland"
+   ],
+   "wave": 2,
+   "list": "A",
+   "gate": {
+    "kind": "ts_bbox",
+    "ts_entity": "adrenal",
+    "side": "left",
+    "dilate_mm": 10
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -adjacent_to-> adrenal (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "spleen",
+   "side": null,
+   "terms": [
+    "spleen"
+   ],
+   "wave": 2,
+   "list": "A",
+   "gate": {
+    "kind": "ts_bbox",
+    "ts_entity": "spleen",
+    "side": null,
+    "dilate_mm": 10
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -adjacent_to-> spleen (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "pancreas",
+   "side": null,
+   "terms": [
+    "pancreas"
+   ],
+   "wave": 2,
+   "list": "A",
+   "gate": {
+    "kind": "ts_bbox",
+    "ts_entity": "pancreas",
+    "side": null,
+    "dilate_mm": 10
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -adjacent_to-> pancreas (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "colon",
+   "side": null,
+   "terms": [
+    "colon",
+    "large bowel",
+    "large intestine"
+   ],
+   "wave": 2,
+   "list": "A",
+   "gate": {
+    "kind": "ts_bbox",
+    "ts_entity": "colon",
+    "side": null,
+    "dilate_mm": 10
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -adjacent_to-> colon (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "psoas",
+   "side": "left",
+   "terms": [
+    "left psoas muscle"
+   ],
+   "wave": 2,
+   "list": "A",
+   "gate": {
+    "kind": "ts_bbox",
+    "ts_entity": "psoas",
+    "side": "left",
+    "dilate_mm": 10
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -adjacent_to-> psoas (hop 1)",
+    "staging: adjacent_invasion,wall_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "quadratus_lumborum",
+   "side": "left",
+   "terms": [
+    "left quadratus lumborum muscle"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "kidney",
+    "anchor_side": "left",
+    "neighbour_found": false,
+    "direction": "posterior"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -adjacent_to-> quadratus_lumborum (hop 1)",
+    "staging: wall_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "diaphragm",
+   "side": null,
+   "terms": [
+    "diaphragm"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "kidney",
+    "anchor_side": "left",
+    "neighbour_found": false,
+    "direction": "superior_posterior"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -adjacent_to-> diaphragm (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "renal_artery",
+   "side": "left",
+   "terms": [
+    "left renal artery"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -supplied_by-> renal_artery (hop 1)",
+    "staging: vascular_invasion"
+   ],
+   "relation": "supplied_by",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "renal_vein",
+   "side": "left",
+   "terms": [
+    "left renal vein"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -drained_by-> renal_vein (hop 1)",
+    "staging: vascular_invasion"
+   ],
+   "relation": "drained_by",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "ureter",
+   "side": "left",
+   "terms": [
+    "left ureter"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "corridor",
+    "from_": "anchor",
+    "to": "target_organ",
+    "radius_mm": 12,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -has_duct-> ureter (hop 1)",
+    "staging: obstruction"
+   ],
+   "relation": "has_duct",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "ln_renal_hilar",
+   "side": "left",
+   "terms": [
+    "left renal hilar lymph nodes"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "region",
+    "defined_by": "vessels_and_vertebral_levels",
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -drains_lymph_to-> ln_renal_hilar (hop 1)",
+    "staging: nodal"
+   ],
+   "relation": "drains_lymph_to",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "ln_paraaortic",
+   "side": null,
+   "terms": [
+    "para-aortic lymph nodes",
+    "retroperitoneal lymph nodes",
+    "paracaval lymph nodes"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "region",
+    "defined_by": "vessels_and_vertebral_levels",
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -drains_lymph_to-> ln_paraaortic (hop 1)",
+    "staging: nodal"
+   ],
+   "relation": "drains_lymph_to",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "aorta",
+   "side": null,
+   "terms": [
+    "aorta",
+    "thoracic aorta",
+    "abdominal aorta"
+   ],
+   "wave": 2,
+   "list": "A",
+   "gate": {
+    "kind": "ts_bbox",
+    "ts_entity": "aorta",
+    "side": null,
+    "dilate_mm": 10
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "renal_artery -supplied_by-> aorta (hop 2)"
+   ],
+   "relation": "supplied_by",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "inferior_vena_cava",
+   "side": null,
+   "terms": [
+    "inferior vena cava",
+    "IVC"
+   ],
+   "wave": 2,
+   "list": "A",
+   "gate": {
+    "kind": "ts_bbox",
+    "ts_entity": "inferior_vena_cava",
+    "side": null,
+    "dilate_mm": 10
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "renal_vein -drained_by-> inferior_vena_cava (hop 2)",
+    "staging: vascular_invasion"
+   ],
+   "relation": "drained_by",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "lung",
+   "side": "left",
+   "terms": [
+    "left lung"
+   ],
+   "wave": 1,
+   "list": "B",
+   "gate": {
+    "kind": "region",
+    "region": "thorax"
+   },
+   "priority": 2,
+   "reason": [
+    "expected in FOV ['T11', 'L4'] (presence=obligatory)",
+    "TS class exists but missing/implausible"
+   ],
+   "relation": null,
+   "from_anchor": null
+  },
+  {
+   "entity": "lung",
+   "side": "right",
+   "terms": [
+    "right lung"
+   ],
+   "wave": 1,
+   "list": "B",
+   "gate": {
+    "kind": "region",
+    "region": "thorax"
+   },
+   "priority": 2,
+   "reason": [
+    "expected in FOV ['T11', 'L4'] (presence=obligatory)",
+    "TS class exists but missing/implausible"
+   ],
+   "relation": null,
+   "from_anchor": null
+  },
+  {
+   "entity": "stomach",
+   "side": null,
+   "terms": [
+    "stomach",
+    "gastric organ"
+   ],
+   "wave": 1,
+   "list": "B",
+   "gate": {
+    "kind": "spatial_prior",
+    "constraints": [
+     {
+      "landmark": "liver",
+      "relation": "left_of",
+      "dist_mm": [
+       0,
+       20
+      ],
+      "sides": [
+       null
+      ]
+     },
+     {
+      "landmark": "spleen",
+      "relation": "medial_to",
+      "dist_mm": [
+       0,
+       30
+      ],
+      "sides": [
+       null
+      ]
+     }
+    ],
+    "fallback_region": "peritoneal_cavity"
+   },
+   "priority": 2,
+   "reason": [
+    "expected in FOV ['T11', 'L4'] (presence=obligatory)",
+    "TS class exists but missing/implausible"
+   ],
+   "relation": null,
+   "from_anchor": null
+  },
+  {
+   "entity": "adrenal",
+   "side": "right",
+   "terms": [
+    "right adrenal gland",
+    "right suprarenal gland"
+   ],
+   "wave": 1,
+   "list": "B",
+   "gate": {
+    "kind": "spatial_prior",
+    "constraints": [
+     {
+      "landmark": "kidney",
+      "relation": "superior_medial_to",
+      "dist_mm": [
+       0,
+       20
+      ],
+      "sides": [
+       "left",
+       "right"
+      ]
+     }
+    ],
+    "fallback_region": "retroperitoneum"
+   },
+   "priority": 2,
+   "reason": [
+    "expected in FOV ['T11', 'L4'] (presence=surgical)",
+    "TS class exists but missing/implausible"
+   ],
+   "relation": null,
+   "from_anchor": null
+  },
+  {
+   "entity": "renal_sinus_fat",
+   "side": "left",
+   "terms": [
+    "left renal sinus fat"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 2,
+   "reason": [
+    "host anchor kidney",
+    "kidney -has_part-> renal_sinus_fat (hop 1)",
+    "staging: confined,location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "perinephric_fat",
+   "side": "left",
+   "terms": [
+    "left perinephric fat",
+    "left perirenal fat"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "shell",
+    "inner_mm": 0,
+    "outer_mm": 40,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 2,
+   "reason": [
+    "host anchor kidney",
+    "kidney -invested_by-> perinephric_fat (hop 1)",
+    "staging: beyond_capsule"
+   ],
+   "relation": "invested_by",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "gerota_fascia",
+   "side": "left",
+   "terms": [
+    "left Gerota's fascia",
+    "left renal fascia"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "shell",
+    "inner_mm": 0,
+    "outer_mm": 40,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 2,
+   "reason": [
+    "host anchor kidney",
+    "kidney -invested_by-> gerota_fascia (hop 1)",
+    "staging: beyond_capsule"
+   ],
+   "relation": "invested_by",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "gonadal_vein",
+   "side": "left",
+   "terms": [
+    "left gonadal vein",
+    "left testicular vein",
+    "left ovarian vein"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 2,
+   "reason": [
+    "host anchor kidney",
+    "kidney -drained_by-> gonadal_vein (hop 1)",
+    "staging: vascular_invasion"
+   ],
+   "relation": "drained_by",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "stomach",
+   "side": null,
+   "terms": [
+    "stomach",
+    "gastric organ"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "spleen",
+    "anchor_side": null,
+    "neighbour_found": false,
+    "direction": "anterior_medial"
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor spleen",
+    "spleen -adjacent_to-> stomach (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "spleen"
+  },
+  {
+   "entity": "splenic_vein",
+   "side": null,
+   "terms": [
+    "splenic vein"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
+    "anchor": "spleen",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor spleen",
+    "spleen -drained_by-> splenic_vein (hop 1)",
+    "staging: vascular_invasion"
+   ],
+   "relation": "drained_by",
+   "from_anchor": "spleen"
+  },
+  {
+   "entity": "celiac_trunk",
+   "side": null,
+   "terms": [
+    "celiac trunk",
+    "coeliac artery"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "aorta",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor aorta",
+    "aorta -has_part-> celiac_trunk (hop 1)",
+    "staging: location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "aorta"
+  },
+  {
+   "entity": "superior_mesenteric_artery",
+   "side": null,
+   "terms": [
+    "superior mesenteric artery",
+    "SMA"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "aorta",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor aorta",
+    "aorta -has_part-> superior_mesenteric_artery (hop 1)"
+   ],
+   "relation": "has_part",
+   "from_anchor": "aorta"
+  },
+  {
+   "entity": "renal_artery",
+   "side": "right",
+   "terms": [
+    "right renal artery"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "aorta",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor aorta",
+    "aorta -has_part-> renal_artery (hop 1)"
+   ],
+   "relation": "has_part",
+   "from_anchor": "aorta"
+  },
+  {
+   "entity": "iliac_artery",
+   "side": "left",
+   "terms": [
+    "left iliac artery",
+    "left common iliac artery",
+    "left external iliac artery"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "aorta",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor aorta",
+    "aorta -has_part-> iliac_artery (hop 1)"
+   ],
+   "relation": "has_part",
+   "from_anchor": "aorta"
+  },
+  {
+   "entity": "iliac_artery",
+   "side": "right",
+   "terms": [
+    "right iliac artery",
+    "right common iliac artery",
+    "right external iliac artery"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "aorta",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor aorta",
+    "aorta -has_part-> iliac_artery (hop 1)"
+   ],
+   "relation": "has_part",
+   "from_anchor": "aorta"
+  },
+  {
+   "entity": "iliac_vein",
+   "side": "left",
+   "terms": [
+    "left iliac vein"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "inferior_vena_cava",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor inferior_vena_cava",
+    "inferior_vena_cava -has_part-> iliac_vein (hop 1)"
+   ],
+   "relation": "has_part",
+   "from_anchor": "inferior_vena_cava"
+  },
+  {
+   "entity": "iliac_vein",
+   "side": "right",
+   "terms": [
+    "right iliac vein"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "inferior_vena_cava",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor inferior_vena_cava",
+    "inferior_vena_cava -has_part-> iliac_vein (hop 1)"
+   ],
+   "relation": "has_part",
+   "from_anchor": "inferior_vena_cava"
+  },
+  {
+   "entity": "renal_vein",
+   "side": "right",
+   "terms": [
+    "right renal vein"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "inferior_vena_cava",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor inferior_vena_cava",
+    "inferior_vena_cava -has_part-> renal_vein (hop 1)"
+   ],
+   "relation": "has_part",
+   "from_anchor": "inferior_vena_cava"
+  },
+  {
+   "entity": "hepatic_veins",
+   "side": null,
+   "terms": [
+    "hepatic veins",
+    "hepatic vein"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "inferior_vena_cava",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor inferior_vena_cava",
+    "inferior_vena_cava -has_part-> hepatic_veins (hop 1)"
+   ],
+   "relation": "has_part",
+   "from_anchor": "inferior_vena_cava"
+  },
+  {
+   "entity": "pancreas_head",
+   "side": null,
+   "terms": [
+    "pancreatic head",
+    "pancreas head"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "pancreas",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor pancreas",
+    "pancreas -has_part-> pancreas_head (hop 1)",
+    "staging: location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "pancreas"
+  },
+  {
+   "entity": "pancreas_body",
+   "side": null,
+   "terms": [
+    "pancreatic body",
+    "pancreas body"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "pancreas",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor pancreas",
+    "pancreas -has_part-> pancreas_body (hop 1)",
+    "staging: location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "pancreas"
+  },
+  {
+   "entity": "pancreas_tail",
+   "side": null,
+   "terms": [
+    "pancreatic tail",
+    "pancreas tail"
+   ],
+   "wave": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "pancreas",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor pancreas",
+    "pancreas -has_part-> pancreas_tail (hop 1)",
+    "staging: location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "pancreas"
+  }
+ ],
+ "log": [
+  {
+   "step": "frame",
+   "method": "ts_vertebrae",
+   "top": "T11",
+   "bottom": "L4",
+   "n": 6
+  },
+  {
+   "step": "found_plausibility",
+   "entity": "urinary_bladder",
+   "side": null,
+   "fail": [
+    "volume 5 ml outside [10,1600]"
+   ]
+  },
+  {
+   "step": "expected",
+   "n": 19,
+   "sex": "male",
+   "span": [
+    "T11",
+    "L4"
+   ]
+  },
+  {
+   "step": "completion",
+   "missing": [
+    [
+     "lung",
+     "left"
+    ],
+    [
+     "lung",
+     "right"
+    ],
+    [
+     "gallbladder",
+     null
+    ],
+    [
+     "stomach",
+     null
+    ],
+    [
+     "duodenum",
+     null
+    ],
+    [
+     "adrenal",
+     "right"
+    ],
+    [
+     "small_bowel",
+     null
+    ],
+    [
+     "iliopsoas",
+     "left"
+    ],
+    [
+     "iliopsoas",
+     "right"
+    ],
+    [
+     "subcutaneous_fat",
+     null
+    ],
+    [
+     "visceral_fat",
+     null
+    ],
+    [
+     "skeletal_muscle",
+     null
+    ]
+   ]
+  },
+  {
+   "step": "host",
+   "host": "kidney",
+   "side": "left",
+   "source": "tumour_overlap"
+  },
+  {
+   "step": "ts_only",
+   "n": 1,
+   "items": [
+    [
+     "kidney",
+     "left"
+    ]
+   ]
+  },
+  {
+   "step": "budget",
+   "dropped": [
+    [
+     "pancreas_uncinate",
+     null,
+     2
+    ],
+    [
+     "pancreatic_duct",
+     null,
+     2
+    ],
+    [
+     "bile_duct",
+     null,
+     2
+    ],
+    [
+     "duodenum",
+     null,
+     2
+    ],
+    [
+     "hepatic_artery",
+     null,
+     2
+    ],
+    [
+     "superior_mesenteric_vein",
+     null,
+     2
+    ],
+    [
+     "portal_vein",
+     null,
+     2
+    ],
+    [
+     "ln_celiac",
+     null,
+     2
+    ],
+    [
+     "ln_hepatic_hilar",
+     null,
+     2
+    ],
+    [
+     "ln_mesenteric",
+     null,
+     2
+    ],
+    [
+     "gallbladder",
+     null,
+     3
+    ],
+    [
+     "duodenum",
+     null,
+     3
+    ],
+    [
+     "small_bowel",
+     null,
+     3
+    ],
+    [
+     "iliopsoas",
+     "left",
+     3
+    ],
+    [
+     "iliopsoas",
+     "right",
+     3
+    ],
+    [
+     "subcutaneous_fat",
+     null,
+     3
+    ],
+    [
+     "visceral_fat",
+     null,
+     3
+    ],
+    [
+     "skeletal_muscle",
+     null,
+     3
+    ]
+   ]
+  }
+ ]
+}

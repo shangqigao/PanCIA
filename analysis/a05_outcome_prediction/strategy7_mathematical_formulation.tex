@@ -31,13 +31,16 @@ embeddings:
 \end{align}
 The encoder parameters $\omega=\{\omega_R,\omega_P,\omega_{RP}\}$ are treated
 as point estimates. Before Bayesian inference, each representation coordinate
-is standardized using statistics estimated from the training cohort,
+is scaled by its training root-mean-square magnitude,
 \begin{equation}
-    \widetilde H_{ikd}=\frac{H_{ikd}-\mu_{kd}}{\sigma_{kd}},
+    s_{kd}=\left\{N^{-1}\sum_i H_{ikd}^2\right\}^{1/2},
+    \qquad \widetilde H_{ikd}=\frac{H_{ikd}}{s_{kd}},
 \end{equation}
-with a corresponding reparameterization of the survival coefficients so that
-the fitted linear predictors are preserved up to an expert-specific constant
-absorbed by the shared baseline hazard.
+with the coefficient reparameterization
+$\widetilde\beta_{kd}=s_{kd}\beta_{kd}$. Consequently,
+$\widetilde H_i^{k\top}\widetilde\beta_k=H_i^{k\top}\beta_k$ exactly. No
+expert-specific centering is applied, so the shared-baseline interpretation is
+preserved.
 
 \subsection{Conditional graphical model}
 
@@ -76,7 +79,7 @@ conditional generative model.
         \node[observed,below=of z] (x) {$X_i$};
         \node[deterministic,right=of x] (h) {$H_i^k$};
         \node[latent,above=of y] (beta) {$\beta_k$};
-        \node[latent,below=of y] (base) {$\lambda_0$};
+        \node[latent,right=of y] (base) {$\lambda_0$};
         \node[deterministic,below=of h] (state) {$S_i$};
         \node[inference,right=of state] (router) {$\pi_\phi(Z_i\mid S_i)$};
         \node[inference,above=of router] (resp) {$r_i$};
@@ -143,10 +146,10 @@ The Bayesian survival heads use the priors
 
 Repeated cross-validation is used to estimate population reliability and
 training-set instability. For repeat $b\in\{1,\ldots,B\}$, let $C_k^{(b)}$ be
-the out-of-fold concordance index of expert $k$. We define the robust score
+the out-of-fold concordance index of expert $k$. The reliability score is the
+repeat mean
 \begin{equation}
-    g_k=\frac{1}{B}\sum_{b=1}^{B}C_k^{(b)}
-        -\operatorname{SD}_{b}\!\left(C_k^{(b)}\right),
+    g_k=\frac{1}{B}\sum_{b=1}^{B}C_k^{(b)},
 \end{equation}
 and the soft empirical reliability distribution
 \begin{equation}
@@ -155,21 +158,20 @@ and the soft empirical reliability distribution
     {\sum_{l\in\mathcal K}\exp\{\gamma(g_l-\bar g)\}},
 \label{eq:cv-reliability}
 \end{equation}
-where $\gamma>0$ controls the influence of reliability differences. This
-criterion rewards both discrimination and stability, without imposing a hard
-penalty on the fusion expert.
+where $\gamma>0$ controls the influence of reliability differences. The
+between-repeat standard deviation of $C_k^{(b)}$ is retained as a diagnostic
+but does not alter the population prior.
 
-To compare predictions across folds, fold $b$ stores an expert-specific
-training median $m_k^{(b)}$ and one common robust scale $s^{(b)}$. Its aligned
-held-out prediction is
+Each held-out prediction is expressed as log cumulative hazard at a common
+training horizon $t^*$,
 \begin{equation}
-    \widetilde\eta_{ik}^{(b)}
-    =\frac{\eta_{ik}^{(b)}-m_k^{(b)}}{s^{(b)}}.
+    \zeta_{ik}^{(b)}(t^*)
+    =\log\Lambda_{0}^{(b)}(t^*)+\eta_{ik}^{(b)}.
 \end{equation}
 The fixed CV uncertainty is
 \begin{equation}
     u_{ik}^{\mathrm{CV}}
-    =\operatorname{SD}_{b}\!\left(\widetilde\eta_{ik}^{(b)}\right).
+    =\operatorname{SD}_{b}\!\left(\zeta_{ik}^{(b)}(t^*)\right).
 \end{equation}
 For a new patient, predictions are first averaged over folds within each repeat,
 and uncertainty is then evaluated across repeat-level predictions.
@@ -199,93 +201,196 @@ For $q(\rho)=\operatorname{Dirichlet}(\alpha)$,
 \label{eq:expected-log-rho}
 \end{equation}
 
-\subsection{Tempered assignment responsibilities}
+\subsection{Variational assignment responsibilities}
+\label{sec:responsibility-derivation}
 
-Let $r_{ik}=q(Z_i=k)$, with $r_{ik}\geq0$ and
-$\sum_{k\in\mathcal K}r_{ik}=1$. Given expert evidence $A_{ik}$, the assignment
-update is
+The responsibility is not itself a log-likelihood. It is the variational
+posterior probability
 \begin{equation}
-    r_{ik}
-    =\frac{\exp\left([A_{ik}+\mathbb E_q(\log\rho_k)]/\tau_r\right)}
-    {\sum_{l\in\mathcal K}
-    \exp\left([A_{il}+\mathbb E_q(\log\rho_l)]/\tau_r\right)},
+    r_{ik}=q_i(Z_i=k),\qquad r_{ik}\geq0,\qquad
+    \sum_{k\in\mathcal K}r_{ik}=1.
+\end{equation}
+To derive its coordinate update, introduce one-hot indicators
+$Z_{ik}=\mathbb{I}(Z_i=k)$. Conditional on the observed embeddings, the
+complete-data log joint can be written as
+\begin{align}
+&\log p(\boldsymbol Y,\boldsymbol Z,\boldsymbol\theta,\rho
+        \mid\boldsymbol X) \nonumber\\
+&\quad=\log p(\rho)+\log p(\boldsymbol\theta)
+ +\sum_{i=1}^{N}\sum_{k\in\mathcal K}Z_{ik}
+   \left\{\log\rho_k+\ell_{ik}(\boldsymbol\theta)\right\},
+\label{eq:complete-log-joint}
+\end{align}
+where $\boldsymbol\theta=(\boldsymbol\beta,\boldsymbol\lambda_0)$ and
+$\ell_{ik}$ is the proper censored-data log-likelihood in
+Eq.~\eqref{eq:piecewise-loglik}.
+
+We use the mean-field family
+\begin{equation}
+ q(\boldsymbol Z,\rho,\boldsymbol\theta)
+ =q(\rho)q(\boldsymbol\theta)\prod_{i=1}^{N}q_i(Z_i).
+\label{eq:mean-field-family}
+\end{equation}
+The evidence lower bound (ELBO) is
+\begin{align}
+\mathcal L(q)
+&=\mathbb E_q\!\left[
+  \log p(\boldsymbol Y,\boldsymbol Z,\boldsymbol\theta,\rho
+       \mid\boldsymbol X)\right]
+  -\mathbb E_q[\log q(\boldsymbol Z,\rho,\boldsymbol\theta)] .
+\label{eq:elbo}
+\end{align}
+It satisfies the exact decomposition
+\begin{align}
+\log p(\boldsymbol Y\mid\boldsymbol X)
+&=\mathcal L(q)
+ +\operatorname{KL}\!\left[
+ q(\boldsymbol Z,\rho,\boldsymbol\theta)
+ \parallel
+ p(\boldsymbol Z,\rho,\boldsymbol\theta
+   \mid\boldsymbol X,\boldsymbol Y)
+ \right].
+\end{align}
+
+Holding $q(\rho)$, $q(\boldsymbol\theta)$, and all assignments other than
+$q_i$ fixed, the terms of the ELBO that depend on $r_i$ are
+\begin{align}
+\mathcal L_i(r_i)
+&=\sum_{k\in\mathcal K}r_{ik}
+  \left\{
+  \mathbb E_{q(\boldsymbol\theta)}[\ell_{ik}(\boldsymbol\theta)]
+  +\mathbb E_{q(\rho)}[\log\rho_k]
+  \right\}
+  -\sum_{k\in\mathcal K}r_{ik}\log r_{ik}+C,
+\label{eq:local-elbo}
+\end{align}
+where $C$ is constant with respect to $r_i$. Define the expected log-joint
+score
+\begin{equation}
+ a_{ik}=\mathbb E_{q(\boldsymbol\theta)}
+        [\ell_{ik}(\boldsymbol\theta)]
+        +\mathbb E_{q(\rho)}[\log\rho_k].
+\label{eq:assignment-score}
+\end{equation}
+To impose $\sum_k r_{ik}=1$, introduce a Lagrange multiplier $\xi_i$:
+\begin{equation}
+ \mathcal J_i
+ =\sum_k r_{ik}a_{ik}-\sum_k r_{ik}\log r_{ik}
+  +\xi_i\left(\sum_k r_{ik}-1\right).
+\end{equation}
+The stationary condition is
+\begin{equation}
+ \frac{\partial\mathcal J_i}{\partial r_{ik}}
+ =a_{ik}-\log r_{ik}-1+\xi_i=0,
+\end{equation}
+and hence $r_{ik}\propto\exp(a_{ik})$. Normalization gives the coordinate
+optimum
+\begin{equation}
+ \boxed{
+ r_{ik}
+ =\frac{\exp(a_{ik})}{\sum_{l\in\mathcal K}\exp(a_{il})}
+ =\operatorname{softmax}_k\!\left\{
+ \mathbb E_q[\ell_{ik}]+\mathbb E_q[\log\rho_k]
+ \right\}.}
 \label{eq:responsibility}
 \end{equation}
-where $\tau_r\geq1$ is the responsibility temperature. This is the maximizer of
-the tempered local free energy
+Because
 \begin{equation}
-    \mathcal F_r
-    =\sum_{i=1}^{N}\sum_{k\in\mathcal K}
-       r_{ik}\{A_{ik}+\mathbb E_q[\log\rho_k]\}
-      +\tau_r\sum_{i=1}^{N}\mathcal H(r_i),
+ \frac{\partial^2\mathcal L_i}{\partial r_{ik}^2}
+ =-\frac{1}{r_{ik}}<0,
 \end{equation}
-where $\mathcal H(r_i)=-\sum_k r_{ik}\log r_{ik}$. Hence, increasing $\tau_r$
-discourages premature assignment collapse.
+the local objective is strictly concave in the interior of the probability
+simplex; Eq.~\eqref{eq:responsibility} is therefore its unique global maximum.
 
-During neural initialization, $A_{ik}=\ell_{ik}^{\mathrm{MAP}}$. During the
-Bayesian stage, posterior-predictive evidence is used:
+For $q(\rho)=\operatorname{Dirichlet}(\alpha)$, substitution of
+Eq.~\eqref{eq:expected-log-rho} yields
 \begin{equation}
-    A_{ik}
-    =\log\left\{
-       \frac{1}{Q}\sum_{q=1}^{Q}\exp(\ell_{ik}^{(q)})
-      \right\},
-\label{eq:posterior-predictive-evidence}
+ r_{ik}=\operatorname{softmax}_k\!\left\{
+ \mathbb E_q[\ell_{ik}]
+ +\psi(\alpha_k)-\psi\!\left(\sum_l\alpha_l\right)
+ \right\}.
+\label{eq:dirichlet-responsibility}
 \end{equation}
-where $q$ indexes matched posterior draws of the survival coefficients and
-shared baseline.
+The final digamma term is common to all experts and cancels algebraically in
+the softmax, but is retained to display the complete expected log prior.
 
-The undamped conjugate population update is
+The expectation over survival parameters is approximated with matched draws
+$\boldsymbol\theta^{(q)}$ from the joint HMC posterior:
 \begin{equation}
-    \alpha_k^\star=\alpha_{0k}+\sum_{i=1}^{N}r_{ik}.
+ \mathbb E_{q(\boldsymbol\theta)}
+ [\ell_{ik}(\boldsymbol\theta)]
+ \simeq\frac{1}{Q}\sum_{q=1}^{Q}\ell_{ik}^{(q)}.
+\label{eq:expected-log-evidence}
 \end{equation}
-For stability, a damped update is applied,
+Importantly, Eq.~\eqref{eq:expected-log-evidence} is a Monte Carlo estimate of
+$\mathbb E_q[\log p]$. It is not the posterior-predictive quantity
 \begin{equation}
-    \alpha\leftarrow(1-\delta)\alpha+\delta\alpha^\star,
+ \log\mathbb E_q[p]
+ \simeq\log\left\{Q^{-1}\sum_q\exp(\ell_{ik}^{(q)})\right\}.
+\end{equation}
+The former, rather than the latter, is required by the ELBO coordinate update.
+
+If $q(\boldsymbol\theta)$ and $q(\rho)$ collapse to point masses, the update
+reduces to the classical finite-mixture responsibility
+\begin{equation}
+ r_{ik}
+ =\frac{\widehat\rho_k
+ p_k(Y_i\mid X_i,\widehat{\boldsymbol\theta})}
+ {\sum_l\widehat\rho_l
+ p_l(Y_i\mid X_i,\widehat{\boldsymbol\theta})}.
+\end{equation}
+
+An optional responsibility temperature modifies the update to
+\begin{equation}
+ r_{ik}^{(\tau_r)}=\operatorname{softmax}_k(a_{ik}/\tau_r),
+ \qquad \tau_r\geq1.
+\label{eq:tempered-responsibility}
+\end{equation}
+This maximizes
+\begin{equation}
+ \sum_k r_{ik}a_{ik}+\tau_r\mathcal H(r_i),
+\end{equation}
+rather than the original local ELBO in Eq.~\eqref{eq:local-elbo}. Thus
+$\tau_r=1$ gives the exact mean-field coordinate update, whereas $\tau_r>1$
+is an entropy-regularized, tempered approximation that discourages premature
+assignment collapse.
+
+The exact conjugate coordinate update for the population distribution is
+\begin{equation}
+ q^*(\rho)=\operatorname{Dirichlet}(\alpha^*),\qquad
+ \alpha_k^*=\alpha_{0k}+\sum_{i=1}^{N}r_{ik}.
+\label{eq:exact-dirichlet-update}
+\end{equation}
+For numerical stability, the implementation damps the update of the normalized
+population mean. Schematically,
+\begin{equation}
+ \alpha\leftarrow(1-\delta)\alpha+\delta\alpha^*,
+ \qquad\delta\in(0,1],
 \label{eq:damped-dirichlet}
 \end{equation}
-where $\delta\in(0,1]$ is the population update rate.
+where $\delta=1$ recovers the exact coordinate update. Finite Monte Carlo
+estimation, $\tau_r\neq1$, or $\delta<1$ converts exact coordinate-ascent
+variational inference into a generalized Monte Carlo variational-EM procedure.
 
 \subsection{Neural initialization}
 
-The encoders, point-estimate survival heads, shared baseline, and router are
-initialized using a generalized-EM objective. The expert component is
+Before Bayesian EM, the three encoders, point-estimate survival heads, and
+shared baseline are trained without latent assignments. The equal-weight
+pretraining objective is
 \begin{equation}
     \mathcal L_{\mathrm{expert}}^{\mathrm{init}}
-    =-\frac{1}{N}\sum_{i=1}^{N}\sum_{k\in\mathcal K}
-      \operatorname{sg}(r_{ik})\ell_{ik}^{\mathrm{MAP}},
+    =-\frac{1}{3N}\sum_{i=1}^{N}\sum_{k\in\mathcal K}
+      \ell_{ik}^{\mathrm{MAP}}.
 \label{eq:initial-expert-loss}
 \end{equation}
-where $\operatorname{sg}(\cdot)$ denotes the stop-gradient operator.
-
-The raw expert risks in Eq.~\eqref{eq:piecewise-loglik} remain unaltered. A
-separately aligned copy is supplied to the router. If $m_k$ is the training
-median of expert $k$ and $s$ is a common robust scale, define
-\begin{equation}
-    \bar\eta_{ik}=\frac{\eta_{ik}-m_k}{s}.
-\end{equation}
-The default router state is
-\begin{equation}
-    S_i=\left(
-       \bar\eta_{iR},\bar\eta_{iP},
-       |\bar\eta_{iR}-\bar\eta_{iP}|
-    \right)^\top.
-\label{eq:risk-pair-state}
-\end{equation}
-The router $\pi_\phi(k\mid S_i)$ is initialized by minimizing
-\begin{equation}
-    \mathcal L_{\mathrm{router}}^{\mathrm{init}}
-    =-\frac{1}{N}\sum_{i=1}^{N}\sum_{k\in\mathcal K}
-      \operatorname{sg}(r_{ik})
-      \log\pi_\phi\!\left(k\mid\operatorname{sg}(S_i)\right).
-\label{eq:initial-router-loss}
-\end{equation}
-Consequently, the router loss does not modify the expert risks or encoders. The
-total initialization criterion is
-\begin{equation}
-    \mathcal L_{\mathrm{init}}
-    =\mathcal L_{\mathrm{expert}}^{\mathrm{init}}
-     +\mathcal L_{\mathrm{router}}^{\mathrm{init}}.
-\end{equation}
+An internal validation subset selects the training duration by the mean expert
+negative log-likelihood. The experts and shared baseline are then reset to
+their identical initial parameters and refitted on the complete outer-training
+cohort for the selected number of epochs. The router is not trained during
+this stage. MAP likelihoods from the all-data refit provide only the initial
+responsibilities for the first conditional HMC update; they do not update the
+population distribution. Router training begins after the first
+posterior-informed responsibility update.
 
 \subsection{Conditional Bayesian survival-head update}
 
@@ -313,7 +418,7 @@ defined as
       \right).
 \end{equation}
 
-The conditional HMC step, Eqs.~\eqref{eq:posterior-predictive-evidence}--
+The conditional HMC step, Eqs.~\eqref{eq:expected-log-evidence}--
 \eqref{eq:responsibility}, and the damped population update in
 Eq.~\eqref{eq:damped-dirichlet} are alternated until the mean absolute change in
 responsibilities is below a prespecified tolerance or a maximum number of
@@ -339,10 +444,27 @@ Thus, $r_i$ is an outcome-informed posterior assignment, whereas
 $\pi_\phi(\cdot\mid S_i)$ is its deployable amortized approximation. They need
 not be equal for an individual patient.
 
-An optional uncertainty-aware state augments the three aligned expert risks
-with $u^{\mathrm{HMC}}$, $u^{\mathrm{CV}}$, and pairwise disagreements scaled by
-their combined uncertainty. The default implementation uses the compact state
-in Eq.~\eqref{eq:risk-pair-state} to limit router variance.
+The deployed router uses the 14-dimensional state
+\begin{align}
+S_i^{(q)}=\big(&\eta_{iR}^{(q)},\eta_{iP}^{(q)},\eta_{iRP}^{(q)},
+u_{iR}^{\mathrm{HMC}},u_{iP}^{\mathrm{HMC}},u_{iRP}^{\mathrm{HMC}},\nonumber\\
+&u_{iR}^{\mathrm{CV}},u_{iP}^{\mathrm{CV}},u_{iRP}^{\mathrm{CV}},
+D_{i,R/P}^{(q)},D_{i,R/RP}^{(q)},D_{i,P/RP}^{(q)},
+Q_{iR}^{\mathrm{KNN}},Q_{iP}^{\mathrm{KNN}}\big)^\top,
+\label{eq:router-state}
+\end{align}
+where
+\begin{equation}
+D_{i,a/b}^{(q)}=
+\frac{|\eta_{ia}^{(q)}-\eta_{ib}^{(q)}|}
+{\sqrt{(u_{ia}^{\mathrm{HMC}})^2+(u_{ia}^{\mathrm{CV}})^2
+      +(u_{ib}^{\mathrm{HMC}})^2+(u_{ib}^{\mathrm{CV}})^2+\epsilon}}.
+\end{equation}
+$Q_{iR}^{\mathrm{KNN}}$ and $Q_{iP}^{\mathrm{KNN}}$ are empirical percentiles
+of the mean cosine distance to the $K$ nearest outer-training embeddings in
+the radiomic and pathomic spaces, respectively. They are outcome-free and can
+therefore be reproduced for a new patient against the stored training
+references.
 
 \subsection{Prediction}
 

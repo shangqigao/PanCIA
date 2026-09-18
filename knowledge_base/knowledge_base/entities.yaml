@@ -1,0 +1,4217 @@
+version: 0.1.0
+entities:
+- id: vertebra_C1
+  name: C1 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: C1 vertebra
+    aliases:
+    - vertebra C1
+  ts:
+    total: vertebrae_C1
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_C2
+  name: C2 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: C2 vertebra
+    aliases:
+    - vertebra C2
+  ts:
+    total: vertebrae_C2
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_C3
+  name: C3 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: C3 vertebra
+    aliases:
+    - vertebra C3
+  ts:
+    total: vertebrae_C3
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_C4
+  name: C4 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: C4 vertebra
+    aliases:
+    - vertebra C4
+  ts:
+    total: vertebrae_C4
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_C5
+  name: C5 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: C5 vertebra
+    aliases:
+    - vertebra C5
+  ts:
+    total: vertebrae_C5
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_C6
+  name: C6 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: C6 vertebra
+    aliases:
+    - vertebra C6
+  ts:
+    total: vertebrae_C6
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_C7
+  name: C7 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: C7 vertebra
+    aliases:
+    - vertebra C7
+  ts:
+    total: vertebrae_C7
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T1
+  name: T1 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T1 vertebra
+    aliases:
+    - vertebra T1
+  ts:
+    total: vertebrae_T1
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T2
+  name: T2 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T2 vertebra
+    aliases:
+    - vertebra T2
+  ts:
+    total: vertebrae_T2
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T3
+  name: T3 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T3 vertebra
+    aliases:
+    - vertebra T3
+  ts:
+    total: vertebrae_T3
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T4
+  name: T4 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T4 vertebra
+    aliases:
+    - vertebra T4
+  ts:
+    total: vertebrae_T4
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T5
+  name: T5 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T5 vertebra
+    aliases:
+    - vertebra T5
+  ts:
+    total: vertebrae_T5
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T6
+  name: T6 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T6 vertebra
+    aliases:
+    - vertebra T6
+  ts:
+    total: vertebrae_T6
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T7
+  name: T7 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T7 vertebra
+    aliases:
+    - vertebra T7
+  ts:
+    total: vertebrae_T7
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T8
+  name: T8 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T8 vertebra
+    aliases:
+    - vertebra T8
+  ts:
+    total: vertebrae_T8
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T9
+  name: T9 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T9 vertebra
+    aliases:
+    - vertebra T9
+  ts:
+    total: vertebrae_T9
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T10
+  name: T10 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T10 vertebra
+    aliases:
+    - vertebra T10
+  ts:
+    total: vertebrae_T10
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T11
+  name: T11 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T11 vertebra
+    aliases:
+    - vertebra T11
+  ts:
+    total: vertebrae_T11
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_T12
+  name: T12 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: T12 vertebra
+    aliases:
+    - vertebra T12
+  ts:
+    total: vertebrae_T12
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_L1
+  name: L1 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: L1 vertebra
+    aliases:
+    - vertebra L1
+  ts:
+    total: vertebrae_L1
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_L2
+  name: L2 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: L2 vertebra
+    aliases:
+    - vertebra L2
+  ts:
+    total: vertebrae_L2
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_L3
+  name: L3 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: L3 vertebra
+    aliases:
+    - vertebra L3
+  ts:
+    total: vertebrae_L3
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_L4
+  name: L4 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: L4 vertebra
+    aliases:
+    - vertebra L4
+  ts:
+    total: vertebrae_L4
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_L5
+  name: L5 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: L5 vertebra
+    aliases:
+    - vertebra L5
+  ts:
+    total: vertebrae_L5
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_S1
+  name: S1 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: S1 vertebra
+    aliases:
+    - vertebra S1
+  ts:
+    total: vertebrae_S1
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_S2
+  name: S2 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: S2 vertebra
+    aliases:
+    - vertebra S2
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_S3
+  name: S3 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: S3 vertebra
+    aliases:
+    - vertebra S3
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_S4
+  name: S4 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: S4 vertebra
+    aliases:
+    - vertebra S4
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: vertebra_S5
+  name: S5 vertebra
+  category: bone
+  laterality: none
+  voxtell:
+    main: S5 vertebra
+    aliases:
+    - vertebra S5
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+- id: spine
+  name: Spine
+  category: bone
+  laterality: none
+  voxtell:
+    main: spine
+    aliases:
+    - vertebral column
+    - lumbar spine
+    - thoracic spine
+  ts:
+    total_mr: vertebrae
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: true
+  anchor:
+    span:
+    - C1
+    - coccyx
+    span_var: 1
+    position:
+      lr: midline
+      ap: posterior
+    presence: obligatory
+    spatial_prior: []
+  notes: 'systemic anchor: cranio-caudal ruler; TS total_mr gives one merged class, use VoxTell per level if needed'
+  sources:
+  - TS
+  - FMA
+- id: sacrum
+  name: Sacrum
+  category: bone
+  laterality: none
+  voxtell:
+    main: sacrum
+    aliases: []
+  ts:
+    total: sacrum
+    total_mr: sacrum
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: true
+  anchor:
+    span:
+    - S1
+    - S5
+    span_var: 1
+    position:
+      lr: midline
+      ap: posterior
+    presence: obligatory
+    spatial_prior: []
+  sources:
+  - TS
+  - FMA
+- id: coccyx
+  name: Coccyx
+  category: bone
+  laterality: none
+  voxtell:
+    main: coccyx
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: hip
+  name: Hip bone (ilium, ischium, pubis)
+  category: bone
+  laterality: bilateral
+  voxtell:
+    main: '{side} hip bone'
+    aliases:
+    - '{side} pelvis bone'
+    - '{side} iliac bone'
+  ts:
+    total:
+      left: hip_left
+      right: hip_right
+    total_mr:
+      left: hip_left
+      right: hip_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: true
+  anchor:
+    span:
+    - L5
+    - coccyx
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: mid
+    presence: obligatory
+    spatial_prior: []
+  sources:
+  - TS
+  - FMA
+- id: femur
+  name: Femur (proximal)
+  category: bone
+  laterality: bilateral
+  voxtell:
+    main: '{side} femur'
+    aliases: []
+  ts:
+    total:
+      left: femur_left
+      right: femur_right
+    total_mr:
+      left: femur_left
+      right: femur_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: sternum
+  name: Sternum
+  category: bone
+  laterality: none
+  voxtell:
+    main: sternum
+    aliases: []
+  ts:
+    total: sternum
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: rib_cage
+  name: Rib cage
+  category: bone
+  laterality: bilateral
+  voxtell:
+    main: '{side} rib cage'
+    aliases:
+    - '{side} ribs'
+  ts:
+    total:
+      left: rib_left_1
+      right: rib_right_1
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  notes: TS gives 24 individual ribs; merge per side. ts entry lists first rib only as representative
+  sources:
+  - TS
+  - FMA
+- id: scapula
+  name: Scapula
+  category: bone
+  laterality: bilateral
+  voxtell:
+    main: '{side} scapula'
+    aliases: []
+  ts:
+    total:
+      left: scapula_left
+      right: scapula_right
+    total_mr:
+      left: scapula_left
+      right: scapula_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: clavicle
+  name: Clavicle
+  category: bone
+  laterality: bilateral
+  voxtell:
+    main: '{side} clavicle'
+    aliases: []
+  ts:
+    total:
+      left: clavicula_left
+      right: clavicula_right
+    total_mr:
+      left: clavicula_left
+      right: clavicula_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: humerus
+  name: Humerus
+  category: bone
+  laterality: bilateral
+  voxtell:
+    main: '{side} humerus'
+    aliases: []
+  ts:
+    total:
+      left: humerus_left
+      right: humerus_right
+    total_mr:
+      left: humerus_left
+      right: humerus_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: spinal_cord
+  name: Spinal cord
+  category: nerve
+  laterality: none
+  voxtell:
+    main: spinal cord
+    aliases: []
+  ts:
+    total: spinal_cord
+    total_mr: spinal_cord
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: aorta
+  name: Aorta
+  category: vessel_artery
+  laterality: none
+  voxtell:
+    main: aorta
+    aliases:
+    - thoracic aorta
+    - abdominal aorta
+  ts:
+    total: aorta
+    total_mr: aorta
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  ct_hu:
+  - 150
+  - 500
+  is_anchor: true
+  anchor:
+    span:
+    - T4
+    - L4
+    span_var: 1
+    position:
+      lr: midline
+      ap: posterior
+    presence: obligatory
+    spatial_prior: []
+  notes: systemic anchor; bifurcation = L4 landmark
+  sources:
+  - TS
+  - FMA
+- id: inferior_vena_cava
+  name: Inferior vena cava
+  category: vessel_vein
+  laterality: none
+  voxtell:
+    main: inferior vena cava
+    aliases:
+    - IVC
+  ts:
+    total: inferior_vena_cava
+    total_mr: inferior_vena_cava
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: true
+  anchor:
+    span:
+    - T8
+    - L5
+    span_var: 1
+    position:
+      lr: right
+      ap: posterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: aorta
+      relation: right_of
+      dist_mm:
+      - 10
+      - 40
+  sources:
+  - TS
+  - FMA
+- id: superior_vena_cava
+  name: Superior vena cava
+  category: vessel_vein
+  laterality: none
+  voxtell:
+    main: superior vena cava
+    aliases: []
+  ts:
+    total: superior_vena_cava
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: iliac_artery
+  name: Common/external iliac artery
+  category: vessel_artery
+  laterality: bilateral
+  voxtell:
+    main: '{side} iliac artery'
+    aliases:
+    - '{side} common iliac artery'
+    - '{side} external iliac artery'
+  ts:
+    total:
+      left: iliac_artery_left
+      right: iliac_artery_right
+    total_mr:
+      left: iliac_artery_left
+      right: iliac_artery_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - L4
+    - S3
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: posterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: aorta
+      relation: inferior_to
+      dist_mm:
+      - 0
+      - 60
+  sources:
+  - TS
+  - FMA
+- id: iliac_vein
+  name: Common/external iliac vein
+  category: vessel_vein
+  laterality: bilateral
+  voxtell:
+    main: '{side} iliac vein'
+    aliases: []
+  ts:
+    total:
+      left: iliac_vena_left
+      right: iliac_vena_right
+    total_mr:
+      left: iliac_vena_left
+      right: iliac_vena_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - L5
+    - S3
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: posterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: iliac_artery
+      relation: posterior_medial_to
+      dist_mm:
+      - 0
+      - 15
+  sources:
+  - TS
+  - FMA
+- id: internal_iliac_artery
+  name: Internal iliac artery
+  category: vessel_artery
+  laterality: bilateral
+  voxtell:
+    main: '{side} internal iliac artery'
+    aliases:
+    - '{side} hypogastric artery'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: internal_iliac_vein
+  name: Internal iliac vein
+  category: vessel_vein
+  laterality: bilateral
+  voxtell:
+    main: '{side} internal iliac vein'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: portal_vein
+  name: Portal vein
+  category: vessel_vein
+  laterality: none
+  voxtell:
+    main: portal vein
+    aliases:
+    - main portal vein
+  ts:
+    total: portal_vein_and_splenic_vein
+    total_mr: portal_vein_and_splenic_vein
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: false
+  notes: TS merges portal + splenic vein; VoxTell separates
+  sources:
+  - TS
+  - FMA
+- id: splenic_vein
+  name: Splenic vein
+  category: vessel_vein
+  laterality: none
+  voxtell:
+    main: splenic vein
+    aliases: []
+  ts:
+    total: portal_vein_and_splenic_vein
+    total_mr: portal_vein_and_splenic_vein
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: hepatic_veins
+  name: Hepatic veins
+  category: vessel_vein
+  laterality: none
+  voxtell:
+    main: hepatic veins
+    aliases:
+    - hepatic vein
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: false
+  notes: MSD Task08 in VoxTell training
+  sources:
+  - TS
+  - FMA
+- id: hepatic_artery
+  name: Hepatic artery
+  category: vessel_artery
+  laterality: none
+  voxtell:
+    main: hepatic artery
+    aliases:
+    - common hepatic artery
+    - proper hepatic artery
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: celiac_trunk
+  name: Coeliac trunk
+  category: vessel_artery
+  laterality: none
+  voxtell:
+    main: celiac trunk
+    aliases:
+    - coeliac artery
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: superior_mesenteric_artery
+  name: Superior mesenteric artery
+  category: vessel_artery
+  laterality: none
+  voxtell:
+    main: superior mesenteric artery
+    aliases:
+    - SMA
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: superior_mesenteric_vein
+  name: Superior mesenteric vein
+  category: vessel_vein
+  laterality: none
+  voxtell:
+    main: superior mesenteric vein
+    aliases:
+    - SMV
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: renal_artery
+  name: Renal artery
+  category: vessel_artery
+  laterality: bilateral
+  voxtell:
+    main: '{side} renal artery'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  notes: KiPA dataset in VoxTell training
+  sources:
+  - TS
+  - FMA
+- id: renal_vein
+  name: Renal vein
+  category: vessel_vein
+  laterality: bilateral
+  voxtell:
+    main: '{side} renal vein'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: false
+  notes: KiPA dataset; key for RCC T3a
+  sources:
+  - TS
+  - FMA
+- id: gonadal_vein
+  name: Gonadal vein
+  category: vessel_vein
+  laterality: bilateral
+  voxtell:
+    main: '{side} gonadal vein'
+    aliases:
+    - '{side} testicular vein'
+    - '{side} ovarian vein'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: pulmonary_artery
+  name: Pulmonary artery
+  category: vessel_artery
+  laterality: none
+  voxtell:
+    main: pulmonary artery
+    aliases:
+    - main pulmonary artery
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: pulmonary_vein
+  name: Pulmonary veins
+  category: vessel_vein
+  laterality: none
+  voxtell:
+    main: pulmonary veins
+    aliases: []
+  ts:
+    total: pulmonary_vein
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: brachiocephalic_trunk
+  name: Brachiocephalic trunk
+  category: vessel_artery
+  laterality: none
+  voxtell:
+    main: brachiocephalic trunk
+    aliases: []
+  ts:
+    total: brachiocephalic_trunk
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: subclavian_artery
+  name: Subclavian artery
+  category: vessel_artery
+  laterality: bilateral
+  voxtell:
+    main: '{side} subclavian artery'
+    aliases: []
+  ts:
+    total:
+      left: subclavian_artery_left
+      right: subclavian_artery_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: common_carotid_artery
+  name: Common carotid artery
+  category: vessel_artery
+  laterality: bilateral
+  voxtell:
+    main: '{side} common carotid artery'
+    aliases: []
+  ts:
+    total:
+      left: common_carotid_artery_left
+      right: common_carotid_artery_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: brachiocephalic_vein
+  name: Brachiocephalic vein
+  category: vessel_vein
+  laterality: bilateral
+  voxtell:
+    main: '{side} brachiocephalic vein'
+    aliases: []
+  ts:
+    total:
+      left: brachiocephalic_vein_left
+      right: brachiocephalic_vein_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: uterine_artery
+  name: Uterine artery
+  category: vessel_artery
+  laterality: bilateral
+  voxtell:
+    main: '{side} uterine artery'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: axillary_vessels
+  name: Axillary artery and vein
+  category: vessel_artery
+  laterality: bilateral
+  voxtell:
+    main: '{side} axillary vessels'
+    aliases:
+    - '{side} axillary artery'
+    - '{side} axillary vein'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: lung
+  name: Lung
+  category: organ
+  laterality: bilateral
+  voxtell:
+    main: '{side} lung'
+    aliases: []
+  ts:
+    total:
+      left: lung_upper_lobe_left
+      right: lung_upper_lobe_right
+    total_mr:
+      left: lung_left
+      right: lung_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  volume_ml:
+    min: 1500
+    max: 4500
+  ct_hu:
+  - -950
+  - -600
+  is_anchor: true
+  anchor:
+    span:
+    - T1
+    - T12
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: mid
+    presence: obligatory
+    spatial_prior:
+    - landmark: heart
+      relation: lateral_to
+      dist_mm:
+      - 0
+      - 30
+  notes: 'TS total: merge lobes per side; lobes are has_part entities'
+  sources:
+  - TS
+  - FMA
+- id: lung_left_upper_lobe
+  name: Left upper lobe
+  category: organ
+  laterality: left
+  voxtell:
+    main: left upper lobe of lung
+    aliases: []
+  ts:
+    total: lung_upper_lobe_left
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: lung_left_lower_lobe
+  name: Left lower lobe
+  category: organ
+  laterality: left
+  voxtell:
+    main: left lower lobe of lung
+    aliases: []
+  ts:
+    total: lung_lower_lobe_left
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: lung_right_upper_lobe
+  name: Right upper lobe
+  category: organ
+  laterality: right
+  voxtell:
+    main: right upper lobe of lung
+    aliases: []
+  ts:
+    total: lung_upper_lobe_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: lung_right_middle_lobe
+  name: Right middle lobe
+  category: organ
+  laterality: right
+  voxtell:
+    main: right middle lobe of lung
+    aliases: []
+  ts:
+    total: lung_middle_lobe_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: lung_right_lower_lobe
+  name: Right lower lobe
+  category: organ
+  laterality: right
+  voxtell:
+    main: right lower lobe of lung
+    aliases: []
+  ts:
+    total: lung_lower_lobe_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: trachea
+  name: Trachea
+  category: duct
+  laterality: none
+  voxtell:
+    main: trachea
+    aliases: []
+  ts:
+    total: trachea
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - C6
+    - T4
+    span_var: 1
+    position:
+      lr: midline
+      ap: mid
+    presence: obligatory
+    spatial_prior: []
+  sources:
+  - TS
+  - FMA
+- id: main_bronchus
+  name: Main bronchus
+  category: duct
+  laterality: bilateral
+  voxtell:
+    main: '{side} main bronchus'
+    aliases:
+    - '{side} mainstem bronchus'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: bronchial_tree
+  name: Bronchial tree / airways
+  category: duct
+  laterality: none
+  voxtell:
+    main: airways
+    aliases:
+    - bronchi
+    - airway tree
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: pleura
+  name: Pleura
+  category: fascia
+  laterality: bilateral
+  voxtell:
+    main: '{side} pleura'
+    aliases:
+    - '{side} pleural surface'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: pleural_effusion
+  name: Pleural effusion
+  category: space
+  laterality: bilateral
+  voxtell:
+    main: '{side} pleural effusion'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: heart
+  name: Heart
+  category: organ
+  laterality: none
+  voxtell:
+    main: heart
+    aliases: []
+  ts:
+    total: heart
+    total_mr: heart
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  volume_ml:
+    min: 400
+    max: 1000
+  is_anchor: true
+  anchor:
+    span:
+    - T5
+    - T9
+    span_var: 1
+    position:
+      lr: midline
+      ap: anterior
+    presence: obligatory
+    spatial_prior: []
+  sources:
+  - TS
+  - FMA
+- id: pericardium
+  name: Pericardium
+  category: fascia
+  laterality: none
+  voxtell:
+    main: pericardium
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: esophagus
+  name: Oesophagus
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: esophagus
+    aliases:
+    - oesophagus
+    - gullet
+  ts:
+    total: esophagus
+    total_mr: esophagus
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: true
+  anchor:
+    span:
+    - C6
+    - T11
+    span_var: 1
+    position:
+      lr: midline
+      ap: posterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: trachea
+      relation: posterior_to
+      dist_mm:
+      - 0
+      - 15
+    - landmark: aorta
+      relation: anterior_right_of
+      dist_mm:
+      - 0
+      - 20
+  sources:
+  - TS
+  - FMA
+- id: thyroid
+  name: Thyroid gland
+  category: gland
+  laterality: none
+  voxtell:
+    main: thyroid gland
+    aliases: []
+  ts:
+    total: thyroid_gland
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: true
+  anchor:
+    span:
+    - C5
+    - T1
+    span_var: 1
+    position:
+      lr: midline
+      ap: anterior
+    presence: surgical
+    spatial_prior: []
+  sources:
+  - TS
+  - FMA
+- id: thymus
+  name: Thymus / anterior mediastinal fat
+  category: gland
+  laterality: none
+  voxtell:
+    main: thymus
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: chest_wall
+  name: Chest wall
+  category: muscle
+  laterality: bilateral
+  voxtell:
+    main: '{side} chest wall'
+    aliases:
+    - '{side} thoracic wall'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: diaphragm
+  name: Diaphragm
+  category: muscle
+  laterality: none
+  voxtell:
+    main: diaphragm
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: breast
+  name: Breast
+  category: organ
+  laterality: bilateral
+  voxtell:
+    main: '{side} breast'
+    aliases:
+    - '{side} mammary gland'
+  ts: {}
+  modality:
+  - MR
+  - CT
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: true
+  anchor:
+    span:
+    - T2
+    - T7
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: anterior
+    presence: surgical
+    spatial_prior:
+    - landmark: pectoralis_major
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 30
+  notes: Duke breast MRI in VoxTell training (breast + FGT)
+  sources:
+  - TS
+  - FMA
+- id: fibroglandular_tissue
+  name: Fibroglandular tissue
+  category: organ
+  laterality: bilateral
+  voxtell:
+    main: '{side} fibroglandular tissue'
+    aliases:
+    - '{side} breast parenchyma'
+  ts: {}
+  modality:
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: pectoralis_major
+  name: Pectoralis major
+  category: muscle
+  laterality: bilateral
+  voxtell:
+    main: '{side} pectoralis major muscle'
+    aliases: []
+  ts:
+    abdominal_muscles:
+      left: pectoralis_major_left
+      right: pectoralis_major_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: skin
+  name: Skin
+  category: fascia
+  laterality: none
+  voxtell:
+    main: skin
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: nipple
+  name: Nipple
+  category: landmark
+  laterality: bilateral
+  voxtell:
+    main: '{side} nipple'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: liver
+  name: Liver
+  category: organ
+  laterality: none
+  voxtell:
+    main: liver
+    aliases:
+    - hepatic parenchyma
+  ts:
+    total: liver
+    total_mr: liver
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  volume_ml:
+    min: 900
+    max: 2500
+  ct_hu:
+  - 40
+  - 80
+  is_anchor: true
+  anchor:
+    span:
+    - T9
+    - L2
+    span_var: 1
+    position:
+      lr: right
+      ap: anterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: kidney
+      relation: superior_to
+      dist_mm:
+      - 0
+      - 40
+    - landmark: diaphragm
+      relation: inferior_to
+      dist_mm:
+      - 0
+      - 10
+  sources:
+  - TS
+  - FMA
+- id: liver_segment_I
+  name: Liver segment I
+  category: organ
+  laterality: none
+  voxtell:
+    main: liver segment I
+    aliases:
+    - Couinaud segment I
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: liver_segment_II
+  name: Liver segment II
+  category: organ
+  laterality: none
+  voxtell:
+    main: liver segment II
+    aliases:
+    - Couinaud segment II
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: liver_segment_III
+  name: Liver segment III
+  category: organ
+  laterality: none
+  voxtell:
+    main: liver segment III
+    aliases:
+    - Couinaud segment III
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: liver_segment_IV
+  name: Liver segment IV
+  category: organ
+  laterality: none
+  voxtell:
+    main: liver segment IV
+    aliases:
+    - Couinaud segment IV
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: liver_segment_V
+  name: Liver segment V
+  category: organ
+  laterality: none
+  voxtell:
+    main: liver segment V
+    aliases:
+    - Couinaud segment V
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: liver_segment_VI
+  name: Liver segment VI
+  category: organ
+  laterality: none
+  voxtell:
+    main: liver segment VI
+    aliases:
+    - Couinaud segment VI
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: liver_segment_VII
+  name: Liver segment VII
+  category: organ
+  laterality: none
+  voxtell:
+    main: liver segment VII
+    aliases:
+    - Couinaud segment VII
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: liver_segment_VIII
+  name: Liver segment VIII
+  category: organ
+  laterality: none
+  voxtell:
+    main: liver segment VIII
+    aliases:
+    - Couinaud segment VIII
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: liver_lobe
+  name: Liver lobe
+  category: organ
+  laterality: bilateral
+  voxtell:
+    main: '{side} lobe of the liver'
+    aliases:
+    - '{side} hepatic lobe'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: gallbladder
+  name: Gallbladder
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: gallbladder
+    aliases: []
+  ts:
+    total: gallbladder
+    total_mr: gallbladder
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  volume_ml:
+    min: 10
+    max: 120
+  is_anchor: true
+  anchor:
+    span:
+    - L1
+    - L2
+    span_var: 1
+    position:
+      lr: right
+      ap: anterior
+    presence: surgical
+    spatial_prior:
+    - landmark: liver
+      relation: inferior_surface_of
+      dist_mm:
+      - 0
+      - 10
+  sources:
+  - TS
+  - FMA
+- id: bile_duct
+  name: Common bile duct
+  category: duct
+  laterality: none
+  voxtell:
+    main: common bile duct
+    aliases:
+    - bile duct
+    - CBD
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: intrahepatic_bile_ducts
+  name: Intrahepatic bile ducts
+  category: duct
+  laterality: none
+  voxtell:
+    main: intrahepatic bile ducts
+    aliases:
+    - biliary tree
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: spleen
+  name: Spleen
+  category: organ
+  laterality: none
+  voxtell:
+    main: spleen
+    aliases: []
+  ts:
+    total: spleen
+    total_mr: spleen
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  volume_ml:
+    min: 80
+    max: 600
+  is_anchor: true
+  anchor:
+    span:
+    - T10
+    - L1
+    span_var: 1
+    position:
+      lr: left
+      ap: posterior
+    presence: surgical
+    spatial_prior:
+    - landmark: kidney
+      relation: superior_lateral_to
+      dist_mm:
+      - 0
+      - 30
+    - landmark: stomach
+      relation: posterior_lateral_to
+      dist_mm:
+      - 0
+      - 20
+  sources:
+  - TS
+  - FMA
+- id: stomach
+  name: Stomach
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: stomach
+    aliases:
+    - gastric organ
+  ts:
+    total: stomach
+    total_mr: stomach
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: true
+  anchor:
+    span:
+    - T10
+    - L2
+    span_var: 1
+    position:
+      lr: left
+      ap: anterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: liver
+      relation: left_of
+      dist_mm:
+      - 0
+      - 20
+    - landmark: spleen
+      relation: medial_to
+      dist_mm:
+      - 0
+      - 30
+  sources:
+  - TS
+  - FMA
+- id: gastric_wall
+  name: Gastric wall
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: gastric wall
+    aliases:
+    - stomach wall
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: gastroesophageal_junction
+  name: Gastro-oesophageal junction
+  category: landmark
+  laterality: none
+  voxtell:
+    main: gastroesophageal junction
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: duodenum
+  name: Duodenum
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: duodenum
+    aliases: []
+  ts:
+    total: duodenum
+    total_mr: duodenum
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - L1
+    - L3
+    span_var: 1
+    position:
+      lr: right
+      ap: mid
+    presence: obligatory
+    spatial_prior:
+    - landmark: pancreas
+      relation: lateral_to_head_of
+      dist_mm:
+      - 0
+      - 10
+  sources:
+  - TS
+  - FMA
+- id: pancreas
+  name: Pancreas
+  category: organ
+  laterality: none
+  voxtell:
+    main: pancreas
+    aliases: []
+  ts:
+    total: pancreas
+    total_mr: pancreas
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  volume_ml:
+    min: 40
+    max: 150
+  is_anchor: true
+  anchor:
+    span:
+    - T12
+    - L2
+    span_var: 1
+    position:
+      lr: midline
+      ap: posterior
+    presence: surgical
+    spatial_prior:
+    - landmark: splenic_vein
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 10
+    - landmark: stomach
+      relation: posterior_to
+      dist_mm:
+      - 0
+      - 20
+  sources:
+  - TS
+  - FMA
+- id: pancreas_head
+  name: Pancreatic head
+  category: organ
+  laterality: none
+  voxtell:
+    main: pancreatic head
+    aliases:
+    - pancreas head
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: pancreas_body
+  name: Pancreatic body
+  category: organ
+  laterality: none
+  voxtell:
+    main: pancreatic body
+    aliases:
+    - pancreas body
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: pancreas_tail
+  name: Pancreatic tail
+  category: organ
+  laterality: none
+  voxtell:
+    main: pancreatic tail
+    aliases:
+    - pancreas tail
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: pancreas_uncinate
+  name: Pancreatic uncinate process
+  category: organ
+  laterality: none
+  voxtell:
+    main: pancreatic uncinate process
+    aliases:
+    - pancreas uncinate process
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: pancreatic_duct
+  name: Main pancreatic duct
+  category: duct
+  laterality: none
+  voxtell:
+    main: pancreatic duct
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: adrenal
+  name: Adrenal gland
+  category: gland
+  laterality: bilateral
+  voxtell:
+    main: '{side} adrenal gland'
+    aliases:
+    - '{side} suprarenal gland'
+  ts:
+    total:
+      left: adrenal_gland_left
+      right: adrenal_gland_right
+    total_mr:
+      left: adrenal_gland_left
+      right: adrenal_gland_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  volume_ml:
+    min: 2
+    max: 15
+  is_anchor: true
+  anchor:
+    span:
+    - T11
+    - L1
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: posterior
+    presence: surgical
+    spatial_prior:
+    - landmark: kidney
+      relation: superior_medial_to
+      dist_mm:
+      - 0
+      - 20
+  sources:
+  - TS
+  - FMA
+- id: kidney
+  name: Kidney
+  category: organ
+  laterality: bilateral
+  voxtell:
+    main: '{side} kidney'
+    aliases:
+    - '{side} renal organ'
+  ts:
+    total:
+      left: kidney_left
+      right: kidney_right
+    total_mr:
+      left: kidney_left
+      right: kidney_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  volume_ml:
+    min: 90
+    max: 300
+  ct_hu:
+  - 30
+  - 60
+  is_anchor: true
+  anchor:
+    span:
+    - T12
+    - L3
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: posterior
+    presence: surgical
+    spatial_prior:
+    - landmark: psoas
+      relation: lateral_to
+      dist_mm:
+      - 0
+      - 20
+    - landmark: quadratus_lumborum
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 15
+    - landmark: liver
+      relation: inferior_to
+      dist_mm:
+      - 0
+      - 40
+  sources:
+  - TS
+  - FMA
+- id: renal_cortex
+  name: Renal cortex
+  category: organ
+  laterality: bilateral
+  voxtell:
+    main: '{side} renal cortex'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: renal_medulla
+  name: Renal medulla
+  category: organ
+  laterality: bilateral
+  voxtell:
+    main: '{side} renal medulla'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: renal_pelvis
+  name: Renal pelvis / collecting system
+  category: duct
+  laterality: bilateral
+  voxtell:
+    main: '{side} renal pelvis'
+    aliases:
+    - '{side} renal collecting system'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: renal_sinus_fat
+  name: Renal sinus fat
+  category: fat
+  laterality: bilateral
+  voxtell:
+    main: '{side} renal sinus fat'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: perinephric_fat
+  name: Perinephric fat
+  category: fat
+  laterality: bilateral
+  voxtell:
+    main: '{side} perinephric fat'
+    aliases:
+    - '{side} perirenal fat'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 2
+  is_anchor: false
+  notes: experimental; RCC T3a criterion
+  sources:
+  - TS
+  - FMA
+- id: gerota_fascia
+  name: Gerota's fascia
+  category: fascia
+  laterality: bilateral
+  voxtell:
+    main: '{side} Gerota''s fascia'
+    aliases:
+    - '{side} renal fascia'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  notes: experimental; RCC T4 criterion
+  sources:
+  - TS
+  - FMA
+- id: kidney_cyst
+  name: Renal cyst
+  category: space
+  laterality: bilateral
+  voxtell:
+    main: '{side} kidney cyst'
+    aliases: []
+  ts:
+    total:
+      left: kidney_cyst_left
+      right: kidney_cyst_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: ureter
+  name: Ureter
+  category: duct
+  laterality: bilateral
+  voxtell:
+    main: '{side} ureter'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: corridor renal pelvis→bladder trigone; hydronephrosis = FIGO IIIB
+  sources:
+  - TS
+  - FMA
+- id: small_bowel
+  name: Small bowel
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: small bowel
+    aliases:
+    - small intestine
+    - jejunum and ileum
+  ts:
+    total: small_bowel
+    total_mr: small_bowel
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - L2
+    - S1
+    span_var: 1
+    position:
+      lr: midline
+      ap: anterior
+    presence: obligatory
+    spatial_prior: []
+  sources:
+  - TS
+  - FMA
+- id: colon
+  name: Colon
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: colon
+    aliases:
+    - large bowel
+    - large intestine
+  ts:
+    total: colon
+    total_mr: colon
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: true
+  anchor:
+    span:
+    - T12
+    - S3
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: anterior
+    presence: obligatory
+    spatial_prior: []
+  notes: TS merges all colon incl. rectum in MR
+  sources:
+  - TS
+  - FMA
+- id: colon_ascending
+  name: Ascending colon
+  category: hollow_organ
+  laterality: right
+  voxtell:
+    main: ascending colon
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: colon_transverse
+  name: Transverse colon
+  category: hollow_organ
+  laterality: midline
+  voxtell:
+    main: transverse colon
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: colon_descending
+  name: Descending colon
+  category: hollow_organ
+  laterality: left
+  voxtell:
+    main: descending colon
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: colon_sigmoid
+  name: Sigmoid colon
+  category: hollow_organ
+  laterality: left
+  voxtell:
+    main: sigmoid colon
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: colon_cecum
+  name: Caecum
+  category: hollow_organ
+  laterality: right
+  voxtell:
+    main: cecum
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: rectum
+  name: Rectum
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: rectum
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  is_anchor: true
+  anchor:
+    span:
+    - S3
+    - coccyx
+    span_var: 1
+    position:
+      lr: midline
+      ap: posterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: sacrum
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 25
+    - landmark: urinary_bladder
+      relation: posterior_to
+      dist_mm:
+      - 0
+      - 40
+  notes: 'TS: part of colon class; completion target on pelvic MR'
+  sources:
+  - TS
+  - FMA
+- id: mesorectum
+  name: Mesorectum / mesorectal fascia
+  category: fascia
+  laterality: none
+  voxtell:
+    main: mesorectal fascia
+    aliases:
+    - mesorectum
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  notes: experimental
+  sources:
+  - TS
+  - FMA
+- id: anal_canal
+  name: Anal canal
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: anal canal
+    aliases:
+    - anus
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: mesentery
+  name: Mesentery
+  category: fat
+  laterality: none
+  voxtell:
+    main: mesentery
+    aliases:
+    - mesenteric fat
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: omentum
+  name: Greater omentum
+  category: fat
+  laterality: none
+  voxtell:
+    main: omentum
+    aliases:
+    - greater omentum
+    - omental fat
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: peritoneum
+  name: Peritoneum
+  category: fascia
+  laterality: none
+  voxtell:
+    main: peritoneum
+    aliases:
+    - peritoneal lining
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: ascites
+  name: Ascites
+  category: space
+  laterality: none
+  voxtell:
+    main: ascites
+    aliases:
+    - peritoneal fluid
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: urinary_bladder
+  name: Urinary bladder
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: urinary bladder
+    aliases:
+    - bladder
+  ts:
+    total: urinary_bladder
+    total_mr: urinary_bladder
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  volume_ml:
+    min: 20
+    max: 800
+  is_anchor: true
+  anchor:
+    span:
+    - S3
+    - coccyx
+    span_var: 1
+    position:
+      lr: midline
+      ap: anterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: hip
+      relation: between
+      dist_mm:
+      - 0
+      - 0
+    - landmark: sacrum
+      relation: anterior_to
+      dist_mm:
+      - 30
+      - 120
+  sources:
+  - TS
+  - FMA
+- id: bladder_wall
+  name: Bladder wall
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: bladder wall
+    aliases:
+    - urinary bladder wall
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: perivesical_fat
+  name: Perivesical fat
+  category: fat
+  laterality: none
+  voxtell:
+    main: perivesical fat
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 2
+  is_anchor: false
+  notes: experimental; BLCA T3
+  sources:
+  - TS
+  - FMA
+- id: urethra
+  name: Urethra
+  category: duct
+  laterality: none
+  voxtell:
+    main: urethra
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: prostate
+  name: Prostate
+  category: gland
+  laterality: none
+  voxtell:
+    main: prostate
+    aliases:
+    - prostate gland
+  ts:
+    total: prostate
+    total_mr: prostate
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 1
+  volume_ml:
+    min: 15
+    max: 150
+  is_anchor: true
+  anchor:
+    span:
+    - S5
+    - coccyx
+    span_var: 1
+    position:
+      lr: midline
+      ap: anterior
+    presence: sex_male
+    spatial_prior:
+    - landmark: urinary_bladder
+      relation: inferior_to
+      dist_mm:
+      - 0
+      - 20
+    - landmark: rectum
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 15
+    - landmark: pubic_symphysis
+      relation: posterior_to
+      dist_mm:
+      - 5
+      - 40
+  sources:
+  - TS
+  - FMA
+- id: prostate_peripheral_zone
+  name: Prostate peripheral zone
+  category: gland
+  laterality: none
+  voxtell:
+    main: peripheral zone of the prostate
+    aliases: []
+  ts: {}
+  modality:
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: prostate_transition_zone
+  name: Prostate transition zone
+  category: gland
+  laterality: none
+  voxtell:
+    main: transition zone of the prostate
+    aliases:
+    - central gland
+  ts: {}
+  modality:
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: seminal_vesicle
+  name: Seminal vesicle
+  category: gland
+  laterality: bilateral
+  voxtell:
+    main: '{side} seminal vesicle'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 1
+  is_anchor: true
+  anchor:
+    span:
+    - S4
+    - coccyx
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: posterior
+    presence: sex_male
+    spatial_prior:
+    - landmark: prostate
+      relation: posterior_superior_to
+      dist_mm:
+      - 0
+      - 20
+    - landmark: urinary_bladder
+      relation: posterior_inferior_to
+      dist_mm:
+      - 0
+      - 15
+    - landmark: rectum
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 15
+  notes: PRAD T3b
+  sources:
+  - TS
+  - FMA
+- id: neurovascular_bundle
+  name: Neurovascular bundle
+  category: nerve
+  laterality: bilateral
+  voxtell:
+    main: '{side} neurovascular bundle'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  notes: experimental
+  sources:
+  - TS
+  - FMA
+- id: uterus
+  name: Uterus
+  category: organ
+  laterality: none
+  voxtell:
+    main: uterus
+    aliases:
+    - uterine body
+    - womb
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 1
+  volume_ml:
+    min: 30
+    max: 400
+  is_anchor: true
+  anchor:
+    span:
+    - S2
+    - coccyx
+    span_var: 1
+    position:
+      lr: midline
+      ap: mid
+    presence: sex_female
+    spatial_prior:
+    - landmark: urinary_bladder
+      relation: posterior_superior_to
+      dist_mm:
+      - 0
+      - 20
+    - landmark: rectum
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 30
+    - landmark: hip
+      relation: between
+      dist_mm:
+      - 0
+      - 0
+    - landmark: sacral_promontory
+      relation: inferior_to
+      dist_mm:
+      - 0
+      - 80
+  notes: 'completion target: TS total_mr has no uterus'
+  sources:
+  - TS
+  - FMA
+- id: endometrium
+  name: Endometrium / uterine cavity
+  category: organ
+  laterality: none
+  voxtell:
+    main: endometrium
+    aliases:
+    - endometrial cavity
+  ts: {}
+  modality:
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: myometrium
+  name: Myometrium
+  category: organ
+  laterality: none
+  voxtell:
+    main: myometrium
+    aliases: []
+  ts: {}
+  modality:
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: UCEC T1a/b = <50% / ≥50% myometrial invasion
+  sources:
+  - TS
+  - FMA
+- id: junctional_zone
+  name: Junctional zone
+  category: organ
+  laterality: none
+  voxtell:
+    main: junctional zone of the uterus
+    aliases: []
+  ts: {}
+  modality:
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: cervix
+  name: Uterine cervix
+  category: organ
+  laterality: none
+  voxtell:
+    main: cervix
+    aliases:
+    - uterine cervix
+    - cervix uteri
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 1
+  volume_ml:
+    min: 10
+    max: 120
+  is_anchor: true
+  anchor:
+    span:
+    - S4
+    - coccyx
+    span_var: 1
+    position:
+      lr: midline
+      ap: mid
+    presence: sex_female
+    spatial_prior:
+    - landmark: uterus
+      relation: inferior_to
+      dist_mm:
+      - 0
+      - 10
+    - landmark: vagina
+      relation: superior_to
+      dist_mm:
+      - 0
+      - 10
+    - landmark: urinary_bladder
+      relation: posterior_to
+      dist_mm:
+      - 0
+      - 15
+    - landmark: rectum
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 20
+  notes: completion target on pelvic MR
+  sources:
+  - TS
+  - FMA
+- id: cervical_stroma
+  name: Cervical stroma
+  category: organ
+  laterality: none
+  voxtell:
+    main: cervical stroma
+    aliases: []
+  ts: {}
+  modality:
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: parametrium
+  name: Parametrium
+  category: fascia
+  laterality: bilateral
+  voxtell:
+    main: '{side} parametrium'
+    aliases:
+    - '{side} parametrial tissue'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 2
+  is_anchor: false
+  notes: experimental; FIGO IIB
+  sources:
+  - TS
+  - FMA
+- id: vagina
+  name: Vagina
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: vagina
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - S5
+    - coccyx
+    span_var: 1
+    position:
+      lr: midline
+      ap: mid
+    presence: sex_female
+    spatial_prior:
+    - landmark: cervix
+      relation: inferior_to
+      dist_mm:
+      - 0
+      - 10
+    - landmark: urethra
+      relation: posterior_to
+      dist_mm:
+      - 0
+      - 10
+    - landmark: rectum
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 10
+  sources:
+  - TS
+  - FMA
+- id: vagina_upper_two_thirds
+  name: Upper two-thirds of vagina
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: upper vagina
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  notes: FIGO IIA vs IIIA boundary
+  sources:
+  - TS
+  - FMA
+- id: ovary
+  name: Ovary
+  category: gland
+  laterality: bilateral
+  voxtell:
+    main: '{side} ovary'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - S1
+    - S4
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: mid
+    presence: sex_female
+    spatial_prior:
+    - landmark: uterus
+      relation: lateral_to
+      dist_mm:
+      - 10
+      - 50
+    - landmark: iliac_artery
+      relation: anterior_medial_to
+      dist_mm:
+      - 0
+      - 25
+  sources:
+  - TS
+  - FMA
+- id: adnexa
+  name: Adnexa (ovary + tube)
+  category: gland
+  laterality: bilateral
+  voxtell:
+    main: '{side} adnexa'
+    aliases:
+    - '{side} ovary and fallopian tube'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: pelvic_sidewall
+  name: Pelvic sidewall
+  category: muscle
+  laterality: bilateral
+  voxtell:
+    main: '{side} pelvic sidewall'
+    aliases:
+    - '{side} obturator internus muscle'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: obturator_internus
+  name: Obturator internus
+  category: muscle
+  laterality: bilateral
+  voxtell:
+    main: '{side} obturator internus muscle'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: levator_ani
+  name: Levator ani / pelvic floor
+  category: muscle
+  laterality: none
+  voxtell:
+    main: levator ani muscle
+    aliases:
+    - pelvic floor muscles
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: external_urethral_sphincter
+  name: External urethral sphincter
+  category: muscle
+  laterality: none
+  voxtell:
+    main: external urethral sphincter
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: iliopsoas
+  name: Iliopsoas
+  category: muscle
+  laterality: bilateral
+  voxtell:
+    main: '{side} iliopsoas muscle'
+    aliases: []
+  ts:
+    total:
+      left: iliopsoas_left
+      right: iliopsoas_right
+    total_mr:
+      left: iliopsoas_left
+      right: iliopsoas_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - L1
+    - coccyx
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: posterior
+    presence: obligatory
+    spatial_prior: []
+  sources:
+  - TS
+  - FMA
+- id: psoas
+  name: Psoas major
+  category: muscle
+  laterality: bilateral
+  voxtell:
+    main: '{side} psoas muscle'
+    aliases: []
+  ts:
+    abdominal_muscles:
+      left: psoas_major_left
+      right: psoas_major_right
+    total:
+      left: iliopsoas_left
+      right: iliopsoas_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - T12
+    - L5
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: posterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: spine
+      relation: lateral_to
+      dist_mm:
+      - 0
+      - 15
+  notes: TS total merges psoas into iliopsoas
+  sources:
+  - TS
+  - FMA
+- id: quadratus_lumborum
+  name: Quadratus lumborum
+  category: muscle
+  laterality: bilateral
+  voxtell:
+    main: '{side} quadratus lumborum muscle'
+    aliases: []
+  ts:
+    abdominal_muscles:
+      left: quadratus_lumborum_left
+      right: quadratus_lumborum_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: gluteus
+  name: Gluteal muscles
+  category: muscle
+  laterality: bilateral
+  voxtell:
+    main: '{side} gluteal muscles'
+    aliases: []
+  ts:
+    total:
+      left: gluteus_maximus_left
+      right: gluteus_maximus_right
+    total_mr:
+      left: gluteus_maximus_left
+      right: gluteus_maximus_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  notes: merge maximus/medius/minimus
+  sources:
+  - TS
+  - FMA
+- id: autochthon
+  name: Autochthonous back muscles (erector spinae)
+  category: muscle
+  laterality: bilateral
+  voxtell:
+    main: '{side} erector spinae muscle'
+    aliases: []
+  ts:
+    total:
+      left: autochthon_left
+      right: autochthon_right
+    total_mr:
+      left: autochthon_left
+      right: autochthon_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: rectus_abdominis
+  name: Rectus abdominis
+  category: muscle
+  laterality: bilateral
+  voxtell:
+    main: '{side} rectus abdominis muscle'
+    aliases: []
+  ts:
+    abdominal_muscles:
+      left: rectus_abdominis_left
+      right: rectus_abdominis_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: abdominal_wall
+  name: Anterior abdominal wall
+  category: muscle
+  laterality: none
+  voxtell:
+    main: anterior abdominal wall
+    aliases:
+    - abdominal wall muscles
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: subcutaneous_fat
+  name: Subcutaneous adipose tissue
+  category: fat
+  laterality: none
+  voxtell:
+    main: subcutaneous fat
+    aliases:
+    - subcutaneous adipose tissue
+    - SAT
+  ts:
+    tissue_types: subcutaneous_fat
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  ct_hu:
+  - -190
+  - -30
+  is_anchor: true
+  anchor:
+    span:
+    - C1
+    - coccyx
+    span_var: 1
+    position:
+      lr: midline
+      ap: mid
+    presence: obligatory
+    spatial_prior: []
+  notes: TS tissue_types is a licensed model; VoxTell fallback
+  sources:
+  - TS
+  - FMA
+- id: visceral_fat
+  name: Visceral adipose tissue
+  category: fat
+  laterality: none
+  voxtell:
+    main: visceral fat
+    aliases:
+    - intra-abdominal fat
+    - torso fat
+    - VAT
+  ts:
+    tissue_types: torso_fat
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  ct_hu:
+  - -190
+  - -30
+  is_anchor: true
+  anchor:
+    span:
+    - T10
+    - S1
+    span_var: 1
+    position:
+      lr: midline
+      ap: anterior
+    presence: obligatory
+    spatial_prior: []
+  sources:
+  - TS
+  - FMA
+- id: skeletal_muscle
+  name: Skeletal muscle (whole)
+  category: muscle
+  laterality: none
+  voxtell:
+    main: skeletal muscle
+    aliases: []
+  ts:
+    tissue_types: skeletal_muscle
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  ct_hu:
+  - -29
+  - 150
+  is_anchor: true
+  anchor:
+    span:
+    - C1
+    - coccyx
+    span_var: 1
+    position:
+      lr: midline
+      ap: mid
+    presence: obligatory
+    spatial_prior: []
+  notes: L3-level cross-section = sarcopenia index
+  sources:
+  - TS
+  - FMA
+- id: body_trunk
+  name: Body (trunk)
+  category: region
+  laterality: none
+  voxtell:
+    main: body
+    aliases: []
+  ts:
+    body: body_trunc
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+- id: ln_mediastinal
+  name: Mediastinal lymph nodes
+  category: lymph_station
+  laterality: none
+  voxtell:
+    main: mediastinal lymph nodes
+    aliases:
+    - mediastinal nodes
+    - thoracic lymph nodes
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: between lungs, T3–T8, around trachea/carina/oesophagus; span T3–T8'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_hilar
+  name: Hilar lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} hilar lymph nodes'
+    aliases:
+    - '{side} pulmonary hilar nodes'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: around main bronchus and pulmonary vessels; span T5–T7'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_supraclavicular
+  name: Supraclavicular lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} supraclavicular lymph nodes'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: above clavicle lateral to carotid; span C7–T1'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_axillary
+  name: Axillary lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} axillary lymph nodes'
+    aliases:
+    - '{side} axillary nodes'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: axilla lateral to pectoralis minor; span T2–T5'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_internal_mammary
+  name: Internal mammary lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} internal mammary lymph nodes'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: parasternal along internal thoracic vessels; span T1–T6'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_celiac
+  name: Coeliac lymph nodes
+  category: lymph_station
+  laterality: none
+  voxtell:
+    main: celiac lymph nodes
+    aliases:
+    - coeliac nodes
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: around coeliac trunk; span T12–L1'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_hepatic_hilar
+  name: Hepatic hilar / hepatoduodenal nodes
+  category: lymph_station
+  laterality: none
+  voxtell:
+    main: hepatic hilar lymph nodes
+    aliases:
+    - portal lymph nodes
+    - hepatoduodenal ligament nodes
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: porta hepatis around portal vein; span T12–L1'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_perigastric
+  name: Perigastric lymph nodes
+  category: lymph_station
+  laterality: none
+  voxtell:
+    main: perigastric lymph nodes
+    aliases:
+    - gastric lymph nodes
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: along lesser and greater curvature; span T10–L2'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_renal_hilar
+  name: Renal hilar lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} renal hilar lymph nodes'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: around renal vessels; span L1–L2'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_paraaortic
+  name: Para-aortic / retroperitoneal lymph nodes
+  category: lymph_station
+  laterality: none
+  voxtell:
+    main: para-aortic lymph nodes
+    aliases:
+    - retroperitoneal lymph nodes
+    - paracaval lymph nodes
+    - aortocaval lymph nodes
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: around aorta and IVC, T12–L4; span T12–L4'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_mesenteric
+  name: Mesenteric lymph nodes
+  category: lymph_station
+  laterality: none
+  voxtell:
+    main: mesenteric lymph nodes
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: along SMA/SMV in mesentery; span L1–L4'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_pericolic
+  name: Pericolic lymph nodes
+  category: lymph_station
+  laterality: none
+  voxtell:
+    main: pericolic lymph nodes
+    aliases:
+    - mesocolic lymph nodes
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: along colonic vessels; span T12–S1'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_common_iliac
+  name: Common iliac lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} common iliac lymph nodes'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: along common iliac vessels L4–S1; span L4–S1'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_external_iliac
+  name: External iliac lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} external iliac lymph nodes'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: along external iliac vessels; span S1–S4'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_internal_iliac
+  name: Internal iliac lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} internal iliac lymph nodes'
+    aliases:
+    - '{side} hypogastric lymph nodes'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: along internal iliac vessels; span S1–S4'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_obturator
+  name: Obturator lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} obturator lymph nodes'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: near
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: medial to obturator internus, below external iliac vein; span S2–S5'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_presacral
+  name: Presacral lymph nodes
+  category: lymph_station
+  laterality: none
+  voxtell:
+    main: presacral lymph nodes
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: ood
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: anterior to sacrum; span S1–S4'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_inguinal
+  name: Inguinal lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} inguinal lymph nodes'
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: below inguinal ligament along femoral vessels; span S5–coccyx'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_pelvic
+  name: Pelvic lymph nodes (aggregate)
+  category: lymph_station
+  laterality: none
+  voxtell:
+    main: pelvic lymph nodes
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: aggregate of iliac/obturator/presacral; span L5–coccyx'
+  sources:
+  - AJCC8
+  - FMA
+- id: ln_abdominal
+  name: Abdominal lymph nodes (aggregate)
+  category: lymph_station
+  laterality: none
+  voxtell:
+    main: abdominal lymph nodes
+    aliases:
+    - enlarged abdominal lymph nodes
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: aggregate; span T10–L5'
+  sources:
+  - AJCC8
+  - FMA

@@ -1,0 +1,192 @@
+id,name,category,laterality,is_anchor,span,presence,voxtell_main,aliases,ts_total,ts_total_mr,tier,priority,modality,volume_ml,notes
+vertebra_C1,C1 vertebra,bone,none,False,,,C1 vertebra,vertebra C1,vertebrae_C1,,in_vocab,3,CT/MR,,
+vertebra_C2,C2 vertebra,bone,none,False,,,C2 vertebra,vertebra C2,vertebrae_C2,,in_vocab,3,CT/MR,,
+vertebra_C3,C3 vertebra,bone,none,False,,,C3 vertebra,vertebra C3,vertebrae_C3,,in_vocab,3,CT/MR,,
+vertebra_C4,C4 vertebra,bone,none,False,,,C4 vertebra,vertebra C4,vertebrae_C4,,in_vocab,3,CT/MR,,
+vertebra_C5,C5 vertebra,bone,none,False,,,C5 vertebra,vertebra C5,vertebrae_C5,,in_vocab,3,CT/MR,,
+vertebra_C6,C6 vertebra,bone,none,False,,,C6 vertebra,vertebra C6,vertebrae_C6,,in_vocab,3,CT/MR,,
+vertebra_C7,C7 vertebra,bone,none,False,,,C7 vertebra,vertebra C7,vertebrae_C7,,in_vocab,3,CT/MR,,
+vertebra_T1,T1 vertebra,bone,none,False,,,T1 vertebra,vertebra T1,vertebrae_T1,,in_vocab,3,CT/MR,,
+vertebra_T2,T2 vertebra,bone,none,False,,,T2 vertebra,vertebra T2,vertebrae_T2,,in_vocab,3,CT/MR,,
+vertebra_T3,T3 vertebra,bone,none,False,,,T3 vertebra,vertebra T3,vertebrae_T3,,in_vocab,3,CT/MR,,
+vertebra_T4,T4 vertebra,bone,none,False,,,T4 vertebra,vertebra T4,vertebrae_T4,,in_vocab,3,CT/MR,,
+vertebra_T5,T5 vertebra,bone,none,False,,,T5 vertebra,vertebra T5,vertebrae_T5,,in_vocab,3,CT/MR,,
+vertebra_T6,T6 vertebra,bone,none,False,,,T6 vertebra,vertebra T6,vertebrae_T6,,in_vocab,3,CT/MR,,
+vertebra_T7,T7 vertebra,bone,none,False,,,T7 vertebra,vertebra T7,vertebrae_T7,,in_vocab,3,CT/MR,,
+vertebra_T8,T8 vertebra,bone,none,False,,,T8 vertebra,vertebra T8,vertebrae_T8,,in_vocab,3,CT/MR,,
+vertebra_T9,T9 vertebra,bone,none,False,,,T9 vertebra,vertebra T9,vertebrae_T9,,in_vocab,3,CT/MR,,
+vertebra_T10,T10 vertebra,bone,none,False,,,T10 vertebra,vertebra T10,vertebrae_T10,,in_vocab,3,CT/MR,,
+vertebra_T11,T11 vertebra,bone,none,False,,,T11 vertebra,vertebra T11,vertebrae_T11,,in_vocab,3,CT/MR,,
+vertebra_T12,T12 vertebra,bone,none,False,,,T12 vertebra,vertebra T12,vertebrae_T12,,in_vocab,3,CT/MR,,
+vertebra_L1,L1 vertebra,bone,none,False,,,L1 vertebra,vertebra L1,vertebrae_L1,,in_vocab,3,CT/MR,,
+vertebra_L2,L2 vertebra,bone,none,False,,,L2 vertebra,vertebra L2,vertebrae_L2,,in_vocab,3,CT/MR,,
+vertebra_L3,L3 vertebra,bone,none,False,,,L3 vertebra,vertebra L3,vertebrae_L3,,in_vocab,3,CT/MR,,
+vertebra_L4,L4 vertebra,bone,none,False,,,L4 vertebra,vertebra L4,vertebrae_L4,,in_vocab,3,CT/MR,,
+vertebra_L5,L5 vertebra,bone,none,False,,,L5 vertebra,vertebra L5,vertebrae_L5,,in_vocab,3,CT/MR,,
+vertebra_S1,S1 vertebra,bone,none,False,,,S1 vertebra,vertebra S1,vertebrae_S1,,in_vocab,3,CT/MR,,
+vertebra_S2,S2 vertebra,bone,none,False,,,S2 vertebra,vertebra S2,,,in_vocab,3,CT/MR,,
+vertebra_S3,S3 vertebra,bone,none,False,,,S3 vertebra,vertebra S3,,,in_vocab,3,CT/MR,,
+vertebra_S4,S4 vertebra,bone,none,False,,,S4 vertebra,vertebra S4,,,in_vocab,3,CT/MR,,
+vertebra_S5,S5 vertebra,bone,none,False,,,S5 vertebra,vertebra S5,,,in_vocab,3,CT/MR,,
+spine,Spine,bone,none,True,C1-coccyx,obligatory,spine,vertebral column; lumbar spine; thoracic spine,,vertebrae,in_vocab,1,CT/MR,,"systemic anchor: cranio-caudal ruler; TS total_mr gives one merged class, use VoxTell per level if needed"
+sacrum,Sacrum,bone,none,True,S1-S5,obligatory,sacrum,,sacrum,sacrum,in_vocab,1,CT/MR,,
+coccyx,Coccyx,bone,none,False,,,coccyx,,,,near,3,CT/MR,,
+hip,"Hip bone (ilium, ischium, pubis)",bone,bilateral,True,L5-coccyx,obligatory,{side} hip bone,{side} pelvis bone; {side} iliac bone,hip_left|hip_right,hip_left|hip_right,in_vocab,1,CT/MR,,
+femur,Femur (proximal),bone,bilateral,False,,,{side} femur,,femur_left|femur_right,femur_left|femur_right,in_vocab,3,CT/MR,,
+sternum,Sternum,bone,none,False,,,sternum,,sternum,,in_vocab,3,CT/MR,,
+rib_cage,Rib cage,bone,bilateral,False,,,{side} rib cage,{side} ribs,rib_left_1|rib_right_1,,in_vocab,2,CT/MR,,TS gives 24 individual ribs; merge per side. ts entry lists first rib only as representative
+scapula,Scapula,bone,bilateral,False,,,{side} scapula,,scapula_left|scapula_right,scapula_left|scapula_right,in_vocab,3,CT/MR,,
+clavicle,Clavicle,bone,bilateral,False,,,{side} clavicle,,clavicula_left|clavicula_right,clavicula_left|clavicula_right,in_vocab,3,CT/MR,,
+humerus,Humerus,bone,bilateral,False,,,{side} humerus,,humerus_left|humerus_right,humerus_left|humerus_right,in_vocab,3,CT/MR,,
+spinal_cord,Spinal cord,nerve,none,False,,,spinal cord,,spinal_cord,spinal_cord,in_vocab,3,CT/MR,,
+aorta,Aorta,vessel_artery,none,True,T4-L4,obligatory,aorta,thoracic aorta; abdominal aorta,aorta,aorta,in_vocab,1,CT/MR,,systemic anchor; bifurcation = L4 landmark
+inferior_vena_cava,Inferior vena cava,vessel_vein,none,True,T8-L5,obligatory,inferior vena cava,IVC,inferior_vena_cava,inferior_vena_cava,in_vocab,1,CT/MR,,
+superior_vena_cava,Superior vena cava,vessel_vein,none,False,,,superior vena cava,,superior_vena_cava,,in_vocab,3,CT/MR,,
+iliac_artery,Common/external iliac artery,vessel_artery,bilateral,True,L4-S3,obligatory,{side} iliac artery,{side} common iliac artery; {side} external iliac artery,iliac_artery_left|iliac_artery_right,iliac_artery_left|iliac_artery_right,in_vocab,2,CT/MR,,
+iliac_vein,Common/external iliac vein,vessel_vein,bilateral,True,L5-S3,obligatory,{side} iliac vein,,iliac_vena_left|iliac_vena_right,iliac_vena_left|iliac_vena_right,in_vocab,2,CT/MR,,
+internal_iliac_artery,Internal iliac artery,vessel_artery,bilateral,False,,,{side} internal iliac artery,{side} hypogastric artery,,,near,2,CT/MR,,
+internal_iliac_vein,Internal iliac vein,vessel_vein,bilateral,False,,,{side} internal iliac vein,,,,near,3,CT/MR,,
+portal_vein,Portal vein,vessel_vein,none,False,,,portal vein,main portal vein,portal_vein_and_splenic_vein,portal_vein_and_splenic_vein,in_vocab,1,CT/MR,,TS merges portal + splenic vein; VoxTell separates
+splenic_vein,Splenic vein,vessel_vein,none,False,,,splenic vein,,portal_vein_and_splenic_vein,portal_vein_and_splenic_vein,near,2,CT/MR,,
+hepatic_veins,Hepatic veins,vessel_vein,none,False,,,hepatic veins,hepatic vein,,,in_vocab,1,CT/MR,,MSD Task08 in VoxTell training
+hepatic_artery,Hepatic artery,vessel_artery,none,False,,,hepatic artery,common hepatic artery; proper hepatic artery,,,near,2,CT/MR,,
+celiac_trunk,Coeliac trunk,vessel_artery,none,False,,,celiac trunk,coeliac artery,,,near,3,CT/MR,,
+superior_mesenteric_artery,Superior mesenteric artery,vessel_artery,none,False,,,superior mesenteric artery,SMA,,,near,2,CT/MR,,
+superior_mesenteric_vein,Superior mesenteric vein,vessel_vein,none,False,,,superior mesenteric vein,SMV,,,near,2,CT/MR,,
+renal_artery,Renal artery,vessel_artery,bilateral,False,,,{side} renal artery,,,,in_vocab,2,CT/MR,,KiPA dataset in VoxTell training
+renal_vein,Renal vein,vessel_vein,bilateral,False,,,{side} renal vein,,,,in_vocab,1,CT/MR,,KiPA dataset; key for RCC T3a
+gonadal_vein,Gonadal vein,vessel_vein,bilateral,False,,,{side} gonadal vein,{side} testicular vein; {side} ovarian vein,,,ood,3,CT/MR,,
+pulmonary_artery,Pulmonary artery,vessel_artery,none,False,,,pulmonary artery,main pulmonary artery,,,in_vocab,2,CT/MR,,
+pulmonary_vein,Pulmonary veins,vessel_vein,none,False,,,pulmonary veins,,pulmonary_vein,,in_vocab,3,CT/MR,,
+brachiocephalic_trunk,Brachiocephalic trunk,vessel_artery,none,False,,,brachiocephalic trunk,,brachiocephalic_trunk,,in_vocab,3,CT/MR,,
+subclavian_artery,Subclavian artery,vessel_artery,bilateral,False,,,{side} subclavian artery,,subclavian_artery_left|subclavian_artery_right,,in_vocab,3,CT/MR,,
+common_carotid_artery,Common carotid artery,vessel_artery,bilateral,False,,,{side} common carotid artery,,common_carotid_artery_left|common_carotid_artery_right,,in_vocab,3,CT/MR,,
+brachiocephalic_vein,Brachiocephalic vein,vessel_vein,bilateral,False,,,{side} brachiocephalic vein,,brachiocephalic_vein_left|brachiocephalic_vein_right,,in_vocab,3,CT/MR,,
+uterine_artery,Uterine artery,vessel_artery,bilateral,False,,,{side} uterine artery,,,,ood,3,CT/MR,,
+axillary_vessels,Axillary artery and vein,vessel_artery,bilateral,False,,,{side} axillary vessels,{side} axillary artery; {side} axillary vein,,,near,3,CT/MR,,
+lung,Lung,organ,bilateral,True,T1-T12,obligatory,{side} lung,,lung_upper_lobe_left|lung_upper_lobe_right,lung_left|lung_right,in_vocab,1,CT/MR,"{'min': 1500, 'max': 4500}",TS total: merge lobes per side; lobes are has_part entities
+lung_left_upper_lobe,Left upper lobe,organ,left,False,,,left upper lobe of lung,,lung_upper_lobe_left,,in_vocab,2,CT/MR,,
+lung_left_lower_lobe,Left lower lobe,organ,left,False,,,left lower lobe of lung,,lung_lower_lobe_left,,in_vocab,2,CT/MR,,
+lung_right_upper_lobe,Right upper lobe,organ,right,False,,,right upper lobe of lung,,lung_upper_lobe_right,,in_vocab,2,CT/MR,,
+lung_right_middle_lobe,Right middle lobe,organ,right,False,,,right middle lobe of lung,,lung_middle_lobe_right,,in_vocab,2,CT/MR,,
+lung_right_lower_lobe,Right lower lobe,organ,right,False,,,right lower lobe of lung,,lung_lower_lobe_right,,in_vocab,2,CT/MR,,
+trachea,Trachea,duct,none,True,C6-T4,obligatory,trachea,,trachea,,in_vocab,2,CT/MR,,
+main_bronchus,Main bronchus,duct,bilateral,False,,,{side} main bronchus,{side} mainstem bronchus,,,in_vocab,2,CT/MR,,
+bronchial_tree,Bronchial tree / airways,duct,none,False,,,airways,bronchi; airway tree,,,in_vocab,3,CT/MR,,
+pleura,Pleura,fascia,bilateral,False,,,{side} pleura,{side} pleural surface,,,near,2,CT/MR,,
+pleural_effusion,Pleural effusion,space,bilateral,False,,,{side} pleural effusion,,,,in_vocab,3,CT/MR,,
+heart,Heart,organ,none,True,T5-T9,obligatory,heart,,heart,heart,in_vocab,1,CT/MR,"{'min': 400, 'max': 1000}",
+pericardium,Pericardium,fascia,none,False,,,pericardium,,,,near,2,CT/MR,,
+esophagus,Oesophagus,hollow_organ,none,True,C6-T11,obligatory,esophagus,oesophagus; gullet,esophagus,esophagus,in_vocab,1,CT/MR,,
+thyroid,Thyroid gland,gland,none,True,C5-T1,surgical,thyroid gland,,thyroid_gland,,in_vocab,3,CT/MR,,
+thymus,Thymus / anterior mediastinal fat,gland,none,False,,,thymus,,,,near,3,CT/MR,,
+chest_wall,Chest wall,muscle,bilateral,False,,,{side} chest wall,{side} thoracic wall,,,near,2,CT/MR,,
+diaphragm,Diaphragm,muscle,none,False,,,diaphragm,,,,near,2,CT/MR,,
+breast,Breast,organ,bilateral,True,T2-T7,surgical,{side} breast,{side} mammary gland,,,in_vocab,1,MR/CT,,Duke breast MRI in VoxTell training (breast + FGT)
+fibroglandular_tissue,Fibroglandular tissue,organ,bilateral,False,,,{side} fibroglandular tissue,{side} breast parenchyma,,,in_vocab,2,MR,,
+pectoralis_major,Pectoralis major,muscle,bilateral,False,,,{side} pectoralis major muscle,,,,in_vocab,2,CT/MR,,
+skin,Skin,fascia,none,False,,,skin,,,,near,3,CT/MR,,
+nipple,Nipple,landmark,bilateral,False,,,{side} nipple,,,,ood,3,CT/MR,,
+liver,Liver,organ,none,True,T9-L2,obligatory,liver,hepatic parenchyma,liver,liver,in_vocab,1,CT/MR,"{'min': 900, 'max': 2500}",
+liver_segment_I,Liver segment I,organ,none,False,,,liver segment I,Couinaud segment I,,,near,3,CT/MR,,
+liver_segment_II,Liver segment II,organ,none,False,,,liver segment II,Couinaud segment II,,,near,3,CT/MR,,
+liver_segment_III,Liver segment III,organ,none,False,,,liver segment III,Couinaud segment III,,,near,3,CT/MR,,
+liver_segment_IV,Liver segment IV,organ,none,False,,,liver segment IV,Couinaud segment IV,,,near,3,CT/MR,,
+liver_segment_V,Liver segment V,organ,none,False,,,liver segment V,Couinaud segment V,,,near,3,CT/MR,,
+liver_segment_VI,Liver segment VI,organ,none,False,,,liver segment VI,Couinaud segment VI,,,near,3,CT/MR,,
+liver_segment_VII,Liver segment VII,organ,none,False,,,liver segment VII,Couinaud segment VII,,,near,3,CT/MR,,
+liver_segment_VIII,Liver segment VIII,organ,none,False,,,liver segment VIII,Couinaud segment VIII,,,near,3,CT/MR,,
+liver_lobe,Liver lobe,organ,bilateral,False,,,{side} lobe of the liver,{side} hepatic lobe,,,in_vocab,2,CT/MR,,
+gallbladder,Gallbladder,hollow_organ,none,True,L1-L2,surgical,gallbladder,,gallbladder,gallbladder,in_vocab,2,CT/MR,"{'min': 10, 'max': 120}",
+bile_duct,Common bile duct,duct,none,False,,,common bile duct,bile duct; CBD,,,near,2,CT/MR,,
+intrahepatic_bile_ducts,Intrahepatic bile ducts,duct,none,False,,,intrahepatic bile ducts,biliary tree,,,near,3,CT/MR,,
+spleen,Spleen,organ,none,True,T10-L1,surgical,spleen,,spleen,spleen,in_vocab,1,CT/MR,"{'min': 80, 'max': 600}",
+stomach,Stomach,hollow_organ,none,True,T10-L2,obligatory,stomach,gastric organ,stomach,stomach,in_vocab,1,CT/MR,,
+gastric_wall,Gastric wall,hollow_organ,none,False,,,gastric wall,stomach wall,,,near,2,CT/MR,,
+gastroesophageal_junction,Gastro-oesophageal junction,landmark,none,False,,,gastroesophageal junction,,,,near,3,CT/MR,,
+duodenum,Duodenum,hollow_organ,none,True,L1-L3,obligatory,duodenum,,duodenum,duodenum,in_vocab,2,CT/MR,,
+pancreas,Pancreas,organ,none,True,T12-L2,surgical,pancreas,,pancreas,pancreas,in_vocab,1,CT/MR,"{'min': 40, 'max': 150}",
+pancreas_head,Pancreatic head,organ,none,False,,,pancreatic head,pancreas head,,,near,3,CT/MR,,
+pancreas_body,Pancreatic body,organ,none,False,,,pancreatic body,pancreas body,,,near,3,CT/MR,,
+pancreas_tail,Pancreatic tail,organ,none,False,,,pancreatic tail,pancreas tail,,,near,3,CT/MR,,
+pancreas_uncinate,Pancreatic uncinate process,organ,none,False,,,pancreatic uncinate process,pancreas uncinate process,,,near,3,CT/MR,,
+pancreatic_duct,Main pancreatic duct,duct,none,False,,,pancreatic duct,,,,near,3,CT/MR,,
+adrenal,Adrenal gland,gland,bilateral,True,T11-L1,surgical,{side} adrenal gland,{side} suprarenal gland,adrenal_gland_left|adrenal_gland_right,adrenal_gland_left|adrenal_gland_right,in_vocab,1,CT/MR,"{'min': 2, 'max': 15}",
+kidney,Kidney,organ,bilateral,True,T12-L3,surgical,{side} kidney,{side} renal organ,kidney_left|kidney_right,kidney_left|kidney_right,in_vocab,1,CT/MR,"{'min': 90, 'max': 300}",
+renal_cortex,Renal cortex,organ,bilateral,False,,,{side} renal cortex,,,,near,3,CT/MR,,
+renal_medulla,Renal medulla,organ,bilateral,False,,,{side} renal medulla,,,,near,3,CT/MR,,
+renal_pelvis,Renal pelvis / collecting system,duct,bilateral,False,,,{side} renal pelvis,{side} renal collecting system,,,near,2,CT/MR,,
+renal_sinus_fat,Renal sinus fat,fat,bilateral,False,,,{side} renal sinus fat,,,,ood,3,CT/MR,,
+perinephric_fat,Perinephric fat,fat,bilateral,False,,,{side} perinephric fat,{side} perirenal fat,,,ood,2,CT/MR,,experimental; RCC T3a criterion
+gerota_fascia,Gerota's fascia,fascia,bilateral,False,,,{side} Gerota's fascia,{side} renal fascia,,,ood,3,CT/MR,,experimental; RCC T4 criterion
+kidney_cyst,Renal cyst,space,bilateral,False,,,{side} kidney cyst,,kidney_cyst_left|kidney_cyst_right,,in_vocab,3,CT/MR,,
+ureter,Ureter,duct,bilateral,False,,,{side} ureter,,,,near,2,CT/MR,,corridor renal pelvis→bladder trigone; hydronephrosis = FIGO IIIB
+small_bowel,Small bowel,hollow_organ,none,True,L2-S1,obligatory,small bowel,small intestine; jejunum and ileum,small_bowel,small_bowel,in_vocab,2,CT/MR,,
+colon,Colon,hollow_organ,none,True,T12-S3,obligatory,colon,large bowel; large intestine,colon,colon,in_vocab,1,CT/MR,,TS merges all colon incl. rectum in MR
+colon_ascending,Ascending colon,hollow_organ,right,False,,,ascending colon,,,,near,3,CT/MR,,
+colon_transverse,Transverse colon,hollow_organ,midline,False,,,transverse colon,,,,near,3,CT/MR,,
+colon_descending,Descending colon,hollow_organ,left,False,,,descending colon,,,,near,3,CT/MR,,
+colon_sigmoid,Sigmoid colon,hollow_organ,left,False,,,sigmoid colon,,,,near,3,CT/MR,,
+colon_cecum,Caecum,hollow_organ,right,False,,,cecum,,,,near,3,CT/MR,,
+rectum,Rectum,hollow_organ,none,True,S3-coccyx,obligatory,rectum,,,,in_vocab,1,CT/MR,,TS: part of colon class; completion target on pelvic MR
+mesorectum,Mesorectum / mesorectal fascia,fascia,none,False,,,mesorectal fascia,mesorectum,,,ood,3,CT/MR,,experimental
+anal_canal,Anal canal,hollow_organ,none,False,,,anal canal,anus,,,near,3,CT/MR,,
+mesentery,Mesentery,fat,none,False,,,mesentery,mesenteric fat,,,near,3,CT/MR,,
+omentum,Greater omentum,fat,none,False,,,omentum,greater omentum; omental fat,,,near,3,CT/MR,,
+peritoneum,Peritoneum,fascia,none,False,,,peritoneum,peritoneal lining,,,ood,3,CT/MR,,
+ascites,Ascites,space,none,False,,,ascites,peritoneal fluid,,,in_vocab,2,CT/MR,,
+urinary_bladder,Urinary bladder,hollow_organ,none,True,S3-coccyx,obligatory,urinary bladder,bladder,urinary_bladder,urinary_bladder,in_vocab,1,CT/MR,"{'min': 20, 'max': 800}",
+bladder_wall,Bladder wall,hollow_organ,none,False,,,bladder wall,urinary bladder wall,,,near,2,CT/MR,,
+perivesical_fat,Perivesical fat,fat,none,False,,,perivesical fat,,,,ood,2,CT/MR,,experimental; BLCA T3
+urethra,Urethra,duct,none,False,,,urethra,,,,near,3,CT/MR,,
+prostate,Prostate,gland,none,True,S5-coccyx,sex_male,prostate,prostate gland,prostate,prostate,in_vocab,1,CT/MR,"{'min': 15, 'max': 150}",
+prostate_peripheral_zone,Prostate peripheral zone,gland,none,False,,,peripheral zone of the prostate,,,,in_vocab,2,MR,,
+prostate_transition_zone,Prostate transition zone,gland,none,False,,,transition zone of the prostate,central gland,,,in_vocab,2,MR,,
+seminal_vesicle,Seminal vesicle,gland,bilateral,True,S4-coccyx,sex_male,{side} seminal vesicle,,,,near,1,CT/MR,,PRAD T3b
+neurovascular_bundle,Neurovascular bundle,nerve,bilateral,False,,,{side} neurovascular bundle,,,,ood,3,CT/MR,,experimental
+uterus,Uterus,organ,none,True,S2-coccyx,sex_female,uterus,uterine body; womb,,,near,1,CT/MR,"{'min': 30, 'max': 400}",completion target: TS total_mr has no uterus
+endometrium,Endometrium / uterine cavity,organ,none,False,,,endometrium,endometrial cavity,,,near,2,MR,,
+myometrium,Myometrium,organ,none,False,,,myometrium,,,,near,2,MR,,UCEC T1a/b = <50% / ≥50% myometrial invasion
+junctional_zone,Junctional zone,organ,none,False,,,junctional zone of the uterus,,,,ood,3,MR,,
+cervix,Uterine cervix,organ,none,True,S4-coccyx,sex_female,cervix,uterine cervix; cervix uteri,,,near,1,CT/MR,"{'min': 10, 'max': 120}",completion target on pelvic MR
+cervical_stroma,Cervical stroma,organ,none,False,,,cervical stroma,,,,ood,3,MR,,
+parametrium,Parametrium,fascia,bilateral,False,,,{side} parametrium,{side} parametrial tissue,,,ood,2,CT/MR,,experimental; FIGO IIB
+vagina,Vagina,hollow_organ,none,True,S5-coccyx,sex_female,vagina,,,,near,2,CT/MR,,
+vagina_upper_two_thirds,Upper two-thirds of vagina,hollow_organ,none,False,,,upper vagina,,,,ood,3,CT/MR,,FIGO IIA vs IIIA boundary
+ovary,Ovary,gland,bilateral,True,S1-S4,sex_female,{side} ovary,,,,near,2,CT/MR,,
+adnexa,Adnexa (ovary + tube),gland,bilateral,False,,,{side} adnexa,{side} ovary and fallopian tube,,,near,3,CT/MR,,
+pelvic_sidewall,Pelvic sidewall,muscle,bilateral,False,,,{side} pelvic sidewall,{side} obturator internus muscle,,,near,2,CT/MR,,
+obturator_internus,Obturator internus,muscle,bilateral,False,,,{side} obturator internus muscle,,,,near,3,CT/MR,,
+levator_ani,Levator ani / pelvic floor,muscle,none,False,,,levator ani muscle,pelvic floor muscles,,,near,2,CT/MR,,
+external_urethral_sphincter,External urethral sphincter,muscle,none,False,,,external urethral sphincter,,,,ood,3,CT/MR,,
+iliopsoas,Iliopsoas,muscle,bilateral,True,L1-coccyx,obligatory,{side} iliopsoas muscle,,iliopsoas_left|iliopsoas_right,iliopsoas_left|iliopsoas_right,in_vocab,2,CT/MR,,
+psoas,Psoas major,muscle,bilateral,True,T12-L5,obligatory,{side} psoas muscle,,iliopsoas_left|iliopsoas_right,,in_vocab,2,CT/MR,,TS total merges psoas into iliopsoas
+quadratus_lumborum,Quadratus lumborum,muscle,bilateral,False,,,{side} quadratus lumborum muscle,,,,near,3,CT/MR,,
+gluteus,Gluteal muscles,muscle,bilateral,False,,,{side} gluteal muscles,,gluteus_maximus_left|gluteus_maximus_right,gluteus_maximus_left|gluteus_maximus_right,in_vocab,3,CT/MR,,merge maximus/medius/minimus
+autochthon,Autochthonous back muscles (erector spinae),muscle,bilateral,False,,,{side} erector spinae muscle,,autochthon_left|autochthon_right,autochthon_left|autochthon_right,in_vocab,3,CT/MR,,
+rectus_abdominis,Rectus abdominis,muscle,bilateral,False,,,{side} rectus abdominis muscle,,,,near,3,CT/MR,,
+abdominal_wall,Anterior abdominal wall,muscle,none,False,,,anterior abdominal wall,abdominal wall muscles,,,near,3,CT/MR,,
+subcutaneous_fat,Subcutaneous adipose tissue,fat,none,True,C1-coccyx,obligatory,subcutaneous fat,subcutaneous adipose tissue; SAT,,,in_vocab,3,CT/MR,,TS tissue_types is a licensed model; VoxTell fallback
+visceral_fat,Visceral adipose tissue,fat,none,True,T10-S1,obligatory,visceral fat,intra-abdominal fat; torso fat; VAT,,,in_vocab,3,CT/MR,,
+skeletal_muscle,Skeletal muscle (whole),muscle,none,True,C1-coccyx,obligatory,skeletal muscle,,,,in_vocab,3,CT/MR,,L3-level cross-section = sarcopenia index
+body_trunk,Body (trunk),region,none,False,,,body,,,,in_vocab,3,CT/MR,,
+ln_mediastinal,Mediastinal lymph nodes,lymph_station,none,False,,,mediastinal lymph nodes,mediastinal nodes; thoracic lymph nodes,,,in_vocab,2,CT/MR,,"gate region: between lungs, T3–T8, around trachea/carina/oesophagus; span T3–T8"
+ln_hilar,Hilar lymph nodes,lymph_station,bilateral,False,,,{side} hilar lymph nodes,{side} pulmonary hilar nodes,,,near,2,CT/MR,,gate region: around main bronchus and pulmonary vessels; span T5–T7
+ln_supraclavicular,Supraclavicular lymph nodes,lymph_station,bilateral,False,,,{side} supraclavicular lymph nodes,,,,near,2,CT/MR,,gate region: above clavicle lateral to carotid; span C7–T1
+ln_axillary,Axillary lymph nodes,lymph_station,bilateral,False,,,{side} axillary lymph nodes,{side} axillary nodes,,,near,2,CT/MR,,gate region: axilla lateral to pectoralis minor; span T2–T5
+ln_internal_mammary,Internal mammary lymph nodes,lymph_station,bilateral,False,,,{side} internal mammary lymph nodes,,,,ood,2,CT/MR,,gate region: parasternal along internal thoracic vessels; span T1–T6
+ln_celiac,Coeliac lymph nodes,lymph_station,none,False,,,celiac lymph nodes,coeliac nodes,,,near,2,CT/MR,,gate region: around coeliac trunk; span T12–L1
+ln_hepatic_hilar,Hepatic hilar / hepatoduodenal nodes,lymph_station,none,False,,,hepatic hilar lymph nodes,portal lymph nodes; hepatoduodenal ligament nodes,,,near,2,CT/MR,,gate region: porta hepatis around portal vein; span T12–L1
+ln_perigastric,Perigastric lymph nodes,lymph_station,none,False,,,perigastric lymph nodes,gastric lymph nodes,,,near,2,CT/MR,,gate region: along lesser and greater curvature; span T10–L2
+ln_renal_hilar,Renal hilar lymph nodes,lymph_station,bilateral,False,,,{side} renal hilar lymph nodes,,,,near,2,CT/MR,,gate region: around renal vessels; span L1–L2
+ln_paraaortic,Para-aortic / retroperitoneal lymph nodes,lymph_station,none,False,,,para-aortic lymph nodes,retroperitoneal lymph nodes; paracaval lymph nodes; aortocaval lymph nodes,,,in_vocab,2,CT/MR,,"gate region: around aorta and IVC, T12–L4; span T12–L4"
+ln_mesenteric,Mesenteric lymph nodes,lymph_station,none,False,,,mesenteric lymph nodes,,,,near,2,CT/MR,,gate region: along SMA/SMV in mesentery; span L1–L4
+ln_pericolic,Pericolic lymph nodes,lymph_station,none,False,,,pericolic lymph nodes,mesocolic lymph nodes,,,ood,2,CT/MR,,gate region: along colonic vessels; span T12–S1
+ln_common_iliac,Common iliac lymph nodes,lymph_station,bilateral,False,,,{side} common iliac lymph nodes,,,,near,2,CT/MR,,gate region: along common iliac vessels L4–S1; span L4–S1
+ln_external_iliac,External iliac lymph nodes,lymph_station,bilateral,False,,,{side} external iliac lymph nodes,,,,near,2,CT/MR,,gate region: along external iliac vessels; span S1–S4
+ln_internal_iliac,Internal iliac lymph nodes,lymph_station,bilateral,False,,,{side} internal iliac lymph nodes,{side} hypogastric lymph nodes,,,near,2,CT/MR,,gate region: along internal iliac vessels; span S1–S4
+ln_obturator,Obturator lymph nodes,lymph_station,bilateral,False,,,{side} obturator lymph nodes,,,,near,2,CT/MR,,"gate region: medial to obturator internus, below external iliac vein; span S2–S5"
+ln_presacral,Presacral lymph nodes,lymph_station,none,False,,,presacral lymph nodes,,,,ood,2,CT/MR,,gate region: anterior to sacrum; span S1–S4
+ln_inguinal,Inguinal lymph nodes,lymph_station,bilateral,False,,,{side} inguinal lymph nodes,,,,in_vocab,2,CT/MR,,gate region: below inguinal ligament along femoral vessels; span S5–coccyx
+ln_pelvic,Pelvic lymph nodes (aggregate),lymph_station,none,False,,,pelvic lymph nodes,,,,in_vocab,2,CT/MR,,gate region: aggregate of iliac/obturator/presacral; span L5–coccyx
+ln_abdominal,Abdominal lymph nodes (aggregate),lymph_station,none,False,,,abdominal lymph nodes,enlarged abdominal lymph nodes,,,in_vocab,2,CT/MR,,gate region: aggregate; span T10–L5

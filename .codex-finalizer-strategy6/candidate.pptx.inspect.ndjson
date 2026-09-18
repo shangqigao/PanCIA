@@ -1,0 +1,37 @@
+{"kind":"deck","id":"pr/76bimj","name":"Deck"}
+{"kind":"layout","layoutId":"de5e037d-bd6e-4a39-87e5-9b9f73e61276","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"7066da95-f894-4783-b31b-3e302ad11b63","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/1fdwdt","slide":1,"title":"Strategy 6: limitations of contextual-bandit survival fusion","textShapes":24}
+{"kind":"shape","id":"sh/wnal07ih","slide":1,"bbox":[0,0,1280,12]}
+{"kind":"textbox","id":"sh/vm14721w","slide":1,"text":"Strategy 6: limitations of contextual-bandit survival fusion","textPreview":"Strategy 6: limitations of contextual-bandit survival fusion","textChars":60,"textLines":1,"bbox":[62,38,1156,58]}
+{"kind":"textbox","id":"sh/a1s3yx0b","slide":1,"text":"The policy and survival experts form a coupled, path-dependent optimization problem","textPreview":"The policy and survival experts form a coupled, path-dependent optimization problem","textChars":83,"textLines":1,"bbox":[64,99,1100,30]}
+{"kind":"shape","id":"sh/90jm5sj6","slide":1,"bbox":[64,142,1152,2]}
+{"kind":"textbox","id":"sh/8zalw7il","slide":1,"text":"STATISTICAL LIMITS","textPreview":"STATISTICAL LIMITS","textChars":18,"textLines":1,"bbox":[64,162,510,28]}
+{"kind":"textbox","id":"sh/ny143210","slide":1,"text":"OPTIMIZATION AND DEPLOYMENT LIMITS","textPreview":"OPTIMIZATION AND DEPLOYMENT LIMITS","textChars":34,"textLines":1,"bbox":[686,162,530,28]}
+{"kind":"shape","id":"sh/mx83ux0f","slide":1,"bbox":[640,162,2,418]}
+{"kind":"textbox","id":"sh/tw3mhwza","slide":1,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[64,205,48,34]}
+{"kind":"textbox","id":"sh/svu58rip","slide":1,"text":"Objective conflict","textPreview":"Objective conflict","textChars":18,"textLines":1,"bbox":[122,203,470,33]}
+{"kind":"textbox","id":"sh/ypcv61sb","slide":1,"text":"Exploration rewards diversity while exploitation rewards current survival fit. Loss weights and temperature schedules can drive the learned policy.","textPreview":"Exploration rewards diversity while exploitation rewards current survival fit. Loss weights and temperature schedules can drive the learn...","textChars":147,"textLines":1,"bbox":[122,239,468,69]}
+{"kind":"shape","id":"sh/zqlwz6tw","slide":1,"bbox":[122,316,458,1]}
+{"kind":"textbox","id":"sh/krud8bah","slide":1,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[64,328,48,34]}
+{"kind":"textbox","id":"sh/lc3e1gbm","slide":1,"text":"Incomplete censored evidence","textPreview":"Incomplete censored evidence","textChars":28,"textLines":1,"bbox":[122,326,470,33]}
+{"kind":"textbox","id":"sh/alsv2hsz","slide":1,"text":"Cox partial likelihood uses censored patients only while they remain in risk sets. It provides no individual censored-data likelihood or baseline hazard.","textPreview":"Cox partial likelihood uses censored patients only while they remain in risk sets. It provides no individual censored-data likelihood or ...","textChars":153,"textLines":1,"bbox":[122,362,468,69]}
+{"kind":"shape","id":"sh/bm1wbmtk","slide":1,"bbox":[122,439,458,1]}
+{"kind":"textbox","id":"sh/cnud4ra5","slide":1,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[64,451,48,34]}
+{"kind":"textbox","id":"sh/xo3edwbq","slide":1,"text":"No performance guarantee","textPreview":"No performance guarantee","textChars":24,"textLines":1,"bbox":[122,449,470,33]}
+{"kind":"textbox","id":"sh/uhwfelsj","slide":1,"text":"Personalized routing can underperform the strongest unimodal expert. Better training fit does not guarantee better out-of-sample concordance.","textPreview":"Personalized routing can underperform the strongest unimodal expert. Better training fit does not guarantee better out-of-sample concorda...","textChars":141,"textLines":1,"bbox":[122,485,468,69]}
+{"kind":"textbox","id":"sh/vi5w7qt4","slide":1,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[686,205,48,34]}
+{"kind":"textbox","id":"sh/rmxszi9g","slide":1,"text":"Path-dependent EM","textPreview":"Path-dependent EM","textChars":17,"textLines":1,"bbox":[744,203,470,33]}
+{"kind":"textbox","id":"sh/61ob6d8v","slide":1,"text":"Policy and weighted experts inherit the previous iteration. Non-convex updates depend on initialization and do not yield a unique solution.","textPreview":"Policy and weighted experts inherit the previous iteration. Non-convex updates depend on initialization and do not yield a unique solution.","textChars":139,"textLines":1,"bbox":[744,239,468,69]}
+{"kind":"shape","id":"sh/toza1srm","slide":1,"bbox":[744,316,458,1]}
+{"kind":"textbox","id":"sh/sn6t8nq1","slide":1,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[686,328,48,34]}
+{"kind":"textbox","id":"sh/fqhs3i9c","slide":1,"text":"Self-reinforcing feedback","textPreview":"Self-reinforcing feedback","textChars":25,"textLines":1,"bbox":[744,326,470,33]}
+{"kind":"textbox","id":"sh/ep8bax8r","slide":1,"text":"Early routing errors alter expert weights. The altered experts then generate the risks used to train the next policy.","textPreview":"Early routing errors alter expert weights. The altered experts then generate the risks used to train the next policy.","textChars":117,"textLines":1,"bbox":[744,362,468,69]}
+{"kind":"shape","id":"sh/1szu5sri","slide":1,"bbox":[744,439,458,1]}
+{"kind":"textbox","id":"sh/grqtcnqx","slide":1,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[686,451,48,34]}
+{"kind":"textbox","id":"sh/3uhc729o","slide":1,"text":"Unstable hard decisions","textPreview":"Unstable hard decisions","textChars":23,"textLines":1,"bbox":[744,449,470,33]}
+{"kind":"textbox","id":"sh/2t8bex83","slide":1,"text":"Near-tied softmax probabilities become discontinuous argmax actions. Small changes can switch experts and materially change pairwise rankings.","textPreview":"Near-tied softmax probabilities become discontinuous argmax actions. Small changes can switch experts and materially change pairwise rank...","textChars":142,"textLines":1,"bbox":[744,485,468,69]}
+{"kind":"shape","id":"sh/kza94761","slide":1,"bbox":[64,607,1152,72]}
+{"kind":"textbox","id":"sh/lkjaxcnm","slide":1,"text":"Consequence","textPreview":"Consequence","textChars":11,"textLines":1,"bbox":[86,619,142,26]}
+{"kind":"textbox","id":"sh/yxsr2xob","slide":1,"text":"Strong average fusion can coexist with weak personalization, unstable assignments and high computational cost.","textPreview":"Strong average fusion can coexist with weak personalization, unstable assignments and high computational cost.","textChars":110,"textLines":1,"bbox":[228,615,952,38]}
+{"kind":"notes","id":"nt/1fdwdt","slide":1,"text":"Strategy 6 critique based on the implemented contextual-bandit survival pipeline. Technical clarification: Cox partial likelihood does not fully ignore censored patients; they contribute while present in risk sets, but it does not provide an individual full censored-data likelihood."}

@@ -1,0 +1,31 @@
+version: 0.1.0
+templates:
+  lateral: '{side} {term}'
+  in_region: '{term} in the {region}'
+  tumour_in_host: '{tumour_phrase}'
+alias_ensemble:
+  n_aliases: 3
+  fusion: majority_vote
+  min_agreement: 2
+  note: main term + first 2 aliases; fuse binary masks by voxel majority
+roi_by_gate:
+  inside: anchor mask dilated 3 mm → bbox
+  shell: anchor bbox dilated by outer_mm
+  neighbour_bbox_or_directional_shell: TS bbox of neighbour if present else directional half-shell of anchor
+  corridor: cylinder between endpoints
+  region: region box from landmarks
+  directional_shell: half-shell on stated side
+  none: whole volume
+waves:
+  wave0: 'ruler prompts if TS vertebrae missing: spine, sacrum, hip bone'
+  wave1: missing anchors from completion under spatial-prior gates
+  wave2: profile items (1–2 hop) of host / promoted / tumour-near anchors
+  max_waves: 2
+budget:
+  max_prompts_per_scan: 40
+  order: tumour prompts, then by (priority, wave); host-derived items get a one-step priority boost
+  drop_order: lowest priority first
+modality:
+  CT: prefer TS mask when TS reliability ≥ 0.8; VoxTell refine host + vessels
+  MR: TS reliability from pilot; completion always on for pelvic anchors
+encoder_reuse: VoxTell embeds text once; image encoder per volume; pass all prompts of a scan in one predict call (voxtell-predict -p ...)

@@ -1,0 +1,46 @@
+version: 0.1.0
+rules:
+- id: volume_range
+  applies: all
+  check: volume_ml within entity.volume_ml (if defined) ×[0.5, 2.0]
+  on_fail: flag
+- id: laterality
+  applies: bilateral
+  check: centroid x-sign matches side in RAS frame from affine
+  on_fail: swap_or_flag
+- id: containment
+  applies: listB
+  check: ≥80% of mask inside gate
+  on_fail: reject
+- id: adjacency
+  applies: listB
+  check: min surface distance to each required neighbour ≤ d_mm from spatial prior
+  on_fail: reject
+- id: symmetry
+  applies: bilateral
+  check: volume ratio L/R within [0.5, 2.0] unless surgical absence flagged
+  on_fail: flag
+- id: tubular_continuity
+  applies: vessel_artery,vessel_vein,duct
+  check: single dominant component ≥70% volume; elongation ≥3
+  on_fail: flag
+- id: intensity
+  applies: CT
+  check: median HU within entity.ct_hu ± 30
+  on_fail: flag
+- id: truncation
+  applies: all
+  check: fraction of mask on volume boundary; >5% → truncated flag
+  on_fail: flag
+- id: existence_gate
+  applies: listB
+  check: 'R²-Seg L1: max prob, positive ratio, KS vs empty distribution'
+  on_fail: absent_if_expected_else_reject
+- id: ts_vt_agreement
+  applies: listA
+  check: Dice(TS, VoxTell) ≥ 0.5 → use VoxTell boundary; else TS + flag
+  on_fail: use_ts
+- id: single_rater_threshold
+  applies: listB
+  check: all listB checks pass AND alias agreement ≥ 2/3
+  on_fail: reject

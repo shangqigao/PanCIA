@@ -1,0 +1,136 @@
+version: 0.1.0
+generic_templates:
+- tumor in the {host}
+- '{host} tumor'
+- '{host} mass'
+- '{host} lesion'
+- cancer of the {host}
+- malignant neoplasm in the {host}
+host_resolution:
+- max_overlap_with_anchor_masks
+- cancer_type_default_host
+- planner_flag_unknown
+cancer_types:
+  TCGA-KIRC:
+    host: kidney
+    phrases:
+    - clear cell renal cell carcinoma in the {side} kidney
+    - renal cell carcinoma in the {side} kidney
+    - '{side} kidney tumor'
+    - renal tumor
+  TCGA-KIRP:
+    host: kidney
+    phrases:
+    - papillary renal cell carcinoma in the {side} kidney
+    - renal cell carcinoma in the {side} kidney
+    - '{side} kidney tumor'
+  TCGA-KICH:
+    host: kidney
+    phrases:
+    - chromophobe renal cell carcinoma in the {side} kidney
+    - renal cell carcinoma in the {side} kidney
+    - '{side} kidney tumor'
+  TCGA-LIHC:
+    host: liver
+    phrases:
+    - hepatocellular carcinoma
+    - liver tumor
+    - hepatic tumor
+    - liver cancer
+  TCGA-BRCA:
+    host: breast
+    phrases:
+    - breast cancer in the {side} breast
+    - '{side} breast tumor'
+    - invasive breast carcinoma
+    - breast lesion
+  TCGA-LUAD:
+    host: lung
+    phrases:
+    - lung adenocarcinoma in the {side} lung
+    - '{side} lung tumor'
+    - lung cancer
+    - pulmonary nodule
+  TCGA-LUSC:
+    host: lung
+    phrases:
+    - squamous cell carcinoma in the {side} lung
+    - '{side} lung tumor'
+    - lung cancer
+    - bronchial carcinoma
+  TCGA-BLCA:
+    host: urinary_bladder
+    phrases:
+    - bladder cancer
+    - urothelial carcinoma of the bladder
+    - bladder tumor
+    - bladder wall thickening
+  TCGA-PRAD:
+    host: prostate
+    phrases:
+    - prostate cancer
+    - prostate tumor
+    - prostatic adenocarcinoma
+    - prostate lesion
+  TCGA-CESC:
+    host: cervix
+    phrases:
+    - cervical cancer
+    - cervix tumor
+    - cervical carcinoma
+    - tumor in the uterine cervix
+  TCGA-UCEC:
+    host: uterus
+    phrases:
+    - endometrial cancer
+    - endometrial carcinoma
+    - uterine tumor
+    - tumor in the uterine cavity
+  TCGA-OV:
+    host: ovary
+    phrases:
+    - ovarian cancer
+    - ovarian tumor
+    - adnexal mass
+    - ovarian carcinoma
+    - peritoneal carcinomatosis
+  TCGA-STAD:
+    host: stomach
+    phrases:
+    - gastric cancer
+    - stomach tumor
+    - gastric adenocarcinoma
+    - gastric wall thickening
+  TCGA-ESCA:
+    host: esophagus
+    phrases:
+    - esophageal cancer
+    - esophageal tumor
+    - esophageal carcinoma
+    - esophageal wall thickening
+  TCGA-COAD:
+    host: colon
+    phrases:
+    - colon cancer
+    - colorectal cancer
+    - colon tumor
+    - colonic adenocarcinoma
+  TCGA-READ:
+    host: rectum
+    phrases:
+    - rectal cancer
+    - rectal tumor
+    - rectal adenocarcinoma
+  TCGA-PAAD:
+    host: pancreas
+    phrases:
+    - pancreatic cancer
+    - pancreatic adenocarcinoma
+    - pancreatic tumor
+    - pancreatic mass
+  CPTAC-*:
+    host: null
+    phrases: []
+    note: 'map CPTAC cohorts to the TCGA host above by organ; CPTAC-CCRCC→kidney, CPTAC-PDA→pancreas, CPTAC-UCEC→uterus, CPTAC-LUAD/LSCC→lung,
+      CPTAC-HNSCC→(head & neck: not covered in v0.1)'
+side_resolution: from tumour-mask laterality vs anchor masks; if unknown prompt both sides and keep the side whose mask overlaps an anchor

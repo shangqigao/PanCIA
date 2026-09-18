@@ -1,0 +1,93 @@
+version: 0.1.0
+landmarks:
+- id: carina
+  entity: trachea
+  level: T4
+  tolerance: 1
+  use: bottom
+  how: caudal end of trachea mask
+- id: diaphragm_dome
+  entity: liver
+  level: T10
+  tolerance: 1
+  use: top
+  how: most cranial liver voxel (right dome)
+- id: xiphoid
+  entity: sternum
+  level: T9
+  tolerance: 1
+  use: bottom
+  how: caudal end of sternum mask
+- id: renal_hilum_level
+  entity: kidney
+  level: L1
+  tolerance: 1
+  use: centroid
+  how: centroid of kidney masks (L1–L2)
+- id: aortic_bifurcation
+  entity: aorta
+  level: L4
+  tolerance: 1
+  use: bottom
+  how: caudal end of aorta mask / start of iliac arteries
+- id: iliac_crest
+  entity: hip
+  level: L4
+  tolerance: 1
+  use: top
+  how: most cranial hip-bone voxel
+- id: sacral_promontory
+  entity: sacrum
+  level: S1
+  tolerance: 0
+  use: top
+  how: most cranial-anterior sacrum voxel
+- id: femoral_head
+  entity: femur
+  level: coccyx
+  tolerance: 1
+  use: top
+  how: centroid of femoral head
+- id: pubic_symphysis
+  entity: hip
+  level: coccyx
+  tolerance: 1
+  use: bottom
+  how: most anterior-inferior midline hip voxel
+- id: bladder_dome
+  entity: urinary_bladder
+  level: S3
+  tolerance: 2
+  use: top
+  how: most cranial bladder voxel (fill-dependent)
+vertebral_order:
+- C1
+- C2
+- C3
+- C4
+- C5
+- C6
+- C7
+- T1
+- T2
+- T3
+- T4
+- T5
+- T6
+- T7
+- T8
+- T9
+- T10
+- T11
+- T12
+- L1
+- L2
+- L3
+- L4
+- L5
+- S1
+- S2
+- S3
+- S4
+- S5
+- coccyx

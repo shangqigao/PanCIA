@@ -1,0 +1,365 @@
+src,type,dst,side_link,direction,contact,staging,note
+kidney,has_part,renal_cortex,same,,,confined|location,
+kidney,has_part,renal_medulla,same,,,confined|location,
+kidney,has_part,renal_pelvis,same,,,confined|location,
+kidney,has_part,renal_sinus_fat,same,,,confined|location,
+kidney,invested_by,perinephric_fat,same,,,beyond_capsule,RCC T3a: perinephric / sinus fat invasion
+kidney,invested_by,gerota_fascia,same,,,beyond_capsule,RCC T4: beyond Gerota fascia
+kidney,adjacent_to,adrenal,same,superior_medial,abuts,adjacent_invasion,T4 if contiguous adrenal invasion
+kidney,adjacent_to,liver,right,superior,near,adjacent_invasion,
+kidney,adjacent_to,spleen,left,superior_lateral,near,adjacent_invasion,
+kidney,adjacent_to,pancreas,same,anterior,near,adjacent_invasion,"head on right, tail on left"
+kidney,adjacent_to,duodenum,right,anterior_medial,abuts,adjacent_invasion,
+kidney,adjacent_to,colon,same,anterior_lateral,abuts,adjacent_invasion,"ascending right, descending left"
+kidney,adjacent_to,psoas,same,medial,abuts,adjacent_invasion|wall_invasion,
+kidney,adjacent_to,quadratus_lumborum,same,posterior,abuts,wall_invasion,
+kidney,adjacent_to,diaphragm,same,superior_posterior,near,adjacent_invasion,
+kidney,supplied_by,renal_artery,same,,,vascular_invasion,
+renal_artery,supplied_by,aorta,any,,,,
+kidney,drained_by,renal_vein,same,,,vascular_invasion,RCC T3a: renal vein / segmental branch thrombus
+renal_vein,drained_by,inferior_vena_cava,any,,,vascular_invasion,"T3b infradiaphragmatic IVC, T3c supradiaphragmatic"
+kidney,drained_by,gonadal_vein,left,,,vascular_invasion,left gonadal vein drains to left renal vein
+kidney,has_duct,ureter,same,,,obstruction,corridor renal pelvis → bladder trigone
+kidney,drains_lymph_to,ln_renal_hilar,same,,,nodal,
+kidney,drains_lymph_to,ln_paraaortic,any,,,nodal,
+kidney,lies_in,retroperitoneum,any,,,,
+liver,has_part,liver_segment_I,any,,,location,
+liver,has_part,liver_segment_II,any,,,location,
+liver,has_part,liver_segment_III,any,,,location,
+liver,has_part,liver_segment_IV,any,,,location,
+liver,has_part,liver_segment_V,any,,,location,
+liver,has_part,liver_segment_VI,any,,,location,
+liver,has_part,liver_segment_VII,any,,,location,
+liver,has_part,liver_segment_VIII,any,,,location,
+liver,has_part,liver_lobe,any,,,location,
+liver,has_part,intrahepatic_bile_ducts,any,,,obstruction,
+liver,invested_by,peritoneum,any,,,beyond_capsule,HCC T4: perforation of visceral peritoneum
+liver,adjacent_to,diaphragm,any,superior,abuts,adjacent_invasion,HCC T4 direct invasion
+liver,adjacent_to,gallbladder,any,inferior,abuts,adjacent_invasion|HCC T4,
+liver,adjacent_to,stomach,any,left_inferior,near,adjacent_invasion,
+liver,adjacent_to,duodenum,any,inferior,abuts,adjacent_invasion,
+liver,adjacent_to,colon,any,inferior,near,adjacent_invasion,hepatic flexure
+liver,adjacent_to,kidney,right,inferior_posterior,abuts,adjacent_invasion,
+liver,adjacent_to,adrenal,right,posterior_medial,abuts,adjacent_invasion,
+liver,adjacent_to,heart,any,superior,separated_by_diaphragm,,
+liver,adjacent_to,chest_wall,right,lateral,separated_by_diaphragm,wall_invasion,
+liver,supplied_by,hepatic_artery,any,,,vascular_invasion,
+hepatic_artery,supplied_by,celiac_trunk,any,,,,
+celiac_trunk,supplied_by,aorta,any,,,,
+liver,supplied_by,portal_vein,any,,,vascular_invasion,HCC T4 / BCLC: portal vein tumour thrombus (main or branch)
+portal_vein,drained_by,superior_mesenteric_vein,any,,,,
+portal_vein,drained_by,splenic_vein,any,,,,
+liver,drained_by,hepatic_veins,any,,,vascular_invasion,HCC T4: hepatic vein invasion
+hepatic_veins,drained_by,inferior_vena_cava,any,,,vascular_invasion,
+liver,has_duct,bile_duct,any,,,obstruction,corridor porta hepatis → duodenum
+liver,drains_lymph_to,ln_hepatic_hilar,any,,,nodal,
+liver,drains_lymph_to,ln_celiac,any,,,nodal,
+liver,drains_lymph_to,ln_paraaortic,any,,,nodal,
+liver,lies_in,peritoneal_cavity,any,,,,
+liver,lies_in,upper_abdomen,any,,,,
+uterus,has_part,endometrium,any,,,confined|location,
+uterus,has_part,myometrium,any,,,confined|location,UCEC T1a/T1b = depth of myometrial invasion
+uterus,has_part,junctional_zone,any,,,confined|location,
+uterus,has_part,cervix,any,,,confined|location,
+uterus,invested_by,peritoneum,any,,,beyond_capsule,uterine serosa; UCEC T3a
+uterus,adjacent_to,urinary_bladder,any,anterior_inferior,abuts,adjacent_invasion,UCEC/CESC T4: bladder mucosa
+uterus,adjacent_to,rectum,any,posterior,near,adjacent_invasion,T4: rectal mucosa
+uterus,adjacent_to,colon_sigmoid,any,posterior_superior,near,adjacent_invasion,
+uterus,adjacent_to,small_bowel,any,superior,near,adjacent_invasion,
+uterus,adjacent_to,ovary,any,lateral,near,adjacent_invasion,UCEC T3a: adnexal involvement
+uterus,adjacent_to,pelvic_sidewall,any,lateral,separated_by_parametrium,wall_invasion,FIGO IIIB: pelvic wall
+uterus,supplied_by,uterine_artery,any,,,,
+uterine_artery,supplied_by,internal_iliac_artery,any,,,,
+uterus,drains_lymph_to,ln_obturator,any,,,nodal,
+uterus,drains_lymph_to,ln_internal_iliac,any,,,nodal,
+uterus,drains_lymph_to,ln_external_iliac,any,,,nodal,
+uterus,drains_lymph_to,ln_common_iliac,any,,,nodal,
+uterus,drains_lymph_to,ln_paraaortic,any,,,nodal,FIGO IIIC2
+uterus,lies_in,pelvis_true,any,,,,
+cervix,has_part,cervical_stroma,any,,,confined,FIGO IB by stromal invasion depth / size
+cervix,invested_by,parametrium,any,,,beyond_capsule,FIGO IIB: parametrial invasion
+cervix,adjacent_to,vagina,any,inferior,continuous,adjacent_invasion,"IIA upper 2/3, IIIA lower 1/3"
+cervix,adjacent_to,urinary_bladder,any,anterior,abuts,adjacent_invasion,IVA bladder mucosa
+cervix,adjacent_to,rectum,any,posterior,near,adjacent_invasion,IVA rectal mucosa
+cervix,adjacent_to,pelvic_sidewall,any,lateral,separated_by_parametrium,wall_invasion,IIIB pelvic wall
+cervix,adjacent_to,ureter,any,lateral,near,obstruction,IIIB hydronephrosis / non-functioning kidney
+cervix,drains_lymph_to,ln_obturator,any,,,nodal,
+cervix,drains_lymph_to,ln_internal_iliac,any,,,nodal,
+cervix,drains_lymph_to,ln_external_iliac,any,,,nodal,
+cervix,drains_lymph_to,ln_presacral,any,,,nodal,
+cervix,drains_lymph_to,ln_common_iliac,any,,,nodal,
+cervix,drains_lymph_to,ln_paraaortic,any,,,nodal,IIIC2
+cervix,lies_in,pelvis_true,any,,,,
+vagina,has_part,vagina_upper_two_thirds,any,,,location,
+vagina,adjacent_to,urethra,any,anterior,abuts,adjacent_invasion,
+vagina,adjacent_to,rectum,any,posterior,abuts,adjacent_invasion,
+vagina,adjacent_to,levator_ani,any,lateral,abuts,wall_invasion,
+ovary,has_part,adnexa,same,,,location,
+ovary,adjacent_to,uterus,same,medial,near,adjacent_invasion,
+ovary,adjacent_to,iliac_artery,same,posterior_lateral,near,wall_invasion,ovarian fossa
+ovary,adjacent_to,colon_sigmoid,left,posterior,near,adjacent_invasion,
+ovary,adjacent_to,small_bowel,any,superior,near,adjacent_invasion,
+ovary,invested_by,peritoneum,any,,,beyond_capsule,FIGO IC capsule rupture / surface
+ovary,adjacent_to,omentum,any,superior,near,peritoneal_spread,FIGO III omental disease
+ovary,drained_by,gonadal_vein,same,,,,
+ovary,drains_lymph_to,ln_paraaortic,any,,,nodal,
+ovary,drains_lymph_to,ln_external_iliac,any,,,nodal,
+ovary,drains_lymph_to,ln_obturator,any,,,nodal,
+ovary,lies_in,pelvis_true,any,,,,
+prostate,has_part,prostate_peripheral_zone,any,,,confined|location,
+prostate,has_part,prostate_transition_zone,any,,,confined|location,
+prostate,invested_by,neurovascular_bundle,any,,,beyond_capsule,T3a extraprostatic extension marker
+prostate,adjacent_to,seminal_vesicle,any,posterior_superior,abuts,adjacent_invasion,T3b seminal vesicle invasion
+prostate,adjacent_to,urinary_bladder,any,superior,abuts,adjacent_invasion,T4 bladder neck
+prostate,adjacent_to,rectum,any,posterior,separated_by_fascia,adjacent_invasion,T4 rectum
+prostate,adjacent_to,levator_ani,any,lateral_inferior,near,wall_invasion,T4 levator / pelvic wall
+prostate,adjacent_to,external_urethral_sphincter,any,inferior,continuous,adjacent_invasion,T4 external sphincter
+prostate,adjacent_to,pelvic_sidewall,any,lateral,near,wall_invasion,
+prostate,has_duct,urethra,any,,,obstruction,
+prostate,supplied_by,internal_iliac_artery,any,,,,
+prostate,drains_lymph_to,ln_obturator,any,,,nodal,
+prostate,drains_lymph_to,ln_internal_iliac,any,,,nodal,
+prostate,drains_lymph_to,ln_external_iliac,any,,,nodal,
+prostate,drains_lymph_to,ln_presacral,any,,,nodal,
+prostate,drains_lymph_to,ln_common_iliac,any,,,M1a,
+prostate,lies_in,pelvis_true,any,,,,
+urinary_bladder,has_part,bladder_wall,any,,,confined,T2 muscularis propria
+urinary_bladder,invested_by,perivesical_fat,any,,,beyond_capsule,T3 perivesical tissue
+urinary_bladder,adjacent_to,prostate,any,inferior,abuts,adjacent_invasion,T4a prostatic stroma
+urinary_bladder,adjacent_to,seminal_vesicle,any,posterior_inferior,abuts,adjacent_invasion,T4a
+urinary_bladder,adjacent_to,uterus,any,posterior_superior,abuts,adjacent_invasion,T4a uterus
+urinary_bladder,adjacent_to,vagina,any,posterior,abuts,adjacent_invasion,T4a vagina
+urinary_bladder,adjacent_to,rectum,any,posterior,near,adjacent_invasion,
+urinary_bladder,adjacent_to,pelvic_sidewall,any,lateral,near,wall_invasion,T4b pelvic wall
+urinary_bladder,adjacent_to,abdominal_wall,any,anterior_superior,near,wall_invasion,T4b abdominal wall
+urinary_bladder,adjacent_to,small_bowel,any,superior,near,adjacent_invasion,
+urinary_bladder,adjacent_to,colon_sigmoid,any,superior_posterior,near,adjacent_invasion,
+urinary_bladder,has_duct,urethra,any,,,obstruction,
+urinary_bladder,has_duct,ureter,any,,,obstruction,ureteric orifice; hydronephrosis
+urinary_bladder,drains_lymph_to,ln_obturator,any,,,nodal,
+urinary_bladder,drains_lymph_to,ln_internal_iliac,any,,,nodal,
+urinary_bladder,drains_lymph_to,ln_external_iliac,any,,,nodal,
+urinary_bladder,drains_lymph_to,ln_presacral,any,,,nodal,
+urinary_bladder,drains_lymph_to,ln_common_iliac,any,,,N3,
+urinary_bladder,lies_in,pelvis_true,any,,,,
+urinary_bladder,lies_in,perivesical_space,any,,,,
+rectum,invested_by,mesorectum,any,,,beyond_capsule,T3 into mesorectal fat; CRM = mesorectal fascia
+rectum,adjacent_to,sacrum,any,posterior,separated_by_presacral_fat,wall_invasion,
+rectum,adjacent_to,prostate,any,anterior,separated_by_fascia,adjacent_invasion,
+rectum,adjacent_to,seminal_vesicle,any,anterior,near,adjacent_invasion,
+rectum,adjacent_to,vagina,any,anterior,abuts,adjacent_invasion,
+rectum,adjacent_to,uterus,any,anterior,near,adjacent_invasion,
+rectum,adjacent_to,urinary_bladder,any,anterior,near,adjacent_invasion,
+rectum,adjacent_to,levator_ani,any,inferior_lateral,abuts,wall_invasion,
+rectum,adjacent_to,anal_canal,any,inferior,continuous,location,
+rectum,drains_lymph_to,ln_mesenteric,any,,,nodal,mesorectal / superior rectal nodes
+rectum,drains_lymph_to,ln_internal_iliac,any,,,nodal,
+rectum,drains_lymph_to,ln_presacral,any,,,nodal,
+rectum,drains_lymph_to,ln_inguinal,any,,,N (low rectal/anal),
+rectum,lies_in,pelvis_true,any,,,,
+rectum,lies_in,presacral_space,any,,,,
+colon,has_part,colon_cecum,any,,,location,
+colon,has_part,colon_ascending,any,,,location,
+colon,has_part,colon_transverse,any,,,location,
+colon,has_part,colon_descending,any,,,location,
+colon,has_part,colon_sigmoid,any,,,location,
+colon,has_part,rectum,any,,,location,TS colon class includes rectum
+colon,invested_by,peritoneum,any,,,beyond_capsule,T4a visceral peritoneum
+colon,invested_by,mesentery,any,,,beyond_capsule,T3 pericolic fat
+colon,adjacent_to,liver,any,superior,near,adjacent_invasion,T4b
+colon,adjacent_to,stomach,any,superior,near,adjacent_invasion,
+colon,adjacent_to,spleen,any,superior,near,adjacent_invasion,
+colon,adjacent_to,kidney,any,posterior,near,adjacent_invasion,
+colon,adjacent_to,duodenum,any,posterior,abuts,adjacent_invasion,
+colon,adjacent_to,pancreas,any,posterior,near,adjacent_invasion,
+colon,adjacent_to,small_bowel,any,medial,abuts,adjacent_invasion,
+colon,adjacent_to,urinary_bladder,any,inferior,near,adjacent_invasion,
+colon,adjacent_to,uterus,any,inferior,near,adjacent_invasion,
+colon,adjacent_to,abdominal_wall,any,anterior,near,wall_invasion,
+colon,adjacent_to,iliopsoas,any,posterior,near,wall_invasion,
+colon,supplied_by,superior_mesenteric_artery,any,,,vascular_invasion,
+colon,drained_by,superior_mesenteric_vein,any,,,vascular_invasion,
+colon,drains_lymph_to,ln_pericolic,any,,,nodal,
+colon,drains_lymph_to,ln_mesenteric,any,,,nodal,
+colon,drains_lymph_to,ln_paraaortic,any,,,M1,
+colon,lies_in,peritoneal_cavity,any,,,,
+stomach,has_part,gastric_wall,any,,,confined,T1–T3 wall layers
+stomach,has_part,gastroesophageal_junction,any,,,location,
+stomach,invested_by,peritoneum,any,,,beyond_capsule,T4a serosa
+stomach,invested_by,omentum,any,,,beyond_capsule,T3 into omentum without serosal breach
+stomach,adjacent_to,liver,any,right_superior,abuts,adjacent_invasion,T4b
+stomach,adjacent_to,spleen,any,left_posterior,near,adjacent_invasion,
+stomach,adjacent_to,pancreas,any,posterior,near,adjacent_invasion,
+stomach,adjacent_to,colon,any,inferior,near,adjacent_invasion,transverse colon
+stomach,adjacent_to,diaphragm,any,superior,abuts,adjacent_invasion,
+stomach,adjacent_to,adrenal,left,posterior,near,adjacent_invasion,
+stomach,adjacent_to,kidney,left,posterior,near,adjacent_invasion,
+stomach,adjacent_to,abdominal_wall,any,anterior,near,wall_invasion,
+stomach,adjacent_to,esophagus,any,superior,continuous,location,
+stomach,adjacent_to,duodenum,any,right,continuous,location,
+stomach,supplied_by,celiac_trunk,any,,,vascular_invasion,
+stomach,drained_by,portal_vein,any,,,vascular_invasion,
+stomach,drained_by,splenic_vein,any,,,vascular_invasion,
+stomach,drains_lymph_to,ln_perigastric,any,,,nodal,
+stomach,drains_lymph_to,ln_celiac,any,,,nodal,
+stomach,drains_lymph_to,ln_hepatic_hilar,any,,,nodal,
+stomach,drains_lymph_to,ln_paraaortic,any,,,M1,
+stomach,lies_in,peritoneal_cavity,any,,,,
+stomach,lies_in,upper_abdomen,any,,,,
+esophagus,adjacent_to,trachea,any,anterior,abuts,adjacent_invasion,T4b trachea
+esophagus,adjacent_to,main_bronchus,left,anterior,abuts,adjacent_invasion,
+esophagus,adjacent_to,aorta,any,left_posterior,abuts,adjacent_invasion,T4b aorta
+esophagus,adjacent_to,heart,any,anterior,separated_by_pericardium,adjacent_invasion,
+esophagus,adjacent_to,pericardium,any,anterior,abuts,adjacent_invasion,T4a pericardium
+esophagus,adjacent_to,pleura,any,lateral,abuts,adjacent_invasion,T4a pleura
+esophagus,adjacent_to,diaphragm,any,inferior,abuts,adjacent_invasion,T4a diaphragm
+esophagus,adjacent_to,spine,any,posterior,near,adjacent_invasion,T4b vertebral body
+esophagus,adjacent_to,stomach,any,inferior,continuous,location,
+esophagus,adjacent_to,thyroid,any,anterior,near,adjacent_invasion,
+esophagus,adjacent_to,lung,any,lateral,separated_by_pleura,adjacent_invasion,
+esophagus,drains_lymph_to,ln_mediastinal,any,,,nodal,
+esophagus,drains_lymph_to,ln_supraclavicular,any,,,nodal,
+esophagus,drains_lymph_to,ln_perigastric,any,,,nodal,
+esophagus,drains_lymph_to,ln_celiac,any,,,nodal,
+esophagus,lies_in,mediastinum,any,,,,
+pancreas,has_part,pancreas_head,any,,,location,
+pancreas,has_part,pancreas_body,any,,,location,
+pancreas,has_part,pancreas_tail,any,,,location,
+pancreas,has_part,pancreas_uncinate,any,,,location,
+pancreas,has_duct,pancreatic_duct,any,,,obstruction,
+pancreas,adjacent_to,bile_duct,any,posterior_head,abuts,obstruction|adjacent_invasion,biliary obstruction
+pancreas,adjacent_to,duodenum,any,right,abuts,adjacent_invasion,
+pancreas,adjacent_to,stomach,any,anterior,near,adjacent_invasion,
+pancreas,adjacent_to,spleen,any,left,abuts,adjacent_invasion,
+pancreas,adjacent_to,kidney,left,posterior,near,adjacent_invasion,
+pancreas,adjacent_to,adrenal,left,posterior,near,adjacent_invasion,
+pancreas,adjacent_to,colon,any,anterior_inferior,near,adjacent_invasion,
+pancreas,adjacent_to,inferior_vena_cava,any,posterior,abuts,vascular_invasion,
+pancreas,adjacent_to,aorta,any,posterior,near,vascular_invasion,
+pancreas,supplied_by,celiac_trunk,any,,,vascular_invasion,T4 coeliac axis
+pancreas,supplied_by,superior_mesenteric_artery,any,,,vascular_invasion,T4 SMA
+pancreas,supplied_by,hepatic_artery,any,,,vascular_invasion,T4 common hepatic artery
+pancreas,drained_by,splenic_vein,any,,,vascular_invasion,
+pancreas,drained_by,superior_mesenteric_vein,any,,,vascular_invasion,
+pancreas,drained_by,portal_vein,any,,,vascular_invasion,
+pancreas,drains_lymph_to,ln_celiac,any,,,nodal,
+pancreas,drains_lymph_to,ln_hepatic_hilar,any,,,nodal,
+pancreas,drains_lymph_to,ln_mesenteric,any,,,nodal,
+pancreas,drains_lymph_to,ln_paraaortic,any,,,nodal,
+pancreas,lies_in,retroperitoneum,any,,,,
+lung,has_part,lung_left_upper_lobe,left,,,location,
+lung,has_part,lung_left_lower_lobe,left,,,location,
+lung,has_part,lung_right_upper_lobe,right,,,location,
+lung,has_part,lung_right_middle_lobe,right,,,location,
+lung,has_part,lung_right_lower_lobe,right,,,location,
+lung,has_part,main_bronchus,same,,,location,T2 main bronchus without carina
+lung,has_part,bronchial_tree,any,,,obstruction,atelectasis / obstructive pneumonitis T2
+lung,invested_by,pleura,same,,,beyond_capsule,T2 visceral pleura; T3 parietal pleura
+lung,adjacent_to,chest_wall,same,lateral,separated_by_pleura,wall_invasion,T3 chest wall
+lung,adjacent_to,diaphragm,same,inferior,separated_by_pleura,adjacent_invasion,T4 diaphragm
+lung,adjacent_to,heart,any,medial,separated_by_pericardium,adjacent_invasion,T4 heart; T3 parietal pericardium
+lung,adjacent_to,pericardium,any,medial,abuts,adjacent_invasion,
+lung,adjacent_to,aorta,left,medial,abuts,adjacent_invasion,T4 great vessels
+lung,adjacent_to,superior_vena_cava,right,medial,abuts,adjacent_invasion,
+lung,adjacent_to,esophagus,any,medial_posterior,near,adjacent_invasion,T4 oesophagus
+lung,adjacent_to,trachea,any,medial_superior,near,adjacent_invasion,T4 carina / trachea
+lung,adjacent_to,spine,any,posterior_medial,near,adjacent_invasion,T4 vertebral body
+lung,adjacent_to,rib_cage,same,lateral,separated_by_pleura,wall_invasion,
+lung,adjacent_to,liver,right,inferior,separated_by_diaphragm,,
+lung,supplied_by,pulmonary_artery,any,,,vascular_invasion,
+lung,drained_by,pulmonary_vein,any,,,vascular_invasion,
+lung,has_duct,main_bronchus,same,,,obstruction,
+main_bronchus,has_duct,trachea,any,,,,
+lung,drains_lymph_to,ln_hilar,same,,,N1,
+lung,drains_lymph_to,ln_mediastinal,any,,,N2/N3,
+lung,drains_lymph_to,ln_supraclavicular,any,,,N3,
+lung,lies_in,thorax,any,,,,
+breast,has_part,fibroglandular_tissue,same,,,location,
+breast,has_part,nipple,same,,,location,
+breast,adjacent_to,pectoralis_major,same,posterior,abuts,adjacent_invasion,pectoralis involvement (not T4 unless chest wall)
+breast,adjacent_to,chest_wall,same,posterior,separated_by_pectoralis,wall_invasion,"T4a chest wall (ribs, intercostals, serratus)"
+breast,adjacent_to,skin,same,anterior,abuts,adjacent_invasion,T4b skin
+breast,adjacent_to,rib_cage,same,posterior,separated_by_muscle,wall_invasion,
+breast,supplied_by,axillary_vessels,same,,,,
+breast,drains_lymph_to,ln_axillary,same,,,N1-N2a,
+breast,drains_lymph_to,ln_internal_mammary,same,,,N2b/N3b,
+breast,drains_lymph_to,ln_supraclavicular,same,,,N3c,
+breast,lies_in,thorax,any,,,,
+adrenal,adjacent_to,kidney,same,inferior_lateral,abuts,adjacent_invasion,
+adrenal,adjacent_to,liver,right,lateral,abuts,adjacent_invasion,
+adrenal,adjacent_to,inferior_vena_cava,right,medial,abuts,vascular_invasion,
+adrenal,adjacent_to,aorta,left,medial,near,vascular_invasion,
+adrenal,adjacent_to,pancreas,left,anterior,near,adjacent_invasion,
+adrenal,adjacent_to,spleen,left,lateral,near,adjacent_invasion,
+adrenal,adjacent_to,diaphragm,same,posterior,abuts,adjacent_invasion,
+adrenal,drains_lymph_to,ln_paraaortic,any,,,nodal,
+adrenal,lies_in,retroperitoneum,any,,,,
+spleen,adjacent_to,stomach,any,anterior_medial,near,adjacent_invasion,
+spleen,adjacent_to,kidney,left,inferior_medial,near,adjacent_invasion,
+spleen,adjacent_to,pancreas,any,medial,abuts,adjacent_invasion,tail
+spleen,adjacent_to,colon,any,inferior,near,adjacent_invasion,splenic flexure
+spleen,adjacent_to,diaphragm,any,superior_posterior,abuts,,
+spleen,drained_by,splenic_vein,any,,,vascular_invasion,
+spleen,lies_in,peritoneal_cavity,any,,,,
+gallbladder,adjacent_to,liver,any,superior,abuts,adjacent_invasion,
+gallbladder,adjacent_to,duodenum,any,inferior_medial,abuts,adjacent_invasion,
+gallbladder,adjacent_to,colon,any,inferior,near,adjacent_invasion,
+gallbladder,has_duct,bile_duct,any,,,obstruction,
+gallbladder,drains_lymph_to,ln_hepatic_hilar,any,,,nodal,
+duodenum,adjacent_to,pancreas,any,medial,abuts,adjacent_invasion,
+duodenum,adjacent_to,kidney,right,posterior,near,adjacent_invasion,
+duodenum,adjacent_to,inferior_vena_cava,any,posterior,abuts,vascular_invasion,
+small_bowel,invested_by,mesentery,any,,,beyond_capsule,
+small_bowel,supplied_by,superior_mesenteric_artery,any,,,vascular_invasion,
+small_bowel,drains_lymph_to,ln_mesenteric,any,,,nodal,
+small_bowel,lies_in,peritoneal_cavity,any,,,,
+aorta,has_part,celiac_trunk,any,,,location,
+aorta,has_part,superior_mesenteric_artery,any,,,,
+aorta,has_part,renal_artery,any,,,,
+aorta,has_part,iliac_artery,any,,,,
+iliac_artery,has_part,internal_iliac_artery,same,,,location,
+iliac_vein,has_part,internal_iliac_vein,same,,,,
+inferior_vena_cava,has_part,iliac_vein,any,,,,
+inferior_vena_cava,has_part,renal_vein,any,,,,
+inferior_vena_cava,has_part,hepatic_veins,any,,,,
+heart,invested_by,pericardium,any,,,,
+heart,adjacent_to,lung,any,lateral,separated_by_pericardium,,
+heart,adjacent_to,esophagus,any,posterior,near,,
+heart,adjacent_to,diaphragm,any,inferior,abuts,,
+heart,lies_in,mediastinum,any,,,,
+trachea,has_part,main_bronchus,any,,,location,
+trachea,adjacent_to,esophagus,any,posterior,abuts,,
+trachea,adjacent_to,thyroid,any,anterior,abuts,,
+trachea,lies_in,mediastinum,any,,,,
+spine,adjacent_to,psoas,any,lateral,abuts,,
+spine,adjacent_to,aorta,any,anterior,abuts,,
+spine,adjacent_to,esophagus,any,anterior,near,,
+spine,has_part,spinal_cord,any,,,,
+spine,has_part,sacrum,any,,,,
+sacrum,adjacent_to,rectum,any,anterior,separated_by_presacral_fat,,
+sacrum,adjacent_to,hip,any,lateral,abuts,,sacroiliac joint
+sacrum,adjacent_to,iliac_artery,any,anterior_lateral,near,,
+hip,adjacent_to,urinary_bladder,same,medial,near,,
+hip,adjacent_to,obturator_internus,same,medial,abuts,,
+hip,adjacent_to,iliopsoas,same,medial,abuts,,
+hip,adjacent_to,gluteus,same,posterior_lateral,abuts,,
+hip,adjacent_to,femur,same,inferior_lateral,abuts,,hip joint
+pelvic_sidewall,has_part,obturator_internus,same,,,location,
+pelvic_sidewall,adjacent_to,iliac_artery,same,superior,near,,
+pelvic_sidewall,adjacent_to,ln_obturator,same,medial,near,,
+skeletal_muscle,has_part,psoas,any,,,,
+skeletal_muscle,has_part,autochthon,any,,,,
+skeletal_muscle,has_part,rectus_abdominis,any,,,,
+skeletal_muscle,has_part,iliopsoas,any,,,,
+skeletal_muscle,has_part,gluteus,any,,,,
+skeletal_muscle,has_part,pectoralis_major,any,,,,
+trachea,landmark_for,spine,any,,,,carina ≈ T4
+liver,landmark_for,spine,any,,,,diaphragm_dome ≈ T10
+sternum,landmark_for,spine,any,,,,xiphoid ≈ T9
+kidney,landmark_for,spine,any,,,,renal_hilum_level ≈ L1
+aorta,landmark_for,spine,any,,,,aortic_bifurcation ≈ L4
+hip,landmark_for,spine,any,,,,iliac_crest ≈ L4
+sacrum,landmark_for,spine,any,,,,sacral_promontory ≈ S1
+femur,landmark_for,spine,any,,,,femoral_head ≈ coccyx
+hip,landmark_for,spine,any,,,,pubic_symphysis ≈ coccyx
+urinary_bladder,landmark_for,spine,any,,,,bladder_dome ≈ S3

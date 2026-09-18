@@ -1,0 +1,2437 @@
+version: 0.1.0
+relations:
+- src: kidney
+  type: has_part
+  dst: renal_cortex
+  side_link: same
+  staging:
+  - confined
+  - location
+- src: kidney
+  type: has_part
+  dst: renal_medulla
+  side_link: same
+  staging:
+  - confined
+  - location
+- src: kidney
+  type: has_part
+  dst: renal_pelvis
+  side_link: same
+  staging:
+  - confined
+  - location
+- src: kidney
+  type: has_part
+  dst: renal_sinus_fat
+  side_link: same
+  staging:
+  - confined
+  - location
+- src: kidney
+  type: invested_by
+  dst: perinephric_fat
+  side_link: same
+  staging:
+  - beyond_capsule
+  note: 'RCC T3a: perinephric / sinus fat invasion'
+- src: kidney
+  type: invested_by
+  dst: gerota_fascia
+  side_link: same
+  staging:
+  - beyond_capsule
+  note: 'RCC T4: beyond Gerota fascia'
+- src: kidney
+  type: adjacent_to
+  dst: adrenal
+  side_link: same
+  direction: superior_medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4 if contiguous adrenal invasion
+- src: kidney
+  type: adjacent_to
+  dst: liver
+  side_link: right
+  direction: superior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: kidney
+  type: adjacent_to
+  dst: spleen
+  side_link: left
+  direction: superior_lateral
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: kidney
+  type: adjacent_to
+  dst: pancreas
+  side_link: same
+  direction: anterior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: head on right, tail on left
+- src: kidney
+  type: adjacent_to
+  dst: duodenum
+  side_link: right
+  direction: anterior_medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: kidney
+  type: adjacent_to
+  dst: colon
+  side_link: same
+  direction: anterior_lateral
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: ascending right, descending left
+- src: kidney
+  type: adjacent_to
+  dst: psoas
+  side_link: same
+  direction: medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  - wall_invasion
+- src: kidney
+  type: adjacent_to
+  dst: quadratus_lumborum
+  side_link: same
+  direction: posterior
+  contact: abuts
+  staging:
+  - wall_invasion
+- src: kidney
+  type: adjacent_to
+  dst: diaphragm
+  side_link: same
+  direction: superior_posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: kidney
+  type: supplied_by
+  dst: renal_artery
+  side_link: same
+  staging:
+  - vascular_invasion
+- src: renal_artery
+  type: supplied_by
+  dst: aorta
+  side_link: any
+- src: kidney
+  type: drained_by
+  dst: renal_vein
+  side_link: same
+  staging:
+  - vascular_invasion
+  note: 'RCC T3a: renal vein / segmental branch thrombus'
+- src: renal_vein
+  type: drained_by
+  dst: inferior_vena_cava
+  side_link: any
+  staging:
+  - vascular_invasion
+  note: T3b infradiaphragmatic IVC, T3c supradiaphragmatic
+- src: kidney
+  type: drained_by
+  dst: gonadal_vein
+  side_link: left
+  staging:
+  - vascular_invasion
+  note: left gonadal vein drains to left renal vein
+- src: kidney
+  type: has_duct
+  dst: ureter
+  side_link: same
+  staging:
+  - obstruction
+  note: corridor renal pelvis → bladder trigone
+- src: kidney
+  type: drains_lymph_to
+  dst: ln_renal_hilar
+  side_link: same
+  staging:
+  - nodal
+- src: kidney
+  type: drains_lymph_to
+  dst: ln_paraaortic
+  side_link: any
+  staging:
+  - nodal
+- src: kidney
+  type: lies_in
+  dst: retroperitoneum
+  side_link: any
+- src: liver
+  type: has_part
+  dst: liver_segment_I
+  side_link: any
+  staging:
+  - location
+- src: liver
+  type: has_part
+  dst: liver_segment_II
+  side_link: any
+  staging:
+  - location
+- src: liver
+  type: has_part
+  dst: liver_segment_III
+  side_link: any
+  staging:
+  - location
+- src: liver
+  type: has_part
+  dst: liver_segment_IV
+  side_link: any
+  staging:
+  - location
+- src: liver
+  type: has_part
+  dst: liver_segment_V
+  side_link: any
+  staging:
+  - location
+- src: liver
+  type: has_part
+  dst: liver_segment_VI
+  side_link: any
+  staging:
+  - location
+- src: liver
+  type: has_part
+  dst: liver_segment_VII
+  side_link: any
+  staging:
+  - location
+- src: liver
+  type: has_part
+  dst: liver_segment_VIII
+  side_link: any
+  staging:
+  - location
+- src: liver
+  type: has_part
+  dst: liver_lobe
+  side_link: any
+  staging:
+  - location
+- src: liver
+  type: has_part
+  dst: intrahepatic_bile_ducts
+  side_link: any
+  staging:
+  - obstruction
+- src: liver
+  type: invested_by
+  dst: peritoneum
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: 'HCC T4: perforation of visceral peritoneum'
+- src: liver
+  type: adjacent_to
+  dst: diaphragm
+  side_link: any
+  direction: superior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: HCC T4 direct invasion
+- src: liver
+  type: adjacent_to
+  dst: gallbladder
+  side_link: any
+  direction: inferior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  - HCC T4
+- src: liver
+  type: adjacent_to
+  dst: stomach
+  side_link: any
+  direction: left_inferior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: liver
+  type: adjacent_to
+  dst: duodenum
+  side_link: any
+  direction: inferior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: liver
+  type: adjacent_to
+  dst: colon
+  side_link: any
+  direction: inferior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: hepatic flexure
+- src: liver
+  type: adjacent_to
+  dst: kidney
+  side_link: right
+  direction: inferior_posterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: liver
+  type: adjacent_to
+  dst: adrenal
+  side_link: right
+  direction: posterior_medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: liver
+  type: adjacent_to
+  dst: heart
+  side_link: any
+  direction: superior
+  contact: separated_by_diaphragm
+- src: liver
+  type: adjacent_to
+  dst: chest_wall
+  side_link: right
+  direction: lateral
+  contact: separated_by_diaphragm
+  staging:
+  - wall_invasion
+- src: liver
+  type: supplied_by
+  dst: hepatic_artery
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: hepatic_artery
+  type: supplied_by
+  dst: celiac_trunk
+  side_link: any
+- src: celiac_trunk
+  type: supplied_by
+  dst: aorta
+  side_link: any
+- src: liver
+  type: supplied_by
+  dst: portal_vein
+  side_link: any
+  staging:
+  - vascular_invasion
+  note: 'HCC T4 / BCLC: portal vein tumour thrombus (main or branch)'
+- src: portal_vein
+  type: drained_by
+  dst: superior_mesenteric_vein
+  side_link: any
+- src: portal_vein
+  type: drained_by
+  dst: splenic_vein
+  side_link: any
+- src: liver
+  type: drained_by
+  dst: hepatic_veins
+  side_link: any
+  staging:
+  - vascular_invasion
+  note: 'HCC T4: hepatic vein invasion'
+- src: hepatic_veins
+  type: drained_by
+  dst: inferior_vena_cava
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: liver
+  type: has_duct
+  dst: bile_duct
+  side_link: any
+  staging:
+  - obstruction
+  note: corridor porta hepatis → duodenum
+- src: liver
+  type: drains_lymph_to
+  dst: ln_hepatic_hilar
+  side_link: any
+  staging:
+  - nodal
+- src: liver
+  type: drains_lymph_to
+  dst: ln_celiac
+  side_link: any
+  staging:
+  - nodal
+- src: liver
+  type: drains_lymph_to
+  dst: ln_paraaortic
+  side_link: any
+  staging:
+  - nodal
+- src: liver
+  type: lies_in
+  dst: peritoneal_cavity
+  side_link: any
+- src: liver
+  type: lies_in
+  dst: upper_abdomen
+  side_link: any
+- src: uterus
+  type: has_part
+  dst: endometrium
+  side_link: any
+  staging:
+  - confined
+  - location
+- src: uterus
+  type: has_part
+  dst: myometrium
+  side_link: any
+  staging:
+  - confined
+  - location
+  note: UCEC T1a/T1b = depth of myometrial invasion
+- src: uterus
+  type: has_part
+  dst: junctional_zone
+  side_link: any
+  staging:
+  - confined
+  - location
+- src: uterus
+  type: has_part
+  dst: cervix
+  side_link: any
+  staging:
+  - confined
+  - location
+- src: uterus
+  type: invested_by
+  dst: peritoneum
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: uterine serosa; UCEC T3a
+- src: uterus
+  type: adjacent_to
+  dst: urinary_bladder
+  side_link: any
+  direction: anterior_inferior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: 'UCEC/CESC T4: bladder mucosa'
+- src: uterus
+  type: adjacent_to
+  dst: rectum
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: 'T4: rectal mucosa'
+- src: uterus
+  type: adjacent_to
+  dst: colon_sigmoid
+  side_link: any
+  direction: posterior_superior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: uterus
+  type: adjacent_to
+  dst: small_bowel
+  side_link: any
+  direction: superior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: uterus
+  type: adjacent_to
+  dst: ovary
+  side_link: any
+  direction: lateral
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: 'UCEC T3a: adnexal involvement'
+- src: uterus
+  type: adjacent_to
+  dst: pelvic_sidewall
+  side_link: any
+  direction: lateral
+  contact: separated_by_parametrium
+  staging:
+  - wall_invasion
+  note: 'FIGO IIIB: pelvic wall'
+- src: uterus
+  type: supplied_by
+  dst: uterine_artery
+  side_link: any
+- src: uterine_artery
+  type: supplied_by
+  dst: internal_iliac_artery
+  side_link: any
+- src: uterus
+  type: drains_lymph_to
+  dst: ln_obturator
+  side_link: any
+  staging:
+  - nodal
+- src: uterus
+  type: drains_lymph_to
+  dst: ln_internal_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: uterus
+  type: drains_lymph_to
+  dst: ln_external_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: uterus
+  type: drains_lymph_to
+  dst: ln_common_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: uterus
+  type: drains_lymph_to
+  dst: ln_paraaortic
+  side_link: any
+  staging:
+  - nodal
+  note: FIGO IIIC2
+- src: uterus
+  type: lies_in
+  dst: pelvis_true
+  side_link: any
+- src: cervix
+  type: has_part
+  dst: cervical_stroma
+  side_link: any
+  staging:
+  - confined
+  note: FIGO IB by stromal invasion depth / size
+- src: cervix
+  type: invested_by
+  dst: parametrium
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: 'FIGO IIB: parametrial invasion'
+- src: cervix
+  type: adjacent_to
+  dst: vagina
+  side_link: any
+  direction: inferior
+  contact: continuous
+  staging:
+  - adjacent_invasion
+  note: IIA upper 2/3, IIIA lower 1/3
+- src: cervix
+  type: adjacent_to
+  dst: urinary_bladder
+  side_link: any
+  direction: anterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: IVA bladder mucosa
+- src: cervix
+  type: adjacent_to
+  dst: rectum
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: IVA rectal mucosa
+- src: cervix
+  type: adjacent_to
+  dst: pelvic_sidewall
+  side_link: any
+  direction: lateral
+  contact: separated_by_parametrium
+  staging:
+  - wall_invasion
+  note: IIIB pelvic wall
+- src: cervix
+  type: adjacent_to
+  dst: ureter
+  side_link: any
+  direction: lateral
+  contact: near
+  staging:
+  - obstruction
+  note: IIIB hydronephrosis / non-functioning kidney
+- src: cervix
+  type: drains_lymph_to
+  dst: ln_obturator
+  side_link: any
+  staging:
+  - nodal
+- src: cervix
+  type: drains_lymph_to
+  dst: ln_internal_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: cervix
+  type: drains_lymph_to
+  dst: ln_external_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: cervix
+  type: drains_lymph_to
+  dst: ln_presacral
+  side_link: any
+  staging:
+  - nodal
+- src: cervix
+  type: drains_lymph_to
+  dst: ln_common_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: cervix
+  type: drains_lymph_to
+  dst: ln_paraaortic
+  side_link: any
+  staging:
+  - nodal
+  note: IIIC2
+- src: cervix
+  type: lies_in
+  dst: pelvis_true
+  side_link: any
+- src: vagina
+  type: has_part
+  dst: vagina_upper_two_thirds
+  side_link: any
+  staging:
+  - location
+- src: vagina
+  type: adjacent_to
+  dst: urethra
+  side_link: any
+  direction: anterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: vagina
+  type: adjacent_to
+  dst: rectum
+  side_link: any
+  direction: posterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: vagina
+  type: adjacent_to
+  dst: levator_ani
+  side_link: any
+  direction: lateral
+  contact: abuts
+  staging:
+  - wall_invasion
+- src: ovary
+  type: has_part
+  dst: adnexa
+  side_link: same
+  staging:
+  - location
+- src: ovary
+  type: adjacent_to
+  dst: uterus
+  side_link: same
+  direction: medial
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: ovary
+  type: adjacent_to
+  dst: iliac_artery
+  side_link: same
+  direction: posterior_lateral
+  contact: near
+  staging:
+  - wall_invasion
+  note: ovarian fossa
+- src: ovary
+  type: adjacent_to
+  dst: colon_sigmoid
+  side_link: left
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: ovary
+  type: adjacent_to
+  dst: small_bowel
+  side_link: any
+  direction: superior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: ovary
+  type: invested_by
+  dst: peritoneum
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: FIGO IC capsule rupture / surface
+- src: ovary
+  type: adjacent_to
+  dst: omentum
+  side_link: any
+  direction: superior
+  contact: near
+  staging:
+  - peritoneal_spread
+  note: FIGO III omental disease
+- src: ovary
+  type: drained_by
+  dst: gonadal_vein
+  side_link: same
+- src: ovary
+  type: drains_lymph_to
+  dst: ln_paraaortic
+  side_link: any
+  staging:
+  - nodal
+- src: ovary
+  type: drains_lymph_to
+  dst: ln_external_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: ovary
+  type: drains_lymph_to
+  dst: ln_obturator
+  side_link: any
+  staging:
+  - nodal
+- src: ovary
+  type: lies_in
+  dst: pelvis_true
+  side_link: any
+- src: prostate
+  type: has_part
+  dst: prostate_peripheral_zone
+  side_link: any
+  staging:
+  - confined
+  - location
+- src: prostate
+  type: has_part
+  dst: prostate_transition_zone
+  side_link: any
+  staging:
+  - confined
+  - location
+- src: prostate
+  type: invested_by
+  dst: neurovascular_bundle
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: T3a extraprostatic extension marker
+- src: prostate
+  type: adjacent_to
+  dst: seminal_vesicle
+  side_link: any
+  direction: posterior_superior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T3b seminal vesicle invasion
+- src: prostate
+  type: adjacent_to
+  dst: urinary_bladder
+  side_link: any
+  direction: superior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4 bladder neck
+- src: prostate
+  type: adjacent_to
+  dst: rectum
+  side_link: any
+  direction: posterior
+  contact: separated_by_fascia
+  staging:
+  - adjacent_invasion
+  note: T4 rectum
+- src: prostate
+  type: adjacent_to
+  dst: levator_ani
+  side_link: any
+  direction: lateral_inferior
+  contact: near
+  staging:
+  - wall_invasion
+  note: T4 levator / pelvic wall
+- src: prostate
+  type: adjacent_to
+  dst: external_urethral_sphincter
+  side_link: any
+  direction: inferior
+  contact: continuous
+  staging:
+  - adjacent_invasion
+  note: T4 external sphincter
+- src: prostate
+  type: adjacent_to
+  dst: pelvic_sidewall
+  side_link: any
+  direction: lateral
+  contact: near
+  staging:
+  - wall_invasion
+- src: prostate
+  type: has_duct
+  dst: urethra
+  side_link: any
+  staging:
+  - obstruction
+- src: prostate
+  type: supplied_by
+  dst: internal_iliac_artery
+  side_link: any
+- src: prostate
+  type: drains_lymph_to
+  dst: ln_obturator
+  side_link: any
+  staging:
+  - nodal
+- src: prostate
+  type: drains_lymph_to
+  dst: ln_internal_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: prostate
+  type: drains_lymph_to
+  dst: ln_external_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: prostate
+  type: drains_lymph_to
+  dst: ln_presacral
+  side_link: any
+  staging:
+  - nodal
+- src: prostate
+  type: drains_lymph_to
+  dst: ln_common_iliac
+  side_link: any
+  staging:
+  - M1a
+- src: prostate
+  type: lies_in
+  dst: pelvis_true
+  side_link: any
+- src: urinary_bladder
+  type: has_part
+  dst: bladder_wall
+  side_link: any
+  staging:
+  - confined
+  note: T2 muscularis propria
+- src: urinary_bladder
+  type: invested_by
+  dst: perivesical_fat
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: T3 perivesical tissue
+- src: urinary_bladder
+  type: adjacent_to
+  dst: prostate
+  side_link: any
+  direction: inferior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4a prostatic stroma
+- src: urinary_bladder
+  type: adjacent_to
+  dst: seminal_vesicle
+  side_link: any
+  direction: posterior_inferior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4a
+- src: urinary_bladder
+  type: adjacent_to
+  dst: uterus
+  side_link: any
+  direction: posterior_superior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4a uterus
+- src: urinary_bladder
+  type: adjacent_to
+  dst: vagina
+  side_link: any
+  direction: posterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4a vagina
+- src: urinary_bladder
+  type: adjacent_to
+  dst: rectum
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: urinary_bladder
+  type: adjacent_to
+  dst: pelvic_sidewall
+  side_link: any
+  direction: lateral
+  contact: near
+  staging:
+  - wall_invasion
+  note: T4b pelvic wall
+- src: urinary_bladder
+  type: adjacent_to
+  dst: abdominal_wall
+  side_link: any
+  direction: anterior_superior
+  contact: near
+  staging:
+  - wall_invasion
+  note: T4b abdominal wall
+- src: urinary_bladder
+  type: adjacent_to
+  dst: small_bowel
+  side_link: any
+  direction: superior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: urinary_bladder
+  type: adjacent_to
+  dst: colon_sigmoid
+  side_link: any
+  direction: superior_posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: urinary_bladder
+  type: has_duct
+  dst: urethra
+  side_link: any
+  staging:
+  - obstruction
+- src: urinary_bladder
+  type: has_duct
+  dst: ureter
+  side_link: any
+  staging:
+  - obstruction
+  note: ureteric orifice; hydronephrosis
+- src: urinary_bladder
+  type: drains_lymph_to
+  dst: ln_obturator
+  side_link: any
+  staging:
+  - nodal
+- src: urinary_bladder
+  type: drains_lymph_to
+  dst: ln_internal_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: urinary_bladder
+  type: drains_lymph_to
+  dst: ln_external_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: urinary_bladder
+  type: drains_lymph_to
+  dst: ln_presacral
+  side_link: any
+  staging:
+  - nodal
+- src: urinary_bladder
+  type: drains_lymph_to
+  dst: ln_common_iliac
+  side_link: any
+  staging:
+  - N3
+- src: urinary_bladder
+  type: lies_in
+  dst: pelvis_true
+  side_link: any
+- src: urinary_bladder
+  type: lies_in
+  dst: perivesical_space
+  side_link: any
+- src: rectum
+  type: invested_by
+  dst: mesorectum
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: T3 into mesorectal fat; CRM = mesorectal fascia
+- src: rectum
+  type: adjacent_to
+  dst: sacrum
+  side_link: any
+  direction: posterior
+  contact: separated_by_presacral_fat
+  staging:
+  - wall_invasion
+- src: rectum
+  type: adjacent_to
+  dst: prostate
+  side_link: any
+  direction: anterior
+  contact: separated_by_fascia
+  staging:
+  - adjacent_invasion
+- src: rectum
+  type: adjacent_to
+  dst: seminal_vesicle
+  side_link: any
+  direction: anterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: rectum
+  type: adjacent_to
+  dst: vagina
+  side_link: any
+  direction: anterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: rectum
+  type: adjacent_to
+  dst: uterus
+  side_link: any
+  direction: anterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: rectum
+  type: adjacent_to
+  dst: urinary_bladder
+  side_link: any
+  direction: anterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: rectum
+  type: adjacent_to
+  dst: levator_ani
+  side_link: any
+  direction: inferior_lateral
+  contact: abuts
+  staging:
+  - wall_invasion
+- src: rectum
+  type: adjacent_to
+  dst: anal_canal
+  side_link: any
+  direction: inferior
+  contact: continuous
+  staging:
+  - location
+- src: rectum
+  type: drains_lymph_to
+  dst: ln_mesenteric
+  side_link: any
+  staging:
+  - nodal
+  note: mesorectal / superior rectal nodes
+- src: rectum
+  type: drains_lymph_to
+  dst: ln_internal_iliac
+  side_link: any
+  staging:
+  - nodal
+- src: rectum
+  type: drains_lymph_to
+  dst: ln_presacral
+  side_link: any
+  staging:
+  - nodal
+- src: rectum
+  type: drains_lymph_to
+  dst: ln_inguinal
+  side_link: any
+  staging:
+  - N (low rectal/anal)
+- src: rectum
+  type: lies_in
+  dst: pelvis_true
+  side_link: any
+- src: rectum
+  type: lies_in
+  dst: presacral_space
+  side_link: any
+- src: colon
+  type: has_part
+  dst: colon_cecum
+  side_link: any
+  staging:
+  - location
+- src: colon
+  type: has_part
+  dst: colon_ascending
+  side_link: any
+  staging:
+  - location
+- src: colon
+  type: has_part
+  dst: colon_transverse
+  side_link: any
+  staging:
+  - location
+- src: colon
+  type: has_part
+  dst: colon_descending
+  side_link: any
+  staging:
+  - location
+- src: colon
+  type: has_part
+  dst: colon_sigmoid
+  side_link: any
+  staging:
+  - location
+- src: colon
+  type: has_part
+  dst: rectum
+  side_link: any
+  staging:
+  - location
+  note: TS colon class includes rectum
+- src: colon
+  type: invested_by
+  dst: peritoneum
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: T4a visceral peritoneum
+- src: colon
+  type: invested_by
+  dst: mesentery
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: T3 pericolic fat
+- src: colon
+  type: adjacent_to
+  dst: liver
+  side_link: any
+  direction: superior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: T4b
+- src: colon
+  type: adjacent_to
+  dst: stomach
+  side_link: any
+  direction: superior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: colon
+  type: adjacent_to
+  dst: spleen
+  side_link: any
+  direction: superior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: colon
+  type: adjacent_to
+  dst: kidney
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: colon
+  type: adjacent_to
+  dst: duodenum
+  side_link: any
+  direction: posterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: colon
+  type: adjacent_to
+  dst: pancreas
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: colon
+  type: adjacent_to
+  dst: small_bowel
+  side_link: any
+  direction: medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: colon
+  type: adjacent_to
+  dst: urinary_bladder
+  side_link: any
+  direction: inferior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: colon
+  type: adjacent_to
+  dst: uterus
+  side_link: any
+  direction: inferior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: colon
+  type: adjacent_to
+  dst: abdominal_wall
+  side_link: any
+  direction: anterior
+  contact: near
+  staging:
+  - wall_invasion
+- src: colon
+  type: adjacent_to
+  dst: iliopsoas
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - wall_invasion
+- src: colon
+  type: supplied_by
+  dst: superior_mesenteric_artery
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: colon
+  type: drained_by
+  dst: superior_mesenteric_vein
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: colon
+  type: drains_lymph_to
+  dst: ln_pericolic
+  side_link: any
+  staging:
+  - nodal
+- src: colon
+  type: drains_lymph_to
+  dst: ln_mesenteric
+  side_link: any
+  staging:
+  - nodal
+- src: colon
+  type: drains_lymph_to
+  dst: ln_paraaortic
+  side_link: any
+  staging:
+  - M1
+- src: colon
+  type: lies_in
+  dst: peritoneal_cavity
+  side_link: any
+- src: stomach
+  type: has_part
+  dst: gastric_wall
+  side_link: any
+  staging:
+  - confined
+  note: T1–T3 wall layers
+- src: stomach
+  type: has_part
+  dst: gastroesophageal_junction
+  side_link: any
+  staging:
+  - location
+- src: stomach
+  type: invested_by
+  dst: peritoneum
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: T4a serosa
+- src: stomach
+  type: invested_by
+  dst: omentum
+  side_link: any
+  staging:
+  - beyond_capsule
+  note: T3 into omentum without serosal breach
+- src: stomach
+  type: adjacent_to
+  dst: liver
+  side_link: any
+  direction: right_superior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4b
+- src: stomach
+  type: adjacent_to
+  dst: spleen
+  side_link: any
+  direction: left_posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: stomach
+  type: adjacent_to
+  dst: pancreas
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: stomach
+  type: adjacent_to
+  dst: colon
+  side_link: any
+  direction: inferior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: transverse colon
+- src: stomach
+  type: adjacent_to
+  dst: diaphragm
+  side_link: any
+  direction: superior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: stomach
+  type: adjacent_to
+  dst: adrenal
+  side_link: left
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: stomach
+  type: adjacent_to
+  dst: kidney
+  side_link: left
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: stomach
+  type: adjacent_to
+  dst: abdominal_wall
+  side_link: any
+  direction: anterior
+  contact: near
+  staging:
+  - wall_invasion
+- src: stomach
+  type: adjacent_to
+  dst: esophagus
+  side_link: any
+  direction: superior
+  contact: continuous
+  staging:
+  - location
+- src: stomach
+  type: adjacent_to
+  dst: duodenum
+  side_link: any
+  direction: right
+  contact: continuous
+  staging:
+  - location
+- src: stomach
+  type: supplied_by
+  dst: celiac_trunk
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: stomach
+  type: drained_by
+  dst: portal_vein
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: stomach
+  type: drained_by
+  dst: splenic_vein
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: stomach
+  type: drains_lymph_to
+  dst: ln_perigastric
+  side_link: any
+  staging:
+  - nodal
+- src: stomach
+  type: drains_lymph_to
+  dst: ln_celiac
+  side_link: any
+  staging:
+  - nodal
+- src: stomach
+  type: drains_lymph_to
+  dst: ln_hepatic_hilar
+  side_link: any
+  staging:
+  - nodal
+- src: stomach
+  type: drains_lymph_to
+  dst: ln_paraaortic
+  side_link: any
+  staging:
+  - M1
+- src: stomach
+  type: lies_in
+  dst: peritoneal_cavity
+  side_link: any
+- src: stomach
+  type: lies_in
+  dst: upper_abdomen
+  side_link: any
+- src: esophagus
+  type: adjacent_to
+  dst: trachea
+  side_link: any
+  direction: anterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4b trachea
+- src: esophagus
+  type: adjacent_to
+  dst: main_bronchus
+  side_link: left
+  direction: anterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: esophagus
+  type: adjacent_to
+  dst: aorta
+  side_link: any
+  direction: left_posterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4b aorta
+- src: esophagus
+  type: adjacent_to
+  dst: heart
+  side_link: any
+  direction: anterior
+  contact: separated_by_pericardium
+  staging:
+  - adjacent_invasion
+- src: esophagus
+  type: adjacent_to
+  dst: pericardium
+  side_link: any
+  direction: anterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4a pericardium
+- src: esophagus
+  type: adjacent_to
+  dst: pleura
+  side_link: any
+  direction: lateral
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4a pleura
+- src: esophagus
+  type: adjacent_to
+  dst: diaphragm
+  side_link: any
+  direction: inferior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4a diaphragm
+- src: esophagus
+  type: adjacent_to
+  dst: spine
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: T4b vertebral body
+- src: esophagus
+  type: adjacent_to
+  dst: stomach
+  side_link: any
+  direction: inferior
+  contact: continuous
+  staging:
+  - location
+- src: esophagus
+  type: adjacent_to
+  dst: thyroid
+  side_link: any
+  direction: anterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: esophagus
+  type: adjacent_to
+  dst: lung
+  side_link: any
+  direction: lateral
+  contact: separated_by_pleura
+  staging:
+  - adjacent_invasion
+- src: esophagus
+  type: drains_lymph_to
+  dst: ln_mediastinal
+  side_link: any
+  staging:
+  - nodal
+- src: esophagus
+  type: drains_lymph_to
+  dst: ln_supraclavicular
+  side_link: any
+  staging:
+  - nodal
+- src: esophagus
+  type: drains_lymph_to
+  dst: ln_perigastric
+  side_link: any
+  staging:
+  - nodal
+- src: esophagus
+  type: drains_lymph_to
+  dst: ln_celiac
+  side_link: any
+  staging:
+  - nodal
+- src: esophagus
+  type: lies_in
+  dst: mediastinum
+  side_link: any
+- src: pancreas
+  type: has_part
+  dst: pancreas_head
+  side_link: any
+  staging:
+  - location
+- src: pancreas
+  type: has_part
+  dst: pancreas_body
+  side_link: any
+  staging:
+  - location
+- src: pancreas
+  type: has_part
+  dst: pancreas_tail
+  side_link: any
+  staging:
+  - location
+- src: pancreas
+  type: has_part
+  dst: pancreas_uncinate
+  side_link: any
+  staging:
+  - location
+- src: pancreas
+  type: has_duct
+  dst: pancreatic_duct
+  side_link: any
+  staging:
+  - obstruction
+- src: pancreas
+  type: adjacent_to
+  dst: bile_duct
+  side_link: any
+  direction: posterior_head
+  contact: abuts
+  staging:
+  - obstruction
+  - adjacent_invasion
+  note: biliary obstruction
+- src: pancreas
+  type: adjacent_to
+  dst: duodenum
+  side_link: any
+  direction: right
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: pancreas
+  type: adjacent_to
+  dst: stomach
+  side_link: any
+  direction: anterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: pancreas
+  type: adjacent_to
+  dst: spleen
+  side_link: any
+  direction: left
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: pancreas
+  type: adjacent_to
+  dst: kidney
+  side_link: left
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: pancreas
+  type: adjacent_to
+  dst: adrenal
+  side_link: left
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: pancreas
+  type: adjacent_to
+  dst: colon
+  side_link: any
+  direction: anterior_inferior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: pancreas
+  type: adjacent_to
+  dst: inferior_vena_cava
+  side_link: any
+  direction: posterior
+  contact: abuts
+  staging:
+  - vascular_invasion
+- src: pancreas
+  type: adjacent_to
+  dst: aorta
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - vascular_invasion
+- src: pancreas
+  type: supplied_by
+  dst: celiac_trunk
+  side_link: any
+  staging:
+  - vascular_invasion
+  note: T4 coeliac axis
+- src: pancreas
+  type: supplied_by
+  dst: superior_mesenteric_artery
+  side_link: any
+  staging:
+  - vascular_invasion
+  note: T4 SMA
+- src: pancreas
+  type: supplied_by
+  dst: hepatic_artery
+  side_link: any
+  staging:
+  - vascular_invasion
+  note: T4 common hepatic artery
+- src: pancreas
+  type: drained_by
+  dst: splenic_vein
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: pancreas
+  type: drained_by
+  dst: superior_mesenteric_vein
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: pancreas
+  type: drained_by
+  dst: portal_vein
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: pancreas
+  type: drains_lymph_to
+  dst: ln_celiac
+  side_link: any
+  staging:
+  - nodal
+- src: pancreas
+  type: drains_lymph_to
+  dst: ln_hepatic_hilar
+  side_link: any
+  staging:
+  - nodal
+- src: pancreas
+  type: drains_lymph_to
+  dst: ln_mesenteric
+  side_link: any
+  staging:
+  - nodal
+- src: pancreas
+  type: drains_lymph_to
+  dst: ln_paraaortic
+  side_link: any
+  staging:
+  - nodal
+- src: pancreas
+  type: lies_in
+  dst: retroperitoneum
+  side_link: any
+- src: lung
+  type: has_part
+  dst: lung_left_upper_lobe
+  side_link: left
+  staging:
+  - location
+- src: lung
+  type: has_part
+  dst: lung_left_lower_lobe
+  side_link: left
+  staging:
+  - location
+- src: lung
+  type: has_part
+  dst: lung_right_upper_lobe
+  side_link: right
+  staging:
+  - location
+- src: lung
+  type: has_part
+  dst: lung_right_middle_lobe
+  side_link: right
+  staging:
+  - location
+- src: lung
+  type: has_part
+  dst: lung_right_lower_lobe
+  side_link: right
+  staging:
+  - location
+- src: lung
+  type: has_part
+  dst: main_bronchus
+  side_link: same
+  staging:
+  - location
+  note: T2 main bronchus without carina
+- src: lung
+  type: has_part
+  dst: bronchial_tree
+  side_link: any
+  staging:
+  - obstruction
+  note: atelectasis / obstructive pneumonitis T2
+- src: lung
+  type: invested_by
+  dst: pleura
+  side_link: same
+  staging:
+  - beyond_capsule
+  note: T2 visceral pleura; T3 parietal pleura
+- src: lung
+  type: adjacent_to
+  dst: chest_wall
+  side_link: same
+  direction: lateral
+  contact: separated_by_pleura
+  staging:
+  - wall_invasion
+  note: T3 chest wall
+- src: lung
+  type: adjacent_to
+  dst: diaphragm
+  side_link: same
+  direction: inferior
+  contact: separated_by_pleura
+  staging:
+  - adjacent_invasion
+  note: T4 diaphragm
+- src: lung
+  type: adjacent_to
+  dst: heart
+  side_link: any
+  direction: medial
+  contact: separated_by_pericardium
+  staging:
+  - adjacent_invasion
+  note: T4 heart; T3 parietal pericardium
+- src: lung
+  type: adjacent_to
+  dst: pericardium
+  side_link: any
+  direction: medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: lung
+  type: adjacent_to
+  dst: aorta
+  side_link: left
+  direction: medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4 great vessels
+- src: lung
+  type: adjacent_to
+  dst: superior_vena_cava
+  side_link: right
+  direction: medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: lung
+  type: adjacent_to
+  dst: esophagus
+  side_link: any
+  direction: medial_posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: T4 oesophagus
+- src: lung
+  type: adjacent_to
+  dst: trachea
+  side_link: any
+  direction: medial_superior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: T4 carina / trachea
+- src: lung
+  type: adjacent_to
+  dst: spine
+  side_link: any
+  direction: posterior_medial
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: T4 vertebral body
+- src: lung
+  type: adjacent_to
+  dst: rib_cage
+  side_link: same
+  direction: lateral
+  contact: separated_by_pleura
+  staging:
+  - wall_invasion
+- src: lung
+  type: adjacent_to
+  dst: liver
+  side_link: right
+  direction: inferior
+  contact: separated_by_diaphragm
+- src: lung
+  type: supplied_by
+  dst: pulmonary_artery
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: lung
+  type: drained_by
+  dst: pulmonary_vein
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: lung
+  type: has_duct
+  dst: main_bronchus
+  side_link: same
+  staging:
+  - obstruction
+- src: main_bronchus
+  type: has_duct
+  dst: trachea
+  side_link: any
+- src: lung
+  type: drains_lymph_to
+  dst: ln_hilar
+  side_link: same
+  staging:
+  - N1
+- src: lung
+  type: drains_lymph_to
+  dst: ln_mediastinal
+  side_link: any
+  staging:
+  - N2/N3
+- src: lung
+  type: drains_lymph_to
+  dst: ln_supraclavicular
+  side_link: any
+  staging:
+  - N3
+- src: lung
+  type: lies_in
+  dst: thorax
+  side_link: any
+- src: breast
+  type: has_part
+  dst: fibroglandular_tissue
+  side_link: same
+  staging:
+  - location
+- src: breast
+  type: has_part
+  dst: nipple
+  side_link: same
+  staging:
+  - location
+- src: breast
+  type: adjacent_to
+  dst: pectoralis_major
+  side_link: same
+  direction: posterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: pectoralis involvement (not T4 unless chest wall)
+- src: breast
+  type: adjacent_to
+  dst: chest_wall
+  side_link: same
+  direction: posterior
+  contact: separated_by_pectoralis
+  staging:
+  - wall_invasion
+  note: T4a chest wall (ribs, intercostals, serratus)
+- src: breast
+  type: adjacent_to
+  dst: skin
+  side_link: same
+  direction: anterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: T4b skin
+- src: breast
+  type: adjacent_to
+  dst: rib_cage
+  side_link: same
+  direction: posterior
+  contact: separated_by_muscle
+  staging:
+  - wall_invasion
+- src: breast
+  type: supplied_by
+  dst: axillary_vessels
+  side_link: same
+- src: breast
+  type: drains_lymph_to
+  dst: ln_axillary
+  side_link: same
+  staging:
+  - N1-N2a
+- src: breast
+  type: drains_lymph_to
+  dst: ln_internal_mammary
+  side_link: same
+  staging:
+  - N2b/N3b
+- src: breast
+  type: drains_lymph_to
+  dst: ln_supraclavicular
+  side_link: same
+  staging:
+  - N3c
+- src: breast
+  type: lies_in
+  dst: thorax
+  side_link: any
+- src: adrenal
+  type: adjacent_to
+  dst: kidney
+  side_link: same
+  direction: inferior_lateral
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: adrenal
+  type: adjacent_to
+  dst: liver
+  side_link: right
+  direction: lateral
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: adrenal
+  type: adjacent_to
+  dst: inferior_vena_cava
+  side_link: right
+  direction: medial
+  contact: abuts
+  staging:
+  - vascular_invasion
+- src: adrenal
+  type: adjacent_to
+  dst: aorta
+  side_link: left
+  direction: medial
+  contact: near
+  staging:
+  - vascular_invasion
+- src: adrenal
+  type: adjacent_to
+  dst: pancreas
+  side_link: left
+  direction: anterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: adrenal
+  type: adjacent_to
+  dst: spleen
+  side_link: left
+  direction: lateral
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: adrenal
+  type: adjacent_to
+  dst: diaphragm
+  side_link: same
+  direction: posterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: adrenal
+  type: drains_lymph_to
+  dst: ln_paraaortic
+  side_link: any
+  staging:
+  - nodal
+- src: adrenal
+  type: lies_in
+  dst: retroperitoneum
+  side_link: any
+- src: spleen
+  type: adjacent_to
+  dst: stomach
+  side_link: any
+  direction: anterior_medial
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: spleen
+  type: adjacent_to
+  dst: kidney
+  side_link: left
+  direction: inferior_medial
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: spleen
+  type: adjacent_to
+  dst: pancreas
+  side_link: any
+  direction: medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: tail
+- src: spleen
+  type: adjacent_to
+  dst: colon
+  side_link: any
+  direction: inferior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: splenic flexure
+- src: spleen
+  type: adjacent_to
+  dst: diaphragm
+  side_link: any
+  direction: superior_posterior
+  contact: abuts
+- src: spleen
+  type: drained_by
+  dst: splenic_vein
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: spleen
+  type: lies_in
+  dst: peritoneal_cavity
+  side_link: any
+- src: gallbladder
+  type: adjacent_to
+  dst: liver
+  side_link: any
+  direction: superior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: gallbladder
+  type: adjacent_to
+  dst: duodenum
+  side_link: any
+  direction: inferior_medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: gallbladder
+  type: adjacent_to
+  dst: colon
+  side_link: any
+  direction: inferior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: gallbladder
+  type: has_duct
+  dst: bile_duct
+  side_link: any
+  staging:
+  - obstruction
+- src: gallbladder
+  type: drains_lymph_to
+  dst: ln_hepatic_hilar
+  side_link: any
+  staging:
+  - nodal
+- src: duodenum
+  type: adjacent_to
+  dst: pancreas
+  side_link: any
+  direction: medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: duodenum
+  type: adjacent_to
+  dst: kidney
+  side_link: right
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: duodenum
+  type: adjacent_to
+  dst: inferior_vena_cava
+  side_link: any
+  direction: posterior
+  contact: abuts
+  staging:
+  - vascular_invasion
+- src: small_bowel
+  type: invested_by
+  dst: mesentery
+  side_link: any
+  staging:
+  - beyond_capsule
+- src: small_bowel
+  type: supplied_by
+  dst: superior_mesenteric_artery
+  side_link: any
+  staging:
+  - vascular_invasion
+- src: small_bowel
+  type: drains_lymph_to
+  dst: ln_mesenteric
+  side_link: any
+  staging:
+  - nodal
+- src: small_bowel
+  type: lies_in
+  dst: peritoneal_cavity
+  side_link: any
+- src: aorta
+  type: has_part
+  dst: celiac_trunk
+  side_link: any
+  staging:
+  - location
+- src: aorta
+  type: has_part
+  dst: superior_mesenteric_artery
+  side_link: any
+- src: aorta
+  type: has_part
+  dst: renal_artery
+  side_link: any
+- src: aorta
+  type: has_part
+  dst: iliac_artery
+  side_link: any
+- src: iliac_artery
+  type: has_part
+  dst: internal_iliac_artery
+  side_link: same
+  staging:
+  - location
+- src: iliac_vein
+  type: has_part
+  dst: internal_iliac_vein
+  side_link: same
+- src: inferior_vena_cava
+  type: has_part
+  dst: iliac_vein
+  side_link: any
+- src: inferior_vena_cava
+  type: has_part
+  dst: renal_vein
+  side_link: any
+- src: inferior_vena_cava
+  type: has_part
+  dst: hepatic_veins
+  side_link: any
+- src: heart
+  type: invested_by
+  dst: pericardium
+  side_link: any
+- src: heart
+  type: adjacent_to
+  dst: lung
+  side_link: any
+  direction: lateral
+  contact: separated_by_pericardium
+- src: heart
+  type: adjacent_to
+  dst: esophagus
+  side_link: any
+  direction: posterior
+  contact: near
+- src: heart
+  type: adjacent_to
+  dst: diaphragm
+  side_link: any
+  direction: inferior
+  contact: abuts
+- src: heart
+  type: lies_in
+  dst: mediastinum
+  side_link: any
+- src: trachea
+  type: has_part
+  dst: main_bronchus
+  side_link: any
+  staging:
+  - location
+- src: trachea
+  type: adjacent_to
+  dst: esophagus
+  side_link: any
+  direction: posterior
+  contact: abuts
+- src: trachea
+  type: adjacent_to
+  dst: thyroid
+  side_link: any
+  direction: anterior
+  contact: abuts
+- src: trachea
+  type: lies_in
+  dst: mediastinum
+  side_link: any
+- src: spine
+  type: adjacent_to
+  dst: psoas
+  side_link: any
+  direction: lateral
+  contact: abuts
+- src: spine
+  type: adjacent_to
+  dst: aorta
+  side_link: any
+  direction: anterior
+  contact: abuts
+- src: spine
+  type: adjacent_to
+  dst: esophagus
+  side_link: any
+  direction: anterior
+  contact: near
+- src: spine
+  type: has_part
+  dst: spinal_cord
+  side_link: any
+- src: spine
+  type: has_part
+  dst: sacrum
+  side_link: any
+- src: sacrum
+  type: adjacent_to
+  dst: rectum
+  side_link: any
+  direction: anterior
+  contact: separated_by_presacral_fat
+- src: sacrum
+  type: adjacent_to
+  dst: hip
+  side_link: any
+  direction: lateral
+  contact: abuts
+  note: sacroiliac joint
+- src: sacrum
+  type: adjacent_to
+  dst: iliac_artery
+  side_link: any
+  direction: anterior_lateral
+  contact: near
+- src: hip
+  type: adjacent_to
+  dst: urinary_bladder
+  side_link: same
+  direction: medial
+  contact: near
+- src: hip
+  type: adjacent_to
+  dst: obturator_internus
+  side_link: same
+  direction: medial
+  contact: abuts
+- src: hip
+  type: adjacent_to
+  dst: iliopsoas
+  side_link: same
+  direction: medial
+  contact: abuts
+- src: hip
+  type: adjacent_to
+  dst: gluteus
+  side_link: same
+  direction: posterior_lateral
+  contact: abuts
+- src: hip
+  type: adjacent_to
+  dst: femur
+  side_link: same
+  direction: inferior_lateral
+  contact: abuts
+  note: hip joint
+- src: pelvic_sidewall
+  type: has_part
+  dst: obturator_internus
+  side_link: same
+  staging:
+  - location
+- src: pelvic_sidewall
+  type: adjacent_to
+  dst: iliac_artery
+  side_link: same
+  direction: superior
+  contact: near
+- src: pelvic_sidewall
+  type: adjacent_to
+  dst: ln_obturator
+  side_link: same
+  direction: medial
+  contact: near
+- src: skeletal_muscle
+  type: has_part
+  dst: psoas
+  side_link: any
+- src: skeletal_muscle
+  type: has_part
+  dst: autochthon
+  side_link: any
+- src: skeletal_muscle
+  type: has_part
+  dst: rectus_abdominis
+  side_link: any
+- src: skeletal_muscle
+  type: has_part
+  dst: iliopsoas
+  side_link: any
+- src: skeletal_muscle
+  type: has_part
+  dst: gluteus
+  side_link: any
+- src: skeletal_muscle
+  type: has_part
+  dst: pectoralis_major
+  side_link: any
+- src: trachea
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: carina ≈ T4
+- src: liver
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: diaphragm_dome ≈ T10
+- src: sternum
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: xiphoid ≈ T9
+- src: kidney
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: renal_hilum_level ≈ L1
+- src: aorta
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: aortic_bifurcation ≈ L4
+- src: hip
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: iliac_crest ≈ L4
+- src: sacrum
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: sacral_promontory ≈ S1
+- src: femur
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: femoral_head ≈ coccyx
+- src: hip
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: pubic_symphysis ≈ coccyx
+- src: urinary_bladder
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: bladder_dome ≈ S3

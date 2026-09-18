@@ -798,10 +798,13 @@ def _component_metadata(
     probability: np.ndarray,
     affine: np.ndarray,
     voxel_volume_mm3: float,
+    origin_voxel: np.ndarray | None = None,
 ) -> dict:
     mask = label_map == component_id
     values = probability[mask]
-    centroid_voxel = np.mean(np.argwhere(mask), axis=0)
+    if origin_voxel is None:
+        origin_voxel = np.zeros(3, dtype=float)
+    centroid_voxel = np.mean(np.argwhere(mask), axis=0) + origin_voxel
     centroid_world = nib.affines.apply_affine(affine, centroid_voxel)
     return {
         "component_id": int(component_id),
@@ -825,23 +828,33 @@ def extract_components(
     """Extract 26-connected components using a fixed probability threshold."""
     structure = ndimage.generate_binary_structure(3, 3)
     labels, count = ndimage.label(probability >= threshold, structure=structure)
+    object_slices = ndimage.find_objects(labels)
     voxel_volume_mm3 = float(abs(np.linalg.det(affine[:3, :3])))
     components = []
     retained = np.zeros_like(labels, dtype=np.int32)
     next_id = 1
     for component_id in range(1, count + 1):
-        mask = labels == component_id
-        volume_mm3 = float(mask.sum() * voxel_volume_mm3)
+        component_slice = object_slices[component_id - 1]
+        if component_slice is None:
+            continue
+        label_crop = labels[component_slice]
+        mask_crop = label_crop == component_id
+        volume_mm3 = float(mask_crop.sum() * voxel_volume_mm3)
         if volume_mm3 < minimum_volume_mm3:
             continue
-        retained[mask] = next_id
+        retained_crop = retained[component_slice]
+        retained_crop[mask_crop] = next_id
+        starts = np.asarray(
+            [axis_slice.start for axis_slice in component_slice], dtype=float
+        )
         components.append(
             _component_metadata(
-                retained,
+                retained_crop,
                 next_id,
-                probability,
+                probability[component_slice],
                 affine,
                 voxel_volume_mm3,
+                origin_voxel=starts,
             )
         )
         next_id += 1
@@ -1590,10 +1603,23 @@ def permutation_energy_test(
     effect_size = observed / max(pooled_scale, 1e-8)
     combined = np.concatenate([sample_a, sample_b])
     n_a = len(sample_a)
+    n_b = len(sample_b)
+    # All permutations contain the same pooled observations.  Sort that pool
+    # once and evaluate the exact one-dimensional energy distance from the two
+    # empirical CDFs; scipy.stats.energy_distance would sort it again for every
+    # permutation and is prohibitively slow for noisy probability maps.
+    order = np.argsort(combined, kind="mergesort")
+    sorted_values = combined[order]
+    interval_widths = np.diff(sorted_values)
     exceedances = 0
     for _ in range(permutations):
-        permuted = rng.permutation(combined)
-        statistic = energy_distance(permuted[:n_a], permuted[n_a:])
+        in_a = rng.permutation(len(combined)) < n_a
+        sorted_in_a = in_a[order]
+        cdf_a = np.cumsum(sorted_in_a[:-1]) / n_a
+        cdf_b = np.cumsum(~sorted_in_a[:-1]) / n_b
+        statistic = np.sqrt(
+            2.0 * np.sum((cdf_a - cdf_b) ** 2 * interval_widths)
+        )
         exceedances += statistic >= observed
     p_value = (exceedances + 1.0) / (permutations + 1.0)
     return float(p_value), float(effect_size)
@@ -1669,6 +1695,7 @@ def analyze_scan_hierarchy(
     maximum_samples: int,
     random_seed: int,
     save_previews: bool,
+    reasoned_probability_dir: Path | None,
 ) -> list[dict]:
     """Apply uterus → ovary → endometrioma reasoning to one scan."""
     scan_name = probability_path.name.removesuffix("_endometrioma.nii.gz")
@@ -2062,6 +2089,16 @@ def analyze_scan_hierarchy(
     # every other survivor must be statistically indistinguishable after FDR.
     survivors = [record for record in records if record["preliminary_accepted"]]
     if not survivors:
+        save_reasoned_probability_map(
+            probability,
+            probability_nii,
+            maps,
+            uterus_mask,
+            ovary_mask,
+            [],
+            scan_name,
+            reasoned_probability_dir,
+        )
         return records
     credible_references = []
     for record in survivors:
@@ -2085,6 +2122,16 @@ def analyze_scan_hierarchy(
     if not credible_references:
         for record in survivors:
             record["rejection_reason"] = "no_credible_endometrioma_reference"
+        save_reasoned_probability_map(
+            probability,
+            probability_nii,
+            maps,
+            uterus_mask,
+            ovary_mask,
+            [],
+            scan_name,
+            reasoned_probability_dir,
+        )
         return records
 
     def reference_rank(record: dict) -> tuple[float, float, float]:
@@ -2159,7 +2206,55 @@ def analyze_scan_hierarchy(
             record["accepted"] = True
             record["stage_3_intra_class_pass"] = True
             record["rejection_reason"] = "accepted_intra_endometrioma_consistent"
+    save_reasoned_probability_map(
+        probability,
+        probability_nii,
+        maps,
+        uterus_mask,
+        ovary_mask,
+        [record["candidate_id"] for record in records if record["accepted"]],
+        scan_name,
+        reasoned_probability_dir,
+    )
     return records
+
+
+def save_reasoned_probability_map(
+    probability: np.ndarray,
+    source_nii: nib.spatialimages.SpatialImage,
+    component_maps: dict[str, np.ndarray],
+    uterus_mask: np.ndarray,
+    ovary_mask: np.ndarray,
+    accepted_endometrioma_ids: list[int],
+    scan_name: str,
+    output_dir: Path | None,
+) -> None:
+    """Save six-channel probabilities after hierarchical component rejection."""
+    if output_dir is None:
+        return
+    output_dir.mkdir(parents=True, exist_ok=True)
+    result = probability.copy()
+    retained_masks = {
+        "endometrioma": np.isin(
+            component_maps["endometrioma"], accepted_endometrioma_ids
+        ),
+        "ovary": ovary_mask,
+        "uterus": uterus_mask,
+    }
+    for class_name, mask in retained_masks.items():
+        channel = ANATOMY_CHANNELS[class_name]
+        result[..., channel] *= mask
+    encoded = np.round(np.clip(result, 0.0, 1.0) * 255.0).astype(np.uint8)
+    header = source_nii.header.copy()
+    header.set_data_dtype(np.uint8)
+    header["descrip"] = b"post hierarchical reasoning probability map; uint8 / 255"
+    output_nii = nib.Nifti1Image(encoded, source_nii.affine, header=header)
+    output_nii.set_qform(source_nii.get_qform(), int(source_nii.header["qform_code"]))
+    output_nii.set_sform(source_nii.get_sform(), int(source_nii.header["sform_code"]))
+    nib.save(
+        output_nii,
+        str(output_dir / f"{scan_name}_endometrioma.nii.gz"),
+    )
 
 
 def run_hierarchical_rejection(
@@ -2182,9 +2277,17 @@ def run_hierarchical_rejection(
     maximum_samples: int,
     random_seed: int,
     save_previews: bool,
+    reasoned_probability_dir: Path | None = None,
+    shard_index: int = 0,
+    num_shards: int = 1,
+    spatial_priors_path: Path | None = None,
+    scan_names_path: Path | None = None,
 ) -> tuple[pd.DataFrame, SpatialPriors]:
     """Learn D1 priors and apply scan-specific hierarchical rejection."""
-    priors = learn_spatial_priors(labels_dir)
+    if spatial_priors_path is not None:
+        priors = SpatialPriors(**json.loads(spatial_priors_path.read_text()))
+    else:
+        priors = learn_spatial_priors(labels_dir)
     priors.endometrioma_ovary_surface_max_mm = min(
         priors.endometrioma_ovary_surface_max_mm,
         endometrioma_distance_cap_mm,
@@ -2193,7 +2296,18 @@ def run_hierarchical_rejection(
         json.dumps(asdict(priors), indent=2), encoding="utf-8"
     )
     records = []
-    probability_paths = sorted(probability_dir.glob(f"*{suffix}"))
+    all_probability_paths = sorted(probability_dir.glob(f"*{suffix}"))
+    if scan_names_path is not None:
+        requested_scans = {
+            line.strip()
+            for line in scan_names_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        }
+        all_probability_paths = [
+            path for path in all_probability_paths
+            if scan_name_from_probability_path(path, suffix) in requested_scans
+        ]
+    probability_paths = all_probability_paths[shard_index::num_shards]
     for index, probability_path in enumerate(probability_paths, start=1):
         scan_name = scan_name_from_probability_path(probability_path, suffix)
         image_path = images_dir / f"{scan_name}.nii.gz"
@@ -2220,6 +2334,7 @@ def run_hierarchical_rejection(
                 maximum_samples,
                 random_seed + index,
                 save_previews,
+                reasoned_probability_dir,
             )
         )
     results = pd.DataFrame(records)
@@ -3714,6 +3829,26 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_DATA_ROOT / "endometriosis_detection",
     )
     parser.add_argument(
+        "--reasoned-probability-dir",
+        type=Path,
+        default=None,
+        help="Optional directory for six-channel post-reasoning probability maps.",
+    )
+    parser.add_argument("--shard-index", type=int, default=0)
+    parser.add_argument("--num-shards", type=int, default=1)
+    parser.add_argument(
+        "--spatial-priors-path",
+        type=Path,
+        default=None,
+        help="Reuse a previously saved spatial_priors.json instead of relearning.",
+    )
+    parser.add_argument(
+        "--scan-names-path",
+        type=Path,
+        default=None,
+        help="Optional text file containing one scan_name per line.",
+    )
+    parser.add_argument(
         "--suffix",
         default="_endometrioma.nii.gz",
         help="Filename suffix removed to obtain scan_name.",
@@ -3786,6 +3921,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip anatomical/statistical rejection and dashboard generation.",
     )
+    parser.add_argument(
+        "--skip-rejection-auxiliary-analysis",
+        action="store_true",
+        help=(
+            "After hierarchical rejection, skip probability correlations, GT recall, "
+            "and the local dashboard. Useful for parallel shards that will be merged."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -3806,6 +3949,8 @@ def main() -> None:
         raise ValueError("--max-endometrioma-ovary-distance-mm must be positive")
     if args.minimum_uterus_volume_mm3 <= 0:
         raise ValueError("--minimum-uterus-volume-mm3 must be positive")
+    if args.num_shards < 1 or not 0 <= args.shard_index < args.num_shards:
+        raise ValueError("Require 0 <= --shard-index < --num-shards")
     if (
         args.local_ring_mm <= 0
         or args.reference_ovary_surface_max_mm < 0
@@ -3821,6 +3966,14 @@ def main() -> None:
         json.dumps(
             {
                 "component_threshold": args.component_threshold,
+                "probability_dir": str(args.probability_dir),
+                "reasoned_probability_dir": (
+                    str(args.reasoned_probability_dir)
+                    if args.reasoned_probability_dir is not None
+                    else None
+                ),
+                "shard_index": args.shard_index,
+                "num_shards": args.num_shards,
                 "minimum_component_volume_mm3": (
                     args.minimum_component_volume_mm3
                 ),
@@ -3903,6 +4056,11 @@ def main() -> None:
             maximum_samples=args.maximum_statistical_samples,
             random_seed=args.random_seed,
             save_previews=args.save_previews,
+            reasoned_probability_dir=args.reasoned_probability_dir,
+            shard_index=args.shard_index,
+            num_shards=args.num_shards,
+            spatial_priors_path=args.spatial_priors_path,
+            scan_names_path=args.scan_names_path,
         )
         pre_volume_path = args.output_dir / "segmentation_volumes.csv"
         if pre_volume_path.exists():
@@ -4004,30 +4162,31 @@ def main() -> None:
                 "Cannot create pre/post figures: %s does not exist",
                 pre_volume_path,
             )
-        analyze_probability_channel_correlations(
-            probability_dir=args.probability_dir,
-            csv_path=args.csv_path,
-            output_dir=args.output_dir,
-            suffix=args.suffix,
-        )
-        _, gt_recall_summary = analyze_gt_recall_by_domain_modality(
-            probability_dir=args.probability_dir,
-            labels_dir=args.labels_dir,
-            csv_path=args.csv_path,
-            output_dir=args.output_dir,
-            suffix=args.suffix,
-            operating_threshold=args.component_threshold,
-        )
-        dashboard_path = args.output_dir / "candidate_review_dashboard.html"
-        build_review_dashboard(
-            candidates,
-            priors,
-            dashboard_path,
-            gt_recall_summary=gt_recall_summary,
-            operating_threshold=args.component_threshold,
-        )
+        if not args.skip_rejection_auxiliary_analysis:
+            analyze_probability_channel_correlations(
+                probability_dir=args.probability_dir,
+                csv_path=args.csv_path,
+                output_dir=args.output_dir,
+                suffix=args.suffix,
+            )
+            _, gt_recall_summary = analyze_gt_recall_by_domain_modality(
+                probability_dir=args.probability_dir,
+                labels_dir=args.labels_dir,
+                csv_path=args.csv_path,
+                output_dir=args.output_dir,
+                suffix=args.suffix,
+                operating_threshold=args.component_threshold,
+            )
+            dashboard_path = args.output_dir / "candidate_review_dashboard.html"
+            build_review_dashboard(
+                candidates,
+                priors,
+                dashboard_path,
+                gt_recall_summary=gt_recall_summary,
+                operating_threshold=args.component_threshold,
+            )
+            LOGGER.info("Saved local review dashboard: %s", dashboard_path)
         LOGGER.info("Saved candidate results: %s", args.output_dir / "candidate_rejection_results.csv")
-        LOGGER.info("Saved local review dashboard: %s", dashboard_path)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,53 @@
+name: PanCIA anchor-centric anatomical knowledge base
+version: 0.1.0
+date: '2026-09-18'
+author: Shangqi Gao (Crispin Lab) with Claude
+status: draft v0.1 — not yet pilot-verified
+vertebral_order:
+- C1
+- C2
+- C3
+- C4
+- C5
+- C6
+- C7
+- T1
+- T2
+- T3
+- T4
+- T5
+- T6
+- T7
+- T8
+- T9
+- T10
+- T11
+- T12
+- L1
+- L2
+- L3
+- L4
+- L5
+- S1
+- S2
+- S3
+- S4
+- S5
+- coccyx
+counts:
+  entities: 191
+  anchors: 36
+  relations: 364
+  regions: 14
+  landmarks: 10
+sources:
+  TS: TotalSegmentator class maps (map_to_binary.py, fetched 2026-09-18)
+  VoxTell: arXiv 2511.11450; repo MIC-DKFZ/VoxTell (no shipped vocabulary; coverage tiers are assumptions until pilot)
+  AJCC8: AJCC Cancer Staging Manual 8th ed. T/N definitions and regional node lists
+  FIGO: FIGO 2018 cervix / 2023 endometrium / 2014 ovary
+  FMA: Foundational Model of Anatomy relations (part_of, adjacent_to)
+coverage_tier_legend:
+  in_vocab: structure or close synonym present in known VoxTell training datasets
+  near: related concept present; expect degraded but usable
+  ood: not expected in training; experimental, strict gates
+  assumed_in_vocab: default for TS classes

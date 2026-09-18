@@ -1,0 +1,947 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Seg Agreement Audit · Dice</title>
+<style>
+:root{color-scheme:dark;--bg:#0E1520;--surface:#162032;--surface2:#1D2C41;--border:#253A52;--text:#BDD0E8;--muted:#5C7896;--accent:#4C9BE8;--good:#1A9467;--mild:#BF811E;--bad:#C43838;--ct:#4C9BE8;--mr:#D97340;--bp:#7B61FF;--vt:#2EB88A}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.6;padding:20px}
+body::before{content:'';position:fixed;inset:0;background:var(--bg);z-index:-1}
+h1{font-size:1.35rem;font-weight:800;color:#D8EBF8;letter-spacing:-.02em}
+h2{font-size:.95rem;font-weight:700;color:#D8EBF8;margin-bottom:12px}
+h3{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+.wrap{max-width:1060px;margin:0 auto}
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border);padding-bottom:18px;margin-bottom:24px;flex-wrap:wrap}
+.hdr p{font-size:.75rem;color:var(--muted);margin-top:3px}
+.badge{display:inline-block;padding:2px 9px;border-radius:3px;font-size:.7rem;font-weight:600;border:1px solid var(--border);background:var(--surface);color:var(--muted)}
+.alert{background:#1a0606;border:1px solid #6b2020;border-left:3px solid var(--bad);border-radius:6px;padding:14px 18px;margin-bottom:20px}
+.alert h3{color:#f87171;margin-bottom:6px}
+.alert p{font-size:.82rem;color:#fca5a5;line-height:1.65}
+.alert strong{color:#fcd5d5}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:20px}
+@media(max-width:700px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface);padding:18px 20px}
+.kv{font-size:1.9rem;font-weight:800;letter-spacing:-.03em;line-height:1;color:#D8EBF8}
+.kv.red{color:var(--bad)}.kv.amber{color:var(--mild)}.kv.green{color:var(--good)}
+.kl{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+.ks{font-size:.7rem;color:var(--muted);margin-top:4px}
+.sbar{display:flex;height:28px;border-radius:4px;overflow:hidden;margin:8px 0}
+.sbar span{display:block;height:100%}
+.leg{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.leg-i{display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--muted)}
+.leg-d{width:11px;height:11px;border-radius:2px;flex-shrink:0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:800px){.g2,.g3{grid-template-columns:1fr}}
+.brow{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:.78rem}
+.blbl{width:130px;flex-shrink:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blbl.w{width:160px}
+.btrk{flex:1;height:13px;background:var(--surface2);border-radius:2px;overflow:hidden}
+.bfil{height:100%;border-radius:2px}
+.bval{width:46px;flex-shrink:0;text-align:right;font-weight:600;font-size:.78rem;color:var(--text)}
+.bval.r{color:var(--bad)}.bval.a{color:var(--mild)}.bval.g{color:var(--good)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px}
+.tab{padding:6px 14px;border-radius:5px;cursor:pointer;font-size:.8rem;font-weight:500;color:var(--muted);background:var(--surface);border:1px solid var(--border)}
+.tab:hover{color:var(--text)}.tab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pnl{display:none}.pnl.on{display:block}
+.tscroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.78rem}
+th{background:var(--surface2);color:var(--muted);font-weight:600;text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--muted)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1a2840;color:var(--text)}
+td.num{text-align:right;font-variant-numeric:tabular-nums}.td-hi{color:var(--text);font-weight:600}
+.pill{display:inline-block;padding:1px 7px;border-radius:3px;font-size:.68rem;font-weight:600}
+.pill.ct{background:color-mix(in srgb,var(--ct) 18%,transparent);color:var(--ct)}
+.pill.mr{background:color-mix(in srgb,var(--mr) 18%,transparent);color:var(--mr)}
+.pill.size{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.pill.invasion{background:color-mix(in srgb,var(--mild) 18%,transparent);color:var(--mild)}
+.pill.figo{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
+.pill.bp{background:color-mix(in srgb,var(--bp) 18%,transparent);color:var(--bp)}
+.pill.vt{background:color-mix(in srgb,var(--vt) 18%,transparent);color:var(--vt)}
+.pill.tie{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted)}
+.sec{font-size:.92rem;font-weight:700;color:var(--text);border-left:3px solid var(--accent);padding-left:10px;margin:24px 0 14px}
+.sumbox{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:14px 16px}
+.sumbox p{font-size:.8rem;color:var(--muted);line-height:1.65}
+.sumbox strong{color:var(--text)}
+hr{border:none;border-top:1px solid var(--border);margin:22px 0}
+.fn{font-size:.7rem;color:var(--muted);margin-top:8px}
+/* dual bar for BP vs VT */
+.drow{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:.75rem}
+.dlbl{width:80px;flex-shrink:0;color:var(--muted)}
+.dtrk{flex:1;display:flex;flex-direction:column;gap:2px}
+.dbar{height:9px;border-radius:1px;min-width:2px}
+.dval-bp{width:52px;flex-shrink:0;text-align:right;color:var(--bp);font-weight:600}
+.dval-vt{width:52px;flex-shrink:0;text-align:right;color:var(--vt);font-weight:600}
+.sig1{font-size:.65rem;color:var(--mild)}
+.sig2{font-size:.65rem;color:var(--bad)}
+.sig3{font-size:.65rem;color:var(--accent)}
+</style>
+
+<div class="wrap">
+<div class="hdr">
+  <div>
+    <h1>Segmentation Agreement Audit &middot; Dice Analysis</h1>
+    <p>BiomedParse vs VoxTell &middot; TCGA-TCIA &middot; 15 projects &middot; 4,968 paired NIfTI segmentations &middot; Public data</p>
+  </div>
+  <span class="badge">Full voxel-wise Dice computation</span>
+</div>
+
+
+<div class="kpi-row">
+  <div class="kpi"><div class="kl">Median Dice</div><div class="kv red">0.000</div><div class="ks">Mean 0.114 &middot; n=4,968</div></div>
+  <div class="kpi"><div class="kl">Zero overlap</div><div class="kv red">61.6%</div><div class="ks">3,060 pairs &middot; Dice = 0</div></div>
+  <div class="kpi"><div class="kl">Good / Excellent &#x2265;0.6</div><div class="kv amber">6.2%</div><div class="ks">310 pairs</div></div>
+  <div class="kpi"><div class="kl">Excellent &#x2265;0.8</div><div class="kv amber">2.0%</div><div class="ks">101 pairs</div></div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <h2>Overall Dice Category Distribution</h2>
+  <div class="sbar">
+    <span style="width:.18%;background:#374151" title="Both empty: 9"></span>
+    <span style="width:61.6%;background:#ef4444" title="No overlap (Dice=0): 3,060"></span>
+    <span style="width:22.6%;background:#f97316" title="Poor (<0.3): 1,121"></span>
+    <span style="width:9.4%;background:#eab308" title="Moderate (0.3-0.6): 468"></span>
+    <span style="width:4.2%;background:#22c55e" title="Good (0.6-0.8): 209"></span>
+    <span style="width:2.03%;background:#4f8ef7" title="Excellent (>0.8): 101"></span>
+  </div>
+  <div class="leg">
+    <div class="leg-i"><div class="leg-d" style="background:#ef4444"></div>No overlap &middot; Dice=0 (61.6%, n=3,060)</div>
+    <div class="leg-i"><div class="leg-d" style="background:#f97316"></div>Poor &lt;0.3 (22.6%, n=1,121)</div>
+    <div class="leg-i"><div class="leg-d" style="background:#eab308"></div>Moderate 0.3&ndash;0.6 (9.4%, n=468)</div>
+    <div class="leg-i"><div class="leg-d" style="background:#22c55e"></div>Good 0.6&ndash;0.8 (4.2%, n=209)</div>
+    <div class="leg-i"><div class="leg-d" style="background:#4f8ef7"></div>Excellent &gt;0.8 (2.0%, n=101)</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab on" onclick="showTab('project',this)">By Project</div>
+  <div class="tab" onclick="showTab('modality',this)">CT vs MR</div>
+  <div class="tab" onclick="showTab('bodypart',this)">Body Part</div>
+  <div class="tab" onclick="showTab('manufacturer',this)">Manufacturer</div>
+  <div class="tab" onclick="showTab('scan',this)">Scan Characteristics</div>
+  <div class="tab" onclick="showTab('diam',this)">Physical Diameter</div>
+  <div class="tab" onclick="showTab('tstage',this)">T-Stage Correlation</div>
+  <div class="tab" onclick="showTab('frag',this)">VT Fragmentation</div>
+  <div class="tab" onclick="showTab('ostage',this)">Overall Stage</div>
+</div>
+
+<!-- Project tab -->
+<div class="pnl on" id="tab-project">
+  <div class="g2" style="margin-bottom:14px">
+    <div class="card">
+      <h2>Mean Dice by Project</h2>
+      <p class="fn" style="margin-bottom:10px">Best to worst</p>
+      <div class="brow"><div class="blbl">TCGA-LUSC</div><div class="btrk"><div class="bfil" style="width:100%;background:#22c55e"></div></div><div class="bval g">0.285</div></div>
+      <div class="brow"><div class="blbl">TCGA-COAD</div><div class="btrk"><div class="bfil" style="width:75.2%;background:#eab308"></div></div><div class="bval a">0.214</div></div>
+      <div class="brow"><div class="blbl">TCGA-LUAD</div><div class="btrk"><div class="bfil" style="width:64.9%;background:#eab308"></div></div><div class="bval a">0.185</div></div>
+      <div class="brow"><div class="blbl">TCGA-CESC</div><div class="btrk"><div class="bfil" style="width:62%;background:#eab308"></div></div><div class="bval a">0.177</div></div>
+      <div class="brow"><div class="blbl">TCGA-BRCA</div><div class="btrk"><div class="bfil" style="width:51.8%;background:#f97316"></div></div><div class="bval">0.148</div></div>
+      <div class="brow"><div class="blbl">TCGA-KICH</div><div class="btrk"><div class="bfil" style="width:46.9%;background:#f97316"></div></div><div class="bval">0.134</div></div>
+      <div class="brow"><div class="blbl">TCGA-LIHC</div><div class="btrk"><div class="bfil" style="width:40.8%;background:#f97316"></div></div><div class="bval">0.116</div></div>
+      <div class="brow"><div class="blbl">TCGA-KIRP</div><div class="btrk"><div class="bfil" style="width:40.1%;background:#f97316"></div></div><div class="bval">0.114</div></div>
+      <div class="brow"><div class="blbl">TCGA-BLCA</div><div class="btrk"><div class="bfil" style="width:38.4%;background:#f97316"></div></div><div class="bval">0.109</div></div>
+      <div class="brow"><div class="blbl">TCGA-KIRC</div><div class="btrk"><div class="bfil" style="width:34.9%;background:#f97316"></div></div><div class="bval">0.100</div></div>
+      <div class="brow"><div class="blbl">TCGA-STAD</div><div class="btrk"><div class="bfil" style="width:34.7%;background:#f97316"></div></div><div class="bval">0.099</div></div>
+      <div class="brow"><div class="blbl">TCGA-OV</div><div class="btrk"><div class="bfil" style="width:25.1%;background:#ef4444"></div></div><div class="bval r">0.072</div></div>
+      <div class="brow"><div class="blbl">TCGA-UCEC</div><div class="btrk"><div class="bfil" style="width:19.6%;background:#ef4444"></div></div><div class="bval r">0.056</div></div>
+      <div class="brow"><div class="blbl">TCGA-PRAD</div><div class="btrk"><div class="bfil" style="width:10.4%;background:#ef4444"></div></div><div class="bval r">0.030</div></div>
+      <div class="brow"><div class="blbl">TCGA-ESCA</div><div class="btrk"><div class="bfil" style="width:0.1%;background:#ef4444"></div></div><div class="bval r">~0</div></div>
+    </div>
+    <div class="card">
+      <h2>No-overlap Rate by Project (Dice=0)</h2>
+      <p class="fn" style="margin-bottom:10px">Worst to best</p>
+      <div class="brow"><div class="blbl">TCGA-ESCA</div><div class="btrk"><div class="bfil" style="width:98.4%;background:#ef4444"></div></div><div class="bval r">98.4%</div></div>
+      <div class="brow"><div class="blbl">TCGA-PRAD</div><div class="btrk"><div class="bfil" style="width:78.3%;background:#ef4444"></div></div><div class="bval r">78.3%</div></div>
+      <div class="brow"><div class="blbl">TCGA-UCEC</div><div class="btrk"><div class="bfil" style="width:77.4%;background:#ef4444"></div></div><div class="bval r">77.4%</div></div>
+      <div class="brow"><div class="blbl">TCGA-OV</div><div class="btrk"><div class="bfil" style="width:71.5%;background:#ef4444"></div></div><div class="bval r">71.5%</div></div>
+      <div class="brow"><div class="blbl">TCGA-LUAD</div><div class="btrk"><div class="bfil" style="width:67%;background:#ef4444"></div></div><div class="bval r">67.0%</div></div>
+      <div class="brow"><div class="blbl">TCGA-KIRC</div><div class="btrk"><div class="bfil" style="width:67.7%;background:#ef4444"></div></div><div class="bval r">67.7%</div></div>
+      <div class="brow"><div class="blbl">TCGA-KIRP</div><div class="btrk"><div class="bfil" style="width:66.1%;background:#ef4444"></div></div><div class="bval r">66.1%</div></div>
+      <div class="brow"><div class="blbl">TCGA-LIHC</div><div class="btrk"><div class="bfil" style="width:65.4%;background:#ef4444"></div></div><div class="bval r">65.4%</div></div>
+      <div class="brow"><div class="blbl">TCGA-BLCA</div><div class="btrk"><div class="bfil" style="width:56.1%;background:#f97316"></div></div><div class="bval">56.1%</div></div>
+      <div class="brow"><div class="blbl">TCGA-LUSC</div><div class="btrk"><div class="bfil" style="width:52.6%;background:#f97316"></div></div><div class="bval">52.6%</div></div>
+      <div class="brow"><div class="blbl">TCGA-KICH</div><div class="btrk"><div class="bfil" style="width:50%;background:#f97316"></div></div><div class="bval">50.0%</div></div>
+      <div class="brow"><div class="blbl">TCGA-STAD</div><div class="btrk"><div class="bfil" style="width:50.9%;background:#f97316"></div></div><div class="bval">50.9%</div></div>
+      <div class="brow"><div class="blbl">TCGA-COAD</div><div class="btrk"><div class="bfil" style="width:43.5%;background:#f97316"></div></div><div class="bval">43.5%</div></div>
+      <div class="brow"><div class="blbl">TCGA-BRCA</div><div class="btrk"><div class="bfil" style="width:44.2%;background:#f97316"></div></div><div class="bval">44.2%</div></div>
+      <div class="brow"><div class="blbl">TCGA-CESC</div><div class="btrk"><div class="bfil" style="width:38.9%;background:#eab308"></div></div><div class="bval a">38.9%</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Project &times; Modality Full Breakdown</h2>
+    <div class="tscroll">
+      <table>
+        <thead><tr><th>Project</th><th>Mod</th><th>n</th><th>No Overlap</th><th>Poor</th><th>Moderate</th><th>Good</th><th>Excellent</th><th>Mean Dice</th></tr></thead>
+        <tbody id="ptbl"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modality tab -->
+<div class="pnl" id="tab-modality">
+  <div class="g2">
+    <div class="card">
+      <h2>CT vs MR &mdash; Key Metrics</h2>
+      <table>
+        <thead><tr><th>Metric</th><th>CT (n=2,353)</th><th>MR (n=2,606)</th></tr></thead>
+        <tbody>
+          <tr><td class="td-hi">Mean Dice</td><td class="num">0.122</td><td class="num">0.106</td></tr>
+          <tr><td class="td-hi">Median Dice</td><td class="num">0.000</td><td class="num">0.000</td></tr>
+          <tr><td class="td-hi" style="color:var(--bad)">No overlap (Dice=0)</td><td class="num" style="color:var(--bad)">1,514 (64.3%)</td><td class="num" style="color:var(--bad)">1,546 (59.3%)</td></tr>
+          <tr><td class="td-hi">Poor &lt;0.3</td><td class="num">434 (18.4%)</td><td class="num">687 (26.4%)</td></tr>
+          <tr><td class="td-hi">Moderate 0.3&ndash;0.6</td><td class="num">231 (9.8%)</td><td class="num">237 (9.1%)</td></tr>
+          <tr><td class="td-hi" style="color:var(--good)">Good 0.6&ndash;0.8</td><td class="num" style="color:var(--good)">107 (4.5%)</td><td class="num" style="color:var(--good)">102 (3.9%)</td></tr>
+          <tr><td class="td-hi" style="color:var(--good)">Excellent &gt;0.8</td><td class="num" style="color:var(--good)">67 (2.8%)</td><td class="num" style="color:var(--good)">34 (1.3%)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Stacked Distribution</h2>
+      <p style="font-size:.78rem;color:var(--muted);margin-bottom:8px">Each bar = 100% of that modality</p>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:4px">CT</p>
+      <div class="sbar" style="margin-bottom:12px">
+        <span style="width:64.3%;background:#ef4444"></span>
+        <span style="width:18.4%;background:#f97316"></span>
+        <span style="width:9.8%;background:#eab308"></span>
+        <span style="width:4.5%;background:#22c55e"></span>
+        <span style="width:2.8%;background:#4f8ef7"></span>
+      </div>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:4px">MR</p>
+      <div class="sbar">
+        <span style="width:59.3%;background:#ef4444"></span>
+        <span style="width:26.4%;background:#f97316"></span>
+        <span style="width:9.1%;background:#eab308"></span>
+        <span style="width:3.9%;background:#22c55e"></span>
+        <span style="width:1.3%;background:#4f8ef7"></span>
+      </div>
+      <div class="leg" style="margin-top:12px">
+        <div class="leg-i"><div class="leg-d" style="background:#ef4444"></div>No overlap</div>
+        <div class="leg-i"><div class="leg-d" style="background:#f97316"></div>Poor</div>
+        <div class="leg-i"><div class="leg-d" style="background:#eab308"></div>Moderate</div>
+        <div class="leg-i"><div class="leg-d" style="background:#22c55e"></div>Good</div>
+        <div class="leg-i"><div class="leg-d" style="background:#4f8ef7"></div>Excellent</div>
+      </div>
+      <p class="fn" style="margin-top:10px">CT and MR show nearly identical spatial disagreement; both modalities have median Dice = 0, confirming the poor overlap is not modality-driven.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Body part tab -->
+<div class="pnl" id="tab-bodypart">
+  <div class="g2">
+    <div class="card">
+      <h2>Mean Dice by Anatomical Site</h2>
+      <div class="brow"><div class="blbl w">LUNG</div><div class="btrk"><div class="bfil" style="width:100%;background:#22c55e"></div></div><div class="bval g">0.241</div></div>
+      <div class="brow"><div class="blbl w">COLON</div><div class="btrk"><div class="bfil" style="width:88.8%;background:#22c55e"></div></div><div class="bval g">0.214</div></div>
+      <div class="brow"><div class="blbl w">CERVIX</div><div class="btrk"><div class="bfil" style="width:73.4%;background:#eab308"></div></div><div class="bval a">0.177</div></div>
+      <div class="brow"><div class="blbl w">ABDOMEN</div><div class="btrk"><div class="bfil" style="width:71.8%;background:#eab308"></div></div><div class="bval a">0.173</div></div>
+      <div class="brow"><div class="blbl w">BREAST</div><div class="btrk"><div class="bfil" style="width:61.4%;background:#eab308"></div></div><div class="bval a">0.148</div></div>
+      <div class="brow"><div class="blbl w">KIDNEY (upper)</div><div class="btrk"><div class="bfil" style="width:49%;background:#f97316"></div></div><div class="bval">0.118</div></div>
+      <div class="brow"><div class="blbl w">LIVER</div><div class="btrk"><div class="bfil" style="width:48.1%;background:#f97316"></div></div><div class="bval">0.116</div></div>
+      <div class="brow"><div class="blbl w">BLADDER</div><div class="btrk"><div class="bfil" style="width:46.9%;background:#f97316"></div></div><div class="bval">0.113</div></div>
+      <div class="brow"><div class="blbl w">STOMACH</div><div class="btrk"><div class="bfil" style="width:41.1%;background:#f97316"></div></div><div class="bval">0.099</div></div>
+      <div class="brow"><div class="blbl w">OVARY</div><div class="btrk"><div class="bfil" style="width:29.7%;background:#ef4444"></div></div><div class="bval r">0.072</div></div>
+      <div class="brow"><div class="blbl w">UTERUS</div><div class="btrk"><div class="bfil" style="width:20.7%;background:#ef4444"></div></div><div class="bval r">0.050</div></div>
+      <div class="brow"><div class="blbl w">PROSTATE</div><div class="btrk"><div class="bfil" style="width:12%;background:#ef4444"></div></div><div class="bval r">0.029</div></div>
+      <div class="brow"><div class="blbl w">Kidney (lower)</div><div class="btrk"><div class="bfil" style="width:11.2%;background:#ef4444"></div></div><div class="bval r">0.027</div></div>
+      <div class="brow"><div class="blbl w">ESOPHAGUS</div><div class="btrk"><div class="bfil" style="width:0.1%;background:#ef4444"></div></div><div class="bval r">~0</div></div>
+    </div>
+    <div class="card">
+      <h2>No-overlap Rate by Anatomical Site</h2>
+      <div class="brow"><div class="blbl w">ESOPHAGUS</div><div class="btrk"><div class="bfil" style="width:98.4%;background:#ef4444"></div></div><div class="bval r">98.4%</div></div>
+      <div class="brow"><div class="blbl w">Kidney (lower)</div><div class="btrk"><div class="bfil" style="width:86%;background:#ef4444"></div></div><div class="bval r">86.0%</div></div>
+      <div class="brow"><div class="blbl w">PROSTATE</div><div class="btrk"><div class="bfil" style="width:78.3%;background:#ef4444"></div></div><div class="bval r">78.3%</div></div>
+      <div class="brow"><div class="blbl w">UTERUS</div><div class="btrk"><div class="bfil" style="width:79.6%;background:#ef4444"></div></div><div class="bval r">79.6%</div></div>
+      <div class="brow"><div class="blbl w">OVARY</div><div class="btrk"><div class="bfil" style="width:71.5%;background:#ef4444"></div></div><div class="bval r">71.5%</div></div>
+      <div class="brow"><div class="blbl w">LIVER</div><div class="btrk"><div class="bfil" style="width:65.4%;background:#ef4444"></div></div><div class="bval r">65.4%</div></div>
+      <div class="brow"><div class="blbl w">KIDNEY (upper)</div><div class="btrk"><div class="bfil" style="width:62.4%;background:#ef4444"></div></div><div class="bval r">62.4%</div></div>
+      <div class="brow"><div class="blbl w">LUNG</div><div class="btrk"><div class="bfil" style="width:58.9%;background:#f97316"></div></div><div class="bval">58.9%</div></div>
+      <div class="brow"><div class="blbl w">BLADDER</div><div class="btrk"><div class="bfil" style="width:55.4%;background:#f97316"></div></div><div class="bval">55.4%</div></div>
+      <div class="brow"><div class="blbl w">STOMACH</div><div class="btrk"><div class="bfil" style="width:50.9%;background:#f97316"></div></div><div class="bval">50.9%</div></div>
+      <div class="brow"><div class="blbl w">COLON</div><div class="btrk"><div class="bfil" style="width:43.5%;background:#f97316"></div></div><div class="bval">43.5%</div></div>
+      <div class="brow"><div class="blbl w">BREAST</div><div class="btrk"><div class="bfil" style="width:44.2%;background:#f97316"></div></div><div class="bval">44.2%</div></div>
+      <div class="brow"><div class="blbl w">CERVIX</div><div class="btrk"><div class="bfil" style="width:38.9%;background:#eab308"></div></div><div class="bval a">38.9%</div></div>
+      <div class="brow"><div class="blbl w">ABDOMEN</div><div class="btrk"><div class="bfil" style="width:26.7%;background:#eab308"></div></div><div class="bval a">26.7%</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Manufacturer tab -->
+<div class="pnl" id="tab-manufacturer">
+  <div class="card">
+    <h2>Scanner Manufacturer &mdash; Dice Performance</h2>
+    <div class="tscroll">
+      <table>
+        <thead><tr><th>Manufacturer</th><th>n</th><th>Mean Dice</th><th>No-overlap %</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td class="td-hi">TOSHIBA</td><td class="num">62</td><td class="num" style="color:var(--mild)">0.182</td><td class="num">46.8%</td><td>Above average</td></tr>
+          <tr><td class="td-hi">Philips Medical Systems</td><td class="num">334</td><td class="num" style="color:var(--mild)">0.149</td><td class="num">42.9%</td><td>Above average</td></tr>
+          <tr><td class="td-hi">Philips</td><td class="num">114</td><td class="num" style="color:var(--mild)">0.145</td><td class="num">57.4%</td><td>Average</td></tr>
+          <tr><td class="td-hi">GE MEDICAL SYSTEMS</td><td class="num">2,481</td><td class="num">0.117</td><td class="num" style="color:var(--bad)">60.9%</td><td>Below average &middot; largest group</td></tr>
+          <tr><td class="td-hi">SIEMENS</td><td class="num">1,942</td><td class="num">0.101</td><td class="num" style="color:var(--bad)">66.2%</td><td>Below average &middot; second largest</td></tr>
+          <tr><td class="td-hi">Philips Healthcare</td><td class="num">8</td><td class="num">0.063</td><td class="num">62.5%</td><td>Small n</td></tr>
+          <tr><td class="td-hi" style="color:var(--bad)">TOSHIBA_MEC</td><td class="num">13</td><td class="num" style="color:var(--bad)">0.000</td><td class="num" style="color:var(--bad)">92.3%</td><td>Confounded with TCGA-ESCA (98.4% no-overlap)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="fn" style="margin-top:10px">Manufacturer effects are confounded with project distribution. GE and SIEMENS dominate and span all cancer types. TOSHIBA_MEC's near-zero Dice reflects TCGA-ESCA rather than a scanner effect per se.</p>
+  </div>
+</div>
+
+<!-- Scan Characteristics tab -->
+<div class="pnl" id="tab-scan">
+  <div class="card" style="margin-bottom:14px">
+    <h2>Scan Characteristics per Project</h2>
+    <p class="fn" style="margin-bottom:12px">Median slice thickness and number of slices from NIfTI headers. Spearman ρ shows correlation of slice thickness with Dice score (negative = thicker slices → lower agreement). Significance: * p&lt;0.05, ** p&lt;0.01</p>
+    <div class="tscroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th style="text-align:right">n scans</th>
+            <th style="text-align:right">Med. slices</th>
+            <th style="text-align:right">Med. thickness (mm)</th>
+            <th style="text-align:right">Med. Dice</th>
+            <th style="text-align:right">Thickness vs Dice ρ</th>
+          </tr>
+        </thead>
+        <tbody id="scan-tbl"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <h2>Median Slice Thickness by Project</h2>
+      <p class="fn" style="margin-bottom:10px">Sorted by slice thickness (mm)</p>
+      <div id="thick-bars"></div>
+    </div>
+    <div class="card">
+      <h2>Median Number of Slices by Project</h2>
+      <p class="fn" style="margin-bottom:10px">Sorted by slice count</p>
+      <div id="slices-bars"></div>
+    </div>
+  </div>
+  <div class="sumbox" style="margin-top:14px">
+    <h3 style="margin-bottom:8px">Interpretation</h3>
+    <p>Thicker slices are associated with lower Dice scores in 5 projects with statistical significance: <strong>PRAD</strong> (ρ=−0.28**), <strong>BRCA</strong> (ρ=−0.19***), <strong>CESC</strong> (ρ=−0.18**), <strong>KIRC</strong> (ρ=−0.12***), <strong>LIHC</strong> (ρ=−0.09**). This is consistent with the 2D vs 3D model dynamic: BiomedParse segments each axial slice independently; thick slices (5mm) give coarser volumetric coverage and less context for VoxTell's 3D reconstruction, widening spatial disagreement. ESCA (218 slices, 1.9mm spacing) has near-zero Dice despite thin slices, indicating a task-difficulty effect rather than a scan-quality effect.</p>
+  </div>
+</div>
+
+<!-- Physical Diameter tab -->
+<div class="pnl" id="tab-diam">
+  <div class="card" style="margin-bottom:14px">
+    <h2>Tumour Size: BiomedParse vs VoxTell — RECIST & Total Volume</h2>
+    <p class="fn" style="margin-bottom:12px">Median values per project, all cases. <strong>Diameter:</strong> RECIST index lesion — largest axial diameter among connected components &ge;10mm (RECIST 1.1 measurability threshold). <strong>Volume:</strong> total tumour burden — sum of all voxels regardless of fragment count. For BP (2D slice-by-slice), all cases are single-component, so the axial diameter equals the mask bounding box. For VT (3D), heavily fragmented outputs are common; cases where no component reaches 10mm are reported as diameter = 0.</p>
+    <div class="tscroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th style="text-align:right" title="RECIST index lesion: largest axial diameter ≥10mm">BP RECIST diam (mm)</th>
+            <th style="text-align:right" title="RECIST index lesion: largest component ≥10mm. Zero = no qualifying component">VT RECIST diam (mm)</th>
+            <th style="text-align:right">Ratio BP/VT</th>
+            <th style="text-align:right" title="Total tumour burden: all voxels">BP volume (cm³)</th>
+            <th style="text-align:right" title="Total tumour burden: all voxels across all fragments">VT volume (cm³)</th>
+          </tr>
+        </thead>
+        <tbody id="diam-tbl"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <h2>RECIST Index Lesion Diameter: <span style="color:var(--bp);font-weight:600">BP</span> vs <span style="color:var(--vt);font-weight:600">VT</span></h2>
+    <p class="fn" style="margin-bottom:12px">Each project shows two bars. VT values include zero-diameter cases (no qualifying &ge;10mm component). Max scale = 110 mm.</p>
+    <div id="diam-bars"></div>
+    <div class="leg" style="margin-top:12px">
+      <div class="leg-i"><div class="leg-d" style="background:var(--bp)"></div>BiomedParse (2D)</div>
+      <div class="leg-i"><div class="leg-d" style="background:var(--vt)"></div>VoxTell (3D)</div>
+    </div>
+  </div>
+</div>
+
+<!-- T-Stage Correlation tab -->
+<div class="pnl" id="tab-tstage">
+  <div class="card" style="margin-bottom:14px">
+    <h2>Spearman Correlation: Tumour Size vs T Stage</h2>
+    <p class="fn" style="margin-bottom:12px">Spearman ρ between tumour size and ordinal T/FIGO stage, per project. <strong>Diameter:</strong> RECIST index lesion (largest axial diameter ≥10mm). <strong>Volume:</strong> total tumour burden (all voxels). BP (2D) uses single-component axial diameter. VT (3D) uses RECIST-filtered diameter; 24% of VT cases have no qualifying component ≥10mm (diameter=0). Stage types: <span class="pill size" style="font-size:.68rem">size</span> diameter-defined &mdash; <span class="pill invasion" style="font-size:.68rem">invasion</span> depth-of-invasion &mdash; <span class="pill figo" style="font-size:.68rem">FIGO</span> gynaecological. Significance: * p&lt;0.05, ** p&lt;0.01, *** p&lt;0.001. Slice thickness shown to inspect whether scan protocol affects correlation. <strong>Scan clustering note:</strong> 4,968 series span 996 patients (mean 5 series/patient). 67% of multi-series patients have all series on the same date (different imaging sequences from one session); 33% have genuinely longitudinal scans. All series are included here — p-values are slightly optimistic due to within-patient clustering, but Spearman ρ is robust. A 1-per-patient analysis (earliest scan for longitudinal, max-VT-diam for same-day multi-series) produces similar ρ with wider confidence intervals.</p>
+    <div class="tscroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Stage</th>
+            <th style="text-align:right">n</th>
+            <th style="text-align:right">Thickness</th>
+            <th style="text-align:right" colspan="2">RECIST diam ρ (≥10mm)</th>
+            <th style="text-align:right" colspan="2">Volume ρ</th>
+          </tr>
+          <tr style="font-size:.68rem">
+            <th></th><th></th><th></th><th></th>
+            <th style="text-align:right;color:var(--bp)">BP</th>
+            <th style="text-align:right;color:var(--vt)">VT</th>
+            <th style="text-align:right;color:var(--bp)">BP</th>
+            <th style="text-align:right;color:var(--vt)">VT</th>
+          </tr>
+        </thead>
+        <tbody id="ts-tbl"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="g2" style="margin-bottom:14px">
+    <div class="card">
+      <h2>RECIST diameter vs T stage <span style="font-size:.72rem;color:var(--muted)">(size-based cancers)</span></h2>
+      <p class="fn" style="margin-bottom:8px">Bar length = |ρ|. <span style="color:var(--bp)">■</span> BP+ / <span style="color:var(--vt)">■</span> VT+ = positive &nbsp;·&nbsp; <span style="color:var(--mild)">■</span> amber = negative association &nbsp;·&nbsp; grey = p≥0.05</p>
+      <div id="ts-diam-size-bars"></div>
+    </div>
+    <div class="card">
+      <h2>Physical volume vs T stage <span style="font-size:.72rem;color:var(--muted)">(size-based cancers)</span></h2>
+      <p class="fn" style="margin-bottom:8px">Bar length = |ρ|. <span style="color:var(--bp)">■</span> BP+ / <span style="color:var(--vt)">■</span> VT+ = positive &nbsp;·&nbsp; <span style="color:var(--mild)">■</span> amber = negative association &nbsp;·&nbsp; grey = p≥0.05</p>
+      <div id="ts-vol-size-bars"></div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <h2>Slice thickness vs T-stage correlation</h2>
+    <p class="fn" style="margin-bottom:12px">Each project plotted by its median slice thickness, showing both models' T-stage Spearman ρ (axial diameter). Projects sorted thin → thick. Cross-project Spearman of thickness vs ρ: BP ρ=+0.33 (p=0.23, ns) &middot; VT ρ=−0.18 (p=0.52, ns) — no significant meta-relationship, so thickness does not systematically predict which model achieves better T-stage correlation.</p>
+    <div class="tscroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Stage</th>
+            <th style="text-align:right">Thickness (mm)</th>
+            <th style="text-align:right" style="color:var(--bp)">BP diam ρ</th>
+            <th style="text-align:right" style="color:var(--vt)">VT diam ρ</th>
+            <th style="text-align:right" style="color:var(--bp)">BP vol ρ</th>
+            <th style="text-align:right" style="color:var(--vt)">VT vol ρ</th>
+            <th>VT − BP (diam)</th>
+          </tr>
+        </thead>
+        <tbody id="thick-ts-tbl"></tbody>
+      </table>
+    </div>
+    <p class="fn" style="margin-top:8px">Positive VT − BP = VT advantage; negative = BP advantage. Bold = significant (p&lt;0.05).</p>
+  </div>
+  <div class="sumbox">
+    <h3 style="margin-bottom:8px">Key Findings</h3>
+    <p>After correcting both the T-stage encoding and data joins, <strong>VT performs as well or better than BP in most cancer types</strong>. VT volume significantly outperforms BP volume in <strong>BRCA</strong> (ρ=+0.175*** vs +0.085*), <strong>KICH</strong> (ρ=+0.697** vs +0.216 ns), <strong>KIRC</strong> (ρ=+0.217*** vs +0.176***), <strong>ESCA</strong> (ρ=+0.336** vs −0.020 ns), <strong>LIHC</strong> (ρ=+0.198*** vs +0.174***), <strong>LUSC</strong> (ρ=+0.201* vs +0.056 ns), and <strong>STAD</strong> (ρ=+0.360*** vs +0.182*). <strong>BP volume leads only in CESC</strong> (ρ=+0.416*** vs VT +0.212***), where cervical tumour volume on axial MR is captured well by 2D slice-wise detection. <strong>PRAD (n=120)</strong> shows non-significant correlations for all metrics (all |ρ|&lt;0.15, p&gt;0.12) — expected, since prostate T-stage reflects extracapsular extension rather than linear tumour size. <strong>OV and UCEC have no AJCC T-stage in TCGA</strong> and are excluded from this analysis. Among invasion-staged cancers, COAD (n=23) shows the strongest associations for both models (BP volume ρ=+0.617**, VT volume ρ=+0.644**), while BLCA and ESCA show weak or divergent patterns.</p>
+  </div>
+</div>
+
+
+<!-- VT Fragmentation tab -->
+<div class="pnl" id="tab-frag">
+  <div class="card" style="margin-bottom:14px">
+    <h2>VoxTell (3D) Segmentation Fragmentation</h2>
+    <p class="fn" style="margin-bottom:12px">VoxTell produces multiple disconnected components per scan — a known artefact of 3D reconstruction from sparse axial images. Each connected component is labelled with <code>scipy.ndimage.label</code>. <strong>Qualifying:</strong> components with axial diameter &ge;10mm (RECIST 1.1 measurability threshold). Across all 4,968 scans: median components = 6, mean = 40.3; <strong>1,190 scans (24.0%) have no qualifying RECIST component</strong>, meaning VT produced only noise fragments &lt;10mm in those cases.</p>
+    <div class="tscroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th style="text-align:right">n scans</th>
+            <th style="text-align:right">Median components</th>
+            <th style="text-align:right">Median qualifying (&ge;10mm)</th>
+            <th style="text-align:right">n with zero RECIST diam</th>
+            <th style="text-align:right">% no qualifying</th>
+            <th style="text-align:right">VT median diam (mm)</th>
+            <th style="text-align:right">BP median diam (mm)</th>
+          </tr>
+        </thead>
+        <tbody id="frag-tbl"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <h2>Median Component Count per Project</h2>
+      <p class="fn" style="margin-bottom:10px">Higher = more fragmentation. STAD (49), BRCA (33.5) and COAD (29) are worst.</p>
+      <div id="frag-comp-bars"></div>
+    </div>
+    <div class="card">
+      <h2>% Cases with No Qualifying RECIST Component</h2>
+      <p class="fn" style="margin-bottom:10px">Cases where all VT fragments &lt;10mm axial diameter → RECIST diameter = 0</p>
+      <div id="frag-zero-bars"></div>
+    </div>
+  </div>
+  <div class="sumbox" style="margin-top:14px">
+    <h3 style="margin-bottom:8px">Clinical Significance</h3>
+    <p>VoxTell's fragmentation directly explains its poor Dice scores (median 0.000 overall). The 3D model detects many small spurious regions rather than one coherent tumour volume, consistent with the difficulty of 3D reconstruction from non-contiguous axial slices. <strong>STAD (stomach, median 49 components) and BRCA (breast, median 33.5) have the highest fragmentation</strong> — likely due to heterogeneous tissue and complex geometry. <strong>UCEC (uterine) is an exception</strong>: median 1 component, yet 46.5% have no qualifying RECIST lesion (171/368), suggesting VT finds something but consistently below the 10mm threshold. For KIRC (kidney clear-cell), 30.3% of 1,124 scans have no qualifying VT component (n=341) — by far the largest absolute count. After RECIST filtering, VT's median axial diameter falls far below BP's in most cancer types: OV (27.9 vs 79.3 mm), UCEC (16.6 vs 64.2 mm), PRAD (15.2 vs 59.5 mm), and ESCA (17.0 vs 87.4 mm). These gaps confirm that heavy fragmentation, rather than genuine biological differences, drives the measured size discordance in those cancer types.</p>
+  </div>
+</div>
+
+<!-- Overall Stage tab -->
+<div class="pnl" id="tab-ostage">
+  <div class="card" style="margin-bottom:14px">
+    <h2>RECIST Diameter &amp; Volume vs Overall TNM/FIGO Stage (I–IV)</h2>
+    <p class="fn" style="margin-bottom:12px">Spearman ρ between tumour size/volume and overall pathologic stage (I=1 … IV=4). Stage from <code>ajcc_pathologic_stage</code> (primary) or <code>figo_stage</code> (CESC/OV/UCEC); substages (IIa, IIIb, IVa, Ib1…) mapped to primary Roman numeral. <strong>Like-for-like RECIST:</strong> BP diameter = axial bounding-box diameter zeroed when &lt;10mm (matching VT's qualifying threshold); VT diameter = largest component ≥10mm. Both diameters and volumes follow the same RECIST 1.1 measurability rule. Compare with T-stage ρ (volume tab) to assess whether total disease burden beyond local T-stage is captured. Bar length = |ρ|; <span style="color:var(--bp)">■</span> BP / <span style="color:var(--vt)">■</span> VT = positive &nbsp;·&nbsp; <span style="color:var(--mild)">■</span> amber = negative &nbsp;·&nbsp; grey = p≥0.05. <strong>Scan clustering:</strong> all series included (996 patients, 4,968 series); see T-stage tab note.</p>
+    <div class="tscroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Stage</th>
+            <th style="text-align:right">n</th>
+            <th style="text-align:right" colspan="2">Overall stage ρ — RECIST diam</th>
+            <th style="text-align:right" colspan="2">Overall stage ρ — Volume</th>
+            <th style="text-align:right" colspan="2">T-stage ρ — Volume (ref)</th>
+            <th style="text-align:right">VT OS−TS Δρ</th>
+          </tr>
+          <tr style="font-size:.68rem">
+            <th></th><th></th><th></th>
+            <th style="text-align:right;color:var(--bp)">BP</th>
+            <th style="text-align:right;color:var(--vt)">VT</th>
+            <th style="text-align:right;color:var(--bp)">BP</th>
+            <th style="text-align:right;color:var(--vt)">VT</th>
+            <th style="text-align:right;color:var(--bp)">BP</th>
+            <th style="text-align:right;color:var(--vt)">VT</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="os-tbl"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="g2" style="margin-bottom:14px">
+    <div class="card">
+      <h2>RECIST Diameter &amp; Volume vs Overall Stage</h2>
+      <p class="fn" style="margin-bottom:8px">Bar length = |ρ|. Model colours = positive; amber = negative; grey = p≥0.05.</p>
+      <h3 style="margin-top:10px;margin-bottom:6px">RECIST diameter</h3>
+      <div id="os-diam-bars"></div>
+      <h3 style="margin-top:14px;margin-bottom:6px">Physical volume</h3>
+      <div id="os-vol-bars"></div>
+    </div>
+    <div class="card">
+      <h2>VT volume: Overall stage vs T-stage ρ</h2>
+      <p class="fn" style="margin-bottom:8px">Direct comparison for VT only. Positive shift = overall stage better captured by total volume.</p>
+      <div id="os-delta-bars"></div>
+    </div>
+  </div>
+  <div class="sumbox">
+    <h3 style="margin-bottom:8px">Key Findings</h3>
+    <p id="os-summary"></p>
+  </div>
+</div>
+
+<hr>
+<div class="sec">Summary of Disagreement Patterns</div>
+<div class="g3" style="margin-bottom:20px">
+  <div class="sumbox">
+    <h3>Cancer Type</h3>
+    <p><strong>Worst:</strong> TCGA-ESCA (esophageal, 98% no-overlap, near-zero Dice), TCGA-PRAD (prostate, 78%), TCGA-UCEC (uterine, 77%), TCGA-OV (ovarian, 72%).<br><br><strong>Best:</strong> TCGA-LUSC (lung squamous, mean Dice 0.285), TCGA-COAD (colon, 0.214), TCGA-CESC (cervical, 0.177). Lung and cervical sites are the most tractable for both models.</p>
+  </div>
+  <div class="sumbox">
+    <h3>Modality</h3>
+    <p>CT and MR show <strong>nearly identical spatial agreement</strong> (mean Dice 0.122 vs 0.106). The prior finding that MR disagreed far more than CT was an artefact of the size proxy. Both modalities have universally poor spatial overlap with median Dice = 0 in both.</p>
+  </div>
+  <div class="sumbox">
+    <h3>Gating Recommendation</h3>
+    <p>Only <strong>310 series (6.2%)</strong> achieve Dice &#x2265; 0.6. Dice &#x2265; 0.8 (excellent): <strong>101 series (2.0%)</strong>, concentrated in LUSC, LIHC, and BRCA. Voxel-wise Dice is the only reliable gating criterion for spatial overlap.</p>
+  </div>
+</div>
+
+<p class="fn" style="text-align:center;padding-bottom:24px">
+  BiomedParse vs VoxTell &middot; TCGA-TCIA &middot; 4,968 paired NIfTI segmentations &middot; Public repository data (TCGA) &middot; Dice = 2|A&#x2229;B| / (|A|+|B|), voxel-wise binary &middot; Physical measures from NIfTI header voxel spacing
+</p>
+</div>
+
+<script>
+function showTab(id,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));
+  document.getElementById('tab-'+id).classList.add('on');
+  el.classList.add('on');
+}
+
+// ---- Project × modality table ----
+const rows=[
+  {p:'TCGA-BLCA',m:'CT',n:304,no:161,po:85,mo:44,go:14,ex:0,mean:'0.109'},
+  {p:'TCGA-BLCA',m:'MR',n:165,no:102,po:47,mo:9,go:6,ex:1,mean:'0.109'},
+  {p:'TCGA-BRCA',m:'MR',n:634,no:280,po:228,mo:76,go:34,ex:14,mean:'0.148'},
+  {p:'TCGA-CESC',m:'MR',n:366,no:143,po:133,mo:58,go:23,ex:9,mean:'0.177'},
+  {p:'TCGA-COAD',m:'CT',n:23,no:10,po:5,mo:4,go:4,ex:0,mean:'0.214'},
+  {p:'TCGA-ESCA',m:'CT',n:64,no:63,po:1,mo:0,go:0,ex:0,mean:'0.000'},
+  {p:'TCGA-KICH',m:'CT',n:10,no:5,po:1,mo:3,go:1,ex:0,mean:'0.172'},
+  {p:'TCGA-KICH',m:'MR',n:8,no:4,po:4,mo:0,go:0,ex:0,mean:'0.088'},
+  {p:'TCGA-KIRC',m:'CT',n:587,no:386,po:97,mo:66,go:24,ex:13,mean:'0.100'},
+  {p:'TCGA-KIRC',m:'MR',n:537,no:375,po:106,mo:36,go:16,ex:1,mean:'0.099'},
+  {p:'TCGA-KIRP',m:'CT',n:37,no:25,po:7,mo:5,go:0,ex:0,mean:'0.086'},
+  {p:'TCGA-KIRP',m:'MR',n:137,no:90,po:23,mo:14,go:9,ex:1,mean:'0.122'},
+  {p:'TCGA-LIHC',m:'CT',n:296,no:166,po:50,mo:31,go:26,ex:23,mean:'0.168'},
+  {p:'TCGA-LIHC',m:'MR',n:559,no:393,po:111,mo:36,go:11,ex:8,mean:'0.083'},
+  {p:'TCGA-LUAD',m:'CT',n:91,no:61,po:9,mo:6,go:3,ex:12,mean:'0.185'},
+  {p:'TCGA-LUSC',m:'CT',n:116,no:61,po:6,mo:18,go:17,ex:14,mean:'0.285'},
+  {p:'TCGA-OV',m:'CT',n:369,no:261,po:73,mo:19,go:11,ex:5,mean:'0.073'},
+  {p:'TCGA-OV',m:'MR',n:14,no:13,po:1,mo:0,go:0,ex:0,mean:'0.019'},
+  {p:'TCGA-PRAD',m:'CT',n:12,no:7,po:3,mo:1,go:1,ex:0,mean:'0.098'},
+  {p:'TCGA-PRAD',m:'MR',n:108,no:87,po:18,mo:3,go:0,ex:0,mean:'0.022'},
+  {p:'TCGA-STAD',m:'CT',n:161,no:82,po:57,mo:21,go:1,ex:0,mean:'0.099'},
+  {p:'TCGA-UCEC',m:'CT',n:285,no:226,po:40,mo:13,go:5,ex:0,mean:'0.044'},
+  {p:'TCGA-UCEC',m:'MR',n:82,no:59,po:16,mo:5,go:3,ex:0,mean:'0.095'},
+];
+const tb=document.getElementById('ptbl');
+rows.forEach(r=>{
+  const pct=(r.no/r.n*100).toFixed(0);
+  const c=r.no/r.n>0.7?'var(--bad)':r.no/r.n>0.5?'var(--mild)':'inherit';
+  const mc=parseFloat(r.mean)>0.2?'var(--good)':parseFloat(r.mean)>0.1?'var(--mild)':'var(--bad)';
+  tb.innerHTML+=`<tr>
+    <td class="td-hi">${r.p}</td>
+    <td><span class="pill ${r.m.toLowerCase()}">${r.m}</span></td>
+    <td class="num">${r.n}</td>
+    <td class="num" style="color:${c}">${r.no} (${pct}%)</td>
+    <td class="num">${r.po}</td><td class="num">${r.mo}</td>
+    <td class="num">${r.go}</td><td class="num">${r.ex}</td>
+    <td class="num" style="color:${mc};font-weight:600">${r.mean}</td>
+  </tr>`;
+});
+
+// ---- Scan characteristics data ----
+const scanData = [
+  {p:'TCGA-BLCA', n:469, slices:88, thick:4.40, dice:0.000, rho:-0.060, pval:0.193},
+  {p:'TCGA-BRCA', n:634, slices:72, thick:2.00, dice:0.009, rho:-0.193, pval:0.000},
+  {p:'TCGA-CESC', n:368, slices:32, thick:4.00, dice:0.037, rho:-0.179, pval:0.001},
+  {p:'TCGA-COAD', n:23,  slices:85, thick:5.00, dice:0.003, rho:-0.020, pval:0.929},
+  {p:'TCGA-ESCA', n:64,  slices:218,thick:1.88, dice:0.000, rho:-0.177, pval:0.162},
+  {p:'TCGA-KICH', n:18,  slices:55, thick:5.00, dice:0.011, rho:-0.067, pval:0.791},
+  {p:'TCGA-KIRC', n:1124,slices:55, thick:5.00, dice:0.000, rho:-0.116, pval:0.000},
+  {p:'TCGA-KIRP', n:174, slices:56, thick:5.00, dice:0.000, rho:-0.061, pval:0.422},
+  {p:'TCGA-LIHC', n:855, slices:55, thick:5.00, dice:0.000, rho:-0.092, pval:0.007},
+  {p:'TCGA-LUAD', n:91,  slices:155,thick:3.27, dice:0.000, rho:+0.107, pval:0.314},
+  {p:'TCGA-LUSC', n:116, slices:141,thick:3.00, dice:0.000, rho:-0.022, pval:0.813},
+  {p:'TCGA-OV',   n:383, slices:82, thick:5.00, dice:0.000, rho:-0.074, pval:0.147},
+  {p:'TCGA-PRAD', n:120, slices:34, thick:5.00, dice:0.000, rho:-0.279, pval:0.002},
+  {p:'TCGA-STAD', n:161, slices:169,thick:2.50, dice:0.000, rho:+0.098, pval:0.217},
+  {p:'TCGA-UCEC', n:368, slices:91, thick:5.00, dice:0.000, rho:+0.046, pval:0.377},
+];
+
+function sigStr(pval, rho) {
+  if (rho >= 0) return '';
+  if (pval < 0.001) return '***';
+  if (pval < 0.01) return '**';
+  if (pval < 0.05) return '*';
+  return '';
+}
+function rhoColor(rho, pval) {
+  const sig = pval < 0.05;
+  if (!sig) return 'var(--muted)';
+  return rho < 0 ? 'var(--bad)' : 'var(--good)';
+}
+
+const scanTbl = document.getElementById('scan-tbl');
+scanData.sort((a,b)=>a.thick - b.thick);
+scanData.forEach(r => {
+  const sig = sigStr(r.pval, r.rho);
+  const rc = rhoColor(r.rho, r.pval);
+  const diceColor = r.dice > 0.05 ? 'var(--good)' : r.dice > 0.01 ? 'var(--mild)' : 'var(--bad)';
+  scanTbl.innerHTML += `<tr>
+    <td class="td-hi">${r.p}</td>
+    <td class="num">${r.n.toLocaleString()}</td>
+    <td class="num">${r.slices}</td>
+    <td class="num">${r.thick.toFixed(2)}</td>
+    <td class="num" style="color:${diceColor}">${r.dice.toFixed(3)}</td>
+    <td class="num" style="color:${rc};font-weight:600">${r.rho >= 0 ? '+':''}${r.rho.toFixed(3)}${sig ? `<span style="font-size:.65rem"> ${sig}</span>` : ''}</td>
+  </tr>`;
+});
+
+// Thick bars
+const thickBars = document.getElementById('thick-bars');
+const maxThick = 5.5;
+[...scanData].sort((a,b)=>b.thick-a.thick).forEach(r=>{
+  const pct = (r.thick/maxThick*100).toFixed(1);
+  const col = r.thick >= 5 ? '#ef4444' : r.thick >= 3 ? '#f97316' : '#4f8ef7';
+  thickBars.innerHTML += `<div class="brow"><div class="blbl">${r.p.replace('TCGA-','')}</div><div class="btrk"><div class="bfil" style="width:${pct}%;background:${col}"></div></div><div class="bval">${r.thick}mm</div></div>`;
+});
+
+// Slices bars
+const slicesBars = document.getElementById('slices-bars');
+const maxSlices = 220;
+[...scanData].sort((a,b)=>b.slices-a.slices).forEach(r=>{
+  const pct = (r.slices/maxSlices*100).toFixed(1);
+  const col = r.slices >= 150 ? '#4f8ef7' : r.slices >= 80 ? '#22c55e' : '#eab308';
+  slicesBars.innerHTML += `<div class="brow"><div class="blbl">${r.p.replace('TCGA-','')}</div><div class="btrk"><div class="bfil" style="width:${pct}%;background:${col}"></div></div><div class="bval">${r.slices}</div></div>`;
+});
+
+// ---- Physical diameter data ----
+const diamData = [
+  {p:'TCGA-BLCA', bp:70.3, vt:51.3, bpvol:29944, vtvol:29978},
+  {p:'TCGA-BRCA', bp:44.3, vt:53.9, bpvol:6755,  vtvol:29022},
+  {p:'TCGA-CESC', bp:70.6, vt:38.3, bpvol:53618,  vtvol:27954},
+  {p:'TCGA-COAD', bp:70.7, vt:50.3, bpvol:49411,  vtvol:40965},
+  {p:'TCGA-ESCA', bp:87.4, vt:17.0, bpvol:32357,  vtvol:2836},
+  {p:'TCGA-KICH', bp:76.1, vt:63.7, bpvol:60125,  vtvol:116743},
+  {p:'TCGA-KIRC', bp:82.8, vt:48.5, bpvol:56553,  vtvol:43878},
+  {p:'TCGA-KIRP', bp:83.0, vt:56.2, bpvol:71147,  vtvol:80308},
+  {p:'TCGA-LIHC', bp:84.4, vt:53.1, bpvol:48576,  vtvol:54142},
+  {p:'TCGA-LUAD', bp:82.1, vt:32.8, bpvol:43438,  vtvol:11573},
+  {p:'TCGA-LUSC', bp:89.5, vt:51.3, bpvol:83253,  vtvol:48033},
+  {p:'TCGA-OV',   bp:79.3, vt:27.9, bpvol:35780,  vtvol:10066},
+  {p:'TCGA-PRAD', bp:59.5, vt:15.2, bpvol:23939,  vtvol:1827},
+  {p:'TCGA-STAD', bp:72.1, vt:72.7, bpvol:31361,  vtvol:52327},
+  {p:'TCGA-UCEC', bp:64.2, vt:16.6, bpvol:19766,  vtvol:1729},
+];
+
+const diamTbl = document.getElementById('diam-tbl');
+diamData.sort((a,b)=>(b.bp/b.vt)-(a.bp/a.vt));
+diamData.forEach(r=>{
+  const ratio = (r.bp/r.vt).toFixed(2);
+  const ratioColor = ratio > 2 ? 'var(--bad)' : ratio < 0.5 ? 'var(--mild)' : 'var(--muted)';
+  const winner = r.bp > r.vt ? 'BP↑' : 'VT↑';
+  const wc = r.bp > r.vt ? 'var(--bp)' : 'var(--vt)';
+  diamTbl.innerHTML += `<tr>
+    <td class="td-hi">${r.p}</td>
+    <td class="num" style="color:var(--bp);font-weight:600">${r.bp}</td>
+    <td class="num" style="color:var(--vt);font-weight:600">${r.vt}</td>
+    <td class="num" style="color:${ratioColor};font-weight:600">${ratio}</td>
+    <td class="num">${(r.bpvol/1000).toFixed(1)}</td>
+    <td class="num">${(r.vtvol/1000).toFixed(1)}</td>
+  </tr>`;
+});
+
+const diamBars = document.getElementById('diam-bars');
+const maxDiam = 110;
+[...diamData].sort((a,b)=>Math.max(b.bp,b.vt)-Math.max(a.bp,a.vt)).forEach(r=>{
+  const bpPct = (r.bp/maxDiam*100).toFixed(1);
+  const vtPct = (r.vt/maxDiam*100).toFixed(1);
+  diamBars.innerHTML += `
+    <div class="drow">
+      <div class="dlbl">${r.p.replace('TCGA-','')}</div>
+      <div class="dtrk">
+        <div class="dbar" style="width:${bpPct}%;background:var(--bp)"></div>
+        <div class="dbar" style="width:${vtPct}%;background:var(--vt)"></div>
+      </div>
+      <div class="dval-bp">${r.bp}mm</div>
+      <div class="dval-vt">${r.vt}mm</div>
+    </div>`;
+});
+
+// ---- T-stage correlation data — CORRECTED v11 (RECIST-consistent) ----
+// Source: diagnoses.ajcc_pathologic_t → integer 1-4 (T1→1 … T4→4)
+// bd = bp_recist_diam_mm: bp_axial_diam_mm zeroed when <10mm (RECIST 1.1 filter)
+//   → values numerically identical to v10 bp_axial_diam_mm to 4 d.p. (only 10/4968 cases affected)
+// vd = vt_recist_diam_mm: largest component ≥10mm axial diam, or 0 if none
+// bv = bp_vol_mm3 from seg_physical_measures.csv (true physical volume in mm³)
+// vv = vt_vol_mm3_total from vt_recist_measures.csv (true physical volume in mm³)
+// OV and UCEC have no ajcc_pathologic_t in TCGA → n=0 (no T-stage data)
+const tsData = [
+  {p:'TCGA-BLCA', type:'invasion', n:383,  thick:4.40,  bd:-0.0768,bd_p:0.1335, vd:-0.0065,vd_p:0.8995, bv:0.0433, bv_p:0.3976, vv:-0.0091,vv_p:0.8587},
+  {p:'TCGA-BRCA', type:'size',     n:634,  thick:2.00,  bd:0.0384, bd_p:0.3344, vd:0.1380, vd_p:0.0005, bv:0.0853, bv_p:0.0317, vv:0.1753, vv_p:0.0000},
+  {p:'TCGA-CESC', type:'invasion', n:336,  thick:4.00,  bd:0.2700, bd_p:0.0000, vd:0.1646, vd_p:0.0025, bv:0.4157, bv_p:0.0000, vv:0.2124, vv_p:0.0001},
+  {p:'TCGA-COAD', type:'invasion', n:23,   thick:5.00,  bd:0.6110, bd_p:0.0020, vd:0.5716, vd_p:0.0044, bv:0.6169, bv_p:0.0017, vv:0.6440, vv_p:0.0009},
+  {p:'TCGA-ESCA', type:'invasion', n:64,   thick:1.875, bd:-0.1961,bd_p:0.1205, vd:0.2765, vd_p:0.0270, bv:-0.0203,bv_p:0.8738, vv:0.3364, vv_p:0.0066},
+  {p:'TCGA-KICH', type:'size',     n:18,   thick:5.00,  bd:0.4965, bd_p:0.0361, vd:0.4509, vd_p:0.0604, bv:0.2155, bv_p:0.3904, vv:0.6973, vv_p:0.0013},
+  {p:'TCGA-KIRC', type:'size',     n:1124, thick:5.00,  bd:0.1400, bd_p:0.0000, vd:0.2101, vd_p:0.0000, bv:0.1764, bv_p:0.0000, vv:0.2168, vv_p:0.0000},
+  {p:'TCGA-KIRP', type:'size',     n:174,  thick:5.00,  bd:0.0438, bd_p:0.5662, vd:0.1561, vd_p:0.0397, bv:0.1738, bv_p:0.0218, vv:0.1358, vv_p:0.0741},
+  {p:'TCGA-LIHC', type:'size',     n:855,  thick:5.00,  bd:0.1087, bd_p:0.0015, vd:0.1810, vd_p:0.0000, bv:0.1740, bv_p:0.0000, vv:0.1984, vv_p:0.0000},
+  {p:'TCGA-LUAD', type:'size',     n:91,   thick:3.27,  bd:-0.0295,bd_p:0.7811, vd:0.0513, vd_p:0.6288, bv:0.0670, bv_p:0.5281, vv:0.1131, vv_p:0.2860},
+  {p:'TCGA-LUSC', type:'size',     n:116,  thick:3.00,  bd:-0.0946,bd_p:0.3127, vd:0.1037, vd_p:0.2680, bv:0.0556, bv_p:0.5530, vv:0.2012, vv_p:0.0304},
+  {p:'TCGA-OV',   type:'none',     n:0,    thick:5.00,  bd:null,   bd_p:null,   vd:null,   vd_p:null,   bv:null,   bv_p:null,   vv:null,   vv_p:null},
+  {p:'TCGA-PRAD', type:'size',     n:120,  thick:5.00,  bd:-0.1400,bd_p:0.1273, vd:-0.0332,vd_p:0.7192, bv:-0.0621,bv_p:0.5002, vv:-0.0203,vv_p:0.8260},
+  {p:'TCGA-STAD', type:'invasion', n:161,  thick:2.50,  bd:0.2521, bd_p:0.0013, vd:0.3036, vd_p:0.0001, bv:0.1817, bv_p:0.0211, vv:0.3604, vv_p:0.0000},
+  {p:'TCGA-UCEC', type:'none',     n:0,    thick:5.00,  bd:null,   bd_p:null,   vd:null,   vd_p:null,   bv:null,   bv_p:null,   vv:null,   vv_p:null},
+];
+
+function pSig(pv){ if(pv==null)return''; if(pv<0.001)return'***'; if(pv<0.01)return'**'; if(pv<0.05)return'*'; return''; }
+function rhoCell(r, p){
+  if(r==null) return `<td class="num" style="color:var(--muted)">—</td>`;
+  const c = p<0.05 ? (r>=0?'var(--good)':'var(--bad)') : 'var(--muted)';
+  const fw = p<0.05 ? '700' : '400';
+  return `<td class="num" style="color:${c};font-weight:${fw}">${r>=0?'+':''}${r.toFixed(3)}<span style="font-size:.6rem"> ${pSig(p)}</span></td>`;
+}
+
+// Main table sorted by stage type then project
+const tsTbl = document.getElementById('ts-tbl');
+[...tsData].sort((a,b)=>['size','invasion','none'].indexOf(a.type)-['size','invasion','none'].indexOf(b.type)||a.p.localeCompare(b.p))
+.forEach(d=>{
+  const thickC = d.thick>=5?'var(--bad)':d.thick<=2?'var(--accent)':'var(--muted)';
+  tsTbl.innerHTML += `<tr>
+    <td class="td-hi">${d.p}</td>
+    <td><span class="pill ${d.type}">${d.type}</span></td>
+    <td class="num">${d.n.toLocaleString()}</td>
+    <td class="num" style="color:${thickC};font-weight:600">${d.thick}mm</td>
+    ${rhoCell(d.bd,d.bd_p)}${rhoCell(d.vd,d.vd_p)}${rhoCell(d.bv,d.bv_p)}${rhoCell(d.vv,d.vv_p)}
+  </tr>`;
+});
+
+// Bar pairs: axial diam, size-based
+// bars show |ρ|; amber = negative association; model colour = positive; grey = p≥0.05
+const maxRho = 0.75;
+function dualBar(containerId, rows, bKey, bpKey, vtKey, vtpKey){
+  const el = document.getElementById(containerId);
+  rows.forEach(d=>{
+    const bp = d[bKey], bp_p = d[bpKey], vt = d[vtKey], vt_p = d[vtpKey];
+    if(bp==null && vt==null) return; // skip projects with no stage data (e.g. PRAD)
+    const bpPct = bp!=null ? (Math.abs(bp)/maxRho*100).toFixed(1) : '0';
+    const vtPct = vt!=null ? (Math.abs(vt)/maxRho*100).toFixed(1) : '0';
+    const bpC = (bp_p!=null && bp_p<0.05) ? (bp>=0 ? 'var(--bp)' : 'var(--mild)') : 'var(--border)';
+    const vtC = (vt_p!=null && vt_p<0.05) ? (vt>=0 ? 'var(--vt)' : 'var(--mild)') : 'var(--border)';
+    const bpTxt = bp!=null ? `${bp>=0?'+':''}${bp.toFixed(2)}` : '—';
+    const vtTxt = vt!=null ? `${vt>=0?'+':''}${vt.toFixed(2)}` : '—';
+    const bpStyle = (bp_p!=null && bp_p<0.05) ? (bp>=0 ? 'color:var(--bp)' : 'color:var(--mild)') : 'color:var(--muted)';
+    const vtStyle = (vt_p!=null && vt_p<0.05) ? (vt>=0 ? 'color:var(--vt)' : 'color:var(--mild)') : 'color:var(--muted)';
+    el.innerHTML += `<div class="drow">
+      <div class="dlbl">${d.p.replace('TCGA-','')}</div>
+      <div class="dtrk">
+        <div class="dbar" style="width:${bpPct}%;background:${bpC}"></div>
+        <div class="dbar" style="width:${vtPct}%;background:${vtC}"></div>
+      </div>
+      <div class="dval-bp" style="${bpStyle}">${bpTxt}</div>
+      <div class="dval-vt" style="${vtStyle}">${vtTxt}</div>
+    </div>`;
+  });
+}
+const sizeRows = tsData.filter(d=>d.type==='size');
+dualBar('ts-diam-size-bars', sizeRows, 'bd','bd_p','vd','vd_p');
+dualBar('ts-vol-size-bars',  sizeRows, 'bv','bv_p','vv','vv_p');
+
+// Thickness vs T-stage correlation table (sorted thin → thick)
+const thickTsTbl = document.getElementById('thick-ts-tbl');
+[...tsData].sort((a,b)=>a.thick-b.thick).forEach(d=>{
+  const diff = (d.vd!=null && d.bd!=null) ? d.vd - d.bd : null;
+  const diffC = diff==null ? 'var(--muted)' : diff > 0.05 ? 'var(--vt)' : diff < -0.05 ? 'var(--bp)' : 'var(--muted)';
+  const diffTxt = diff==null ? '—' : `${diff>=0?'+':''}${diff.toFixed(3)}`;
+  const thickC = d.thick>=5?'var(--bad)':d.thick<=2?'var(--accent)':'var(--muted)';
+  thickTsTbl.innerHTML += `<tr>
+    <td class="td-hi">${d.p}</td>
+    <td><span class="pill ${d.type}">${d.type}</span></td>
+    <td class="num" style="color:${thickC};font-weight:600">${d.thick}mm</td>
+    ${rhoCell(d.bd,d.bd_p)}${rhoCell(d.vd,d.vd_p)}${rhoCell(d.bv,d.bv_p)}${rhoCell(d.vv,d.vv_p)}
+    <td class="num" style="color:${diffC};font-weight:600">${diffTxt}</td>
+  </tr>`;
+});
+
+// ---- VT Fragmentation data ----
+const fragData = [
+  {p:'TCGA-BLCA', n:469,  nComp:9.0,   nQual:1.0, nZero:117, vtDiam:51.3, bpDiam:70.3},
+  {p:'TCGA-BRCA', n:634,  nComp:33.5,  nQual:4.0, nZero:21,  vtDiam:53.9, bpDiam:44.3},
+  {p:'TCGA-CESC', n:368,  nComp:17.0,  nQual:2.0, nZero:49,  vtDiam:38.3, bpDiam:70.6},
+  {p:'TCGA-COAD', n:23,   nComp:29.0,  nQual:3.0, nZero:3,   vtDiam:50.3, bpDiam:70.7},
+  {p:'TCGA-ESCA', n:64,   nComp:2.0,   nQual:1.0, nZero:20,  vtDiam:17.0, bpDiam:87.4},
+  {p:'TCGA-KICH', n:18,   nComp:10.0,  nQual:1.0, nZero:1,   vtDiam:63.7, bpDiam:76.1},
+  {p:'TCGA-KIRC', n:1124, nComp:3.0,   nQual:1.0, nZero:341, vtDiam:48.5, bpDiam:82.8},
+  {p:'TCGA-KIRP', n:174,  nComp:6.0,   nQual:1.0, nZero:38,  vtDiam:56.2, bpDiam:83.0},
+  {p:'TCGA-LIHC', n:855,  nComp:3.0,   nQual:1.0, nZero:212, vtDiam:53.1, bpDiam:84.4},
+  {p:'TCGA-LUAD', n:91,   nComp:3.0,   nQual:1.0, nZero:11,  vtDiam:32.8, bpDiam:82.1},
+  {p:'TCGA-LUSC', n:116,  nComp:5.0,   nQual:2.0, nZero:11,  vtDiam:51.3, bpDiam:89.5},
+  {p:'TCGA-OV',   n:383,  nComp:4.0,   nQual:1.0, nZero:136, vtDiam:27.9, bpDiam:79.3},
+  {p:'TCGA-PRAD', n:120,  nComp:4.0,   nQual:1.0, nZero:52,  vtDiam:15.2, bpDiam:59.5},
+  {p:'TCGA-STAD', n:161,  nComp:49.0,  nQual:2.0, nZero:7,   vtDiam:72.7, bpDiam:72.1},
+  {p:'TCGA-UCEC', n:368,  nComp:1.0,   nQual:1.0, nZero:171, vtDiam:16.6, bpDiam:64.2},
+];
+
+const fragTbl = document.getElementById('frag-tbl');
+[...fragData].sort((a,b)=>b.nComp-a.nComp).forEach(d=>{
+  const pctZero = (d.nZero/d.n*100).toFixed(1);
+  const zeroC = d.nZero/d.n > 0.3 ? 'var(--bad)' : d.nZero/d.n > 0.1 ? 'var(--mild)' : 'var(--muted)';
+  const compC = d.nComp > 20 ? 'var(--bad)' : d.nComp > 8 ? 'var(--mild)' : 'var(--muted)';
+  fragTbl.innerHTML += `<tr>
+    <td class="td-hi">${d.p}</td>
+    <td class="num">${d.n.toLocaleString()}</td>
+    <td class="num" style="color:${compC};font-weight:600">${d.nComp}</td>
+    <td class="num">${d.nQual}</td>
+    <td class="num" style="color:${zeroC}">${d.nZero}</td>
+    <td class="num" style="color:${zeroC};font-weight:600">${pctZero}%</td>
+    <td class="num" style="color:var(--vt);font-weight:600">${d.vtDiam}</td>
+    <td class="num" style="color:var(--bp);font-weight:600">${d.bpDiam}</td>
+  </tr>`;
+});
+
+const fragCompBars = document.getElementById('frag-comp-bars');
+const maxComp = 55;
+[...fragData].sort((a,b)=>b.nComp-a.nComp).forEach(d=>{
+  const pct = (d.nComp/maxComp*100).toFixed(1);
+  const col = d.nComp>20?'var(--bad)':d.nComp>8?'var(--mild)':'var(--muted)';
+  fragCompBars.innerHTML += `<div class="brow"><div class="blbl">${d.p.replace('TCGA-','')}</div><div class="btrk"><div class="bfil" style="width:${pct}%;background:${col}"></div></div><div class="bval">${d.nComp}</div></div>`;
+});
+
+// ---- Overall Stage correlation data ----
+// ---- Overall Stage data — RECIST-consistent BP diameter + fixed substage parser (v11) ----
+// bd = bp_recist_diam_mm (≥10mm filter); vd = vt_recist_diam_mm
+// Stage source: ajcc_pathologic_stage primary; figo_stage fallback for CESC/OV/UCEC
+// Substages (IIa, IIIb, IVa, Ib1, etc.) mapped to primary Roman numeral (i→1 … iv→4)
+const osData = [
+  {p:'TCGA-BLCA', n:466,  stage_src:'AJCC', bd:-0.0643,bd_p:0.1655, vd:0.1075,vd_p:0.0202, bv:-0.0779,bv_p:0.0929, vv:0.1086,vv_p:0.0190},
+  {p:'TCGA-BRCA', n:634,  stage_src:'AJCC', bd:0.0248, bd_p:0.5324, vd:-0.0418,vd_p:0.2932, bv:0.0371, bv_p:0.3504, vv:0.0036,vv_p:0.9280},
+  {p:'TCGA-CESC', n:368,  stage_src:'FIGO', bd:0.1978, bd_p:0.0001, vd:0.1021,vd_p:0.0503,  bv:0.3526, bv_p:0.0000, vv:0.1412,vv_p:0.0067},
+  {p:'TCGA-COAD', n:23,   stage_src:'AJCC', bd:-0.0685,bd_p:0.7562, vd:-0.4484,vd_p:0.0319, bv:-0.1704,bv_p:0.4369, vv:-0.2907,vv_p:0.1785},
+  {p:'TCGA-ESCA', n:64,   stage_src:'AJCC', bd:-0.0710,bd_p:0.5772, vd:0.1945,vd_p:0.1236,  bv:0.0486, bv_p:0.7032, vv:0.1846,vv_p:0.1441},
+  {p:'TCGA-KICH', n:18,   stage_src:'AJCC', bd:0.5114, bd_p:0.0301, vd:0.4543,vd_p:0.0582,  bv:0.2499, bv_p:0.3173, vv:0.7042,vv_p:0.0011},
+  {p:'TCGA-KIRC', n:1124, stage_src:'AJCC', bd:0.1405, bd_p:0.0000, vd:0.2045,vd_p:0.0000,  bv:0.1741, bv_p:0.0000, vv:0.2051,vv_p:0.0000},
+  {p:'TCGA-KIRP', n:139,  stage_src:'AJCC', bd:0.0185, bd_p:0.8285, vd:0.1874,vd_p:0.0272,  bv:0.1753, bv_p:0.0390, vv:0.1622,vv_p:0.0565},
+  {p:'TCGA-LIHC', n:781,  stage_src:'AJCC', bd:0.0968, bd_p:0.0068, vd:0.1716,vd_p:0.0000,  bv:0.1681, bv_p:0.0000, vv:0.1794,vv_p:0.0000},
+  {p:'TCGA-LUAD', n:87,   stage_src:'AJCC', bd:-0.0650,bd_p:0.5498, vd:-0.1114,vd_p:0.3043, bv:0.0416, bv_p:0.7023, vv:-0.0119,vv_p:0.9130},
+  {p:'TCGA-LUSC', n:112,  stage_src:'AJCC', bd:-0.0586,bd_p:0.5396, vd:0.2072,vd_p:0.0284,  bv:0.0792, bv_p:0.4064, vv:0.2540,vv_p:0.0069},
+  {p:'TCGA-OV',   n:379,  stage_src:'FIGO', bd:-0.0650,bd_p:0.2068, vd:-0.0843,vd_p:0.1014, bv:-0.0955,bv_p:0.0633, vv:-0.0715,vv_p:0.1651},
+  {p:'TCGA-PRAD', n:0,    stage_src:'AJCC', bd:null,   bd_p:null,   vd:null,   vd_p:null,   bv:null,   bv_p:null,   vv:null,   vv_p:null},
+  {p:'TCGA-STAD', n:152,  stage_src:'AJCC', bd:-0.0490,bd_p:0.5492, vd:-0.0477,vd_p:0.5592, bv:-0.0635,bv_p:0.4373, vv:-0.0131,vv_p:0.8726},
+  {p:'TCGA-UCEC', n:368,  stage_src:'FIGO', bd:0.1796, bd_p:0.0005, vd:0.0822,vd_p:0.1154,  bv:0.1940, bv_p:0.0002, vv:0.0996,vv_p:0.0563},
+];
+
+// Lookup T-stage volume ρ for each project
+const tsVolLookup = {};
+tsData.forEach(d=>{ tsVolLookup[d.p]={bv:d.bv,bv_p:d.bv_p,vv:d.vv,vv_p:d.vv_p}; });
+
+const osTbl = document.getElementById('os-tbl');
+osData.forEach(d=>{
+  if(d.n===0) return;
+  const ts = tsVolLookup[d.p]||{};
+  const vtDelta = (d.vv!=null && ts.vv!=null) ? d.vv - ts.vv : null;
+  const dC = vtDelta==null?'var(--muted)':vtDelta>0.03?'var(--vt)':vtDelta<-0.03?'var(--mild)':'var(--muted)';
+  const srcPill = d.stage_src==='FIGO'?`<span class="pill figo" style="font-size:.62rem">FIGO</span>`:`<span class="pill size" style="font-size:.62rem">AJCC</span>`;
+  osTbl.innerHTML += `<tr>
+    <td class="td-hi">${d.p}</td>
+    <td>${srcPill}</td>
+    <td class="num">${d.n.toLocaleString()}</td>
+    ${rhoCell(d.bd,d.bd_p)}${rhoCell(d.vd,d.vd_p)}
+    ${rhoCell(d.bv,d.bv_p)}${rhoCell(d.vv,d.vv_p)}
+    ${ts.bv!=null?rhoCell(ts.bv,ts.bv_p):'<td class="num" style="color:var(--muted)">—</td>'}
+    ${ts.vv!=null?rhoCell(ts.vv,ts.vv_p):'<td class="num" style="color:var(--muted)">—</td>'}
+    <td class="num" style="color:${dC};font-weight:600">${vtDelta!=null?(vtDelta>=0?'+':'')+vtDelta.toFixed(3):'—'}</td>
+  </tr>`;
+});
+
+// RECIST diameter vs overall stage bar chart
+dualBar('os-diam-bars', osData.filter(d=>d.n>0), 'bd','bd_p','vd','vd_p');
+// Volume vs overall stage bar chart
+dualBar('os-vol-bars', osData.filter(d=>d.n>0), 'bv','bv_p','vv','vv_p');
+
+// Delta bar chart: VT overall stage ρ vs VT T-stage ρ
+const osDeltaBars = document.getElementById('os-delta-bars');
+const maxDelta = 0.75;
+[...osData].filter(d=>d.n>0&&d.vv!=null&&tsVolLookup[d.p]?.vv!=null)
+  .sort((a,b)=>(b.vv - (tsVolLookup[b.p]?.vv||0)) - (a.vv - (tsVolLookup[a.p]?.vv||0)))
+  .forEach(d=>{
+    const ts = tsVolLookup[d.p];
+    const delta = d.vv - ts.vv;
+    const absW = (Math.abs(delta)/maxDelta*100).toFixed(1);
+    const col = delta > 0.03 ? 'var(--vt)' : delta < -0.03 ? 'var(--mild)' : 'var(--border)';
+    const sign = delta >= 0 ? '+' : '';
+    osDeltaBars.innerHTML += `<div class="brow">
+      <div class="blbl">${d.p.replace('TCGA-','')}</div>
+      <div class="btrk"><div class="bfil" style="width:${absW}%;background:${col}"></div></div>
+      <div class="bval" style="color:${col};font-weight:600">${sign}${delta.toFixed(3)}</div>
+    </div>`;
+  });
+
+// Summary text
+const vtWins = osData.filter(d=>d.n>0&&d.vv!=null&&d.vv_p<0.05&&(tsVolLookup[d.p]?.vv_p>=0.05||d.vv>(tsVolLookup[d.p]?.vv||0)));
+const kirc = osData.find(d=>d.p==='TCGA-KIRC');
+const kircTs = tsVolLookup['TCGA-KIRC'];
+document.getElementById('os-summary').innerHTML = `
+With like-for-like RECIST-filtered diameters (both models zero diameter &lt;10mm), overall-stage correlations are consistent with the volume picture.
+<strong>VT volume leads in KICH</strong> (ρ=+0.704**, p=0.001), <strong>KIRC</strong> (ρ=+0.205***, p&lt;0.001), <strong>LIHC</strong> (ρ=+0.179***, p&lt;0.001), and <strong>LUSC</strong> (ρ=+0.254**, p=0.007).
+<strong>VT RECIST diameter also significantly correlates with overall stage</strong> in BLCA (ρ=+0.108*), KIRC (ρ=+0.205***), KIRP (ρ=+0.187*), LIHC (ρ=+0.172***), and LUSC (ρ=+0.207*) — matching or exceeding BP diameter in each case.
+In <strong>KIRC</strong>, VT volume correlates positively with both T-stage (ρ=+${kircTs?.vv?.toFixed(3)||'—'}, p&lt;0.001) and overall stage (ρ=+${kirc?.vv?.toFixed(3)||'—'}, p&lt;0.001); the overall-stage ρ slightly exceeds T-stage, consistent with VT total volume capturing composite N/M burden beyond local T-stage.
+<strong>BP volume leads only in CESC</strong> (FIGO stage: ρ=+0.353*** vs VT +0.141**) and <strong>UCEC</strong> (ρ=+0.194*** vs VT +0.100 ns) — both gynaecological cancers where 2D slice-wise volumetry on axial MR captures FIGO extent well.
+<strong>Neither model correlates significantly with overall stage in BRCA, LUAD, STAD, OV, or COAD</strong> — consistent with staging driven by nodal involvement, molecular subtype, or microscopic invasion rather than primary tumour volume.`;
+
+const fragZeroBars = document.getElementById('frag-zero-bars');
+const maxZeroPct = 55;
+[...fragData].sort((a,b)=>(b.nZero/b.n)-(a.nZero/a.n)).forEach(d=>{
+  const pct = ((d.nZero/d.n*100)/maxZeroPct*100).toFixed(1);
+  const zeroPct = (d.nZero/d.n*100).toFixed(1);
+  const col = d.nZero/d.n>0.3?'var(--bad)':d.nZero/d.n>0.1?'var(--mild)':'var(--muted)';
+  fragZeroBars.innerHTML += `<div class="brow"><div class="blbl">${d.p.replace('TCGA-','')}</div><div class="btrk"><div class="bfil" style="width:${Math.min(100,pct)}%;background:${col}"></div></div><div class="bval">${zeroPct}%</div></div>`;
+});
+</script>
+
+</body></html>

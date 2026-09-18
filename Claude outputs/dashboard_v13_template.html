@@ -1,0 +1,217 @@
+<title>Tumour Size vs Stage</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F4F6F9;--surface:#FFFFFF;--surface2:#EDF1F6;--border:#D5DCE6;--text:#17202B;--muted:#5B6B7F;--faint:#9AA7B8;
+  --accent:#2F5FA8;--bp:#6D4FD6;--vt:#158C6E;--neg:#C2731A;--ns:#B9C2CE;--zero:#8A96A6;--good-bg:#E8F5F0;--warn-bg:#FFF4E6;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F151D;--surface:#171F2A;--surface2:#1F2937;--border:#2C3847;--text:#E4EAF2;--muted:#9AA8BA;--faint:#66758A;
+  --accent:#6E9BE0;--bp:#A08BFF;--vt:#3DBF9C;--neg:#E09A45;--ns:#3A4656;--zero:#66758A;--good-bg:#12271F;--warn-bg:#2A1E0F;
+}}
+:root[data-theme="dark"]{
+  --bg:#0F151D;--surface:#171F2A;--surface2:#1F2937;--border:#2C3847;--text:#E4EAF2;--muted:#9AA8BA;--faint:#66758A;
+  --accent:#6E9BE0;--bp:#A08BFF;--vt:#3DBF9C;--neg:#E09A45;--ns:#3A4656;--zero:#66758A;--good-bg:#12271F;--warn-bg:#2A1E0F;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Source Sans 3',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.55;padding:28px 16px 56px}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+h1{font-size:1.6rem;font-weight:700;letter-spacing:-.02em;text-wrap:balance}
+h2{font-size:1.05rem;font-weight:700;letter-spacing:-.01em}
+h3{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+p{color:var(--text)}
+.sub{color:var(--muted);font-size:.9rem;margin-top:4px}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.hdr{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:16px}
+.tag{display:inline-block;font-size:.72rem;font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:var(--surface)}
+.verdict{border-left:4px solid var(--accent)}
+.verdict p{font-size:1rem}
+.verdict strong{font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+@media(max-width:820px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface);padding:14px 16px}
+.kpi .v{font-size:1.7rem;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.kpi .l{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+.kpi .s{font-size:.78rem;color:var(--muted);margin-top:4px}
+.bpc{color:var(--bp)}.vtc{color:var(--vt)}
+.method{display:grid;grid-template-columns:1fr 1fr;gap:10px 28px}
+@media(max-width:820px){.method{grid-template-columns:1fr}}
+.method div{font-size:.88rem;color:var(--muted);padding-left:12px;border-left:2px solid var(--border)}
+.method b{color:var(--text);font-weight:600}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:900px){.two{grid-template-columns:1fr}}
+.tscroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.84rem}
+th i{text-transform:none;font-style:normal}
+th{color:var(--muted);font-weight:600;text-align:left;padding:6px 8px;border-bottom:2px solid var(--border);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;background:var(--surface)}
+td{padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+td.n,th.n{text-align:right}
+td.rho{text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;font-size:.8rem}
+.sig{font-weight:600}.ns{color:var(--faint)}
+.pill{display:inline-block;font-size:.66rem;font-weight:600;padding:1px 7px;border-radius:4px;letter-spacing:.02em}
+.pill.size{background:var(--good-bg);color:var(--vt)}.pill.inv{background:var(--warn-bg);color:var(--neg)}.pill.figo{background:var(--surface2);color:var(--accent)}.pill.none{background:var(--surface2);color:var(--faint)}
+.win{display:inline-block;width:26px;text-align:center;font-size:.68rem;font-weight:700;border-radius:4px;padding:1px 0}
+.win.bp{background:var(--bp);color:#fff}.win.vt{background:var(--vt);color:#fff}.win.tie{background:var(--surface2);color:var(--faint)}
+/* zero-centred paired bars */
+.chart{display:flex;flex-direction:column;gap:5px}
+.axis{display:flex;align-items:center;gap:8px;font-size:.68rem;color:var(--faint)}
+.axis .lbl{width:52px;flex-shrink:0}
+.axis .ticks{flex:1;position:relative;height:14px}
+.axis .ticks span{position:absolute;transform:translateX(-50%)}
+.row{display:flex;align-items:center;gap:8px}
+.row .lbl{width:52px;flex-shrink:0;font-size:.8rem;font-weight:600}
+.row .trk{flex:1;position:relative;height:22px}
+.row .trk::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--zero)}
+.bar{position:absolute;height:9px;border-radius:2px}
+.bar.b1{top:1px}.bar.b2{top:12px}
+.row .val{width:96px;flex-shrink:0;display:flex;flex-direction:column;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.7rem;line-height:1.35;text-align:right;font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.75rem;color:var(--muted);align-items:center}
+.sw{display:inline-block;width:12px;height:9px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.fn{font-size:.8rem;color:var(--muted)}
+code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.8em;background:var(--surface2);padding:1px 5px;border-radius:4px}
+ul.plain{list-style:none;display:flex;flex-direction:column;gap:6px}
+ul.plain li{font-size:.88rem;color:var(--muted);padding-left:14px;position:relative}
+ul.plain li::before{content:'–';position:absolute;left:0;color:var(--faint)}
+ul.plain b{color:var(--text);font-weight:600}
+</style>
+
+<div class="wrap">
+
+<div class="hdr">
+  <div>
+    <h1>Tumour size vs stage: BiomedParse (2D) vs VoxTell (3D)</h1>
+    <div class="sub">TCGA-TCIA public cohort · 15 cancer types · 4,968 CT/MR series from 996 patients · RECIST 1.1 longest diameter on axial slices · Spearman ρ against AJCC T stage and overall stage</div>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag">v13 · 16 Sep 2026</span><span class="tag">public data only</span></div>
+</div>
+
+<div class="card verdict">
+  <h3>Conclusion</h3>
+  <p><strong>VoxTell's RECIST longest diameter tracks pathological T stage better than BiomedParse's in 12 of 13 cancer types with T-stage data</strong>, and is significantly associated with T stage in 9 of them (BRCA, CESC, COAD, ESCA, KICH, KIRC, LIHC, LUSC, STAD) versus 4 for BiomedParse (CESC, KIRC, LIHC, STAD). The same pattern holds for tumour volume (VT significant in 9, BP in 7). <strong>BiomedParse leads only in cervical cancer (CESC)</strong>, where 2D slice-wise MR segmentation captures FIGO/T extent well, and in endometrial cancer (UCEC) at overall stage. Neither model correlates with stage in bladder (BLCA), lung adenocarcinoma (LUAD) or prostate (PRAD), whose T stage is defined by depth of invasion or extraprostatic extension rather than size — an expected null. Correlations are modest overall (|ρ| mostly 0.1–0.4): stage is a coarse ordinal target and 24% of VoxTell outputs contain no RECIST-measurable lesion.</p>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="l">Series · patients</div><div class="v mono">4,968 · 996</div><div class="s">15 TCGA projects, CT and MR</div></div>
+  <div class="kpi"><div class="l">With T stage · overall stage</div><div class="v mono">802 · 967</div><div class="s">patients (primary diagnosis only)</div></div>
+  <div class="kpi"><div class="l">Measurable lesion · BP</div><div class="v mono bpc">99.2%</div><div class="s">of series have an index lesion ≥ RECIST threshold</div></div>
+  <div class="kpi"><div class="l">Measurable lesion · VT</div><div class="v mono vtc">76.0%</div><div class="s">24% contain only fragments below threshold</div></div>
+  <div class="kpi"><div class="l">VT fragments per scan</div><div class="v mono vtc">6</div><div class="s">median connected components (BP: 1)</div></div>
+</div>
+
+<div class="card">
+  <h2>How the numbers were produced</h2>
+  <div class="method">
+    <div><b>Clinical stage.</b> GDC <code>clinical.tsv</code> per project. One row per patient taken entirely from the <b>primary diagnosis</b> record (<code>&lt;case&gt;_diagnosis</code>, classification "primary"); synchronous/prior primaries and metastases are ignored. T = <code>ajcc_pathologic_t</code> → 1–4 (Tis/T0/TX excluded). Overall = <code>ajcc_pathologic_stage</code>, or <code>figo_stage</code> for CESC/OV/UCEC → I–IV (substages collapsed).</div>
+    <div><b>Axial plane.</b> The superior–inferior axis is identified from the NIfTI affine for every scan; measurements are made on true anatomical axial slices even for the 18% of series acquired sagittally or coronally (mostly breast and cervix MR). Slice thickness = spacing along S–I.</div>
+    <div><b>RECIST 1.1 longest diameter.</b> Masks are split into 3D connected components (6-connectivity). For each component the longest edge-to-edge caliper on any <b>single axial slice</b> is computed (convex hull of boundary-pixel corners). A component is measurable if LD ≥ 10 mm, or ≥ 2 × slice thickness when thickness &gt; 5 mm. The index lesion is the largest measurable component; series with none score 0 mm. Identical rule for both models.</div>
+    <div><b>Volume.</b> Total mask volume = voxel count × |det(affine)| in mm³ (all components, including VoxTell fragments). Index-lesion volume is also stored in the per-series file.</div>
+    <div><b>Statistics.</b> Spearman rank correlation of each measure with ordinal stage, per project, over all series. Patients contribute a mean of 5 series (67% of multi-series patients: same-day sequences), so p-values are optimistic; ρ is unaffected. * p&lt;0.05, ** p&lt;0.01, *** p&lt;0.001.</div>
+    <div><b>Stage type.</b> <span class="pill size">size</span> T stage defined mainly by tumour dimension (BRCA, KICH, KIRC, KIRP, LIHC, LUAD, LUSC) · <span class="pill inv">invasion</span> by depth of invasion / extension (BLCA, CESC, COAD, ESCA, PRAD, STAD) · <span class="pill figo">FIGO</span> overall stage from FIGO (CESC, OV, UCEC). OV and UCEC have no AJCC T in TCGA; PRAD has no overall stage.</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>T stage (AJCC pathological T1–T4)</h2>
+  <p class="fn">ρ per project. Bars are zero-centred: right = larger tumours at higher stage. Solid = p&lt;0.05, pale = not significant. Winner = model with the larger positive ρ when at least one is significant.</p>
+  <div class="two">
+    <div><h3 style="margin-bottom:8px">RECIST longest diameter</h3><div id="ch-T-ld" class="chart"></div></div>
+    <div><h3 style="margin-bottom:8px">Total volume</h3><div id="ch-T-vol" class="chart"></div></div>
+  </div>
+  <div class="legend"><span><i class="sw" style="background:var(--bp)"></i>BiomedParse</span><span><i class="sw" style="background:var(--vt)"></i>VoxTell</span><span><i class="sw" style="background:var(--ns)"></i>p ≥ 0.05</span></div>
+  <div class="tscroll"><table id="tbl-T"></table></div>
+</div>
+
+<div class="card">
+  <h2>Overall stage (AJCC / FIGO I–IV)</h2>
+  <p class="fn">Overall stage adds nodal and metastatic burden to T; a primary-tumour measure is expected to correlate less well except where T dominates staging (kidney, liver).</p>
+  <div class="two">
+    <div><h3 style="margin-bottom:8px">RECIST longest diameter</h3><div id="ch-overall-ld" class="chart"></div></div>
+    <div><h3 style="margin-bottom:8px">Total volume</h3><div id="ch-overall-vol" class="chart"></div></div>
+  </div>
+  <div class="legend"><span><i class="sw" style="background:var(--bp)"></i>BiomedParse</span><span><i class="sw" style="background:var(--vt)"></i>VoxTell</span><span><i class="sw" style="background:var(--ns)"></i>p ≥ 0.05</span></div>
+  <div class="tscroll"><table id="tbl-overall"></table></div>
+</div>
+
+<div class="card">
+  <h2>Reading the results</h2>
+  <ul class="plain">
+    <li><b>Size-staged cancers behave as expected.</b> In KIRC (n=1,124 series), LIHC (855) and BRCA (634) both models' diameters and volumes rise with T stage; VoxTell is consistently stronger (KIRC LD ρ +0.22 vs +0.13; BRCA LD +0.16*** vs +0.03 ns). KICH (18 series, 6 patients) shows the largest ρ (+0.62/+0.70) but is too small to weight heavily.</li>
+    <li><b>VoxTell also captures invasion-staged tumours</b> where BP does not: oesophageal (ESCA LD +0.39** vs −0.15), gastric (STAD +0.32*** vs +0.26**) and colon (COAD +0.56** vs +0.39 ns), i.e. 3D context helps where the tumour is a wall thickening rather than a mass.</li>
+    <li><b>BiomedParse wins in gynaecological MR.</b> CESC T stage (LD +0.24*** vs +0.15**; volume +0.42*** vs +0.21***) and UCEC FIGO stage (LD +0.21*** vs +0.09 ns). These cohorts are 42%/10% sagittal or coronal MR with thin axial reformats, where 2D slice-wise detection is at its strongest and VoxTell fragments most (median 17 components in CESC).</li>
+    <li><b>Expected nulls.</b> BLCA (depth of invasion; BP diameter even weakly negative, −0.14**), LUAD (n=91) and PRAD (extraprostatic extension; 14 patients) show no association for either model. Overall stage adds little beyond T except in KIRC/LIHC, and is flat in BRCA, STAD, OV and COAD where nodal or peritoneal disease drives stage.</li>
+    <li><b>Caveats.</b> Multiple series per patient inflate n; small projects (COAD, ESCA, KICH, KIRP, PRAD: 6–19 patients) are exploratory; 24% of VoxTell series have no measurable lesion and score 0 mm, which is counted (not excluded) as a segmentation failure; total volume includes VoxTell noise fragments (index-lesion volume, in the CSV, gives near-identical ρ).</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>Cohort by project</h2>
+  <div class="tscroll"><table id="tbl-meta"></table></div>
+</div>
+
+<div class="card">
+  <h2>Reproducibility</h2>
+  <ul class="plain">
+    <li><b>Per-series measurements</b> · <code>~/mnt/clinical/recist_measures_v3.csv</code> (9,936 rows: series × model; components, measurable components, RECIST LD and slice index, index-lesion volume, total and largest-component volume, S–I axis, acquisition plane, slice thickness).</li>
+    <li><b>Per-patient clinical (primary diagnosis)</b> · <code>tcga_clinical_primary.csv</code> (6,981 cases; raw T/stage/FIGO strings, encoded integers, selection rule, number of diagnoses).</li>
+    <li><b>Analysis table</b> · <code>seg_stage_analysis_v3.csv</code> (4,968 series joined to patient stage, study date, modality) and <b>correlations</b> · <code>stage_correlations_v3.csv</code>.</li>
+    <li><b>Scripts</b> · <code>~/mnt/clinical/scripts/recist_v3.py</code> (measurements, resumable) and <code>build_stage_analysis_v3.py</code> (clinical extraction, join, Spearman). Masks: <code>~/mnt/TCGA_Seg/{BiomedParse,VoxTell}</code>; clinical: GDC exports of 2026-09-15; series metadata: TCIA <code>TCGA_pathology_has_radiology.csv</code>.</li>
+    <li><b>Changes from v12 (audit of 16 Sep 2026).</b> (1) Clinical merge previously mixed fields across diagnosis records — 24 imaged patients changed stage; BLCA overall-stage VT ρ (+0.11*) is no longer significant, LUSC T-stage VT volume rose to +0.31***. (2) Through-plane axis previously assumed to be array axis 2 — 242 scans (mostly sagittal breast MR) were measured in the wrong plane. (3) Diameter was the in-plane bounding-box side of the whole mask; now RECIST single-slice longest diameter per component, so COAD BP diameter dropped from +0.61** to +0.39 ns and ESCA VT rose from +0.28* to +0.39**. Volumes and Spearman code verified unchanged.</li>
+  </ul>
+</div>
+
+</div>
+
+<script>
+const D = __DATA__;
+const TYPE = {'TCGA-BRCA':'size','TCGA-KICH':'size','TCGA-KIRC':'size','TCGA-KIRP':'size','TCGA-LIHC':'size','TCGA-LUAD':'size','TCGA-LUSC':'size',
+              'TCGA-BLCA':'inv','TCGA-CESC':'inv','TCGA-COAD':'inv','TCGA-ESCA':'inv','TCGA-PRAD':'inv','TCGA-STAD':'inv','TCGA-OV':'none','TCGA-UCEC':'none'};
+const TYPELBL={size:'size',inv:'invasion',none:'no AJCC T',figo:'FIGO'};
+const MAX=0.75;
+const short=p=>p.replace('TCGA-','');
+const stars=p=>p==null?'':p<0.001?'***':p<0.01?'**':p<0.05?'*':'';
+const fmt=(r,p)=>r==null?'<span class="ns">—</span>':`<span class="${p<0.05?'sig':'ns'}">${r>=0?'+':''}${r.toFixed(3)}${stars(p)}</span>`;
+const winner=(bp,bpp,vt,vtp)=>{ if(bp==null) return '<span class="win tie">—</span>';
+  const s1=bpp<0.05, s2=vtp<0.05; if(!s1&&!s2) return '<span class="win tie">ns</span>';
+  const a=(s1&&bp>0)?bp:-9, b=(s2&&vt>0)?vt:-9; if(a<0&&b<0) return '<span class="win tie">ns</span>'; if(Math.abs(a-b)<0.02) return '<span class="win tie">≈</span>';
+  return a>b?'<span class="win bp">BP</span>':'<span class="win vt">VT</span>'; };
+
+function chart(id, rows, key){
+  const el=document.getElementById(id);
+  let h=`<div class="axis"><span class="lbl"></span><div class="ticks">${[-0.6,-0.3,0,0.3,0.6].map(t=>`<span style="left:${(t/MAX+1)*50}%">${t>0?'+':''}${t}</span>`).join('')}</div><span style="width:96px;text-align:right">BP / VT</span></div>`;
+  rows.forEach(r=>{
+    const bp=r[`bp_${key}_rho`], vt=r[`vt_${key}_rho`], bpp=r[`bp_${key}_p`], vtp=r[`vt_${key}_p`];
+    if(bp==null) return;
+    const bar=(v,p,cls,c)=>{ const w=Math.min(Math.abs(v),MAX)/MAX*50; const left=v>=0?50:50-w;
+      const col=p<0.05?`var(--${c})`:'var(--ns)'; return `<div class="bar ${cls}" style="left:${left}%;width:${w}%;background:${col}" title="${c.toUpperCase()} ρ=${v.toFixed(3)} p=${p.toFixed(4)}"></div>`; };
+    h+=`<div class="row"><span class="lbl">${short(r.project)}</span><div class="trk">${bar(bp,bpp,'b1','bp')}${bar(vt,vtp,'b2','vt')}</div>
+        <div class="val"><span style="color:${bpp<0.05?'var(--bp)':'var(--faint)'}">${bp>=0?'+':''}${bp.toFixed(2)}${stars(bpp)}</span><span style="color:${vtp<0.05?'var(--vt)':'var(--faint)'}">${vt>=0?'+':''}${vt.toFixed(2)}${stars(vtp)}</span></div></div>`;
+  });
+  el.innerHTML=h;
+}
+function table(id, rows, stage){
+  const el=document.getElementById(id);
+  let h=`<thead><tr><th>Project</th><th>Stage type</th><th class="n">Series</th><th class="n">Patients</th>
+    <th class="n" style="color:var(--bp)">BP LD <i>ρ</i></th><th class="n" style="color:var(--vt)">VT LD <i>ρ</i></th><th>LD</th>
+    <th class="n" style="color:var(--bp)">BP vol <i>ρ</i></th><th class="n" style="color:var(--vt)">VT vol <i>ρ</i></th><th>Vol</th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+    if(r.n_series===0) return;
+    const t = stage==='overall' && r.stage_source==='FIGO' ? 'figo' : TYPE[r.project];
+    h+=`<tr><td><b>${r.project}</b></td><td><span class="pill ${t}">${TYPELBL[t]}</span></td><td class="n mono">${r.n_series.toLocaleString()}</td><td class="n mono">${r.n_patients}</td>
+      <td class="rho">${fmt(r.bp_ld_rho,r.bp_ld_p)}</td><td class="rho">${fmt(r.vt_ld_rho,r.vt_ld_p)}</td><td>${winner(r.bp_ld_rho,r.bp_ld_p,r.vt_ld_rho,r.vt_ld_p)}</td>
+      <td class="rho">${fmt(r.bp_vol_rho,r.bp_vol_p)}</td><td class="rho">${fmt(r.vt_vol_rho,r.vt_vol_p)}</td><td>${winner(r.bp_vol_rho,r.bp_vol_p,r.vt_vol_rho,r.vt_vol_p)}</td></tr>`;
+  });
+  el.innerHTML=h+'</tbody>';
+}
+const order=p=>({size:0,inv:1,none:2}[TYPE[p]]);
+['T','overall'].forEach(st=>{
+  const rows=D.corr.filter(r=>r.stage===st).sort((a,b)=>order(a.project)-order(b.project)||a.project.localeCompare(b.project));
+  chart(`ch-${st}-ld`, rows, 'ld'); chart(`ch-${st}-vol`, rows, 'vol'); table(`tbl-${st}`, rows, st);
+});
+(function(){
+  let h=`<thead><tr><th>Project</th><th>Modality</th><th class="n">Series</th><th class="n">Patients</th><th class="n">Median axial slice (mm)</th><th class="n">Non-axial acquisition</th><th class="n" style="color:var(--bp)">BP measurable</th><th class="n" style="color:var(--vt)">VT measurable</th><th class="n" style="color:var(--vt)">VT components (median)</th></tr></thead><tbody>`;
+  D.meta.forEach(m=>{ h+=`<tr><td><b>${m.project}</b></td><td>${m.mod}</td><td class="n mono">${m.n.toLocaleString()}</td><td class="n mono">${m.pat}</td><td class="n mono">${m.thick}</td><td class="n mono">${m.nonax}%</td><td class="n mono">${m.bpmeas}%</td><td class="n mono">${m.vtmeas}%</td><td class="n mono">${m.vtcomp}</td></tr>`; });
+  document.getElementById('tbl-meta').innerHTML=h+'</tbody>';
+})();
+</script>

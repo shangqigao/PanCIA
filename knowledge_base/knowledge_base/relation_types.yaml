@@ -1,0 +1,67 @@
+version: 0.1.0
+relation_types:
+- id: has_part
+  meaning: sub-structure of the anchor; supports confined-to-organ and intra-organ location
+  gate:
+    kind: inside
+    dilate_mm: 3
+  default_priority: 2
+- id: invested_by
+  meaning: capsule, fascia or fat compartment surrounding the anchor; supports beyond-capsule / compartment extension (T3-type criteria)
+  gate:
+    kind: shell
+    inner_mm: 0
+    outer_mm: 40
+  default_priority: 1
+- id: adjacent_to
+  meaning: physical neighbour; supports adjacent-organ invasion (T4-type criteria). Read in reverse it is the spatial prior for completion
+  gate:
+    kind: neighbour_bbox_or_directional_shell
+    shell_mm: 30
+  default_priority: 2
+- id: supplied_by
+  meaning: arterial supply down to nameable branches; supports vascular encasement
+  gate:
+    kind: corridor
+    from_: anchor_hilum
+    to: parent_trunk
+    radius_mm: 15
+  default_priority: 2
+- id: drained_by
+  meaning: venous drainage down to nameable branches; supports venous invasion / tumour thrombus (e.g. renal vein, portal vein)
+  gate:
+    kind: corridor
+    from_: anchor_hilum
+    to: parent_trunk
+    radius_mm: 15
+  default_priority: 1
+- id: has_duct
+  meaning: excretory duct or airway; supports obstruction criteria (hydronephrosis, biliary dilatation, atelectasis)
+  gate:
+    kind: corridor
+    from_: anchor
+    to: target_organ
+    radius_mm: 12
+  default_priority: 2
+- id: drains_lymph_to
+  meaning: regional lymph-node station per AJCC 8th primary-site definition; supports N stage
+  gate:
+    kind: region
+    defined_by: vessels_and_vertebral_levels
+  default_priority: 2
+- id: lies_in
+  meaning: body region / compartment membership; supports FOV logic and peritoneal reasoning
+  gate:
+    kind: none
+  default_priority: 3
+- id: wall_of
+  meaning: wall or floor the anchor attaches to; supports wall invasion (chest wall, pelvic sidewall, diaphragm)
+  gate:
+    kind: directional_shell
+    shell_mm: 25
+  default_priority: 2
+- id: landmark_for
+  meaning: non-vertebral landmark with a known vertebral level; used for frame estimation when TS vertebrae are missing
+  gate:
+    kind: none
+  default_priority: 3

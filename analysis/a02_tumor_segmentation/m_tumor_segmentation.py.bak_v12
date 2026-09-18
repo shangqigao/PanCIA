@@ -36,11 +36,7 @@ def extract_radiology_segmentation(
         zoom_in=False,
         voxtell_model_root=None,
         device=None,
-        skip_exist=False,
-        ts_model_root=None,
-        ts_task=None,
-        ts_fast=False,
-        ts_extra_tasks=None,
+        skip_exist=False
     ):
     """extract segmentation from radiology images
     Args:
@@ -86,24 +82,6 @@ def extract_radiology_segmentation(
             prompt_ensemble=prompt_ensemble,
             device=device,
             skip_exist=skip_exist,
-        )
-    elif model_mode == "TotalSegmentator":
-        extract_TotalSegmentator_segmentation(
-            dataset=dataset,
-            seg_obj=seg_obj,
-            img_paths=img_paths,
-            save_dir=save_dir,
-            format=img_format,
-            modality=modality,
-            site=site,
-            keep_largest=keep_largest,
-            prompt_ensemble=prompt_ensemble,
-            device=device,
-            skip_exist=skip_exist,
-            model_root=ts_model_root,
-            task=ts_task,
-            fast=ts_fast,
-            extra_tasks=ts_extra_tasks,
         )
     else:
         raise ValueError(f"Invalid model mode: {model_mode}")
@@ -464,184 +442,6 @@ def extract_VoxTell_segmentation(
 
     return
 
-def extract_TotalSegmentator_segmentation(
-        dataset,
-        seg_obj,
-        img_paths,
-        save_dir,
-        format='nifti',
-        modality='CT',
-        site='kidney',
-        keep_largest=False,
-        prompt_ensemble=False,
-        device=None,
-        skip_exist=False,
-        model_root=None,
-        task=None,
-        fast=False,
-        extra_tasks=None,
-    ):
-    """Segment anatomy in NIfTI volumes with TotalSegmentator (multi-label, no prompts).
-
-    Mirrors ``extract_VoxTell_segmentation``. TotalSegmentator is installed in its own
-    environment, so every backend import stays inside this function.
-
-    Per image the function writes, next to each other in ``save_dir``:
-      ``{img_name}_{seg_obj}.nii.gz``          multi-label mask in the input image grid (task ``total``/``total_mr``)
-      ``{img_name}_{seg_obj}_labels.json``     label id -> class name for that task
-      ``{img_name}_{seg_obj}_structures.csv``  one row per found class: volume_ml, centroid (RAS, mm),
-                                               zmin/zmax (mm), touches_boundary — the input the KB planner needs
-      ``{img_name}_{seg_obj}_{extra_task}.nii.gz`` for each ``extra_tasks`` entry (e.g. ``body``, ``tissue_types``)
-
-    Args:
-        model_root: directory holding the TotalSegmentator weights (``<model_root>/nnunet/results/...``).
-            Defaults to ``checkpoints/TotalSegmentator`` next to the repo, mirroring VoxTell. Weights missing
-            for the requested task are downloaded there on first use (needs internet; pre-download on a login
-            node with ``TOTALSEG_HOME_DIR=<model_root> totalseg_download_weights -t total``).
-        task: TotalSegmentator task. ``None`` picks ``total`` for CT and ``total_mr`` for MR per image.
-        fast: use the 3 mm low-resolution model (``--fast``); much quicker, coarser masks.
-        extra_tasks: optional list of additional TS tasks run on the same image (``body``, ``lung_vessels``,
-            ``tissue_types`` [licensed], ``abdominal_muscles`` [licensed], ...).
-        device: ``gpu``, ``gpu:N``, ``cuda:N``, ``cpu`` or ``mps`` (default: auto).
-    """
-    import json
-    import csv
-    import nibabel as nib
-
-    # Weights location: TotalSegmentator reads TOTALSEG_HOME_DIR (default ~/.totalsegmentator).
-    # Set it before importing the package so every download / lookup uses the repo checkpoint folder.
-    if model_root is None:
-        model_root = os.path.join(relative_path, "checkpoints", "TotalSegmentator")
-    model_root = pathlib.Path(model_root).expanduser().resolve()
-    model_root.mkdir(parents=True, exist_ok=True)
-    os.environ["TOTALSEG_HOME_DIR"] = str(model_root)
-    logger.info("TotalSegmentator weights directory: %s", model_root)
-
-    from totalsegmentator.python_api import totalsegmentator
-    from totalsegmentator.map_to_binary import class_map
-
-    if prompt_ensemble:
-        raise ValueError("prompt_ensemble is not applicable to TotalSegmentator (no text prompts)")
-    if seg_obj != "organ":
-        logger.warning("TotalSegmentator segments anatomy; seg_obj=%r is unusual (expected 'organ')", seg_obj)
-    if keep_largest:
-        logger.warning("keep_largest is ignored for TotalSegmentator multi-label output")
-
-    # TotalSegmentator device vocabulary: gpu | gpu:N | cpu | mps
-    if device is None:
-        try:
-            import torch
-            ts_device = "gpu" if torch.cuda.is_available() else ("mps" if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available() else "cpu")
-        except Exception:
-            ts_device = "cpu"
-    else:
-        ts_device = str(device).replace("cuda", "gpu")
-    logger.info("TotalSegmentator device: %s", ts_device)
-
-    if isinstance(format, str):
-        format = [format] * len(img_paths)
-    if isinstance(modality, str):
-        modality = [modality] * len(img_paths)
-    if isinstance(site, str):
-        site = [site] * len(img_paths)
-    extra_tasks = list(extra_tasks or [])
-
-    save_dir = pathlib.Path(save_dir)
-    save_dir.mkdir(parents=True, exist_ok=True)
-
-    def _structure_table(mask_img, label_names):
-        """Per-label volume / centroid / z-extent / boundary contact in patient (RAS) coordinates."""
-        data = np.asanyarray(mask_img.dataobj)
-        affine = mask_img.affine
-        vox_ml = float(abs(np.linalg.det(affine[:3, :3]))) / 1000.0
-        rows = []
-        labels = np.unique(data)
-        labels = labels[labels > 0]
-        shape = np.array(data.shape)
-        for lab in labels:
-            idx = np.argwhere(data == lab)
-            if idx.size == 0:
-                continue
-            n = idx.shape[0]
-            centroid_vox = idx.mean(axis=0)
-            centroid_ras = affine[:3, :3] @ centroid_vox + affine[:3, 3]
-            # z extent in mm: transform bbox corners
-            mins, maxs = idx.min(axis=0), idx.max(axis=0)
-            corners = np.array([[x, y, z] for x in (mins[0], maxs[0]) for y in (mins[1], maxs[1]) for z in (mins[2], maxs[2])], dtype=float)
-            corners_ras = (affine[:3, :3] @ corners.T).T + affine[:3, 3]
-            touches = bool(np.any(mins == 0) or np.any(maxs == shape - 1))
-            rows.append(dict(label=int(lab), name=label_names.get(int(lab), str(int(lab))), n_voxels=int(n),
-                             volume_ml=round(n * vox_ml, 3),
-                             centroid_x_mm=round(float(centroid_ras[0]), 2), centroid_y_mm=round(float(centroid_ras[1]), 2), centroid_z_mm=round(float(centroid_ras[2]), 2),
-                             zmin_mm=round(float(corners_ras[:, 2].min()), 2), zmax_mm=round(float(corners_ras[:, 2].max()), 2),
-                             touches_boundary=touches))
-        return rows
-
-    for idx, img_path in enumerate(img_paths):
-        logger.info("Segmenting image: %s/%s...", idx + 1, len(img_paths))
-        if format[idx] != "nifti":
-            raise ValueError("TotalSegmentator currently supports only NIfTI input")
-        if isinstance(img_path, list):
-            if len(img_path) != 1:
-                raise ValueError("TotalSegmentator supports one NIfTI volume per case, not multi-phase input")
-            img_path = img_path[0]
-
-        if '/MAMA-MIA/' in str(img_path):
-            img_name = pathlib.Path(img_path).name.replace("_0001.nii.gz", "")
-        elif f'/{dataset}_NIFTI/' in str(img_path):
-            img_name = str(img_path).split(f'/{dataset}_NIFTI/')[-1].replace(".nii.gz", "")
-        else:
-            img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
-
-        save_mask_path = save_dir / f"{img_name}_{seg_obj}.nii.gz"
-        labels_path = save_dir / f"{img_name}_{seg_obj}_labels.json"
-        table_path = save_dir / f"{img_name}_{seg_obj}_structures.csv"
-        if save_mask_path.exists() and table_path.exists() and skip_exist:
-            logger.info("%s has existed, skip!", save_mask_path.name)
-            continue
-
-        img_task = task or ("total_mr" if str(modality[idx]).upper().startswith("MR") else "total")
-        if img_task not in class_map:
-            raise ValueError(f"Unknown TotalSegmentator task {img_task!r}")
-        logger.info("Using TotalSegmentator task: %s (fast=%s) for %s", img_task, fast, img_path)
-        os.makedirs(os.path.dirname(save_mask_path), exist_ok=True)
-
-        # multi-label output written directly to save_mask_path (ml=True -> single file)
-        totalsegmentator(
-            str(img_path), str(save_mask_path),
-            ml=True, task=img_task, fast=fast, device=ts_device,
-            quiet=True, verbose=False, skip_saving=False,
-        )
-
-        label_names = {int(k): v for k, v in class_map[img_task].items()}
-        with open(labels_path, "w") as f:
-            json.dump(dict(task=img_task, fast=fast, modality=str(modality[idx]), site=str(site[idx]), labels=label_names), f, indent=1)
-
-        mask_img = nib.load(str(save_mask_path))
-        rows = _structure_table(mask_img, label_names)
-        with open(table_path, "w", newline="") as f:
-            fieldnames = ["label", "name", "n_voxels", "volume_ml", "centroid_x_mm", "centroid_y_mm", "centroid_z_mm", "zmin_mm", "zmax_mm", "touches_boundary"]
-            w = csv.DictWriter(f, fieldnames=fieldnames)
-            w.writeheader()
-            for r in rows:
-                w.writerow(r)
-        logger.info("Saved %s (%d structures) and %s", save_mask_path.name, len(rows), table_path.name)
-
-        for extra in extra_tasks:
-            if extra not in class_map:
-                logger.warning("Skipping unknown extra task %r", extra)
-                continue
-            extra_path = save_dir / f"{img_name}_{seg_obj}_{extra}.nii.gz"
-            if extra_path.exists() and skip_exist:
-                continue
-            logger.info("Running extra TotalSegmentator task: %s", extra)
-            try:
-                totalsegmentator(str(img_path), str(extra_path), ml=True, task=extra, fast=fast, device=ts_device, quiet=True, verbose=False)
-            except Exception as exc:  # licensed tasks raise without a licence key
-                logger.warning("Extra task %s failed for %s: %s", extra, img_name, exc)
-
-    return
-
 def create_prompts(meta_data):
     keys = ['view', 'slice_index', 'modality', 'site', 'target']
     assert all(meta_data.get(k) is not None for k in keys), f"all basic info {keys} should be provided"
@@ -704,7 +504,7 @@ if __name__ == "__main__":
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--model', default="BiomedParse", choices=["SegVol", "BiomedParse", "VoxTell", "TotalSegmentator"], type=str)
+    parser.add_argument('--model', default="BiomedParse", choices=["SegVol", "BiomedParse", "VoxTell"], type=str)
     parser.add_argument(
         '--voxtell_model_root',
         default=os.path.join(relative_path, 'checkpoints', 'VoxTell'),
@@ -715,26 +515,7 @@ if __name__ == "__main__":
         '--device',
         default=None,
         type=str,
-        help='Torch device for VoxTell/TotalSegmentator, e.g. cuda:0 or cpu (default: auto-detect)',
-    )
-    parser.add_argument(
-        '--ts_model_root',
-        default=os.path.join(relative_path, 'checkpoints', 'TotalSegmentator'),
-        type=str,
-        help='Directory holding TotalSegmentator weights (nnunet/results); downloads missing tasks here',
-    )
-    parser.add_argument(
-        '--ts_task',
-        default=None,
-        type=str,
-        help='TotalSegmentator task; default picks total (CT) or total_mr (MR) per image',
-    )
-    parser.add_argument('--ts_fast', action='store_true', help='TotalSegmentator 3 mm fast model')
-    parser.add_argument(
-        '--ts_extra_tasks',
-        default=None,
-        nargs='*',
-        help='Additional TotalSegmentator tasks run per image, e.g. body lung_vessels tissue_types',
+        help='VoxTell torch device, e.g. cuda:0 or cpu (default: auto-detect)',
     )
     args = parser.parse_args()
 
@@ -783,9 +564,5 @@ if __name__ == "__main__":
         zoom_in=False,
         voxtell_model_root=args.voxtell_model_root,
         device=args.device,
-        skip_exist=True,
-        ts_model_root=args.ts_model_root,
-        ts_task=args.ts_task,
-        ts_fast=args.ts_fast,
-        ts_extra_tasks=args.ts_extra_tasks,
+        skip_exist=True
     )
