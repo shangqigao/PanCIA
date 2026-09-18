@@ -17,7 +17,10 @@
 source ~/.bashrc
 # conda activate PanCIA
 # conda activate /home/sg2162/rds/hpc-work/miniconda3/Qwen
-conda activate /home/sg2162/rds/hpc-work/miniconda3/voxtell
+# conda activate /home/sg2162/rds/hpc-work/miniconda3/voxtell
+
+conda activate /home/sg2162/rds/hpc-work/miniconda3/totalseg
+export TOTALSEG_HOME_DIR=/home/sg2162/rds/hpc-work/PanCIA/checkpoints/TotalSegmentator
 
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
