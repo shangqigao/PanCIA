@@ -1,4 +1,4 @@
-version: 0.1.0
+version: 0.3.0
 generic_templates:
 - tumor in the {host}
 - '{host} tumor'
@@ -7,9 +7,96 @@ generic_templates:
 - cancer of the {host}
 - malignant neoplasm in the {host}
 host_resolution:
-- max_overlap_with_anchor_masks
-- cancer_type_default_host
-- planner_flag_unknown
+- cancer_type_or_explicit_host_is_primary
+- rater_evidence_validated_in_host_region_only
+- never_replace_primary_by_rater_evidence
+spread:
+  note: 'Hosts are a WEIGHTED SET, not one organ. Prior classes: primary (cancer type / explicit host), local_invasion (anchors linked to the
+    primary by adjacent_to / invested_by in relations.yaml — data-agnostic, derived automatically so unseen cancers are covered), distant (cancer-specific
+    common metastatic sites among anchors; default list for unknown cancers). Regional nodes stay profile items, not hosts.'
+  prior:
+    primary: 1.0
+    local_invasion: 0.3
+    distant: 0.15
+  evidence: 'set-based, per candidate host present in the scan: 2 = agreement T_BP ∩ T_VT validated in the host region, 1 = one rater validated,
+    0 = none (same envelope / KB-prior-region validation as for the primary)'
+  weight: prior × (1 + evidence)  — a score for ordering and budgeting, not a probability; primary is always kept
+  keep_secondary: evidence ≥ 1 (a validated tumour component in that organ) OR weight ≥ 0.3 with the organ in the FOV and TS-found (local-invasion
+    neighbours are checked for tumour contact in the reasoning layer)
+  planner: primary → 2-hop profile; kept secondary hosts → 1-hop profile + tumour-near anchors around their validated component; fusion assigns
+    every atom to the host whose extent it overlaps most → primary lesion + secondary lesions per host
+  distant_default:
+  - liver
+  - lung
+  - adrenal
+  - spine
+  distant_by_cancer:
+    TCGA-KIRC:
+    - lung
+    - liver
+    - adrenal
+    - spine
+    - pancreas
+    TCGA-KIRP:
+    - lung
+    - liver
+    - spine
+    TCGA-KICH:
+    - liver
+    - lung
+    TCGA-LIHC:
+    - lung
+    - adrenal
+    - spine
+    TCGA-BRCA:
+    - liver
+    - lung
+    - spine
+    TCGA-LUAD:
+    - adrenal
+    - liver
+    - spine
+    TCGA-LUSC:
+    - adrenal
+    - liver
+    - spine
+    TCGA-BLCA:
+    - liver
+    - lung
+    - spine
+    TCGA-PRAD:
+    - spine
+    - hip
+    - sacrum
+    TCGA-CESC:
+    - liver
+    - lung
+    - spine
+    TCGA-UCEC:
+    - lung
+    - liver
+    TCGA-OV:
+    - liver
+    - spleen
+    - small_bowel
+    - colon
+    TCGA-STAD:
+    - liver
+    - ovary
+    - lung
+    TCGA-ESCA:
+    - liver
+    - lung
+    - adrenal
+    TCGA-COAD:
+    - liver
+    - lung
+    TCGA-READ:
+    - liver
+    - lung
+    TCGA-PAAD:
+    - liver
+    - lung
 cancer_types:
   TCGA-KIRC:
     host: kidney

@@ -9,7 +9,7 @@ OUT = os.path.join(os.path.dirname(__file__), 'knowledge_base')
 os.makedirs(OUT, exist_ok=True)
 TS = json.load(open(os.path.join(os.path.dirname(__file__), 'seed', 'ts_class_maps.json')))
 TS_ALL = {task: set(v.values()) for task, v in TS.items()}
-VERSION = '0.1.0'
+VERSION = '0.3.0'
 TODAY = str(datetime.date.today())
 
 # ------------------------------------------------------------------ helpers
@@ -52,6 +52,9 @@ def rel(src, type, dst, *, side='same', direction=None, contact=None, staging=()
     R.append(d)
 
 # ------------------------------------------------------------------ relation types
+# NOTE: every `gate` below is an OUTPUT FILTER applied to VoxTell's full-volume prediction, never an input crop.
+# VoxTell is a whole-volume model (trained on full scans; text conditioning uses global context), so inference
+# always runs on the entire image; the gate then keeps only connected components lying inside the gate region.
 RELATION_TYPES = [
  dict(id='has_part', meaning='sub-structure of the anchor; supports confined-to-organ and intra-organ location',
       gate=dict(kind='inside', dilate_mm=3), default_priority=2),
@@ -547,7 +550,22 @@ for lm in LANDMARKS: rel(lm['entity'], 'landmark_for', 'spine', side='any', note
 TUMOUR = dict(
  version=VERSION,
  generic_templates=['tumor in the {host}', '{host} tumor', '{host} mass', '{host} lesion', 'cancer of the {host}', 'malignant neoplasm in the {host}'],
- host_resolution=['max_overlap_with_anchor_masks', 'cancer_type_default_host', 'planner_flag_unknown'],
+ host_resolution=['cancer_type_or_explicit_host_is_primary', 'rater_evidence_validated_in_host_region_only', 'never_replace_primary_by_rater_evidence'],
+ spread=dict(
+   note='Hosts are a WEIGHTED SET, not one organ. Prior classes: primary (cancer type / explicit host), local_invasion (anchors linked to the '
+        'primary by adjacent_to / invested_by in relations.yaml — data-agnostic, derived automatically so unseen cancers are covered), '
+        'distant (cancer-specific common metastatic sites among anchors; default list for unknown cancers). Regional nodes stay profile items, not hosts.',
+   prior=dict(primary=1.0, local_invasion=0.3, distant=0.15),
+   evidence='set-based, per candidate host present in the scan: 2 = agreement T_BP ∩ T_VT validated in the host region, 1 = one rater validated, 0 = none (same envelope / KB-prior-region validation as for the primary)',
+   weight='prior × (1 + evidence)  — a score for ordering and budgeting, not a probability; primary is always kept',
+   keep_secondary='evidence ≥ 1 (a validated tumour component in that organ) OR weight ≥ 0.3 with the organ in the FOV and TS-found (local-invasion neighbours are checked for tumour contact in the reasoning layer)',
+   planner='primary → 2-hop profile; kept secondary hosts → 1-hop profile + tumour-near anchors around their validated component; fusion assigns every atom to the host whose extent it overlaps most → primary lesion + secondary lesions per host',
+   distant_default=['liver', 'lung', 'adrenal', 'spine'],
+   distant_by_cancer={
+     'TCGA-KIRC': ['lung', 'liver', 'adrenal', 'spine', 'pancreas'], 'TCGA-KIRP': ['lung', 'liver', 'spine'], 'TCGA-KICH': ['liver', 'lung'],
+     'TCGA-LIHC': ['lung', 'adrenal', 'spine'], 'TCGA-BRCA': ['liver', 'lung', 'spine'], 'TCGA-LUAD': ['adrenal', 'liver', 'spine'], 'TCGA-LUSC': ['adrenal', 'liver', 'spine'],
+     'TCGA-BLCA': ['liver', 'lung', 'spine'], 'TCGA-PRAD': ['spine', 'hip', 'sacrum'], 'TCGA-CESC': ['liver', 'lung', 'spine'], 'TCGA-UCEC': ['lung', 'liver'], 'TCGA-OV': ['liver', 'spleen', 'small_bowel', 'colon'],
+     'TCGA-STAD': ['liver', 'ovary', 'lung'], 'TCGA-ESCA': ['liver', 'lung', 'adrenal'], 'TCGA-COAD': ['liver', 'lung'], 'TCGA-READ': ['liver', 'lung'], 'TCGA-PAAD': ['liver', 'lung']}),
  cancer_types={
   'TCGA-KIRC': dict(host='kidney', phrases=['clear cell renal cell carcinoma in the {side} kidney', 'renal cell carcinoma in the {side} kidney', '{side} kidney tumor', 'renal tumor']),
   'TCGA-KIRP': dict(host='kidney', phrases=['papillary renal cell carcinoma in the {side} kidney', 'renal cell carcinoma in the {side} kidney', '{side} kidney tumor']),
@@ -575,25 +593,67 @@ TUMOUR = dict(
 PROMPT_RULES = dict(version=VERSION,
  templates=dict(lateral='{side} {term}', in_region='{term} in the {region}', tumour_in_host='{tumour_phrase}'),
  alias_ensemble=dict(n_aliases=3, fusion='majority_vote', min_agreement=2, note='main term + first 2 aliases; fuse binary masks by voxel majority'),
- roi_by_gate=dict(inside='anchor mask dilated 3 mm → bbox', shell='anchor bbox dilated by outer_mm', neighbour_bbox_or_directional_shell='TS bbox of neighbour if present else directional half-shell of anchor', corridor='cylinder between endpoints', region='region box from landmarks', directional_shell='half-shell on stated side', none='whole volume'),
- waves=dict(wave0='ruler prompts if TS vertebrae missing: spine, sacrum, hip bone', wave1='missing anchors from completion under spatial-prior gates', wave2='profile items (1–2 hop) of host / promoted / tumour-near anchors', max_waves=2),
- budget=dict(max_prompts_per_scan=40, order='tumour prompts, then by (priority, wave); host-derived items get a one-step priority boost', drop_order='lowest priority first'),
+ inference=dict(input='ALWAYS the full volume — VoxTell is trained on whole scans and its text conditioning needs global context; never crop',
+                call='one predictor call per scan with every prompt of the plan (image encoder once, text embedded once)'),
+ gate_as_output_filter=dict(
+     rule='after inference, label connected components of each mask; keep components with ≥ min_inside fraction of voxels inside the gate region; drop the rest',
+     min_inside=0.8,
+     inside='anchor mask dilated by dilate_mm', shell='anchor surface shell inner_mm..outer_mm', neighbour_bbox_or_directional_shell='TS bbox of neighbour (dilated) if present, else directional half-shell of the anchor',
+     corridor='cylinder of radius_mm between the two endpoints', region='region box from landmarks / vertebral levels', directional_shell='half-shell on the stated side of the anchor', none='no filtering',
+     empty_after_filter='if the structure was expected (completion) → record ABSENT (sex-dependent/surgical/variable) or NOT_FOUND (obligatory); otherwise → rejected. No statistical existence test at this stage'),
+ single_pass=dict(rule='ONE VoxTell call per scan with the complete plan; no re-planning after inference. TS + KB are sufficient to compile every prompt (host from cancer type / tumour overlap; profiles of TS-unnameable missing anchors are planned up front and simply come back empty if the anchor is absent)',
+                  why='a second pass doubles orchestration and failure modes for little gain; VoxTell embeds text once and runs the image encoder once, so extra prompts are cheap'),
+ tiers=dict(tier0='ruler prompts if TS vertebrae and fallback landmarks are missing: spine, sacrum, hip bone (used by the reasoning layer for frame/laterality)', tier1='missing anchors from completion under spatial-prior gates — never dropped by the budget', tier2='profile items (1–2 hop) of host / TS-unnameable missing / tumour-near anchors — trimmed by the budget', note='tiers order and budget prompts; they are NOT separate inference passes'),
+ budget=dict(max_prompts_per_scan=60, order='tumour/ruler prompts, then tier, then priority; host-derived items get a one-step priority boost', drop_order='tier-2 items, lowest priority first; tier 0/1 and tumour prompts are protected'),
  modality=dict(CT='prefer TS mask when TS reliability ≥ 0.8; VoxTell refine host + vessels', MR='TS reliability from pilot; completion always on for pelvic anchors'),
  encoder_reuse='VoxTell embeds text once; image encoder per volume; pass all prompts of a scan in one predict call (voxtell-predict -p ...)',
 )
-QC_RULES = dict(version=VERSION, rules=[
- dict(id='volume_range', applies='all', check='volume_ml within entity.volume_ml (if defined) ×[0.5, 2.0]', on_fail='flag'),
- dict(id='laterality', applies='bilateral', check='centroid x-sign matches side in RAS frame from affine', on_fail='swap_or_flag'),
- dict(id='containment', applies='listB', check='≥80% of mask inside gate', on_fail='reject'),
- dict(id='adjacency', applies='listB', check='min surface distance to each required neighbour ≤ d_mm from spatial prior', on_fail='reject'),
- dict(id='symmetry', applies='bilateral', check='volume ratio L/R within [0.5, 2.0] unless surgical absence flagged', on_fail='flag'),
- dict(id='tubular_continuity', applies='vessel_artery,vessel_vein,duct', check='single dominant component ≥70% volume; elongation ≥3', on_fail='flag'),
- dict(id='intensity', applies='CT', check='median HU within entity.ct_hu ± 30', on_fail='flag'),
- dict(id='truncation', applies='all', check='fraction of mask on volume boundary; >5% → truncated flag', on_fail='flag'),
- dict(id='existence_gate', applies='listB', check='R²-Seg L1: max prob, positive ratio, KS vs empty distribution', on_fail='absent_if_expected_else_reject'),
- dict(id='ts_vt_agreement', applies='listA', check='Dice(TS, VoxTell) ≥ 0.5 → use VoxTell boundary; else TS + flag', on_fail='use_ts'),
- dict(id='single_rater_threshold', applies='listB', check='all listB checks pass AND alias agreement ≥ 2/3', on_fail='reject'),
-])
+QC_RULES = dict(version=VERSION,
+ stage='1: anatomical reasoning by SET THEORY and TOPOLOGY only. No statistical rejection (no MMD, KS, HU/intensity tests) at this stage; '
+       'those rules are listed under deferred_rules and are not applied. Sex/presence class is never a filter: existence is decided on the image.',
+ sets=dict(B='body mask (TS body or image>air threshold)', O_TS='TotalSegmentator organ masks (per class, per side)', O_VT='VoxTell anatomy masks after alias vote',
+           T_BP='BiomedParse tumour mask', T_VT='VoxTell tumour mask', G='gate region compiled from the plan', C='organ consensus = O_TS ∩ O_VT (eroded 1 voxel) when both exist, else the single available mask'),
+ rules=[
+ # ---- set-theoretic (membership / containment / disjointness)
+ dict(id='alias_vote', basis='set', applies='all VoxTell prompts', check='voxel-wise majority over main + aliases (≥2/3); masks are sets, vote = intersection of pairwise unions', on_fail='drop_prompt'),
+ dict(id='inside_body', basis='set', applies='all', check='|M ∩ B| / |M| ≥ 0.98', on_fail='remove_outside'),
+ dict(id='gate_containment', basis='set+topology', applies='listB', check='per connected component c of M: |c ∩ G| / |c| ≥ 0.8 → keep c, else drop c', on_fail='drop_component'),
+ dict(id='part_in_whole', basis='set', applies='has_part relations', check='part ⊂ whole: |part ∩ whole| / |part| ≥ 0.9 (renal cortex ⊂ kidney, prostate zones ⊂ prostate …)', on_fail='clip_to_whole'),
+ dict(id='pairwise_disjoint', basis='set', applies='distinct entities of the same rater', check='|Mi ∩ Mj| / min(|Mi|,|Mj|) ≤ 0.05 unless has_part/wall_of relation; overlap voxels assigned to the entity whose component stays connected after removal (ties → higher priority)', on_fail='reassign_overlap'),
+ dict(id='lies_in_region', basis='set', applies='entities with lies_in', check='|M ∩ region box| / |M| ≥ 0.8', on_fail='drop_component'),
+ # ---- topological (connectivity / adjacency / genus)
+ dict(id='component_count', basis='topology', applies='all', check='number of 26-connected components ≤ entity.expected_components (solid organ 1 per side; lung lobes 1 each; bowel ≤3; vessels 1 dominant); extra components below 5% volume dropped', on_fail='keep_largest_k'),
+ dict(id='tubular_continuity', basis='topology', applies='vessel_artery,vessel_vein,duct,ureter,bowel', check='dominant component ≥70% of volume and forms one path along its axis (skeleton has one main branch; no gap > 2 voxels)', on_fail='flag_fragmented'),
+ dict(id='adjacency', basis='topology', applies='adjacent_to / invested_by / wall_of edges required by the gate', check='dilate(M, d_mm) ∩ N ≠ ∅ for each required neighbour N (contact), d_mm from spatial prior', on_fail='drop_component'),
+ dict(id='laterality', basis='geometry', applies='bilateral', check='centroid on the stated side of the midsagittal plane (fit through spine/aorta/sacrum centroids); left/right masks disjoint', on_fail='swap_or_flag'),
+ dict(id='truncation', basis='set', applies='all', check='fraction of M on the volume boundary > 5% → truncated (measurements flagged, not rejected)', on_fail='flag'),
+ dict(id='ts_vt_arbitration', basis='set', applies='listA non-host anchors (TS and VoxTell both segmented the entity)', check='Dice ≥ 0.5 → consensus C = O_TS ∩ O_VT eroded; boundary = O_TS (TS is the supervised, data-driven rater for that class); Dice < 0.5 → keep the mask that satisfies component_count, adjacency and part_in_whole; if both do → TS; log disagreement', on_fail='use_ts'),
+ dict(id='host_reference', basis='set+topology', applies='the host organ when TS has a class for it (non-OOD host)', check=(
+      'H_TS = TS host mask (data-driven prior, primary); H_VT = VoxTell host mask after alias vote + QC. '
+      'Core   C_H = (H_TS ∩ H_VT) eroded 1 voxel, minus all tumour claims (T_BP ∪ T_VT)  → normal-tissue reference. '
+      'Extent H_ext = connected components of (H_TS ∪ H_VT) that touch C_H  → envelope in which tumour atoms may live (organ ∪ tumour). '
+      'Boundary for features/graph = H_TS, unless H_TS fails plausibility (volume outside prior range, component count above expected, truncated) while H_VT passes, or Dice(H_TS, H_VT) < 0.5 with H_VT passing → H_VT; logged. '
+      'Disagreement D_H = H_TS △ H_VT: components that overlap a tumour claim are TUMOUR-RELATED (the organ rater that excluded them, usually VoxTell, is an extra witness that the region is not normal organ) and join the tumour candidate pool with provenance organ_disagreement; components without tumour overlap are boundary noise and follow the boundary choice above. '
+      'OOD host (no TS class): H_TS does not exist → H = H_VT; C_H = H_VT eroded minus tumour claims; H_ext = components of (H_VT ∪ tumour claims) touching H_VT.'),
+      on_fail='use_ts_if_exists_else_vt'),
+ dict(id='absence', basis='set', applies='listB completion', check='expected anchor with empty mask after alias_vote + gate_containment → ABSENT (surgical / sex-dependent / variable anchors) or NOT_FOUND (obligatory) — recorded, never a failure', on_fail='record'),
+ # ---- tumour fusion by set theory + topology (replaces two-sided MMD at this stage)
+ dict(id='tumour_hosts', basis='set', applies='T_BP, T_VT', check='hosts are a WEIGHTED SET (tumour_prompts.spread): primary from cancer type / explicit host (always kept); candidates = local-invasion neighbours (adjacent_to / invested_by anchors of the primary) + cancer-specific distant sites; evidence per candidate = validated tumour component in its TS envelope (2 agreement, 1 single rater, 0 none; the coarse KB prior box is never evidence for a secondary); weight = prior × (1 + evidence); a secondary host is kept (own extent + 1-hop extent profile: capsule/fascia, vessels, nodes, neighbours) only with evidence ≥ 1; evidence-0 neighbours in the FOV become contact_check hosts (tumour–organ contact tested on TS masks, no prompts). Every fused atom is assigned to the kept host whose extent it overlaps most → primary lesion + secondary lesions per host', on_fail='primary_only'),
+ dict(id='tumour_agreement', basis='set', applies='T_BP, T_VT', check='A = T_BP ∩ T_VT (agreed core); D = T_BP △ T_VT (disagreement); atoms = connected components of D labelled BP-only / VT-only', on_fail='n/a'),
+ dict(id='atom_connected_to_core', basis='topology', applies='atoms', check='keep an atom only if it touches A (26-adjacency) or a kept atom; atoms disconnected from A are dropped (unless |A| = 0, see atom_support)', on_fail='drop_atom'),
+ dict(id='atom_support', basis='set', applies='atoms (esp. when A = ∅, the ~61 % zero-overlap series)', check='support(atom) = number of independent witnesses: T_BP claims it (+1), T_VT claims it (+1), it lies ≥50 % in the tumour-related organ disagreement H_TS \\ H_VT or H_VT \\ H_TS (+1: the organ rater excluded it from normal organ). A = ∅ → the index candidate is the largest component inside H_ext with the highest support (≥2 preferred; a single-witness component is kept with provenance single_rater); components with support 1 outside H_ext are dropped', on_fail='drop_atom'),
+ dict(id='atom_in_host_envelope', basis='set', applies='atoms', check='|atom ∩ dilate(host ∪ A, 10 mm)| / |atom| ≥ 0.8 — tumour may extend beyond the organ (T3/T4) but not disappear from it', on_fail='drop_atom'),
+ dict(id='atom_not_in_other_organ', basis='set', applies='atoms', check='|atom ∩ C_other| / |atom| ≤ 0.2 for every non-host organ consensus C_other; a BP/VT tumour component inside a non-host organ is that organ, not tumour', on_fail='drop_atom'),
+ dict(id='tumour_topology', basis='topology', applies='fused tumour', check='fused = A ∪ kept atoms; fill internal holes (genus 0 per component); components ranked by volume; RECIST index lesion = largest measurable', on_fail='n/a'),
+ dict(id='tumour_vs_anatomy_disjoint', basis='set', applies='fused tumour vs final anatomy masks', check='fused tumour removed from every anatomy mask except the host (host keeps organ ∪ tumour for extent measures; organ parenchyma = host \\ tumour for normal-tissue features)', on_fail='subtract'),
+ ],
+ deferred_rules=[
+ dict(id='volume_range', basis='prior', check='volume_ml within entity.volume_ml ×[0.5, 2.0]', status='flag-only in the planner (triggers re-query), never rejection; kept as KB prior for the cohort audit'),
+ dict(id='symmetry', basis='prior', check='L/R volume ratio within [0.5, 2.0]', status='flag-only'),
+ dict(id='intensity', basis='statistical', check='median HU within entity.ct_hu ± 30', status='DEFERRED — stage 2'),
+ dict(id='existence_gate', basis='statistical', check='R²-Seg L1 (max prob, positive ratio, KS)', status='DEFERRED — stage 2; stage 1 uses the absence rule (empty set after set/topology filters)'),
+ dict(id='two_sided_mmd', basis='statistical', check='atom vs normal (organ consensus) and atom vs agreed tumour core, BH-FDR', status='DEFERRED — stage 2; stage 1 fuses atoms by connectivity + containment only'),
+ ])
 
 # ================================================================== VALIDATE + DUMP
 ids = {e['id'] for e in E}

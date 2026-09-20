@@ -1,4 +1,4 @@
-version: 0.1.0
+version: 0.3.0
 entities:
 - id: vertebra_C1
   name: C1 vertebra
