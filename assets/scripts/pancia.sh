@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-##SBATCH --time=0-36:00:00
-#SBATCH --time=0-00:10:00
+#SBATCH --time=0-36:00:00
+##SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-#SBATCH --qos=intr
+##SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -100,6 +100,8 @@ save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg"
 python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
             --seg_obj organ \
             --model TotalSegmentator \
+            --ts_fast \
+            --ts_threads 8 \
             --radiology $radiology \
             --dataset TCGA \
             --save_dir $save_dir
