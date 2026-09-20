@@ -92,6 +92,23 @@ class KnowledgeBase:
             frontier = nxt
         return out
 
+    def spread_hosts(self, primary: str, cancer_type: Optional[str] = None) -> List[dict]:
+        """Weighted candidate hosts from the data-agnostic prior: primary, local-invasion neighbours (adjacent_to /
+        invested_by anchors of the primary, derived from the relation graph) and cancer-specific distant sites."""
+        sp = self.tumour_prompts.get('spread', {})
+        prior = sp.get('prior', dict(primary=1.0, local_invasion=0.3, distant=0.15))
+        out = [dict(entity=primary, cls='primary', prior=prior['primary'])]
+        seen = {primary}
+        for r in self.out_edges.get(primary, []):
+            d = self.entities.get(r['dst'])
+            if r['type'] in ('adjacent_to', 'invested_by') and d and d.get('is_anchor') and r['dst'] not in seen:
+                seen.add(r['dst']); out.append(dict(entity=r['dst'], cls='local_invasion', prior=prior['local_invasion'], via=r['type']))
+        distant = (sp.get('distant_by_cancer') or {}).get(cancer_type or '', sp.get('distant_default', []))
+        for e in distant:
+            if e in self.entities and self.entities[e].get('is_anchor') and e not in seen:
+                seen.add(e); out.append(dict(entity=e, cls='distant', prior=prior['distant']))
+        return out
+
     def spatial_prior_for(self, entity_id: str) -> List[dict]:
         e = self.entities[entity_id]
         return (e.get('anchor') or {}).get('spatial_prior', [])

@@ -1,13 +1,17 @@
 """Deterministic per-scan prompt planner.
 
-Input : TS output summary (which classes found, volumes, centroids in mm, truncation), modality, cancer type, sex.
-Output: Plan with wave-ordered PromptJobs and a decision log. No model calls; pure KB logic.
+Input : TS output summary (which classes found, volumes, centroids in mm, truncation), modality, cancer type,
+        optional sex (recorded in the plan for validation only; never used to include/exclude anchors — avoids bias
+        from missing/incorrect records and from assuming anatomy from a label; existence is decided on the image).
+Output: Plan with tiered PromptJobs and a decision log. No model calls; pure KB logic.
+SINGLE PASS: the whole plan is compiled from TS + KB and sent to VoxTell in ONE call per scan. Tiers only order and
+budget prompts (0 ruler, 1 completion, 2 profile); nothing is re-planned after VoxTell.
 
 Steps
- 1. frame        — vertebral span of the FOV from TS vertebrae, else fallback landmarks, else wave-0 ruler prompts
+ 1. frame        — vertebral span of the FOV from TS vertebrae, else fallback landmarks, else provisional span + tier-0 ruler prompts
  2. anchors      — TS-found classes → KB anchors (with plausibility), expected set from spans/presence, missing = expected − found
- 3. wave 1       — completion prompts for missing anchors under spatial-prior gates
- 4. wave 2       — profile prompts (List A refine / List B extend) for host, promoted, tumour-near and systemic anchors
+ 3. tier 1       — completion prompts for missing anchors under spatial-prior gates
+ 4. tier 2       — profile prompts (List A refine / List B extend) for host, TS-unnameable missing, tumour-near and systemic anchors
  5. budget       — priority cap, dedup, log
 """
 from __future__ import annotations
@@ -33,7 +37,8 @@ class TSOutput:
     structures: List[TSStructure]
     fov_z_mm: Tuple[float, float]
     tumour_centroid_mm: Optional[Tuple[float, float, float]] = None
-    tumour_host_guess: Optional[str] = None     # entity id from max overlap, if a tumour mask exists
+    tumour_host_guess: Optional[str] = None     # PRIMARY host (cancer type / explicit host)
+    hosts: List[dict] = field(default_factory=list)   # weighted host set from adapter: [{entity, cls, prior, evidence, weight, region}], primary first
 
     def by_name(self) -> Dict[str, TSStructure]:
         return {s.ts_name: s for s in self.structures}
@@ -44,7 +49,7 @@ class PromptJob:
     entity: str
     side: Optional[str]
     terms: List[str]
-    wave: int
+    tier: int                    # 0 ruler | 1 completion | 2 profile — ordering/budget only; ONE VoxTell call
     list: str                    # 'A' refine | 'B' extend | 'R' ruler | 'T' tumour
     gate: dict
     priority: int
@@ -56,6 +61,7 @@ class PromptJob:
 @dataclass
 class Plan:
     frame: dict
+    hosts: List[dict]
     anchors_found: List[dict]
     anchors_expected: List[str]
     anchors_missing: List[dict]
@@ -64,7 +70,7 @@ class Plan:
     log: List[dict] = field(default_factory=list)
 
     def to_json(self) -> str:
-        return json.dumps(dict(frame=self.frame, anchors_found=self.anchors_found, anchors_expected=self.anchors_expected,
+        return json.dumps(dict(frame=self.frame, hosts=self.hosts, anchors_found=self.anchors_found, anchors_expected=self.anchors_expected,
                                anchors_missing=self.anchors_missing, anchors_absent_candidates=self.anchors_absent_candidates,
                                prompts=[asdict(p) for p in self.prompts], log=self.log), indent=1)
 
@@ -113,7 +119,7 @@ class Planner:
             span = [kb.vertebral_order[top_i], kb.vertebral_order[bot_i]]
             log.append(dict(step='frame', method='fallback_landmarks', landmarks=[e[2] for e in est], span=span))
             return dict(span=span, method='fallback_landmarks', confidence='medium')
-        log.append(dict(step='frame', method='none', action='wave0_ruler_prompts'))
+        log.append(dict(step='frame', method='none', action='tier0_ruler_prompts'))
         return dict(span=None, method='none', confidence='low')
 
     # ------------------------------------------------------------ 2. anchors
@@ -148,16 +154,15 @@ class Planner:
             a = e['anchor']
             if not kb.span_overlaps(a['span'], frame['span']):
                 continue
-            pres = a['presence']
-            if pres == 'sex_female' and sex == 'male': continue
-            if pres == 'sex_male' and sex == 'female': continue
-            exp.append(e['id'])
-        log.append(dict(step='expected', n=len(exp), sex=sex or 'unknown→both', span=frame['span']))
+            exp.append(e['id'])   # presence class (incl. sex_*) is NOT used to exclude: the image decides, sex is metadata only
+        log.append(dict(step='expected', n=len(exp), sex_recorded=sex, sex_used_for_filtering=False, span=frame['span']))
         return exp
 
     # ------------------------------------------------------------ gates
     def gate_from_prior(self, entity_id: str, side: Optional[str], found_index: Dict[Tuple[str, Optional[str]], dict]) -> dict:
-        """Compile the spatial prior into a gate spec referencing found landmarks (resolution happens at run time on masks)."""
+        """Compile the spatial prior into a gate spec referencing found landmarks.
+        Gates are OUTPUT filters: VoxTell always runs on the full volume; the gate is applied afterwards to keep only
+        connected components inside the region (see prompt_rules.gate_as_output_filter)."""
         priors = self.kb.spatial_prior_for(entity_id)
         usable = []
         for p in priors:
@@ -185,7 +190,11 @@ class Planner:
         return g
 
     # ------------------------------------------------------------ main
-    def plan(self, ts: TSOutput, modality: str, cancer_type: Optional[str] = None, sex: Optional[str] = None) -> Plan:
+    def plan(self, ts: TSOutput, modality: str, cancer_type: Optional[str] = None, sex: Optional[str] = None,
+             include_tumour_prompt: bool = False) -> Plan:
+        """include_tumour_prompt: add the cancer-type tumour phrase to the anatomy call. Default False because the
+        initial VoxTell tumour mask (step 1) already exists and a re-issued VoxTell prompt is NOT an independent rater
+        (same model, same image; only the wording differs). Set True only when no initial VT tumour mask is available."""
         kb = self.kb; log = []
         frame = self.estimate_frame(ts, log)
         found = self.map_found(ts, log)
@@ -194,13 +203,13 @@ class Planner:
             found_index[('spine', None)] = dict(entity='spine', side=None, ts_name='vertebrae_*', plausible=True, is_anchor=True, volume_ml=None, truncated=False, why=[])
         prompts: List[PromptJob] = []
 
-        # wave 0: ruler if frame unknown
+        # tier 0: ruler if frame unknown
         if not frame.get('span'):
             for eid in ['spine', 'sacrum', 'hip']:
                 for side in (['left', 'right'] if kb.entities[eid]['laterality'] == 'bilateral' else [None]):
                     prompts.append(PromptJob(eid, side, kb.voxtell_terms(eid, side), 0, 'R', dict(kind='none'), 1, ['frame unknown → ruler prompt']))
             frame = dict(span=['T10', 'coccyx'], method='assumed_after_ruler', confidence='low')   # provisional wide span
-            log.append(dict(step='frame', note='provisional span until wave-0 masks return; re-run plan() with ruler results'))
+            log.append(dict(step='frame', note='provisional wide span; tier-0 ruler masks are used by the reasoning layer for frame/laterality checks, no re-planning'))
 
         expected = self.expected_anchors(frame, sex, log)
         found_anchor_ids = {f['entity'] for f in found if f['plausible'] and f['is_anchor']}
@@ -210,7 +219,7 @@ class Planner:
             sides = ['left', 'right'] if e['laterality'] == 'bilateral' else [None]
             if all((eid, s) in found_index for s in sides):
                 continue
-            if e['anchor']['presence'] == 'surgical':
+            if e['anchor']['presence'] in ('surgical', 'sex_female', 'sex_male', 'variable'):   # empty return = absence, not failure
                 absent_candidates.append(eid)
             for side in sides:
                 if (eid, side) in found_index:
@@ -233,11 +242,16 @@ class Planner:
             if cands:
                 host_side = min(cands, key=lambda fs: sum((a - b) ** 2 for a, b in zip(fs[1].centroid_mm, ts.tumour_centroid_mm)))[0]['side']
             else:
-                host_side = 'left' if ts.tumour_centroid_mm[0] > 0 else 'right'
-        log.append(dict(step='host', host=host, side=host_side, source='tumour_overlap' if ts.tumour_host_guess else 'cancer_type'))
+                # no TS mask of the host (e.g. breast): side from the tumour x offset to the midline (spine/aorta/sacrum if found), only when clearly lateral
+                mid = [ts.by_name()[f['ts_name']].centroid_mm[0] for f in found if f['entity'] in ('spine', 'aorta', 'sacrum')]
+                dx = ts.tumour_centroid_mm[0] - (sum(mid) / len(mid) if mid else 0.0)
+                host_side = ('left' if dx > 0 else 'right') if abs(dx) >= 30 else None
+        # no validated tumour evidence on a bilateral host → both sides are prompted (never guess a side)
+        log.append(dict(step='host', host=host, side=host_side or ('both' if host and kb.entities[host]['laterality'] == 'bilateral' else None),
+                        source='tumour_evidence' if ts.tumour_centroid_mm else 'cancer_type'))
 
-        # tumour prompts
-        if host:
+        # tumour prompts (only when no initial VT tumour mask exists — see include_tumour_prompt)
+        if host and include_tumour_prompt:
             ct = kb.tumour_prompts['cancer_types'].get(cancer_type or '', {})
             phrases = ct.get('phrases') or [t.replace('{host}', kb.entities[host]['name'].lower()) for t in kb.tumour_prompts['generic_templates']]
             sides = [host_side] if host_side else (['left', 'right'] if kb.entities[host]['laterality'] == 'bilateral' else [None])
@@ -245,7 +259,7 @@ class Planner:
                 terms = [p.replace('{side}', side or '').replace('  ', ' ').strip() for p in phrases[:3]]
                 prompts.append(PromptJob(host, side, terms, 2, 'T', dict(kind='inside', anchor=host, dilate_mm=20), 1, ['tumour prompt on host']))
 
-        # wave 2: profiles
+        # tier 2: profiles
         # promote only anchors TS cannot name (or the host); TS-nameable-but-missing anchors are usually FOV-edge and get no profile expansion
         promoted = [(m['entity'], m['side']) for m in missing if (not m.get('ts_has_class') or m['entity'] == host) and m['entity'] not in self.systemic]
         near = []
@@ -256,19 +270,37 @@ class Planner:
                 d = sum((a - b) ** 2 for a, b in zip(s.centroid_mm, ts.tumour_centroid_mm)) ** 0.5
                 if d <= self.tumour_near_mm + 60:    # centroid distance is coarse; run-time uses surface distance
                     near.append((f['entity'], f['side']))
+        # secondary hosts (spread): kept candidates other than the primary → 1-hop profile each
+        hosts_out = []
+        secondary = []
+        for h in (ts.hosts or []):
+            if h['entity'] == host:
+                hosts_out.append(dict(h, side=host_side, role='primary')); continue
+            role = h.get('role', 'secondary')
+            hosts_out.append(dict(h, side=None, role=role))
+            if role == 'secondary':
+                secondary.append(h)          # contact_check hosts get no prompts: the reasoning layer tests tumour–organ contact on TS masks
+        if host and not hosts_out:
+            hosts_out.append(dict(entity=host, cls='primary', prior=1.0, evidence=None, weight=1.0, side=host_side, role='primary'))
+        log.append(dict(step='hosts', hosts=[(h['entity'], h['role'], h['cls'], h.get('evidence'), h.get('weight')) for h in hosts_out]))
         targets = []
         if host: targets.append((host, host_side, 2, 'host'))
+        for h in secondary:
+            sides = ['left', 'right'] if kb.entities[h['entity']]['laterality'] == 'bilateral' else [None]
+            for sd in sides:
+                targets.append((h['entity'], sd, 1, f"secondary_host[{h['cls']},ev={h.get('evidence')}]"))
         for eid, side in promoted: targets.append((eid, side, 1 if eid != host else 2, 'promoted'))
         for eid, side in near: targets.append((eid, side, 1, 'tumour_near'))
         seen = set()
+        earlier = {(p.entity, p.side): p for p in prompts}          # tier-0/1/tumour prompts already planned
         ts_only = []
         for eid, side, hops, why in targets:
-            for r in kb.profile(eid, hops=hops):
+            # secondary hosts: extent-relevant relations only (capsule/fascia, vessels, nodes) — no sub-parts (e.g. liver segments)
+            types = {'invested_by', 'supplied_by', 'drained_by', 'drains_lymph_to', 'adjacent_to'} if why.startswith('secondary_host') else None
+            for r in kb.profile(eid, hops=hops, types=types):
                 dst = kb.entities.get(r['dst'])
                 if not dst: continue
                 if modality not in dst.get('modality', ['CT', 'MR']): continue
-                pres = (dst.get('anchor') or {}).get('presence')
-                if (pres == 'sex_female' and sex == 'male') or (pres == 'sex_male' and sex == 'female'): continue
                 bilateral = dst['laterality'] == 'bilateral'
                 sl = r.get('side_link', 'same')
                 if sl in ('left', 'right'):
@@ -285,8 +317,15 @@ class Planner:
                     pr = r.get('priority') or kb.relation_types[r['type']]['default_priority']
                     if dst.get('coverage_tier') == 'ood': pr = max(pr, 3)
                     if why == 'host': pr = max(1, pr - 1)          # host-derived structures matter most
+                    elif why.startswith('secondary_host') and ('ev=1' in why or 'ev=2' in why): pr = max(1, pr)   # evidenced secondary host keeps its default priority
                     else: pr = max(pr, 2)                           # everything not derived from the host is at most priority 2
                     ts_found = (r['dst'], ds) in found_index
+                    if key in earlier:                                # already a completion prompt: merge reason + priority, no duplicate
+                        ep = earlier[key]
+                        ep.priority = min(ep.priority, pr)
+                        ep.reason.append(f"also {why} profile: {r['src']} -{r['type']}-> {r['dst']}")
+                        if ep.relation is None: ep.relation, ep.from_anchor = r['type'], eid
+                        continue
                     if ts_found and pr > 1:
                         ts_only.append(dict(entity=r['dst'], side=ds, relation=r['type'], from_anchor=eid))   # keep TS mask, no VoxTell prompt
                         continue
@@ -297,10 +336,15 @@ class Planner:
                                              relation=r['type'], from_anchor=eid))
         # budget
         cap = kb.prompt_rules['budget']['max_prompts_per_scan']
-        prompts.sort(key=lambda p: (0 if p.list in ('T', 'R') else 1, p.priority, p.wave))
+        prompts.sort(key=lambda p: (0 if p.list in ('T', 'R') else 1, p.tier, p.priority))
         log.append(dict(step='ts_only', n=len(ts_only), items=[(t['entity'], t['side']) for t in ts_only]))
-        kept, dropped = prompts[:cap], prompts[cap:]
+        log.append(dict(step='tumour_prompt', included=include_tumour_prompt, host=host))
+        # completion (tier 0/1) and tumour prompts are never dropped: they decide which anchors exist; the cap trims tier 2 only
+        protected = [p for p in prompts if p.tier < 2 or p.list in ('T', 'R')]
+        w2 = [p for p in prompts if not (p.tier < 2 or p.list in ('T', 'R'))]
+        room = max(0, cap - len(protected))
+        kept, dropped = protected + w2[:room], w2[room:]
         if dropped:
             log.append(dict(step='budget', dropped=[(p.entity, p.side, p.priority) for p in dropped]))
-        return Plan(frame=frame, anchors_found=found, anchors_expected=expected, anchors_missing=missing,
+        return Plan(frame=frame, hosts=hosts_out, anchors_found=found, anchors_expected=expected, anchors_missing=missing,
                     anchors_absent_candidates=absent_candidates, prompts=kept, log=log)

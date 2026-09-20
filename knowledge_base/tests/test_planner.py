@@ -19,12 +19,15 @@ def test_pelvic_mr_cesc_completion():
         TSStructure('iliac_artery_left', 8, (40, -20, 40)), TSStructure('iliac_artery_right', 8, (-40, -20, 40)),
         TSStructure('colon', 250, (10, -30, 20)), TSStructure('femur_left', 200, (90, 0, -90), zmin_mm=-120, zmax_mm=-60), TSStructure('femur_right', 200, (-90, 0, -90), zmin_mm=-120, zmax_mm=-60),
         TSStructure('iliopsoas_left', 120, (50, -10, 0)), TSStructure('iliopsoas_right', 120, (-50, -10, 0))])
-    plan = Planner(KB).plan(ts, modality='MR', cancer_type='TCGA-CESC', sex='female')
+    plan = Planner(KB).plan(ts, modality='MR', cancer_type='TCGA-CESC', sex='female', include_tumour_prompt=True)
     missing = {m['entity'] for m in plan.anchors_missing}
     # completion must propose the female pelvic organs TS cannot name
     for e in ['uterus', 'cervix', 'vagina', 'rectum', 'ovary']:
         assert e in missing, f'{e} not proposed; missing={missing}'
-    assert 'prostate' not in missing and 'seminal_vesicle' not in missing
+    # sex is metadata only: male-presence anchors are still proposed (image decides; empty → recorded absent)
+    assert 'prostate' in missing and 'seminal_vesicle' in missing
+    assert any(l.get('step') == 'expected' and l.get('sex_used_for_filtering') is False for l in plan.log)
+    assert 'prostate' in plan.anchors_absent_candidates or any(m['entity'] == 'prostate' for m in plan.anchors_missing)
     ent = {(p.entity, p.side) for p in plan.prompts}
     # cervix profile → parametrium, pelvic node stations
     assert ('parametrium', 'left') in ent or ('parametrium', 'right') in ent
@@ -43,7 +46,7 @@ def test_abdominal_ct_kirc():
         TSStructure('spleen', 200, (90, -40, 130)), TSStructure('aorta', 60, (-5, -70, 80)), TSStructure('inferior_vena_cava', 40, (20, -60, 80)),
         TSStructure('pancreas', 70, (0, -20, 100)), TSStructure('adrenal_gland_left', 5, (60, -70, 120)), TSStructure('colon', 400, (0, 40, 40)),
         TSStructure('iliopsoas_left', 200, (35, -70, 40)), TSStructure('iliopsoas_right', 200, (-35, -70, 40)), TSStructure('urinary_bladder', 5, (0, 60, -10))])
-    plan = Planner(KB).plan(ts, modality='CT', cancer_type='TCGA-KIRC', sex='male')
+    plan = Planner(KB).plan(ts, modality='CT', cancer_type='TCGA-KIRC', sex='male', include_tumour_prompt=True)
     assert plan.frame['method'] == 'ts_vertebrae'
     missing = {(m['entity'], m['side']) for m in plan.anchors_missing}
     assert ('adrenal', 'right') in missing          # right adrenal not found → completion
@@ -58,8 +61,8 @@ def test_abdominal_ct_kirc():
 if __name__ == '__main__':
     test_kb_valid(); print('KB valid')
     p1 = test_pelvic_mr_cesc_completion(); print('CESC MR: frame', p1.frame, '| missing', [(m['entity'], m['side']) for m in p1.anchors_missing])
-    print('  prompts:', len(p1.prompts)); [print('  ', p.wave, p.list, p.priority, p.entity, p.side, '|', p.terms[0], '|', p.gate.get('kind'), '|', p.reason[-1]) for p in p1.prompts]
+    print('  prompts:', len(p1.prompts)); [print('  ', p.tier, p.list, p.priority, p.entity, p.side, '|', p.terms[0], '|', p.gate.get('kind'), '|', p.reason[-1]) for p in p1.prompts]
     p2 = test_abdominal_ct_kirc(); print('\nKIRC CT: frame', p2.frame, '| missing', [(m['entity'], m['side']) for m in p2.anchors_missing])
-    print('  prompts:', len(p2.prompts)); [print('  ', p.wave, p.list, p.priority, p.entity, p.side, '|', p.terms[0], '|', p.gate.get('kind'), '|', p.reason[-1]) for p in p2.prompts]
+    print('  prompts:', len(p2.prompts)); [print('  ', p.tier, p.list, p.priority, p.entity, p.side, '|', p.terms[0], '|', p.gate.get('kind'), '|', p.reason[-1]) for p in p2.prompts]
     open(os.path.join(os.path.dirname(__file__), 'example_plan_cesc_mr.json'), 'w').write(p1.to_json())
     open(os.path.join(os.path.dirname(__file__), 'example_plan_kirc_ct.json'), 'w').write(p2.to_json())
