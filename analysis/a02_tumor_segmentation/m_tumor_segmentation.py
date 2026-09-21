@@ -253,7 +253,6 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
             ensemble_prob = []
             ensemble_feat = []
             for prompt in prompts:
-                logger.info("Using BiomedParse prompt: %s", prompt)
                 if save_radiomics:
                     pred_prob, feature = interactive_infer_image(model, Image.fromarray(img), prompt, resize_mask=True, return_feature=True)
                     ensemble_feat.append(np.transpose(feature, (1, 2, 0)))
@@ -297,6 +296,8 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
                 slice_feat = np.mean(np.stack(ensemble_feat, axis=0), axis=0, keepdims=True)
                 feat_4d.append(slice_feat)
         
+        logger.info("Using BiomedParse prompt: %s", prompts[0])
+
         # post-processing predicted masks
         mask_3d = np.concatenate(mask_3d, axis=0)
 
@@ -315,12 +316,12 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
             mask_3d = np.moveaxis(mask_nib, slice_axis, 0)
 
         if save_radiomics: feat_4d = np.concatenate(feat_4d, axis=0)
-        keep_largest = seg_obj == 'tumor'
+        # keep_largest = seg_obj == 'tumor'
         if beta_params is not None:
             prob_3d = np.concatenate(prob_3d, axis=0)
             image_4d = np.stack(image_4d, axis=0)
             logger.info("Post-processing by removing both unconfident predictions and spatially inconsistent objects")
-            mask_3d = remove_inconsistent_objects(mask_3d, prob_3d=prob_3d, image_4d=image_4d, beta_params=beta_params, keep_largest=keep_largest)
+            mask_3d = remove_inconsistent_objects(mask_3d, prob_3d=prob_3d, image_4d=image_4d, beta_params=beta_params, keep_largest=False)
         else:
             logger.info("Post-processing by removing spatially inconsistent objects")
             if format[idx] == 'dicom':
@@ -329,7 +330,7 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
                 voxel_spacing = spacing.tolist()
                 z_spacing = voxel_spacing.pop(slice_axis)
                 voxel_spacing.insert(0, z_spacing)
-            mask_3d = remove_inconsistent_objects(mask_3d, spacing=voxel_spacing, keep_largest=keep_largest)
+            mask_3d = remove_inconsistent_objects(mask_3d, spacing=voxel_spacing, keep_largest=False)
         final_mask = np.moveaxis(mask_3d, 0, slice_axis)
         logger.info(f"Saving predicted segmentation to {save_mask_path}")
         nifti_img = nib.Nifti1Image(final_mask, affine)
@@ -803,14 +804,14 @@ if __name__ == "__main__":
     extract_radiology_segmentation(
         dataset=args.dataset,
         seg_obj=args.seg_obj,
-        img_paths=dataset_info['img_paths'],
-        text_prompts=dataset_info['text_prompts'],
+        img_paths=dataset_info['img_paths'][3200:],
+        text_prompts=dataset_info['text_prompts'][3200:],
         model_mode=args.model,
         save_dir=save_dir,
-        modality=dataset_info['modality'],
-        site=dataset_info['site'],
+        modality=dataset_info['modality'][3200:],
+        site=dataset_info['site'][3200:],
         meta_list=dataset_info['meta_list'],
-        img_format=dataset_info['img_format'],
+        img_format=dataset_info['img_format'][3200:],
         beta_params=None,
         keep_largest=args.keep_largest,
         prompt_ensemble=False,
