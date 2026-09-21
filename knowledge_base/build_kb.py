@@ -9,7 +9,7 @@ OUT = os.path.join(os.path.dirname(__file__), 'knowledge_base')
 os.makedirs(OUT, exist_ok=True)
 TS = json.load(open(os.path.join(os.path.dirname(__file__), 'seed', 'ts_class_maps.json')))
 TS_ALL = {task: set(v.values()) for task, v in TS.items()}
-VERSION = '0.3.1'
+VERSION = '0.4.1'
 TODAY = str(datetime.date.today())
 
 # ------------------------------------------------------------------ helpers
@@ -150,7 +150,7 @@ ent('internal_iliac_vein', 'Internal iliac vein', 'vessel_vein', lat='bilateral'
 ent('portal_vein', 'Portal vein', 'vessel_vein', vt='portal vein', aliases=('main portal vein',), ts={'total': 'portal_vein_and_splenic_vein', 'total_mr': 'portal_vein_and_splenic_vein'}, tier='in_vocab', prio=1,
     notes='TS merges portal + splenic vein; VoxTell separates')
 ent('splenic_vein', 'Splenic vein', 'vessel_vein', vt='splenic vein', ts={'total': 'portal_vein_and_splenic_vein', 'total_mr': 'portal_vein_and_splenic_vein'}, tier='near', prio=2)
-ent('hepatic_veins', 'Hepatic veins', 'vessel_vein', vt='hepatic veins', aliases=('hepatic vein',), tier='in_vocab', prio=1, notes='MSD Task08 in VoxTell training')
+ent('hepatic_veins', 'Hepatic veins', 'vessel_vein', vt='hepatic veins', aliases=('hepatic vessels', 'hepatic vein'), tier='in_vocab', prio=1, notes='MSD Task08 in VoxTell training')
 ent('hepatic_artery', 'Hepatic artery', 'vessel_artery', vt='hepatic artery', aliases=('common hepatic artery', 'proper hepatic artery'), tier='near', prio=2)
 ent('celiac_trunk', 'Coeliac trunk', 'vessel_artery', vt='celiac trunk', aliases=('coeliac artery',), tier='near', prio=3)
 ent('superior_mesenteric_artery', 'Superior mesenteric artery', 'vessel_artery', vt='superior mesenteric artery', aliases=('SMA',), tier='near', prio=2)
@@ -265,7 +265,7 @@ ent('uterus', 'Uterus', 'organ', vt='uterus', aliases=('uterine body', 'womb'), 
     anchor=A(['S2', 'coccyx'], 'midline', 'mid', 'sex_female', prior=[('urinary_bladder', 'posterior_superior_to', (0, 20)), ('rectum', 'anterior_to', (0, 30)), ('hip', 'between', (0, 0)), ('sacral_promontory', 'inferior_to', (0, 80))]),
     notes='completion target: TS total_mr has no uterus')
 ent('endometrium', 'Endometrium / uterine cavity', 'organ', vt='endometrium', aliases=('endometrial cavity',), tier='near', prio=2, modality=('MR',))
-ent('myometrium', 'Myometrium', 'organ', vt='myometrium', tier='near', prio=2, modality=('MR',), notes='UCEC T1a/b = <50% / ≥50% myometrial invasion')
+ent('myometrium', 'Myometrium', 'organ', vt='myometrium', aliases=('myometrial tissue', 'uterine muscular wall'), tier='near', prio=2, modality=('MR',), notes='UCEC T1a/b = <50% / ≥50% myometrial invasion')
 ent('junctional_zone', 'Junctional zone', 'organ', vt='junctional zone of the uterus', tier='ood', prio=3, modality=('MR',))
 ent('cervix', 'Uterine cervix', 'organ', vt='cervix', aliases=('uterine cervix', 'cervix uteri'), tier='near', prio=1, vol={'min': 10, 'max': 120},
     anchor=A(['S4', 'coccyx'], 'midline', 'mid', 'sex_female', prior=[('uterus', 'inferior_to', (0, 10)), ('vagina', 'superior_to', (0, 10)), ('urinary_bladder', 'posterior_to', (0, 15)), ('rectum', 'anterior_to', (0, 20))]),
@@ -284,7 +284,7 @@ ent('levator_ani', 'Levator ani / pelvic floor', 'muscle', vt='levator ani muscl
 ent('external_urethral_sphincter', 'External urethral sphincter', 'muscle', vt='external urethral sphincter', tier='ood', prio=3)
 ent('iliopsoas', 'Iliopsoas', 'muscle', lat='bilateral', vt='{side} iliopsoas muscle', ts={'total': {'left': 'iliopsoas_left', 'right': 'iliopsoas_right'}, 'total_mr': {'left': 'iliopsoas_left', 'right': 'iliopsoas_right'}}, tier='in_vocab', prio=2,
     anchor=A(['L1', 'coccyx'], 'bilateral', 'posterior', 'obligatory'))
-ent('psoas', 'Psoas major', 'muscle', lat='bilateral', vt='{side} psoas muscle', ts={'abdominal_muscles': {'left': 'psoas_major_left', 'right': 'psoas_major_right'}, 'total': {'left': 'iliopsoas_left', 'right': 'iliopsoas_right'}}, tier='in_vocab', prio=2,
+ent('psoas', 'Psoas major', 'muscle', lat='bilateral', vt='{side} psoas muscle', aliases=('{side} psoas major muscle',), ts={'abdominal_muscles': {'left': 'psoas_major_left', 'right': 'psoas_major_right'}, 'total': {'left': 'iliopsoas_left', 'right': 'iliopsoas_right'}}, tier='in_vocab', prio=2,
     anchor=A(['T12', 'L5'], 'bilateral', 'posterior', 'obligatory', prior=[('spine', 'lateral_to', (0, 15))]), notes='TS total merges psoas into iliopsoas')
 ent('quadratus_lumborum', 'Quadratus lumborum', 'muscle', lat='bilateral', vt='{side} quadratus lumborum muscle', ts={'abdominal_muscles': {'left': 'quadratus_lumborum_left', 'right': 'quadratus_lumborum_right'}}, tier='near', prio=3)
 ent('gluteus', 'Gluteal muscles', 'muscle', lat='bilateral', vt='{side} gluteal muscles', ts={'total': {'left': 'gluteus_maximus_left', 'right': 'gluteus_maximus_right'}, 'total_mr': {'left': 'gluteus_maximus_left', 'right': 'gluteus_maximus_right'}}, tier='in_vocab', prio=3, notes='merge maximus/medius/minimus')
@@ -655,6 +655,140 @@ QC_RULES = dict(version=VERSION,
  dict(id='two_sided_mmd', basis='statistical', check='atom vs normal (organ consensus) and atom vs agreed tumour core, BH-FDR', status='DEFERRED — stage 2; stage 1 fuses atoms by connectivity + containment only'),
  ])
 
+
+# ================================================================== ALIGN VOXTELL PHRASES TO THE PUBLISHED VOCABULARY
+# Source: arXiv 2511.11450 Table 10 (1078 training labels with # training volumes) + Table 7 (held-out test classes);
+# VoxTell v1.1 was trained on both. Parsed into seed/voxtell_vocabulary.csv. For each entity: the main phrase becomes the
+# exact vocabulary string when one exists (VoxTell's own wording: 'left iliopsoas', 'l1 vertebra', 'liver segment 1',
+# 'left lung upper lobe', 'left iliac vena'); aliases are re-ordered exact > near > rest; coverage_tier is set from the
+# vocabulary: in_vocab (exact, >= 20 training volumes), rare (exact, < 20), near (token overlap only), ood (no match).
+import csv as _csv, re as _re
+_VOC_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'seed', 'voxtell_vocabulary.csv')
+_SIDE = _re.compile(r'\b(left|right)\b')
+_SYN = {'vena': 'vein', 'hipbone': 'hip bone', 'oesophagus': 'esophagus', 'tumour': 'tumor', 'transitional': 'transition', 'vertebrae': 'vertebra'}
+_ROMAN = {'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', 'v': '5', 'vi': '6', 'vii': '7', 'viii': '8'}
+_GENERIC = {'muscle', 'gland', 'bone'}      # VoxTell often omits these ('left iliopsoas', 'left hip bone' but 'thyroid gland')
+def _norm(x):
+    x = _re.sub(r'\s+', ' ', _re.sub(r'[^a-z0-9 ]', ' ', x.lower().replace('_', ' ').replace('-', ' '))).strip()
+    w = [_SYN.get(t, t) for t in x.split()]
+    if len(w) >= 2 and w[-2] == 'segment' and w[-1] in _ROMAN: w[-1] = _ROMAN[w[-1]]
+    return ' '.join(w)
+def _toks(x): return {t for t in _norm(x).split() if t not in {'the', 'of', 'a', 'an', 'in', 'and', 'or', 'with', 'to'}}
+VOCAB = {}
+if os.path.exists(_VOC_PATH):
+    for r in _csv.DictReader(open(_VOC_PATH, newline='')):
+        VOCAB[_norm(r['name'])] = dict(name=r['name'], n=int(r['train_volumes']) if r['train_volumes'] else 10**6, src=r['source'])
+# VoxTell v1.1 label set behind the Hugging Face precomputed text embeddings (huggingface.co/mrokuss/VoxTell,
+# embeddings/voxtell_v1.1/labels.json): 14,194 prompt strings = training classes + their rewritten synonyms, for the
+# 190 datasets of v1.1. This is the operational vocabulary (what the text encoder was trained on); Table 10 supplies the
+# training-volume counts where a label matches, otherwise the count is unknown (None) but presence is confirmed.
+_HF_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'seed', 'voxtell_v1.1_labels.json')
+HF_LABELS = json.load(open(_HF_PATH)) if os.path.exists(_HF_PATH) else []
+for lab in HF_LABELS:
+    k = _norm(lab)
+    if k not in VOCAB:
+        VOCAB[k] = dict(name=lab, n=None, src='hf_v1.1_labels')
+    else:
+        VOCAB[k]['src'] += '+hf_v1.1'
+_UNKNOWN_N = 10**6   # unknown count (test-set or HF-only label): treated as trained, not rare
+MIN_VOL = 20
+
+def _n(v): return _UNKNOWN_N if v['n'] is None else v['n']
+def _variants(pn):
+    out = [pn]
+    pg = ' '.join(t for t in pn.split() if t not in _GENERIC)      # 'left iliopsoas muscle' -> 'left iliopsoas'
+    if pg != pn: out.append(pg)
+    for q in list(out):                                             # simple plural / singular of the last token
+        w = q.split()
+        if w and w[-1].endswith('s'): out.append(' '.join(w[:-1] + [w[-1][:-1]]))
+        elif w: out.append(' '.join(w[:-1] + [w[-1] + 's']))
+    return out
+def _grade(phrase, side):
+    p = phrase.replace('{side}', side or '').strip()
+    pn = _norm(p)
+    if side is None:                                 # lateral entity whose phrase carries its own side word ('left upper lobe of lung')
+        w = set(pn.split())
+        side = 'left' if 'left' in w and 'right' not in w else ('right' if 'right' in w and 'left' not in w else None)
+    for q in _variants(pn):
+        if q in VOCAB:
+            v = VOCAB[q]; return ('exact' if _n(v) >= MIN_VOL else 'rare'), v
+    pt = _toks(p) - {'left', 'right'}
+    if pt:
+        # rank near candidates: known training count first (Table 10 label), then by count; HF-only rewrites last
+        def _rk(v): return (v['n'] is not None, v['n'] or 0)
+        cands = [(_rk(v), k, v) for k, v in VOCAB.items() if pt <= _toks(k) and ('left' in k) == (side == 'left') and ('right' in k) == (side == 'right')]
+        cands = cands or [(_rk(v), k, v) for k, v in VOCAB.items() if pt <= _toks(k)]
+        if cands:
+            _, k, v = max(cands)
+            extra = _toks(k) - pt - {'left', 'right'}
+            v = dict(v, adoptable=extra <= _GENERIC)       # wording may be adopted only if the extra words are generic
+            return 'near', v
+    head = sorted(_toks(p) - {'left', 'right'}, key=len)[-1] if (_toks(p) - {'left', 'right'}) else ''
+    if head and any(head in _toks(k) for k in VOCAB):
+        return 'near', None
+    return 'ood', None
+
+def align_voxtell(E):
+    if not VOCAB:
+        print('WARNING: seed/voxtell_vocabulary.csv missing — coverage tiers left as authored'); return
+    RANK = {'exact': 0, 'rare': 1, 'near': 2, 'ood': 3}
+    changed = 0
+    for e in E:
+        vt = e['voxtell']; phrases = [vt['main']] + list(vt.get('aliases', []))
+        sides = ['left', 'right'] if e['laterality'] == 'bilateral' else [None]
+        scored = []
+        for ph in phrases:
+            gs = [_grade(ph, sd) for sd in sides]
+            g = max((x[0] for x in gs), key=lambda x: RANK[x])        # a side template counts as its weaker side
+            v = gs[0][1]
+            scored.append((RANK[g], (0 if (v and v['n'] is not None) else 1), -(_n(v) if v else 0), ph, g, v))
+            if e['laterality'] == 'bilateral' and '{side}' in ph:
+                # unsided label (e.g. 'renal vein' 70 volumes vs 'left renal vein' 1): usable, the side comes from the gate
+                g0, v0 = _grade(ph.replace('{side} ', '').replace('{side}', ''), None)
+                if v0 is not None and g0 in ('exact', 'rare') and (v is None or (v0['n'] is not None and _n(v0) > 10 * max(_n(v), 1))):
+                    scored.append((RANK[g0], (0 if v0['n'] is not None else 1), -_n(v0), v0['name'], g0, v0))
+                elif v0 is not None and g0 in ('exact', 'rare') and g not in ('exact', 'rare'):   # sided label absent, unsided label present (e.g. 'seminal vesicles')
+                    scored.append((RANK[g0], (0 if v0['n'] is not None else 1), -_n(v0), v0['name'], g0, v0))
+        scored = [(r, ph, g, v) for r, _, _, ph, g, v in sorted(scored, key=lambda x: (x[0], x[1], x[2]))]
+        # if some exact vocabulary string is only a near match to our phrasing, adopt the vocabulary wording as main
+        best_rank = min(x[0] for x in scored)
+        if best_rank >= 2:      # no exact/rare phrase: look for a vocabulary string that our tokens are a subset of and adopt it
+            for _, ph, g, v in scored:
+                if g == 'near' and v is not None and v.get('adoptable'):
+                    name = v['name']
+                    if e['laterality'] == 'bilateral' and _SIDE.search(name):
+                        name = _SIDE.sub('{side}', name, count=1)
+                    if all(_grade(name, sd)[0] in ('exact', 'rare') for sd in sides):
+                        scored.insert(0, (RANK['exact' if _n(v) >= MIN_VOL else 'rare'], name, 'exact' if _n(v) >= MIN_VOL else 'rare', v))
+                        break
+        else:
+            # exact match found: if the KB wording differs from the vocabulary wording, adopt the vocabulary wording as main
+            r0, ph0, g0, v0 = scored[0]
+            if v0 is not None and _norm(ph0.replace('{side}', 'left')) != _norm(v0['name']) and _norm(ph0.replace('{side}', '')) != _norm(v0['name']):
+                name = v0['name']
+                if e['laterality'] == 'bilateral' and _SIDE.search(name):
+                    name = _SIDE.sub('{side}', name, count=1)
+                scored.insert(0, (r0, name, g0, v0))
+        scored.sort(key=lambda x: x[0])
+        seen, ordered = set(), []
+        for _, ph, g, v in scored:
+            if ph not in seen:
+                seen.add(ph); ordered.append((ph, g, v))
+        new_main, gmain, vmain = ordered[0]
+        tier = {'exact': 'in_vocab', 'rare': 'rare', 'near': 'near', 'ood': 'ood'}[gmain]
+        if vt['main'] != new_main or e.get('coverage_tier') != tier:
+            changed += 1
+        vt['main'] = new_main; vt['aliases'] = [o[0] for o in ordered[1:]]
+        e['coverage_tier'] = tier
+        e['voxtell_evidence'] = dict(grade=gmain, vocab_match=vmain['name'] if vmain else None, unsided_label=bool(vmain and e['laterality'] == 'bilateral' and '{side}' not in new_main), train_volumes=(None if not vmain else (None if vmain['n'] in (None, 10**6) else vmain['n'])),
+                                     source=(vmain['src'] if vmain else None))
+    print(f'voxtell alignment: {changed} entities changed (main phrase or tier)')
+align_voxtell(E)
+for _e in E:
+    if _e['id'] in ('subcutaneous_fat', 'visceral_fat', 'skeletal_muscle') and _e.get('is_anchor'):
+        _e['is_anchor'] = False; _e.pop('anchor', None)
+        _e['notes'] = (_e.get('notes') or '') + ' | not an anchor since v0.4.0: VoxTell has only whole-body fat / muscles labels and TS tissue_types is not run'
+
 # ================================================================== VALIDATE + DUMP
 ids = {e['id'] for e in E}
 assert len(ids) == len(E), 'duplicate entity id'
@@ -673,7 +807,8 @@ meta = dict(name='PanCIA anchor-centric anatomical knowledge base', version=VERS
             counts=dict(entities=len(E), anchors=sum(e['is_anchor'] for e in E), relations=len(R), regions=len(REGIONS), landmarks=len(LANDMARKS)),
             sources=dict(TS='TotalSegmentator class maps (map_to_binary.py, fetched 2026-09-18)', VoxTell='arXiv 2511.11450; repo MIC-DKFZ/VoxTell (no shipped vocabulary; coverage tiers are assumptions until pilot)',
                          AJCC8='AJCC Cancer Staging Manual 8th ed. T/N definitions and regional node lists', FIGO='FIGO 2018 cervix / 2023 endometrium / 2014 ovary', FMA='Foundational Model of Anatomy relations (part_of, adjacent_to)'),
-            coverage_tier_legend=dict(in_vocab='structure or close synonym present in known VoxTell training datasets', near='related concept present; expect degraded but usable', ood='not expected in training; experimental, strict gates', assumed_in_vocab='default for TS classes'))
+            coverage_tier_legend=dict(in_vocab='exact VoxTell training/test label (arXiv 2511.11450 Table 10/7), >= 20 training volumes', rare='exact label but < 20 training volumes (e.g. left renal vein: 1) — expect weak masks', near='no exact label; a vocabulary label shares all content tokens or the head noun — zero-shot wording', ood='no vocabulary label with this head noun — truly unseen concept; experimental, strict gates'),
+            voxtell_vocabulary=dict(files=['seed/voxtell_v1.1_labels.json', 'seed/voxtell_vocabulary.csv'], n_labels=len(VOCAB), n_hf_v1_1_labels=len(HF_LABELS), source='HF mrokuss/VoxTell embeddings/voxtell_v1.1/labels.json (14,194 prompt strings incl. rewrites; presence) + arXiv 2511.11450 Table 10/7 (training-volume counts)'))
 def dump(name, obj):
     with open(os.path.join(OUT, name), 'w') as f:
         yaml.safe_dump(obj, f, sort_keys=False, allow_unicode=True, width=140)

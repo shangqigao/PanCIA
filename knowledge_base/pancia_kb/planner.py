@@ -372,7 +372,8 @@ class Planner:
                     if key in seen: continue
                     seen.add(key)
                     pr = r.get('priority') or kb.relation_types[r['type']]['default_priority']
-                    if dst.get('coverage_tier') == 'ood': pr = max(pr, 3)
+                    if dst.get('coverage_tier') == 'ood': pr = max(pr, 3)          # unseen concept: last to be budgeted
+                    elif dst.get('coverage_tier') == 'rare': pr = max(pr, 2)       # label seen on < 20 volumes
                     if why == 'host': pr = max(1, pr - 1)          # host-derived structures matter most
                     elif why.startswith('secondary_host') and ('ev=1' in why or 'ev=2' in why): pr = max(1, pr)   # evidenced secondary host keeps its default priority
                     else: pr = max(pr, 2)                           # everything not derived from the host is at most priority 2

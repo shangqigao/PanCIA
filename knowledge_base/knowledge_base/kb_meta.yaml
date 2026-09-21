@@ -1,6 +1,6 @@
 name: PanCIA anchor-centric anatomical knowledge base
-version: 0.3.1
-date: '2026-09-20'
+version: 0.4.1
+date: '2026-09-21'
 author: Shangqi Gao (Crispin Lab) with Claude
 status: draft v0.1 — not yet pilot-verified
 vertebral_order:
@@ -36,7 +36,7 @@ vertebral_order:
 - coccyx
 counts:
   entities: 191
-  anchors: 36
+  anchors: 33
   relations: 364
   regions: 14
   landmarks: 10
@@ -47,7 +47,15 @@ sources:
   FIGO: FIGO 2018 cervix / 2023 endometrium / 2014 ovary
   FMA: Foundational Model of Anatomy relations (part_of, adjacent_to)
 coverage_tier_legend:
-  in_vocab: structure or close synonym present in known VoxTell training datasets
-  near: related concept present; expect degraded but usable
-  ood: not expected in training; experimental, strict gates
-  assumed_in_vocab: default for TS classes
+  in_vocab: exact VoxTell training/test label (arXiv 2511.11450 Table 10/7), >= 20 training volumes
+  rare: 'exact label but < 20 training volumes (e.g. left renal vein: 1) — expect weak masks'
+  near: no exact label; a vocabulary label shares all content tokens or the head noun — zero-shot wording
+  ood: no vocabulary label with this head noun — truly unseen concept; experimental, strict gates
+voxtell_vocabulary:
+  files:
+  - seed/voxtell_v1.1_labels.json
+  - seed/voxtell_vocabulary.csv
+  n_labels: 14175
+  n_hf_v1_1_labels: 14194
+  source: HF mrokuss/VoxTell embeddings/voxtell_v1.1/labels.json (14,194 prompt strings incl. rewrites; presence) + arXiv 2511.11450 Table 10/7
+    (training-volume counts)

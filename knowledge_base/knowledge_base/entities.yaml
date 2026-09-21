@@ -1,4 +1,4 @@
-version: 0.3.1
+version: 0.4.1
 entities:
 - id: vertebra_C1
   name: C1 vertebra
@@ -18,6 +18,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: c1 vertebra
+    unsided_label: false
+    train_volumes: 4504
+    source: table10_train+hf_v1.1
 - id: vertebra_C2
   name: C2 vertebra
   category: bone
@@ -36,6 +42,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: c2 vertebra
+    unsided_label: false
+    train_volumes: 4504
+    source: table10_train+hf_v1.1
 - id: vertebra_C3
   name: C3 vertebra
   category: bone
@@ -54,6 +66,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: c3 vertebra
+    unsided_label: false
+    train_volumes: 4504
+    source: table10_train+hf_v1.1
 - id: vertebra_C4
   name: C4 vertebra
   category: bone
@@ -72,6 +90,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: c4 vertebra
+    unsided_label: false
+    train_volumes: 4504
+    source: table10_train+hf_v1.1
 - id: vertebra_C5
   name: C5 vertebra
   category: bone
@@ -90,6 +114,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: c5 vertebra
+    unsided_label: false
+    train_volumes: 4504
+    source: table10_train+hf_v1.1
 - id: vertebra_C6
   name: C6 vertebra
   category: bone
@@ -108,6 +138,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: c6 vertebra
+    unsided_label: false
+    train_volumes: 4504
+    source: table10_train+hf_v1.1
 - id: vertebra_C7
   name: C7 vertebra
   category: bone
@@ -126,6 +162,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: c7 vertebra
+    unsided_label: false
+    train_volumes: 4504
+    source: table10_train+hf_v1.1
 - id: vertebra_T1
   name: T1 vertebra
   category: bone
@@ -144,6 +186,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t1 vertebra
+    unsided_label: false
+    train_volumes: 4559
+    source: table10_train+hf_v1.1
 - id: vertebra_T2
   name: T2 vertebra
   category: bone
@@ -162,6 +210,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t2 vertebra
+    unsided_label: false
+    train_volumes: 4559
+    source: table10_train+hf_v1.1
 - id: vertebra_T3
   name: T3 vertebra
   category: bone
@@ -180,6 +234,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t3 vertebra
+    unsided_label: false
+    train_volumes: 4559
+    source: table10_train+hf_v1.1
 - id: vertebra_T4
   name: T4 vertebra
   category: bone
@@ -198,6 +258,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t4 vertebra
+    unsided_label: false
+    train_volumes: 4559
+    source: table10_train+hf_v1.1
 - id: vertebra_T5
   name: T5 vertebra
   category: bone
@@ -216,6 +282,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t5 vertebra
+    unsided_label: false
+    train_volumes: 4559
+    source: table10_train+hf_v1.1
 - id: vertebra_T6
   name: T6 vertebra
   category: bone
@@ -234,6 +306,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t6 vertebra
+    unsided_label: false
+    train_volumes: 4559
+    source: table10_train+hf_v1.1
 - id: vertebra_T7
   name: T7 vertebra
   category: bone
@@ -252,6 +330,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t7 vertebra
+    unsided_label: false
+    train_volumes: 5099
+    source: table10_train+hf_v1.1
 - id: vertebra_T8
   name: T8 vertebra
   category: bone
@@ -270,6 +354,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t8 vertebra
+    unsided_label: false
+    train_volumes: 5099
+    source: table10_train+hf_v1.1
 - id: vertebra_T9
   name: T9 vertebra
   category: bone
@@ -288,6 +378,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t9 vertebra
+    unsided_label: false
+    train_volumes: 5546
+    source: table10_train+hf_v1.1
 - id: vertebra_T10
   name: T10 vertebra
   category: bone
@@ -306,6 +402,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t10 vertebra
+    unsided_label: false
+    train_volumes: 5546
+    source: table10_train+hf_v1.1
 - id: vertebra_T11
   name: T11 vertebra
   category: bone
@@ -324,6 +426,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t11 vertebra
+    unsided_label: false
+    train_volumes: 5546
+    source: table10_train+hf_v1.1
 - id: vertebra_T12
   name: T12 vertebra
   category: bone
@@ -342,6 +450,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: t12 vertebra
+    unsided_label: false
+    train_volumes: 5546
+    source: table10_train+hf_v1.1
 - id: vertebra_L1
   name: L1 vertebra
   category: bone
@@ -360,6 +474,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: l1 vertebra
+    unsided_label: false
+    train_volumes: 5546
+    source: table10_train+hf_v1.1
 - id: vertebra_L2
   name: L2 vertebra
   category: bone
@@ -378,6 +498,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: l2 vertebra
+    unsided_label: false
+    train_volumes: 5546
+    source: table10_train+hf_v1.1
 - id: vertebra_L3
   name: L3 vertebra
   category: bone
@@ -396,6 +522,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: l3 vertebra
+    unsided_label: false
+    train_volumes: 5546
+    source: table10_train+hf_v1.1
 - id: vertebra_L4
   name: L4 vertebra
   category: bone
@@ -414,6 +546,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: l4 vertebra
+    unsided_label: false
+    train_volumes: 5546
+    source: table10_train+hf_v1.1
 - id: vertebra_L5
   name: L5 vertebra
   category: bone
@@ -432,6 +570,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: l5 vertebra
+    unsided_label: false
+    train_volumes: 5546
+    source: table10_train+hf_v1.1
 - id: vertebra_S1
   name: S1 vertebra
   category: bone
@@ -450,6 +594,12 @@ entities:
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: exact
+    vocab_match: s1 vertebra
+    unsided_label: false
+    train_volumes: 1228
+    source: table10_train+hf_v1.1
 - id: vertebra_S2
   name: S2 vertebra
   category: bone
@@ -462,11 +612,17 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: near
   priority: 3
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: vertebra_S3
   name: S3 vertebra
   category: bone
@@ -479,11 +635,17 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: near
   priority: 3
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: vertebra_S4
   name: S4 vertebra
   category: bone
@@ -496,11 +658,17 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: near
   priority: 3
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: vertebra_S5
   name: S5 vertebra
   category: bone
@@ -513,11 +681,17 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: near
   priority: 3
   is_anchor: false
   sources:
   - TS
+  voxtell_evidence:
+    grade: near
+    vocab_match: s1-s5 vertebrae
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: spine
   name: Spine
   category: bone
@@ -550,6 +724,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: spine
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: sacrum
   name: Sacrum
   category: bone
@@ -582,6 +762,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: sacrum
+    unsided_label: false
+    train_volumes: 5720
+    source: table10_train+table7_test+hf_v1.1
 - id: coccyx
   name: Coccyx
   category: bone
@@ -593,12 +779,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: hip
   name: Hip bone (ilium, ischium, pubis)
   category: bone
@@ -637,6 +829,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left hipbone
+    unsided_label: false
+    train_volumes: null
+    source: table7_test+hf_v1.1+hf_v1.1
 - id: femur
   name: Femur (proximal)
   category: bone
@@ -660,6 +858,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left femur
+    unsided_label: false
+    train_volumes: 3974
+    source: table10_train+hf_v1.1
 - id: sternum
   name: Sternum
   category: bone
@@ -678,6 +882,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: sternum
+    unsided_label: false
+    train_volumes: 3454
+    source: table10_train+hf_v1.1
 - id: rib_cage
   name: Rib cage
   category: bone
@@ -700,6 +910,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left rib cage
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: scapula
   name: Scapula
   category: bone
@@ -723,6 +939,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left scapula
+    unsided_label: false
+    train_volumes: 3974
+    source: table10_train+hf_v1.1
 - id: clavicle
   name: Clavicle
   category: bone
@@ -746,6 +968,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left clavicle
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: humerus
   name: Humerus
   category: bone
@@ -769,6 +997,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left humerus
+    unsided_label: false
+    train_volumes: 3974
+    source: table10_train+hf_v1.1
 - id: spinal_cord
   name: Spinal cord
   category: nerve
@@ -788,6 +1022,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: spinal cord
+    unsided_label: false
+    train_volumes: 5433
+    source: table10_train+table7_test+hf_v1.1
 - id: aorta
   name: Aorta
   category: vessel_artery
@@ -795,8 +1035,8 @@ entities:
   voxtell:
     main: aorta
     aliases:
-    - thoracic aorta
     - abdominal aorta
+    - thoracic aorta
   ts:
     total: aorta
     total_mr: aorta
@@ -823,6 +1063,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: aorta
+    unsided_label: false
+    train_volumes: 5057
+    source: table10_train+table7_test+hf_v1.1
 - id: inferior_vena_cava
   name: Inferior vena cava
   category: vessel_vein
@@ -858,6 +1104,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: inferior vena cava
+    unsided_label: false
+    train_volumes: 5016
+    source: table10_train+table7_test+hf_v1.1+hf_v1.1
 - id: superior_vena_cava
   name: Superior vena cava
   category: vessel_vein
@@ -876,6 +1128,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: superior vena cava
+    unsided_label: false
+    train_volumes: 1289
+    source: table10_train+table7_test+hf_v1.1
 - id: iliac_artery
   name: Common/external iliac artery
   category: vessel_artery
@@ -916,6 +1174,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left iliac artery
+    unsided_label: false
+    train_volumes: 4514
+    source: table10_train+hf_v1.1
 - id: iliac_vein
   name: Common/external iliac vein
   category: vessel_vein
@@ -954,6 +1218,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left iliac vena
+    unsided_label: false
+    train_volumes: 4514
+    source: table10_train+hf_v1.1
 - id: internal_iliac_artery
   name: Internal iliac artery
   category: vessel_artery
@@ -966,12 +1236,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left internal iliac artery
+    unsided_label: false
+    train_volumes: 51
+    source: table10_train+hf_v1.1
 - id: internal_iliac_vein
   name: Internal iliac vein
   category: vessel_vein
@@ -983,12 +1259,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: rare
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: rare
+    vocab_match: left internal iliac vein
+    unsided_label: false
+    train_volumes: 1
+    source: table10_train+hf_v1.1
 - id: portal_vein
   name: Portal vein
   category: vessel_vein
@@ -1010,6 +1292,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: portal vein
+    unsided_label: false
+    train_volumes: 21
+    source: table10_train
 - id: splenic_vein
   name: Splenic vein
   category: vessel_vein
@@ -1023,19 +1311,26 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: rare
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: rare
+    vocab_match: splenic vein
+    unsided_label: false
+    train_volumes: 1
+    source: table10_train+hf_v1.1
 - id: hepatic_veins
   name: Hepatic veins
   category: vessel_vein
   laterality: none
   voxtell:
-    main: hepatic veins
+    main: hepatic vessels
     aliases:
+    - hepatic veins
     - hepatic vein
   ts: {}
   modality:
@@ -1048,6 +1343,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: hepatic vessels
+    unsided_label: false
+    train_volumes: 494
+    source: table10_train+table7_test+hf_v1.1
 - id: hepatic_artery
   name: Hepatic artery
   category: vessel_artery
@@ -1055,18 +1356,24 @@ entities:
   voxtell:
     main: hepatic artery
     aliases:
-    - common hepatic artery
     - proper hepatic artery
+    - common hepatic artery
   ts: {}
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: hepatic artery
+    unsided_label: false
+    train_volumes: 120
+    source: table10_train+hf_v1.1
 - id: celiac_trunk
   name: Coeliac trunk
   category: vessel_artery
@@ -1079,12 +1386,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: celiac trunk
+    unsided_label: false
+    train_volumes: 533
+    source: table10_train+hf_v1.1
 - id: superior_mesenteric_artery
   name: Superior mesenteric artery
   category: vessel_artery
@@ -1097,30 +1410,42 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: superior mesenteric artery
+    unsided_label: false
+    train_volumes: 171
+    source: table10_train+hf_v1.1
 - id: superior_mesenteric_vein
   name: Superior mesenteric vein
   category: vessel_vein
   laterality: none
   voxtell:
-    main: superior mesenteric vein
+    main: SMV
     aliases:
-    - SMV
+    - superior mesenteric vein
   ts: {}
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: smv
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: renal_artery
   name: Renal artery
   category: vessel_artery
@@ -1139,13 +1464,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left renal artery
+    unsided_label: false
+    train_volumes: 171
+    source: table10_train+hf_v1.1
 - id: renal_vein
   name: Renal vein
   category: vessel_vein
   laterality: bilateral
   voxtell:
-    main: '{side} renal vein'
-    aliases: []
+    main: renal vein
+    aliases:
+    - '{side} renal vein'
   ts: {}
   modality:
   - CT
@@ -1157,25 +1489,37 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: renal vein
+    unsided_label: true
+    train_volumes: 70
+    source: table10_train+hf_v1.1
 - id: gonadal_vein
   name: Gonadal vein
   category: vessel_vein
   laterality: bilateral
   voxtell:
-    main: '{side} gonadal vein'
+    main: '{side} testicular vein'
     aliases:
-    - '{side} testicular vein'
     - '{side} ovarian vein'
+    - '{side} gonadal vein'
   ts: {}
   modality:
   - CT
   - MR
-  coverage_tier: ood
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left testicular vein
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: pulmonary_artery
   name: Pulmonary artery
   category: vessel_artery
@@ -1194,6 +1538,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: pulmonary artery
+    unsided_label: false
+    train_volumes: 593
+    source: table10_train+table7_test
 - id: pulmonary_vein
   name: Pulmonary veins
   category: vessel_vein
@@ -1212,6 +1562,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: pulmonary veins
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: brachiocephalic_trunk
   name: Brachiocephalic trunk
   category: vessel_artery
@@ -1230,6 +1586,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: brachiocephalic trunk
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: subclavian_artery
   name: Subclavian artery
   category: vessel_artery
@@ -1250,6 +1612,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left subclavian artery
+    unsided_label: false
+    train_volumes: 1931
+    source: table10_train+hf_v1.1
 - id: common_carotid_artery
   name: Common carotid artery
   category: vessel_artery
@@ -1270,6 +1638,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left common carotid artery
+    unsided_label: false
+    train_volumes: 1931
+    source: table10_train+hf_v1.1
 - id: brachiocephalic_vein
   name: Brachiocephalic vein
   category: vessel_vein
@@ -1290,6 +1664,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left brachiocephalic vein
+    unsided_label: false
+    train_volumes: 1761
+    source: table10_train+hf_v1.1
 - id: uterine_artery
   name: Uterine artery
   category: vessel_artery
@@ -1301,12 +1681,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: ood
+  coverage_tier: near
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: axillary_vessels
   name: Axillary artery and vein
   category: vessel_artery
@@ -1320,12 +1706,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: lung
   name: Lung
   category: organ
@@ -1371,13 +1763,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left lung
+    unsided_label: false
+    train_volumes: 4404
+    source: table10_train+table7_test+hf_v1.1+hf_v1.1
 - id: lung_left_upper_lobe
   name: Left upper lobe
   category: organ
   laterality: left
   voxtell:
-    main: left upper lobe of lung
-    aliases: []
+    main: left lung upper lobe
+    aliases:
+    - left upper lobe of lung
   ts:
     total: lung_upper_lobe_left
   modality:
@@ -1389,13 +1788,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left lung upper lobe
+    unsided_label: false
+    train_volumes: 3454
+    source: table10_train+hf_v1.1
 - id: lung_left_lower_lobe
   name: Left lower lobe
   category: organ
   laterality: left
   voxtell:
-    main: left lower lobe of lung
-    aliases: []
+    main: left lung lower lobe
+    aliases:
+    - left lower lobe of lung
   ts:
     total: lung_lower_lobe_left
   modality:
@@ -1407,13 +1813,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left lung lower lobe
+    unsided_label: false
+    train_volumes: 3454
+    source: table10_train+hf_v1.1
 - id: lung_right_upper_lobe
   name: Right upper lobe
   category: organ
   laterality: right
   voxtell:
-    main: right upper lobe of lung
-    aliases: []
+    main: right lung upper lobe
+    aliases:
+    - right upper lobe of lung
   ts:
     total: lung_upper_lobe_right
   modality:
@@ -1425,13 +1838,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: right lung upper lobe
+    unsided_label: false
+    train_volumes: 3454
+    source: table10_train+hf_v1.1
 - id: lung_right_middle_lobe
   name: Right middle lobe
   category: organ
   laterality: right
   voxtell:
-    main: right middle lobe of lung
-    aliases: []
+    main: right lung middle lobe
+    aliases:
+    - right middle lobe of lung
   ts:
     total: lung_middle_lobe_right
   modality:
@@ -1443,13 +1863,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: right lung middle lobe
+    unsided_label: false
+    train_volumes: 3454
+    source: table10_train+hf_v1.1
 - id: lung_right_lower_lobe
   name: Right lower lobe
   category: organ
   laterality: right
   voxtell:
-    main: right lower lobe of lung
-    aliases: []
+    main: right lung lower lobe
+    aliases:
+    - right lower lobe of lung
   ts:
     total: lung_lower_lobe_right
   modality:
@@ -1461,6 +1888,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: right lung lower lobe
+    unsided_label: false
+    train_volumes: 3454
+    source: table10_train+hf_v1.1
 - id: trachea
   name: Trachea
   category: duct
@@ -1489,6 +1922,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: trachea
+    unsided_label: false
+    train_volumes: 2018
+    source: table10_train+table7_test+hf_v1.1
 - id: main_bronchus
   name: Main bronchus
   category: duct
@@ -1507,14 +1946,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left main bronchus
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: bronchial_tree
   name: Bronchial tree / airways
   category: duct
   laterality: none
   voxtell:
-    main: airways
+    main: bronchi
     aliases:
-    - bronchi
+    - airways
     - airway tree
   ts: {}
   modality:
@@ -1526,6 +1971,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: bronchi
+    unsided_label: false
+    train_volumes: 583
+    source: table10_train+hf_v1.1
 - id: pleura
   name: Pleura
   category: fascia
@@ -1544,13 +1995,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: pleura lesion
+    unsided_label: false
+    train_volumes: 245
+    source: table10_train
 - id: pleural_effusion
   name: Pleural effusion
   category: space
   laterality: bilateral
   voxtell:
-    main: '{side} pleural effusion'
-    aliases: []
+    main: pleural effusion
+    aliases:
+    - '{side} pleural effusion'
   ts: {}
   modality:
   - CT
@@ -1561,6 +2019,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: pleural effusion
+    unsided_label: true
+    train_volumes: 78
+    source: table10_train+hf_v1.1
 - id: heart
   name: Heart
   category: organ
@@ -1593,6 +2057,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: heart
+    unsided_label: false
+    train_volumes: 2855
+    source: table10_train+table7_test+hf_v1.1
 - id: pericardium
   name: Pericardium
   category: fascia
@@ -1604,12 +2074,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: esophagus
   name: Oesophagus
   category: hollow_organ
@@ -1651,6 +2127,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: esophagus
+    unsided_label: false
+    train_volumes: 7549
+    source: table10_train+table7_test+hf_v1.1+hf_v1.1
 - id: thyroid
   name: Thyroid gland
   category: gland
@@ -1679,6 +2161,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: thyroid gland
+    unsided_label: false
+    train_volumes: 1446
+    source: table10_train+hf_v1.1
 - id: thymus
   name: Thymus / anterior mediastinal fat
   category: gland
@@ -1690,12 +2178,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: thymus
+    unsided_label: false
+    train_volumes: 886
+    source: table10_train+hf_v1.1
 - id: chest_wall
   name: Chest wall
   category: muscle
@@ -1714,6 +2208,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: left chest wall ribs
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: diaphragm
   name: Diaphragm
   category: muscle
@@ -1725,12 +2225,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: breast
   name: Breast
   category: organ
@@ -1765,14 +2271,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left breast
+    unsided_label: false
+    train_volumes: 1086
+    source: table10_train+table7_test+hf_v1.1
 - id: fibroglandular_tissue
   name: Fibroglandular tissue
   category: organ
   laterality: bilateral
   voxtell:
-    main: '{side} fibroglandular tissue'
+    main: '{side} breast parenchyma'
     aliases:
-    - '{side} breast parenchyma'
+    - '{side} fibroglandular tissue'
   ts: {}
   modality:
   - MR
@@ -1782,6 +2294,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left breast parenchyma
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: pectoralis_major
   name: Pectoralis major
   category: muscle
@@ -1796,12 +2314,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: ood
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: skin
   name: Skin
   category: fascia
@@ -1813,12 +2337,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: skin
+    unsided_label: false
+    train_volumes: 886
+    source: table10_train+table7_test+hf_v1.1
 - id: nipple
   name: Nipple
   category: landmark
@@ -1836,6 +2366,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: liver
   name: Liver
   category: organ
@@ -1882,6 +2418,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: liver
+    unsided_label: false
+    train_volumes: 8669
+    source: table10_train+table7_test+hf_v1.1
 - id: liver_segment_I
   name: Liver segment I
   category: organ
@@ -1894,12 +2436,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: liver segment 1
+    unsided_label: false
+    train_volumes: 243
+    source: table10_train+hf_v1.1+hf_v1.1
 - id: liver_segment_II
   name: Liver segment II
   category: organ
@@ -1912,12 +2460,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: liver segment 2
+    unsided_label: false
+    train_volumes: 243
+    source: table10_train+hf_v1.1+hf_v1.1
 - id: liver_segment_III
   name: Liver segment III
   category: organ
@@ -1930,12 +2484,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: liver segment 3
+    unsided_label: false
+    train_volumes: 243
+    source: table10_train+hf_v1.1+hf_v1.1
 - id: liver_segment_IV
   name: Liver segment IV
   category: organ
@@ -1948,12 +2508,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: liver segment 4
+    unsided_label: false
+    train_volumes: 193
+    source: table10_train+hf_v1.1+hf_v1.1
 - id: liver_segment_V
   name: Liver segment V
   category: organ
@@ -1966,12 +2532,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: liver segment 5
+    unsided_label: false
+    train_volumes: 243
+    source: table10_train+hf_v1.1+hf_v1.1
 - id: liver_segment_VI
   name: Liver segment VI
   category: organ
@@ -1984,12 +2556,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: liver segment 6
+    unsided_label: false
+    train_volumes: 243
+    source: table10_train+hf_v1.1+hf_v1.1
 - id: liver_segment_VII
   name: Liver segment VII
   category: organ
@@ -2002,12 +2580,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: liver segment 7
+    unsided_label: false
+    train_volumes: 243
+    source: table10_train+hf_v1.1+hf_v1.1
 - id: liver_segment_VIII
   name: Liver segment VIII
   category: organ
@@ -2020,20 +2604,26 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: liver segment 8
+    unsided_label: false
+    train_volumes: 243
+    source: table10_train+hf_v1.1+hf_v1.1
 - id: liver_lobe
   name: Liver lobe
   category: organ
   laterality: bilateral
   voxtell:
-    main: '{side} lobe of the liver'
+    main: '{side} hepatic lobe'
     aliases:
-    - '{side} hepatic lobe'
+    - '{side} lobe of the liver'
   ts: {}
   modality:
   - CT
@@ -2044,6 +2634,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left hepatic lobe
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: gallbladder
   name: Gallbladder
   category: hollow_organ
@@ -2081,6 +2677,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: gallbladder
+    unsided_label: false
+    train_volumes: 5606
+    source: table10_train+table7_test+hf_v1.1
 - id: bile_duct
   name: Common bile duct
   category: duct
@@ -2094,30 +2696,42 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: common bile duct
+    unsided_label: false
+    train_volumes: 482
+    source: table10_train+hf_v1.1
 - id: intrahepatic_bile_ducts
   name: Intrahepatic bile ducts
   category: duct
   laterality: none
   voxtell:
-    main: intrahepatic bile ducts
+    main: biliary tree
     aliases:
-    - biliary tree
+    - intrahepatic bile ducts
   ts: {}
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: biliary tree
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: spleen
   name: Spleen
   category: organ
@@ -2160,6 +2774,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: spleen
+    unsided_label: false
+    train_volumes: 6823
+    source: table10_train+table7_test+hf_v1.1
 - id: stomach
   name: Stomach
   category: hollow_organ
@@ -2200,6 +2820,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: stomach
+    unsided_label: false
+    train_volumes: 5840
+    source: table10_train+table7_test+hf_v1.1
 - id: gastric_wall
   name: Gastric wall
   category: hollow_organ
@@ -2212,12 +2838,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: gastric wall
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: gastroesophageal_junction
   name: Gastro-oesophageal junction
   category: landmark
@@ -2229,12 +2861,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: duodenum
   name: Duodenum
   category: hollow_organ
@@ -2269,6 +2907,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: duodenum
+    unsided_label: false
+    train_volumes: 4073
+    source: table10_train+table7_test+hf_v1.1
 - id: pancreas
   name: Pancreas
   category: organ
@@ -2311,6 +2955,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: pancreas
+    unsided_label: false
+    train_volumes: 7934
+    source: table10_train+table7_test+hf_v1.1
 - id: pancreas_head
   name: Pancreatic head
   category: organ
@@ -2329,6 +2979,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: pancreatic head venous network
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: pancreas_body
   name: Pancreatic body
   category: organ
@@ -2341,12 +2997,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: pancreatic body
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: pancreas_tail
   name: Pancreatic tail
   category: organ
@@ -2365,6 +3027,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: pancreatic tail arterial supply
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: pancreas_uncinate
   name: Pancreatic uncinate process
   category: organ
@@ -2383,6 +3051,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: pancreatic_duct
   name: Main pancreatic duct
   category: duct
@@ -2394,12 +3068,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: pancreatic duct
+    unsided_label: false
+    train_volumes: 482
+    source: table10_train+hf_v1.1
 - id: adrenal
   name: Adrenal gland
   category: gland
@@ -2442,6 +3122,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left adrenal gland
+    unsided_label: false
+    train_volumes: 5423
+    source: table10_train+table7_test+hf_v1.1
 - id: kidney
   name: Kidney
   category: organ
@@ -2497,6 +3183,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left kidney
+    unsided_label: false
+    train_volumes: 5666
+    source: table10_train+table7_test+hf_v1.1
 - id: renal_cortex
   name: Renal cortex
   category: organ
@@ -2508,12 +3200,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left renal cortex
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: renal_medulla
   name: Renal medulla
   category: organ
@@ -2531,6 +3229,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: left renal cortex and medulla
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: renal_pelvis
   name: Renal pelvis / collecting system
   category: duct
@@ -2549,6 +3253,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: renal_sinus_fat
   name: Renal sinus fat
   category: fat
@@ -2560,12 +3270,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: ood
+  coverage_tier: near
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: perinephric_fat
   name: Perinephric fat
   category: fat
@@ -2585,6 +3301,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: gerota_fascia
   name: Gerota's fascia
   category: fascia
@@ -2597,13 +3319,19 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: ood
+  coverage_tier: near
   priority: 3
   is_anchor: false
   notes: experimental; RCC T4 criterion
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: kidney_cyst
   name: Renal cyst
   category: space
@@ -2624,6 +3352,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left kidney cyst
+    unsided_label: false
+    train_volumes: 1228
+    source: table10_train+hf_v1.1
 - id: ureter
   name: Ureter
   category: duct
@@ -2635,22 +3369,28 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: rare
   priority: 2
   is_anchor: false
   notes: corridor renal pelvis→bladder trigone; hydronephrosis = FIGO IIIB
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: rare
+    vocab_match: left ureter
+    unsided_label: false
+    train_volumes: 1
+    source: table10_train+hf_v1.1
 - id: small_bowel
   name: Small bowel
   category: hollow_organ
   laterality: none
   voxtell:
-    main: small bowel
+    main: small intestine
     aliases:
-    - small intestine
     - jejunum and ileum
+    - small bowel
   ts:
     total: small_bowel
     total_mr: small_bowel
@@ -2673,15 +3413,21 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: small intestine
+    unsided_label: false
+    train_volumes: null
+    source: table7_test+hf_v1.1
 - id: colon
   name: Colon
   category: hollow_organ
   laterality: none
   voxtell:
-    main: colon
+    main: large intestine
     aliases:
+    - colon
     - large bowel
-    - large intestine
   ts:
     total: colon
     total_mr: colon
@@ -2705,6 +3451,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: large intestine
+    unsided_label: false
+    train_volumes: null
+    source: table7_test+hf_v1.1
 - id: colon_ascending
   name: Ascending colon
   category: hollow_organ
@@ -2716,12 +3468,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: ascending colon
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: colon_transverse
   name: Transverse colon
   category: hollow_organ
@@ -2733,12 +3491,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: transverse colon
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: colon_descending
   name: Descending colon
   category: hollow_organ
@@ -2750,12 +3514,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: descending colon
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: colon_sigmoid
   name: Sigmoid colon
   category: hollow_organ
@@ -2767,12 +3537,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: sigmoid colon
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: colon_cecum
   name: Caecum
   category: hollow_organ
@@ -2784,12 +3560,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: cecum
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: rectum
   name: Rectum
   category: hollow_organ
@@ -2828,6 +3610,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: rectum
+    unsided_label: false
+    train_volumes: 1281
+    source: table10_train+table7_test+hf_v1.1
 - id: mesorectum
   name: Mesorectum / mesorectal fascia
   category: fascia
@@ -2847,6 +3635,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: anal_canal
   name: Anal canal
   category: hollow_organ
@@ -2859,12 +3653,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: anal canal
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: mesentery
   name: Mesentery
   category: fat
@@ -2877,12 +3677,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: mesentery
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: omentum
   name: Greater omentum
   category: fat
@@ -2896,48 +3702,66 @@ entities:
   modality:
   - CT
   - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: omentum
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
+- id: peritoneum
+  name: Peritoneum
+  category: fascia
+  laterality: none
+  voxtell:
+    main: peritoneal lining
+    aliases:
+    - peritoneum
+  ts: {}
+  modality:
+  - CT
+  - MR
   coverage_tier: near
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
-- id: peritoneum
-  name: Peritoneum
-  category: fascia
-  laterality: none
-  voxtell:
-    main: peritoneum
-    aliases:
-    - peritoneal lining
-  ts: {}
-  modality:
-  - CT
-  - MR
-  coverage_tier: ood
-  priority: 3
-  is_anchor: false
-  sources:
-  - TS
-  - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ascites
   name: Ascites
   category: space
   laterality: none
   voxtell:
-    main: ascites
+    main: peritoneal fluid
     aliases:
-    - peritoneal fluid
+    - ascites
   ts: {}
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: near
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: urinary_bladder
   name: Urinary bladder
   category: hollow_organ
@@ -2981,6 +3805,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: urinary bladder
+    unsided_label: false
+    train_volumes: 5098
+    source: table10_train+table7_test+hf_v1.1
 - id: bladder_wall
   name: Bladder wall
   category: hollow_organ
@@ -2993,12 +3823,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: bladder wall
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: perivesical_fat
   name: Perivesical fat
   category: fat
@@ -3017,6 +3853,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: urethra
   name: Urethra
   category: duct
@@ -3028,12 +3870,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: prostate
   name: Prostate
   category: gland
@@ -3082,13 +3930,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: prostate
+    unsided_label: false
+    train_volumes: 3003
+    source: table10_train+hf_v1.1
 - id: prostate_peripheral_zone
   name: Prostate peripheral zone
   category: gland
   laterality: none
   voxtell:
-    main: peripheral zone of the prostate
-    aliases: []
+    main: prostate peripheral zone
+    aliases:
+    - peripheral zone of the prostate
   ts: {}
   modality:
   - MR
@@ -3098,14 +3953,21 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: prostate peripheral zone
+    unsided_label: false
+    train_volumes: 269
+    source: table10_train+hf_v1.1
 - id: prostate_transition_zone
   name: Prostate transition zone
   category: gland
   laterality: none
   voxtell:
-    main: transition zone of the prostate
+    main: prostate transitional zone
     aliases:
     - central gland
+    - transition zone of the prostate
   ts: {}
   modality:
   - MR
@@ -3115,18 +3977,25 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: prostate transitional zone
+    unsided_label: false
+    train_volumes: 32
+    source: table10_train+hf_v1.1
 - id: seminal_vesicle
   name: Seminal vesicle
   category: gland
   laterality: bilateral
   voxtell:
-    main: '{side} seminal vesicle'
-    aliases: []
+    main: seminal vesicles
+    aliases:
+    - '{side} seminal vesicle'
   ts: {}
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 1
   is_anchor: true
   anchor:
@@ -3158,6 +4027,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: seminal vesicles
+    unsided_label: true
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: neurovascular_bundle
   name: Neurovascular bundle
   category: nerve
@@ -3169,13 +4044,19 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: ood
+  coverage_tier: near
   priority: 3
   is_anchor: false
   notes: experimental
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: prostate neurovascular bundle complex
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: uterus
   name: Uterus
   category: organ
@@ -3189,7 +4070,7 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 1
   volume_ml:
     min: 30
@@ -3229,40 +4110,60 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: uterus
+    unsided_label: false
+    train_volumes: 583
+    source: table10_train+hf_v1.1
 - id: endometrium
   name: Endometrium / uterine cavity
   category: organ
   laterality: none
   voxtell:
-    main: endometrium
+    main: endometrial cavity
     aliases:
-    - endometrial cavity
+    - endometrium
   ts: {}
   modality:
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: endometrial cavity
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: myometrium
   name: Myometrium
   category: organ
   laterality: none
   voxtell:
-    main: myometrium
-    aliases: []
+    main: myometrial tissue
+    aliases:
+    - uterine muscular wall
+    - myometrium
   ts: {}
   modality:
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   notes: UCEC T1a/b = <50% / ≥50% myometrial invasion
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: myometrial tissue
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: junctional_zone
   name: Junctional zone
   category: organ
@@ -3279,6 +4180,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: cervix
   name: Uterine cervix
   category: organ
@@ -3292,7 +4199,7 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 1
   volume_ml:
     min: 10
@@ -3332,6 +4239,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: cervix
+    unsided_label: false
+    train_volumes: 949
+    source: table10_train+hf_v1.1
 - id: cervical_stroma
   name: Cervical stroma
   category: organ
@@ -3342,12 +4255,18 @@ entities:
   ts: {}
   modality:
   - MR
-  coverage_tier: ood
+  coverage_tier: near
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: parametrium
   name: Parametrium
   category: fascia
@@ -3367,6 +4286,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: vagina
   name: Vagina
   category: hollow_organ
@@ -3378,7 +4303,7 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 2
   is_anchor: true
   anchor:
@@ -3409,6 +4334,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: vagina_upper_two_thirds
   name: Upper two-thirds of vagina
   category: hollow_organ
@@ -3427,6 +4358,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ovary
   name: Ovary
   category: gland
@@ -3438,7 +4375,7 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 2
   is_anchor: true
   anchor:
@@ -3464,6 +4401,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: adnexa
   name: Adnexa (ovary + tube)
   category: gland
@@ -3476,30 +4419,42 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: pelvic_sidewall
   name: Pelvic sidewall
   category: muscle
   laterality: bilateral
   voxtell:
-    main: '{side} pelvic sidewall'
+    main: '{side} obturator internus muscle'
     aliases:
-    - '{side} obturator internus muscle'
+    - '{side} pelvic sidewall'
   ts: {}
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left obturator internus muscle
+    unsided_label: false
+    train_volumes: 78
+    source: table10_train+hf_v1.1
 - id: obturator_internus
   name: Obturator internus
   category: muscle
@@ -3511,12 +4466,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left obturator internus muscle
+    unsided_label: false
+    train_volumes: 78
+    source: table10_train+hf_v1.1
 - id: levator_ani
   name: Levator ani / pelvic floor
   category: muscle
@@ -3535,6 +4496,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: external_urethral_sphincter
   name: External urethral sphincter
   category: muscle
@@ -3546,12 +4513,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: ood
+  coverage_tier: near
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: iliopsoas
   name: Iliopsoas
   category: muscle
@@ -3585,13 +4558,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left iliopsoas muscle
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: psoas
   name: Psoas major
   category: muscle
   laterality: bilateral
   voxtell:
-    main: '{side} psoas muscle'
-    aliases: []
+    main: '{side} psoas major muscle'
+    aliases:
+    - '{side} psoas muscle'
   ts:
     abdominal_muscles:
       left: psoas_major_left
@@ -3624,6 +4604,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left psoas major muscle
+    unsided_label: false
+    train_volumes: 78
+    source: table10_train+hf_v1.1
 - id: quadratus_lumborum
   name: Quadratus lumborum
   category: muscle
@@ -3638,12 +4624,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left quadratus lumborum muscle
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: gluteus
   name: Gluteal muscles
   category: muscle
@@ -3668,13 +4660,20 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left gluteal muscles
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: autochthon
   name: Autochthonous back muscles (erector spinae)
   category: muscle
   laterality: bilateral
   voxtell:
-    main: '{side} erector spinae muscle'
-    aliases: []
+    main: erector spinae
+    aliases:
+    - '{side} erector spinae muscle'
   ts:
     total:
       left: autochthon_left
@@ -3691,6 +4690,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: erector spinae
+    unsided_label: true
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: rectus_abdominis
   name: Rectus abdominis
   category: muscle
@@ -3705,12 +4710,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left rectus abdominis muscle
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: abdominal_wall
   name: Anterior abdominal wall
   category: muscle
@@ -3729,6 +4740,12 @@ entities:
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: right anterior abdominal wall vein
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: subcutaneous_fat
   name: Subcutaneous adipose tissue
   category: fat
@@ -3748,21 +4765,18 @@ entities:
   ct_hu:
   - -190
   - -30
-  is_anchor: true
-  anchor:
-    span:
-    - C1
-    - coccyx
-    span_var: 1
-    position:
-      lr: midline
-      ap: mid
-    presence: obligatory
-    spatial_prior: []
-  notes: TS tissue_types is a licensed model; VoxTell fallback
+  is_anchor: false
+  notes: 'TS tissue_types is a licensed model; VoxTell fallback | not an anchor since v0.4.0: VoxTell has only whole-body fat / muscles labels
+    and TS tissue_types is not run'
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: subcutaneous fat
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: visceral_fat
   name: Visceral adipose tissue
   category: fat
@@ -3783,20 +4797,17 @@ entities:
   ct_hu:
   - -190
   - -30
-  is_anchor: true
-  anchor:
-    span:
-    - T10
-    - S1
-    span_var: 1
-    position:
-      lr: midline
-      ap: anterior
-    presence: obligatory
-    spatial_prior: []
+  is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: visceral fat
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
+  notes: ' | not an anchor since v0.4.0: VoxTell has only whole-body fat / muscles labels and TS tissue_types is not run'
 - id: skeletal_muscle
   name: Skeletal muscle (whole)
   category: muscle
@@ -3809,26 +4820,23 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: near
   priority: 3
   ct_hu:
   - -29
   - 150
-  is_anchor: true
-  anchor:
-    span:
-    - C1
-    - coccyx
-    span_var: 1
-    position:
-      lr: midline
-      ap: mid
-    presence: obligatory
-    spatial_prior: []
-  notes: L3-level cross-section = sarcopenia index
+  is_anchor: false
+  notes: 'L3-level cross-section = sarcopenia index | not an anchor since v0.4.0: VoxTell has only whole-body fat / muscles labels and TS tissue_types
+    is not run'
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: skeletal muscle tissue
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: body_trunk
   name: Body (trunk)
   category: region
@@ -3841,12 +4849,18 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: near
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: uterine body
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: ln_mediastinal
   name: Mediastinal lymph nodes
   category: lymph_station
@@ -3867,25 +4881,38 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: mediastinal lymph nodes
+    unsided_label: false
+    train_volumes: 192
+    source: table10_train+hf_v1.1
 - id: ln_hilar
   name: Hilar lymph nodes
   category: lymph_station
   laterality: bilateral
   voxtell:
-    main: '{side} hilar lymph nodes'
+    main: hilar lymph nodes
     aliases:
+    - '{side} hilar lymph nodes'
     - '{side} pulmonary hilar nodes'
   ts: {}
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: in_vocab
   priority: 2
   is_anchor: false
   notes: 'gate region: around main bronchus and pulmonary vessels; span T5–T7'
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: hilar lymph nodes
+    unsided_label: true
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: ln_supraclavicular
   name: Supraclavicular lymph nodes
   category: lymph_station
@@ -3897,13 +4924,19 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 2
   is_anchor: false
   notes: 'gate region: above clavicle lateral to carotid; span C7–T1'
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_axillary
   name: Axillary lymph nodes
   category: lymph_station
@@ -3916,13 +4949,19 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: near
+  coverage_tier: ood
   priority: 2
   is_anchor: false
   notes: 'gate region: axilla lateral to pectoralis minor; span T2–T5'
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_internal_mammary
   name: Internal mammary lymph nodes
   category: lymph_station
@@ -3934,13 +4973,19 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: ood
+  coverage_tier: near
   priority: 2
   is_anchor: false
   notes: 'gate region: parasternal along internal thoracic vessels; span T1–T6'
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_celiac
   name: Coeliac lymph nodes
   category: lymph_station
@@ -3960,6 +5005,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_hepatic_hilar
   name: Hepatic hilar / hepatoduodenal nodes
   category: lymph_station
@@ -3980,14 +5031,20 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_perigastric
   name: Perigastric lymph nodes
   category: lymph_station
   laterality: none
   voxtell:
-    main: perigastric lymph nodes
+    main: gastric lymph nodes
     aliases:
-    - gastric lymph nodes
+    - perigastric lymph nodes
   ts: {}
   modality:
   - CT
@@ -3999,6 +5056,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_renal_hilar
   name: Renal hilar lymph nodes
   category: lymph_station
@@ -4017,6 +5080,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_paraaortic
   name: Para-aortic / retroperitoneal lymph nodes
   category: lymph_station
@@ -4038,6 +5107,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: para-aortic lymph nodes
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: ln_mesenteric
   name: Mesenteric lymph nodes
   category: lymph_station
@@ -4056,6 +5131,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_pericolic
   name: Pericolic lymph nodes
   category: lymph_station
@@ -4075,6 +5156,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_common_iliac
   name: Common iliac lymph nodes
   category: lymph_station
@@ -4093,6 +5180,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_external_iliac
   name: External iliac lymph nodes
   category: lymph_station
@@ -4111,6 +5204,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_internal_iliac
   name: Internal iliac lymph nodes
   category: lymph_station
@@ -4130,6 +5229,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_obturator
   name: Obturator lymph nodes
   category: lymph_station
@@ -4148,6 +5253,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_presacral
   name: Presacral lymph nodes
   category: lymph_station
@@ -4166,6 +5277,12 @@ entities:
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_inguinal
   name: Inguinal lymph nodes
   category: lymph_station
@@ -4177,13 +5294,19 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: ood
   priority: 2
   is_anchor: false
   notes: 'gate region: below inguinal ligament along femoral vessels; span S5–coccyx'
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: ood
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_pelvic
   name: Pelvic lymph nodes (aggregate)
   category: lymph_station
@@ -4195,13 +5318,19 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: near
   priority: 2
   is_anchor: false
   notes: 'gate region: aggregate of iliac/obturator/presacral; span L5–coccyx'
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null
 - id: ln_abdominal
   name: Abdominal lymph nodes (aggregate)
   category: lymph_station
@@ -4214,10 +5343,16 @@ entities:
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: near
   priority: 2
   is_anchor: false
   notes: 'gate region: aggregate; span T10–L5'
   sources:
   - AJCC8
   - FMA
+  voxtell_evidence:
+    grade: near
+    vocab_match: null
+    unsided_label: false
+    train_volumes: null
+    source: null

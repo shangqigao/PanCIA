@@ -146,7 +146,7 @@ class KnowledgeBase:
                         errs.append(f"{e['id']}: prior landmark {p['landmark']} unknown")
             if '{side}' in e['voxtell']['main'] and e['laterality'] not in ('bilateral', 'left', 'right'):
                 errs.append(f"{e['id']}: side template on non-lateral entity")
-            if e['laterality'] == 'bilateral' and '{side}' not in e['voxtell']['main']:
+            if e['laterality'] == 'bilateral' and '{side}' not in e['voxtell']['main'] and not (e.get('voxtell_evidence') or {}).get('unsided_label'):
                 errs.append(f"{e['id']}: bilateral entity without side template")
         for l in self.landmarks.values():
             if l['entity'] not in ids: errs.append(f"landmark entity missing {l['entity']}")

@@ -160,10 +160,7 @@
   "vagina",
   "ovary",
   "iliopsoas",
-  "psoas",
-  "subcutaneous_fat",
-  "visceral_fat",
-  "skeletal_muscle"
+  "psoas"
  ],
  "anchors_missing": [
   {
@@ -475,33 +472,6 @@
     "region": null
    },
    "ts_has_class": false
-  },
-  {
-   "entity": "subcutaneous_fat",
-   "side": null,
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": false
-  },
-  {
-   "entity": "visceral_fat",
-   "side": null,
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": false
-  },
-  {
-   "entity": "skeletal_muscle",
-   "side": null,
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": false
   }
  ],
  "anchors_absent_candidates": [
@@ -585,6 +555,7 @@
    "entity": "seminal_vesicle",
    "side": "left",
    "terms": [
+    "seminal vesicles",
     "left seminal vesicle"
    ],
    "tier": 1,
@@ -619,6 +590,7 @@
    "entity": "seminal_vesicle",
    "side": "right",
    "terms": [
+    "seminal vesicles",
     "right seminal vesicle"
    ],
    "tier": 1,
@@ -733,27 +705,6 @@
    "from_anchor": null
   },
   {
-   "entity": "vagina",
-   "side": null,
-   "terms": [
-    "vagina"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 1,
-   "reason": [
-    "expected in FOV ['L3', 'coccyx'] (presence=sex_female)",
-    "not nameable by TS in this task",
-    "also host profile: cervix -adjacent_to-> vagina"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "cervix"
-  },
-  {
    "entity": "spine",
    "side": null,
    "terms": [
@@ -780,8 +731,8 @@
    "side": null,
    "terms": [
     "aorta",
-    "thoracic aorta",
-    "abdominal aorta"
+    "abdominal aorta",
+    "thoracic aorta"
    ],
    "tier": 1,
    "list": "B",
@@ -822,9 +773,9 @@
    "entity": "small_bowel",
    "side": null,
    "terms": [
-    "small bowel",
     "small intestine",
-    "jejunum and ileum"
+    "jejunum and ileum",
+    "small bowel"
    ],
    "tier": 1,
    "list": "B",
@@ -875,6 +826,27 @@
    ],
    "relation": "adjacent_to",
    "from_anchor": "rectum"
+  },
+  {
+   "entity": "vagina",
+   "side": null,
+   "terms": [
+    "vagina"
+   ],
+   "tier": 1,
+   "list": "B",
+   "gate": {
+    "kind": "region",
+    "region": null
+   },
+   "priority": 2,
+   "reason": [
+    "expected in FOV ['L3', 'coccyx'] (presence=sex_female)",
+    "not nameable by TS in this task",
+    "also host profile: cervix -adjacent_to-> vagina"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "cervix"
   },
   {
    "entity": "ovary",
@@ -950,6 +922,7 @@
    "entity": "psoas",
    "side": "left",
    "terms": [
+    "left psoas major muscle",
     "left psoas muscle"
    ],
    "tier": 1,
@@ -970,6 +943,7 @@
    "entity": "psoas",
    "side": "right",
    "terms": [
+    "right psoas major muscle",
     "right psoas muscle"
    ],
    "tier": 1,
@@ -1055,68 +1029,27 @@
    "from_anchor": null
   },
   {
-   "entity": "subcutaneous_fat",
+   "entity": "cervical_stroma",
    "side": null,
    "terms": [
-    "subcutaneous fat",
-    "subcutaneous adipose tissue",
-    "SAT"
+    "cervical stroma"
    ],
-   "tier": 1,
+   "tier": 2,
    "list": "B",
    "gate": {
-    "kind": "region",
-    "region": null
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "cervix",
+    "anchor_side": null
    },
-   "priority": 3,
+   "priority": 1,
    "reason": [
-    "expected in FOV ['L3', 'coccyx'] (presence=obligatory)",
-    "not nameable by TS in this task"
+    "host anchor cervix",
+    "cervix -has_part-> cervical_stroma (hop 1)",
+    "staging: confined"
    ],
-   "relation": null,
-   "from_anchor": null
-  },
-  {
-   "entity": "visceral_fat",
-   "side": null,
-   "terms": [
-    "visceral fat",
-    "intra-abdominal fat",
-    "torso fat"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 3,
-   "reason": [
-    "expected in FOV ['L3', 'coccyx'] (presence=obligatory)",
-    "not nameable by TS in this task"
-   ],
-   "relation": null,
-   "from_anchor": null
-  },
-  {
-   "entity": "skeletal_muscle",
-   "side": null,
-   "terms": [
-    "skeletal muscle"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 3,
-   "reason": [
-    "expected in FOV ['L3', 'coccyx'] (presence=obligatory)",
-    "not nameable by TS in this task"
-   ],
-   "relation": null,
-   "from_anchor": null
+   "relation": "has_part",
+   "from_anchor": "cervix"
   },
   {
    "entity": "urinary_bladder",
@@ -1146,8 +1079,8 @@
    "entity": "pelvic_sidewall",
    "side": "left",
    "terms": [
-    "left pelvic sidewall",
-    "left obturator internus muscle"
+    "left obturator internus muscle",
+    "left pelvic sidewall"
    ],
    "tier": 2,
    "list": "B",
@@ -1172,8 +1105,8 @@
    "entity": "pelvic_sidewall",
    "side": "right",
    "terms": [
-    "right pelvic sidewall",
-    "right obturator internus muscle"
+    "right obturator internus muscle",
+    "right pelvic sidewall"
    ],
    "tier": 2,
    "list": "B",
@@ -1456,29 +1389,6 @@
    "from_anchor": "cervix"
   },
   {
-   "entity": "cervical_stroma",
-   "side": null,
-   "terms": [
-    "cervical stroma"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "cervix",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "host anchor cervix",
-    "cervix -has_part-> cervical_stroma (hop 1)",
-    "staging: confined"
-   ],
-   "relation": "has_part",
-   "from_anchor": "cervix"
-  },
-  {
    "entity": "parametrium",
    "side": "left",
    "terms": [
@@ -1627,57 +1537,11 @@
    "from_anchor": "rectum"
   },
   {
-   "entity": "ln_inguinal",
-   "side": "left",
-   "terms": [
-    "left inguinal lymph nodes"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "defined_by": "vessels_and_vertebral_levels",
-    "anchor": "rectum",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor rectum",
-    "rectum -drains_lymph_to-> ln_inguinal (hop 1)",
-    "staging: N (low rectal/anal)"
-   ],
-   "relation": "drains_lymph_to",
-   "from_anchor": "rectum"
-  },
-  {
-   "entity": "ln_inguinal",
-   "side": "right",
-   "terms": [
-    "right inguinal lymph nodes"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "defined_by": "vessels_and_vertebral_levels",
-    "anchor": "rectum",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor rectum",
-    "rectum -drains_lymph_to-> ln_inguinal (hop 1)",
-    "staging: N (low rectal/anal)"
-   ],
-   "relation": "drains_lymph_to",
-   "from_anchor": "rectum"
-  },
-  {
    "entity": "endometrium",
    "side": null,
    "terms": [
-    "endometrium",
-    "endometrial cavity"
+    "endometrial cavity",
+    "endometrium"
    ],
    "tier": 2,
    "list": "B",
@@ -1700,6 +1564,8 @@
    "entity": "myometrium",
    "side": null,
    "terms": [
+    "myometrial tissue",
+    "uterine muscular wall",
     "myometrium"
    ],
    "tier": 2,
@@ -1717,6 +1583,31 @@
     "staging: confined,location"
    ],
    "relation": "has_part",
+   "from_anchor": "uterus"
+  },
+  {
+   "entity": "peritoneum",
+   "side": null,
+   "terms": [
+    "peritoneal lining",
+    "peritoneum"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "shell",
+    "inner_mm": 0,
+    "outer_mm": 40,
+    "anchor": "uterus",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "promoted anchor uterus",
+    "uterus -invested_by-> peritoneum (hop 1)",
+    "staging: beyond_capsule"
+   ],
+   "relation": "invested_by",
    "from_anchor": "uterus"
   },
   {
@@ -1745,53 +1636,52 @@
    "from_anchor": "uterus"
   },
   {
-   "entity": "urethra",
-   "side": null,
-   "terms": [
-    "urethra"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "vagina",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "anterior"
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor vagina",
-    "vagina -adjacent_to-> urethra (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "vagina"
-  },
-  {
-   "entity": "adnexa",
+   "entity": "uterine_artery",
    "side": "left",
    "terms": [
-    "left adnexa",
-    "left ovary and fallopian tube"
+    "left uterine artery"
    ],
    "tier": 2,
    "list": "B",
    "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "ovary",
-    "anchor_side": "left"
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
+    "anchor": "uterus",
+    "anchor_side": null
    },
    "priority": 2,
    "reason": [
-    "promoted anchor ovary",
-    "ovary -has_part-> adnexa (hop 1)",
-    "staging: location"
+    "promoted anchor uterus",
+    "uterus -supplied_by-> uterine_artery (hop 1)"
    ],
-   "relation": "has_part",
-   "from_anchor": "ovary"
+   "relation": "supplied_by",
+   "from_anchor": "uterus"
+  },
+  {
+   "entity": "uterine_artery",
+   "side": "right",
+   "terms": [
+    "right uterine artery"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
+    "anchor": "uterus",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "promoted anchor uterus",
+    "uterus -supplied_by-> uterine_artery (hop 1)"
+   ],
+   "relation": "supplied_by",
+   "from_anchor": "uterus"
   },
   {
    "entity": "omentum",
@@ -1821,27 +1711,55 @@
    "from_anchor": "ovary"
   },
   {
-   "entity": "adnexa",
-   "side": "right",
+   "entity": "gonadal_vein",
+   "side": "left",
    "terms": [
-    "right adnexa",
-    "right ovary and fallopian tube"
+    "left testicular vein",
+    "left ovarian vein",
+    "left gonadal vein"
    ],
    "tier": 2,
    "list": "B",
    "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
+    "anchor": "ovary",
+    "anchor_side": "left"
+   },
+   "priority": 2,
+   "reason": [
+    "promoted anchor ovary",
+    "ovary -drained_by-> gonadal_vein (hop 1)"
+   ],
+   "relation": "drained_by",
+   "from_anchor": "ovary"
+  },
+  {
+   "entity": "gonadal_vein",
+   "side": "right",
+   "terms": [
+    "right testicular vein",
+    "right ovarian vein",
+    "right gonadal vein"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
     "anchor": "ovary",
     "anchor_side": "right"
    },
    "priority": 2,
    "reason": [
     "promoted anchor ovary",
-    "ovary -has_part-> adnexa (hop 1)",
-    "staging: location"
+    "ovary -drained_by-> gonadal_vein (hop 1)"
    ],
-   "relation": "has_part",
+   "relation": "drained_by",
    "from_anchor": "ovary"
   },
   {
@@ -2060,6 +1978,75 @@
    ],
    "relation": "has_part",
    "from_anchor": "colon"
+  },
+  {
+   "entity": "colon_ascending",
+   "side": null,
+   "terms": [
+    "ascending colon"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "colon",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -has_part-> colon_ascending (hop 1)",
+    "staging: location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "colon_transverse",
+   "side": null,
+   "terms": [
+    "transverse colon"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "colon",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -has_part-> colon_transverse (hop 1)",
+    "staging: location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "colon_descending",
+   "side": null,
+   "terms": [
+    "descending colon"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "colon",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -has_part-> colon_descending (hop 1)",
+    "staging: location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "colon"
   }
  ],
  "log": [
@@ -2092,7 +2079,7 @@
   },
   {
    "step": "expected",
-   "n": 22,
+   "n": 19,
    "sex_recorded": "female",
    "sex_used_for_filtering": false,
    "span": [
@@ -2170,18 +2157,6 @@
     [
      "psoas",
      "right"
-    ],
-    [
-     "subcutaneous_fat",
-     null
-    ],
-    [
-     "visceral_fat",
-     null
-    ],
-    [
-     "skeletal_muscle",
-     null
     ]
    ]
   },
@@ -2254,21 +2229,6 @@
    "step": "budget",
    "dropped": [
     [
-     "colon_ascending",
-     null,
-     2
-    ],
-    [
-     "colon_transverse",
-     null,
-     2
-    ],
-    [
-     "colon_descending",
-     null,
-     2
-    ],
-    [
      "mesentery",
      null,
      2
@@ -2324,23 +2284,18 @@
      3
     ],
     [
-     "junctional_zone",
-     null,
-     3
-    ],
-    [
-     "peritoneum",
-     null,
-     3
-    ],
-    [
-     "uterine_artery",
+     "ln_inguinal",
      "left",
      3
     ],
     [
-     "uterine_artery",
+     "ln_inguinal",
      "right",
+     3
+    ],
+    [
+     "junctional_zone",
+     null,
      3
     ],
     [
@@ -2349,12 +2304,17 @@
      3
     ],
     [
-     "gonadal_vein",
+     "urethra",
+     null,
+     3
+    ],
+    [
+     "adnexa",
      "left",
      3
     ],
     [
-     "gonadal_vein",
+     "adnexa",
      "right",
      3
     ],

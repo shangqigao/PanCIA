@@ -236,10 +236,7 @@
   "small_bowel",
   "colon",
   "iliopsoas",
-  "psoas",
-  "subcutaneous_fat",
-  "visceral_fat",
-  "skeletal_muscle"
+  "psoas"
  ],
  "anchors_missing": [
   {
@@ -386,33 +383,6 @@
     "region": null
    },
    "ts_has_class": true
-  },
-  {
-   "entity": "subcutaneous_fat",
-   "side": null,
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": false
-  },
-  {
-   "entity": "visceral_fat",
-   "side": null,
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": false
-  },
-  {
-   "entity": "skeletal_muscle",
-   "side": null,
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": false
   }
  ],
  "anchors_absent_candidates": [
@@ -635,9 +605,9 @@
    "entity": "small_bowel",
    "side": null,
    "terms": [
-    "small bowel",
     "small intestine",
-    "jejunum and ileum"
+    "jejunum and ileum",
+    "small bowel"
    ],
    "tier": 1,
    "list": "B",
@@ -689,70 +659,6 @@
    "reason": [
     "expected in FOV ['T11', 'L4'] (presence=obligatory)",
     "TS class exists but missing/implausible"
-   ],
-   "relation": null,
-   "from_anchor": null
-  },
-  {
-   "entity": "subcutaneous_fat",
-   "side": null,
-   "terms": [
-    "subcutaneous fat",
-    "subcutaneous adipose tissue",
-    "SAT"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 3,
-   "reason": [
-    "expected in FOV ['T11', 'L4'] (presence=obligatory)",
-    "not nameable by TS in this task"
-   ],
-   "relation": null,
-   "from_anchor": null
-  },
-  {
-   "entity": "visceral_fat",
-   "side": null,
-   "terms": [
-    "visceral fat",
-    "intra-abdominal fat",
-    "torso fat"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 3,
-   "reason": [
-    "expected in FOV ['T11', 'L4'] (presence=obligatory)",
-    "not nameable by TS in this task"
-   ],
-   "relation": null,
-   "from_anchor": null
-  },
-  {
-   "entity": "skeletal_muscle",
-   "side": null,
-   "terms": [
-    "skeletal muscle"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 3,
-   "reason": [
-    "expected in FOV ['T11', 'L4'] (presence=obligatory)",
-    "not nameable by TS in this task"
    ],
    "relation": null,
    "from_anchor": null
@@ -825,6 +731,54 @@
     "staging: confined,location"
    ],
    "relation": "has_part",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "renal_sinus_fat",
+   "side": "left",
+   "terms": [
+    "left renal sinus fat"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -has_part-> renal_sinus_fat (hop 1)",
+    "staging: confined,location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "gerota_fascia",
+   "side": "left",
+   "terms": [
+    "left Gerota's fascia",
+    "left renal fascia"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "shell",
+    "inner_mm": 0,
+    "outer_mm": 40,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -invested_by-> gerota_fascia (hop 1)",
+    "staging: beyond_capsule"
+   ],
+   "relation": "invested_by",
    "from_anchor": "kidney"
   },
   {
@@ -901,9 +855,9 @@
    "entity": "colon",
    "side": null,
    "terms": [
+    "large intestine",
     "colon",
-    "large bowel",
-    "large intestine"
+    "large bowel"
    ],
    "tier": 2,
    "list": "A",
@@ -926,6 +880,7 @@
    "entity": "psoas",
    "side": "left",
    "terms": [
+    "left psoas major muscle",
     "left psoas muscle"
    ],
    "tier": 2,
@@ -971,31 +926,6 @@
    "from_anchor": "kidney"
   },
   {
-   "entity": "diaphragm",
-   "side": null,
-   "terms": [
-    "diaphragm"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "kidney",
-    "anchor_side": "left",
-    "neighbour_found": false,
-    "direction": "superior_posterior"
-   },
-   "priority": 1,
-   "reason": [
-    "host anchor kidney",
-    "kidney -adjacent_to-> diaphragm (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "kidney"
-  },
-  {
    "entity": "renal_artery",
    "side": "left",
    "terms": [
@@ -1024,6 +954,7 @@
    "entity": "renal_vein",
    "side": "left",
    "terms": [
+    "renal vein",
     "left renal vein"
    ],
    "tier": 2,
@@ -1040,6 +971,33 @@
    "reason": [
     "host anchor kidney",
     "kidney -drained_by-> renal_vein (hop 1)",
+    "staging: vascular_invasion"
+   ],
+   "relation": "drained_by",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "gonadal_vein",
+   "side": "left",
+   "terms": [
+    "left testicular vein",
+    "left ovarian vein",
+    "left gonadal vein"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
+    "anchor": "kidney",
+    "anchor_side": "left"
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "kidney -drained_by-> gonadal_vein (hop 1)",
     "staging: vascular_invasion"
    ],
    "relation": "drained_by",
@@ -1147,8 +1105,8 @@
    "side": null,
    "terms": [
     "aorta",
-    "thoracic aorta",
-    "abdominal aorta"
+    "abdominal aorta",
+    "thoracic aorta"
    ],
    "tier": 2,
    "list": "A",
@@ -1164,29 +1122,6 @@
     "renal_artery -supplied_by-> aorta (hop 2)"
    ],
    "relation": "supplied_by",
-   "from_anchor": "kidney"
-  },
-  {
-   "entity": "renal_sinus_fat",
-   "side": "left",
-   "terms": [
-    "left renal sinus fat"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "kidney",
-    "anchor_side": "left"
-   },
-   "priority": 2,
-   "reason": [
-    "host anchor kidney",
-    "kidney -has_part-> renal_sinus_fat (hop 1)",
-    "staging: confined,location"
-   ],
-   "relation": "has_part",
    "from_anchor": "kidney"
   },
   {
@@ -1215,55 +1150,28 @@
    "from_anchor": "kidney"
   },
   {
-   "entity": "gerota_fascia",
-   "side": "left",
+   "entity": "diaphragm",
+   "side": null,
    "terms": [
-    "left Gerota's fascia",
-    "left renal fascia"
+    "diaphragm"
    ],
    "tier": 2,
    "list": "B",
    "gate": {
-    "kind": "shell",
-    "inner_mm": 0,
-    "outer_mm": 40,
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
     "anchor": "kidney",
-    "anchor_side": "left"
+    "anchor_side": "left",
+    "neighbour_found": false,
+    "direction": "superior_posterior"
    },
    "priority": 2,
    "reason": [
     "host anchor kidney",
-    "kidney -invested_by-> gerota_fascia (hop 1)",
-    "staging: beyond_capsule"
+    "kidney -adjacent_to-> diaphragm (hop 1)",
+    "staging: adjacent_invasion"
    ],
-   "relation": "invested_by",
-   "from_anchor": "kidney"
-  },
-  {
-   "entity": "gonadal_vein",
-   "side": "left",
-   "terms": [
-    "left gonadal vein",
-    "left testicular vein",
-    "left ovarian vein"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "corridor",
-    "from_": "anchor_hilum",
-    "to": "parent_trunk",
-    "radius_mm": 15,
-    "anchor": "kidney",
-    "anchor_side": "left"
-   },
-   "priority": 2,
-   "reason": [
-    "host anchor kidney",
-    "kidney -drained_by-> gonadal_vein (hop 1)",
-    "staging: vascular_invasion"
-   ],
-   "relation": "drained_by",
+   "relation": "adjacent_to",
    "from_anchor": "kidney"
   },
   {
@@ -1456,6 +1364,7 @@
    "entity": "renal_vein",
    "side": "right",
    "terms": [
+    "renal vein",
     "right renal vein"
    ],
    "tier": 2,
@@ -1478,6 +1387,7 @@
    "entity": "hepatic_veins",
    "side": null,
    "terms": [
+    "hepatic vessels",
     "hepatic veins",
     "hepatic vein"
    ],
@@ -1650,8 +1560,8 @@
    "side": null,
    "terms": [
     "hepatic artery",
-    "common hepatic artery",
-    "proper hepatic artery"
+    "proper hepatic artery",
+    "common hepatic artery"
    ],
    "tier": 2,
    "list": "B",
@@ -1676,8 +1586,8 @@
    "entity": "superior_mesenteric_vein",
    "side": null,
    "terms": [
-    "superior mesenteric vein",
-    "SMV"
+    "SMV",
+    "superior mesenteric vein"
    ],
    "tier": 2,
    "list": "B",
@@ -1839,7 +1749,7 @@
   },
   {
    "step": "expected",
-   "n": 19,
+   "n": 16,
    "sex_recorded": "male",
    "sex_used_for_filtering": false,
    "span": [
@@ -1885,18 +1795,6 @@
     [
      "iliopsoas",
      "right"
-    ],
-    [
-     "subcutaneous_fat",
-     null
-    ],
-    [
-     "visceral_fat",
-     null
-    ],
-    [
-     "skeletal_muscle",
-     null
     ]
    ]
   },

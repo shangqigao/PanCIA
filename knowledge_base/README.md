@@ -1,4 +1,4 @@
-# PanCIA anchor-centric anatomical knowledge base (v0.3.0, draft)
+# PanCIA anchor-centric anatomical knowledge base (v0.4.1, draft)
 
 Knowledge that lets a **deterministic planner** turn a TotalSegmentator (TS) result into VoxTell prompts for any
 scan, any cancer type: which anchors *should* be in the field of view, where they must be, which surrounding
@@ -10,7 +10,7 @@ host organ's profile.
 knowledge_base/
   kb_meta.yaml          version, counts, sources, coverage-tier legend
   entities.yaml         191 structures: VoxTell terms + aliases, TS class mapping, tier, volume/HU, priority;
-                        36 are anchors with span / position / presence class / spatial prior
+                        33 are anchors with span / position / presence class / spatial prior
   relations.yaml        364 typed edges = anchor profiles (has_part, invested_by, adjacent_to, supplied_by,
                         drained_by, has_duct, drains_lymph_to, lies_in, wall_of, landmark_for), each with the
                         staging question it supports
@@ -157,11 +157,28 @@ Run-time components still to implement on top of this: the single VoxTell call p
 (`voxtell-predict -i img -o out -p <all terms of the plan>`), gate resolution on actual masks, the set/topology
 reasoning module implementing `qc_rules.yaml`, and evidence write-back.
 
-## Coverage tiers (assumptions until the pilot)
-VoxTell ships no vocabulary file. Tiers were assigned from the datasets known to be in its training corpus
-(TS classes, AMOS/BTCV/FLARE organs, KiPA renal vessels, MSD hepatic vessels, LNQ nodes, prostate-zone and breast
-MRI sets). `ood` entries (parametrium, Gerota fascia, perinephric/perivesical fat, mesorectal fascia, neurovascular
-bundle, gonadal/uterine vessels, junctional zone) are experimental: strict gates, retire if the pilot fails them.
+## Coverage tiers (from VoxTell's published vocabulary, v0.4.1)
+Two fetched sources: the **VoxTell v1.1 label set** behind its Hugging Face text embeddings
+(`embeddings/voxtell_v1.1/labels.json`, 14,194 prompt strings = training classes + rewritten synonyms, 190 datasets;
+`seed/voxtell_v1.1_labels.json`) gives *presence*; the paper's **Table 10** (1,078 v1.0 labels with # training
+volumes) + **Table 7** (test classes), parsed into `seed/voxtell_vocabulary.csv`, gives the *counts*. `build_kb.py`
+aligns every entity to the merged vocabulary: the main phrase becomes the
+exact vocabulary wording when one exists ('left iliopsoas', 'L1 vertebra', 'liver segment 4', 'left lung upper lobe',
+'left iliac vena'), aliases are ordered exact › near › rest, and `coverage_tier` is set from the match — `in_vocab`
+(exact label with ≥ 20 training volumes or unknown count), `rare` (exact label, < 20 volumes; expect weak masks), `near` (no exact label;
+zero-shot wording sharing the head noun), `ood` (no label with this head noun). `voxtell_evidence` on each entity
+records the matched label and its count; `knowledge_base/voxtell_vocab_check.csv` lists every phrase.
+
+What this means for the project: uterus, cervix, rectum, prostate (+ zones), iliopsoas, iliac vessels, liver
+segments, lung lobes, individual vertebrae C1–L5 (a vertebral ruler for MR, where TS `total_mr` has no levels) are
+real labels. Seminal vesicles (unsided), endometrial cavity, myometrial tissue, omentum and para-aortic lymph nodes exist in v1.1
+only. **Ovary, vagina, parametrium, mesorectum, urethra, diaphragm and most abdominal / pelvic node stations are not in
+the vocabulary** (mediastinal, hilar, cervical and para-aortic nodes are); prompting them is zero-shot and the planner
+budgets them last. Renal vein is labelled on 70
+volumes unsided but on 1 volume per side, so the unsided label is used and the side comes from the gate. The three
+tissue compartments (subcutaneous fat, visceral fat, skeletal muscle) are no longer anchors: VoxTell has only
+whole-body 'fat' / 'muscles' labels and TS `tissue_types` is not run. `scripts/extract_voxtell_vocab.py` re-grades
+the KB and can merge the Hugging Face embedding `.npz` keys as a second source.
 
 ## Editing
 Edit `build_kb.py`, run it (it asserts referential integrity and TS class names), then `python tests/test_planner.py`.

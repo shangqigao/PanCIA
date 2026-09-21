@@ -1,4 +1,4 @@
-version: 0.3.1
+version: 0.4.1
 stage: '1: anatomical reasoning by SET THEORY and TOPOLOGY only. No statistical rejection (no MMD, KS, HU/intensity tests) at this stage; those
   rules are listed under deferred_rules and are not applied. Sex/presence class is never a filter: existence is decided on the image.'
 sets:

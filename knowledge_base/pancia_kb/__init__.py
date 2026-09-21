@@ -12,4 +12,4 @@ from .planner import Planner, TSOutput, TSStructure, Plan, PromptJob
 from .adapter import load_ts_output
 
 __all__ = ['KnowledgeBase', 'Planner', 'TSOutput', 'TSStructure', 'Plan', 'PromptJob', 'load_ts_output']
-__version__ = '0.3.1'
+__version__ = '0.4.1'

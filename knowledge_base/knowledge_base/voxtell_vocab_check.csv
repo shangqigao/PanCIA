@@ -1,0 +1,427 @@
+entity,phrase,grade,vocab_match,train_volumes,current_tier
+vertebra_C1,C1 vertebra,exact,c1 vertebra,4504,in_vocab
+vertebra_C1,vertebra C1,exact,vertebra c1,1000000,in_vocab
+vertebra_C2,C2 vertebra,exact,c2 vertebra,4504,in_vocab
+vertebra_C2,vertebra C2,exact,vertebra c2,1000000,in_vocab
+vertebra_C3,C3 vertebra,exact,c3 vertebra,4504,in_vocab
+vertebra_C3,vertebra C3,exact,vertebra c3,1000000,in_vocab
+vertebra_C4,C4 vertebra,exact,c4 vertebra,4504,in_vocab
+vertebra_C4,vertebra C4,exact,vertebra c4,1000000,in_vocab
+vertebra_C5,C5 vertebra,exact,c5 vertebra,4504,in_vocab
+vertebra_C5,vertebra C5,exact,vertebra c5,1000000,in_vocab
+vertebra_C6,C6 vertebra,exact,c6 vertebra,4504,in_vocab
+vertebra_C6,vertebra C6,exact,vertebra c6,1000000,in_vocab
+vertebra_C7,C7 vertebra,exact,c7 vertebra,4504,in_vocab
+vertebra_C7,vertebra C7,exact,vertebra c7,1000000,in_vocab
+vertebra_T1,T1 vertebra,exact,t1 vertebra,4559,in_vocab
+vertebra_T1,vertebra T1,exact,vertebra t1,1000000,in_vocab
+vertebra_T2,T2 vertebra,exact,t2 vertebra,4559,in_vocab
+vertebra_T2,vertebra T2,exact,vertebra t2,1000000,in_vocab
+vertebra_T3,T3 vertebra,exact,t3 vertebra,4559,in_vocab
+vertebra_T3,vertebra T3,exact,vertebra t3,1000000,in_vocab
+vertebra_T4,T4 vertebra,exact,t4 vertebra,4559,in_vocab
+vertebra_T4,vertebra T4,exact,vertebra t4,1000000,in_vocab
+vertebra_T5,T5 vertebra,exact,t5 vertebra,4559,in_vocab
+vertebra_T5,vertebra T5,exact,vertebra t5,1000000,in_vocab
+vertebra_T6,T6 vertebra,exact,t6 vertebra,4559,in_vocab
+vertebra_T6,vertebra T6,exact,vertebra t6,1000000,in_vocab
+vertebra_T7,T7 vertebra,exact,t7 vertebra,5099,in_vocab
+vertebra_T7,vertebra T7,exact,vertebra t7,1000000,in_vocab
+vertebra_T8,T8 vertebra,exact,t8 vertebra,5099,in_vocab
+vertebra_T8,vertebra T8,exact,vertebra t8,1000000,in_vocab
+vertebra_T9,T9 vertebra,exact,t9 vertebra,5546,in_vocab
+vertebra_T9,vertebra T9,exact,vertebra t9,1000000,in_vocab
+vertebra_T10,T10 vertebra,exact,t10 vertebra,5546,in_vocab
+vertebra_T10,vertebra T10,exact,vertebra t10,1000000,in_vocab
+vertebra_T11,T11 vertebra,exact,t11 vertebra,5546,in_vocab
+vertebra_T11,vertebra T11,exact,vertebra t11,1000000,in_vocab
+vertebra_T12,T12 vertebra,exact,t12 vertebra,5546,in_vocab
+vertebra_T12,vertebra T12,exact,vertebra t12,1000000,in_vocab
+vertebra_L1,L1 vertebra,exact,l1 vertebra,5546,in_vocab
+vertebra_L1,vertebra L1,exact,vertebra l1,1000000,in_vocab
+vertebra_L2,L2 vertebra,exact,l2 vertebra,5546,in_vocab
+vertebra_L2,vertebra L2,exact,vertebra l2,1000000,in_vocab
+vertebra_L3,L3 vertebra,exact,l3 vertebra,5546,in_vocab
+vertebra_L3,vertebra L3,exact,vertebra l3,1000000,in_vocab
+vertebra_L4,L4 vertebra,exact,l4 vertebra,5546,in_vocab
+vertebra_L4,vertebra L4,exact,vertebra l4,1000000,in_vocab
+vertebra_L5,L5 vertebra,exact,l5 vertebra,5546,in_vocab
+vertebra_L5,vertebra L5,exact,vertebra l5,1000000,in_vocab
+vertebra_S1,S1 vertebra,exact,s1 vertebra,1228,in_vocab
+vertebra_S1,vertebra S1,near,s1-s5 vertebrae,1000000,in_vocab
+vertebra_S2,S2 vertebra,near,,,near
+vertebra_S2,vertebra S2,ood,,,near
+vertebra_S3,S3 vertebra,near,,,near
+vertebra_S3,vertebra S3,ood,,,near
+vertebra_S4,S4 vertebra,near,,,near
+vertebra_S4,vertebra S4,ood,,,near
+vertebra_S5,S5 vertebra,near,s1-s5 vertebrae,1000000,near
+vertebra_S5,vertebra S5,near,s1-s5 vertebrae,1000000,near
+spine,spine,exact,spine,1000000,in_vocab
+spine,vertebral column,exact,vertebral column,1000000,in_vocab
+spine,lumbar spine,exact,lumbar spine,1000000,in_vocab
+spine,thoracic spine,exact,thoracic spine,1000000,in_vocab
+sacrum,sacrum,exact,sacrum,5720,in_vocab
+coccyx,coccyx,ood,,,ood
+hip,left hip bone,exact,left hip bone,1000000,in_vocab
+hip,right hip bone,exact,right hip bone,1000000,in_vocab
+hip,left pelvis bone,exact,left pelvis bone,78,in_vocab
+hip,right pelvis bone,exact,right pelvis bone,78,in_vocab
+hip,left iliac bone,exact,left iliac bone,1000000,in_vocab
+hip,right iliac bone,exact,right iliac bone,1000000,in_vocab
+femur,left femur,exact,left femur,3974,in_vocab
+femur,right femur,exact,right femur,3974,in_vocab
+sternum,sternum,exact,sternum,3454,in_vocab
+rib_cage,left rib cage,exact,left rib cage,1000000,in_vocab
+rib_cage,right rib cage,exact,right rib cage,1000000,in_vocab
+rib_cage,left ribs,exact,left ribs,1000000,in_vocab
+rib_cage,right ribs,exact,right ribs,1000000,in_vocab
+scapula,left scapula,exact,left scapula,3974,in_vocab
+scapula,right scapula,exact,right scapula,3974,in_vocab
+clavicle,left clavicle,exact,left clavicle,1000000,in_vocab
+clavicle,right clavicle,exact,right clavicle,1000000,in_vocab
+humerus,left humerus,exact,left humerus,3974,in_vocab
+humerus,right humerus,exact,right humerus,3974,in_vocab
+spinal_cord,spinal cord,exact,spinal cord,5433,in_vocab
+aorta,aorta,exact,aorta,5057,in_vocab
+aorta,abdominal aorta,exact,abdominal aorta,120,in_vocab
+aorta,thoracic aorta,exact,thoracic aorta,30,in_vocab
+inferior_vena_cava,inferior vena cava,exact,inferior vena cava,5016,in_vocab
+inferior_vena_cava,IVC,exact,ivc,1000000,in_vocab
+superior_vena_cava,superior vena cava,exact,superior vena cava,1289,in_vocab
+iliac_artery,left iliac artery,exact,left iliac artery,4514,in_vocab
+iliac_artery,right iliac artery,exact,right iliac artery,4514,in_vocab
+iliac_artery,left common iliac artery,exact,left common iliac artery,172,in_vocab
+iliac_artery,right common iliac artery,exact,right common iliac artery,172,in_vocab
+iliac_artery,left external iliac artery,exact,left external iliac artery,51,in_vocab
+iliac_artery,right external iliac artery,exact,right external iliac artery,51,in_vocab
+iliac_vein,left iliac vein,exact,left iliac vena,4514,in_vocab
+iliac_vein,right iliac vein,exact,right iliac vena,4514,in_vocab
+internal_iliac_artery,left internal iliac artery,exact,left internal iliac artery,51,in_vocab
+internal_iliac_artery,right internal iliac artery,exact,right internal iliac artery,51,in_vocab
+internal_iliac_artery,left hypogastric artery,exact,left hypogastric artery,1000000,in_vocab
+internal_iliac_artery,right hypogastric artery,exact,right hypogastric artery,1000000,in_vocab
+internal_iliac_vein,left internal iliac vein,rare,left internal iliac vein,1,rare
+internal_iliac_vein,right internal iliac vein,rare,right internal iliac vein,1,rare
+portal_vein,portal vein,exact,portal vein,21,in_vocab
+portal_vein,main portal vein,exact,main portal vein,1000000,in_vocab
+splenic_vein,splenic vein,rare,splenic vein,1,rare
+hepatic_veins,hepatic vessels,exact,hepatic vessels,494,in_vocab
+hepatic_veins,hepatic veins,exact,hepatic veins,1000000,in_vocab
+hepatic_veins,hepatic vein,exact,hepatic veins,1000000,in_vocab
+hepatic_artery,hepatic artery,exact,hepatic artery,120,in_vocab
+hepatic_artery,proper hepatic artery,exact,proper hepatic artery,1000000,in_vocab
+hepatic_artery,common hepatic artery,rare,common hepatic artery,1,in_vocab
+celiac_trunk,celiac trunk,exact,celiac trunk,533,in_vocab
+celiac_trunk,coeliac artery,exact,coeliac artery,1000000,in_vocab
+superior_mesenteric_artery,superior mesenteric artery,exact,superior mesenteric artery,171,in_vocab
+superior_mesenteric_artery,SMA,exact,sma,1000000,in_vocab
+superior_mesenteric_vein,SMV,exact,smv,1000000,in_vocab
+superior_mesenteric_vein,superior mesenteric vein,rare,superior mesenteric vein,1,in_vocab
+renal_artery,left renal artery,exact,left renal artery,171,in_vocab
+renal_artery,right renal artery,exact,right renal artery,171,in_vocab
+renal_vein,renal vein,exact,renal vein,70,in_vocab
+renal_vein,left renal vein,rare,left renal vein,1,in_vocab
+renal_vein,right renal vein,rare,right renal vein,1,in_vocab
+gonadal_vein,left testicular vein,exact,left testicular vein,1000000,in_vocab
+gonadal_vein,right testicular vein,exact,right testicular vein,1000000,in_vocab
+gonadal_vein,left ovarian vein,exact,left ovarian vein,1000000,in_vocab
+gonadal_vein,right ovarian vein,exact,right ovarian vein,1000000,in_vocab
+gonadal_vein,left gonadal vein,rare,left gonadal vein,2,in_vocab
+gonadal_vein,right gonadal vein,rare,right gonadal vein,1,in_vocab
+pulmonary_artery,pulmonary artery,exact,pulmonary artery,593,in_vocab
+pulmonary_artery,main pulmonary artery,exact,main pulmonary artery,1000000,in_vocab
+pulmonary_vein,pulmonary veins,exact,pulmonary veins,1000000,in_vocab
+brachiocephalic_trunk,brachiocephalic trunk,exact,brachiocephalic trunk,1000000,in_vocab
+subclavian_artery,left subclavian artery,exact,left subclavian artery,1931,in_vocab
+subclavian_artery,right subclavian artery,exact,right subclavian artery,1761,in_vocab
+common_carotid_artery,left common carotid artery,exact,left common carotid artery,1931,in_vocab
+common_carotid_artery,right common carotid artery,exact,right common carotid artery,1761,in_vocab
+brachiocephalic_vein,left brachiocephalic vein,exact,left brachiocephalic vein,1761,in_vocab
+brachiocephalic_vein,right brachiocephalic vein,exact,right brachiocephalic vein,1761,in_vocab
+uterine_artery,left uterine artery,near,,,near
+uterine_artery,right uterine artery,near,,,near
+axillary_vessels,left axillary vessels,near,,,ood
+axillary_vessels,right axillary vessels,near,,,ood
+axillary_vessels,left axillary artery,near,,,ood
+axillary_vessels,right axillary artery,near,,,ood
+axillary_vessels,left axillary vein,near,,,ood
+axillary_vessels,right axillary vein,near,,,ood
+lung,left lung,exact,left lung,4404,in_vocab
+lung,right lung,exact,right lung,4404,in_vocab
+lung_left_upper_lobe,left lung upper lobe,exact,left lung upper lobe,3454,in_vocab
+lung_left_upper_lobe,left upper lobe of lung,near,dexter lung upper lobe,1000000,in_vocab
+lung_left_lower_lobe,left lung lower lobe,exact,left lung lower lobe,3454,in_vocab
+lung_left_lower_lobe,left lower lobe of lung,near,dexter lung lower lobe,1000000,in_vocab
+lung_right_upper_lobe,right lung upper lobe,exact,right lung upper lobe,3454,in_vocab
+lung_right_upper_lobe,right upper lobe of lung,near,dexter lung upper lobe,1000000,in_vocab
+lung_right_middle_lobe,right lung middle lobe,exact,right lung middle lobe,3454,in_vocab
+lung_right_middle_lobe,right middle lobe of lung,near,dexter lung middle lobe,1000000,in_vocab
+lung_right_lower_lobe,right lung lower lobe,exact,right lung lower lobe,3454,in_vocab
+lung_right_lower_lobe,right lower lobe of lung,near,dexter lung lower lobe,1000000,in_vocab
+trachea,trachea,exact,trachea,2018,in_vocab
+main_bronchus,left main bronchus,exact,left main bronchus,1000000,in_vocab
+main_bronchus,right main bronchus,exact,right main bronchus,1000000,in_vocab
+main_bronchus,left mainstem bronchus,exact,left mainstem bronchus,1000000,in_vocab
+main_bronchus,right mainstem bronchus,exact,right mainstem bronchus,1000000,in_vocab
+bronchial_tree,bronchi,exact,bronchi,583,in_vocab
+bronchial_tree,airways,exact,airways,162,in_vocab
+bronchial_tree,airway tree,exact,airway tree,1000000,in_vocab
+pleura,left pleura,near,lesion in pleura,1000000,near
+pleura,right pleura,near,lesion in pleura,1000000,near
+pleura,left pleural surface,near,,,near
+pleura,right pleural surface,near,,,near
+pleural_effusion,pleural effusion,exact,pleural effusion,78,in_vocab
+pleural_effusion,left pleural effusion,exact,pleural effusion,78,in_vocab
+pleural_effusion,right pleural effusion,exact,pleural effusion,78,in_vocab
+heart,heart,exact,heart,2855,in_vocab
+pericardium,pericardium,ood,,,ood
+esophagus,esophagus,exact,esophagus,7549,in_vocab
+esophagus,oesophagus,exact,esophagus,7549,in_vocab
+esophagus,gullet,exact,gullet,1000000,in_vocab
+thyroid,thyroid gland,exact,thyroid gland,1446,in_vocab
+thymus,thymus,exact,thymus,886,in_vocab
+chest_wall,left chest wall,near,anterior chest wall sternum,1000000,near
+chest_wall,right chest wall,near,anterior chest wall sternum,1000000,near
+chest_wall,left thoracic wall,near,,,near
+chest_wall,right thoracic wall,near,,,near
+diaphragm,diaphragm,ood,,,ood
+breast,left breast,exact,left breast,1086,in_vocab
+breast,right breast,exact,right breast,1086,in_vocab
+breast,left mammary gland,exact,left mammary gland,1000000,in_vocab
+breast,right mammary gland,exact,right mammary gland,1000000,in_vocab
+fibroglandular_tissue,left breast parenchyma,exact,left breast parenchyma,1000000,in_vocab
+fibroglandular_tissue,right breast parenchyma,exact,right breast parenchyma,1000000,in_vocab
+fibroglandular_tissue,left fibroglandular tissue,near,,,in_vocab
+fibroglandular_tissue,right fibroglandular tissue,near,,,in_vocab
+pectoralis_major,left pectoralis major muscle,near,,,ood
+pectoralis_major,right pectoralis major muscle,near,,,ood
+skin,skin,exact,skin,886,in_vocab
+nipple,left nipple,ood,,,ood
+nipple,right nipple,ood,,,ood
+liver,liver,exact,liver,8669,in_vocab
+liver,hepatic parenchyma,exact,hepatic parenchyma,1000000,in_vocab
+liver_segment_I,liver segment I,exact,liver segment 1,243,in_vocab
+liver_segment_I,Couinaud segment I,exact,couinaud segment i,1000000,in_vocab
+liver_segment_II,liver segment II,exact,liver segment 2,243,in_vocab
+liver_segment_II,Couinaud segment II,exact,couinaud segment ii,1000000,in_vocab
+liver_segment_III,liver segment III,exact,liver segment 3,243,in_vocab
+liver_segment_III,Couinaud segment III,exact,couinaud segment iii,1000000,in_vocab
+liver_segment_IV,liver segment IV,exact,liver segment 4,193,in_vocab
+liver_segment_IV,Couinaud segment IV,exact,couinaud segment iv,1000000,in_vocab
+liver_segment_V,liver segment V,exact,liver segment 5,243,in_vocab
+liver_segment_V,Couinaud segment V,exact,couinaud segment v,1000000,in_vocab
+liver_segment_VI,liver segment VI,exact,liver segment 6,243,in_vocab
+liver_segment_VI,Couinaud segment VI,exact,couinaud segment vi,1000000,in_vocab
+liver_segment_VII,liver segment VII,exact,liver segment 7,243,in_vocab
+liver_segment_VII,Couinaud segment VII,exact,couinaud segment vii,1000000,in_vocab
+liver_segment_VIII,liver segment VIII,exact,liver segment 8,243,in_vocab
+liver_segment_VIII,Couinaud segment VIII,exact,couinaud segment viii,1000000,in_vocab
+liver_lobe,left hepatic lobe,exact,left hepatic lobe,1000000,in_vocab
+liver_lobe,right hepatic lobe,exact,right hepatic lobe,1000000,in_vocab
+liver_lobe,left lobe of the liver,near,caudate liver lobe,1000000,in_vocab
+liver_lobe,right lobe of the liver,near,caudate liver lobe,1000000,in_vocab
+gallbladder,gallbladder,exact,gallbladder,5606,in_vocab
+bile_duct,common bile duct,exact,common bile duct,482,in_vocab
+bile_duct,bile duct,exact,bile ducts,1000000,in_vocab
+bile_duct,CBD,ood,,,in_vocab
+intrahepatic_bile_ducts,biliary tree,exact,biliary tree,1000000,in_vocab
+intrahepatic_bile_ducts,intrahepatic bile ducts,near,,,in_vocab
+spleen,spleen,exact,spleen,6823,in_vocab
+stomach,stomach,exact,stomach,5840,in_vocab
+stomach,gastric organ,exact,gastric organ,1000000,in_vocab
+gastric_wall,gastric wall,exact,gastric wall,1000000,in_vocab
+gastric_wall,stomach wall,exact,stomach wall,1000000,in_vocab
+gastroesophageal_junction,gastroesophageal junction,near,,,ood
+duodenum,duodenum,exact,duodenum,4073,in_vocab
+pancreas,pancreas,exact,pancreas,7934,in_vocab
+pancreas_head,pancreatic head,near,pancreatic head venous drainage,1000000,near
+pancreas_head,pancreas head,near,,,near
+pancreas_body,pancreatic body,exact,pancreatic body,1000000,in_vocab
+pancreas_body,pancreas body,near,,,in_vocab
+pancreas_tail,pancreatic tail,near,pancreatic tail arterial supply,1000000,near
+pancreas_tail,pancreas tail,near,,,near
+pancreas_uncinate,pancreatic uncinate process,near,,,near
+pancreas_uncinate,pancreas uncinate process,near,,,near
+pancreatic_duct,pancreatic duct,exact,pancreatic duct,482,in_vocab
+adrenal,left adrenal gland,exact,left adrenal gland,5423,in_vocab
+adrenal,right adrenal gland,exact,right adrenal gland,5423,in_vocab
+adrenal,left suprarenal gland,exact,left suprarenal gland,1000000,in_vocab
+adrenal,right suprarenal gland,exact,right suprarenal gland,1000000,in_vocab
+kidney,left kidney,exact,left kidney,5666,in_vocab
+kidney,right kidney,exact,right kidney,5603,in_vocab
+kidney,left renal organ,exact,left renal organ,1000000,in_vocab
+kidney,right renal organ,exact,right renal organ,1000000,in_vocab
+renal_cortex,left renal cortex,exact,left renal cortex,1000000,in_vocab
+renal_cortex,right renal cortex,exact,right renal cortex,1000000,in_vocab
+renal_medulla,left renal medulla,near,left renal cortex and medulla,1000000,near
+renal_medulla,right renal medulla,near,left renal cortex and medulla,1000000,near
+renal_pelvis,left renal pelvis,near,,,near
+renal_pelvis,right renal pelvis,near,,,near
+renal_pelvis,left renal collecting system,near,,,near
+renal_pelvis,right renal collecting system,near,,,near
+renal_sinus_fat,left renal sinus fat,near,,,near
+renal_sinus_fat,right renal sinus fat,near,,,near
+perinephric_fat,left perinephric fat,near,,,ood
+perinephric_fat,right perinephric fat,near,,,ood
+perinephric_fat,left perirenal fat,near,,,ood
+perinephric_fat,right perirenal fat,near,,,ood
+gerota_fascia,left Gerota's fascia,near,,,near
+gerota_fascia,right Gerota's fascia,near,,,near
+gerota_fascia,left renal fascia,near,,,near
+gerota_fascia,right renal fascia,near,,,near
+kidney_cyst,left kidney cyst,exact,left kidney cyst,1228,in_vocab
+kidney_cyst,right kidney cyst,exact,right kidney cyst,1228,in_vocab
+ureter,left ureter,rare,left ureter,1,rare
+ureter,right ureter,rare,right ureter,1,rare
+small_bowel,small intestine,exact,small intestine,1000000,in_vocab
+small_bowel,jejunum and ileum,exact,jejunum and ileum,3600,in_vocab
+small_bowel,small bowel,exact,small bowel,50,in_vocab
+colon,large intestine,exact,large intestine,1000000,in_vocab
+colon,colon,exact,colon,3506,in_vocab
+colon,large bowel,exact,large bowel,1000000,in_vocab
+colon_ascending,ascending colon,exact,ascending colon,1000000,in_vocab
+colon_transverse,transverse colon,exact,transverse colon,1000000,in_vocab
+colon_descending,descending colon,exact,descending colon,1000000,in_vocab
+colon_sigmoid,sigmoid colon,exact,sigmoid colon,1000000,in_vocab
+colon_cecum,cecum,exact,cecum,1000000,in_vocab
+rectum,rectum,exact,rectum,1281,in_vocab
+mesorectum,mesorectal fascia,near,,,ood
+mesorectum,mesorectum,ood,,,ood
+anal_canal,anal canal,exact,anal canal,1000000,in_vocab
+anal_canal,anus,ood,,,in_vocab
+mesentery,mesentery,exact,mesentery,1000000,in_vocab
+mesentery,mesenteric fat,near,,,in_vocab
+omentum,omentum,exact,omentum,1000000,in_vocab
+omentum,greater omentum,near,,,in_vocab
+omentum,omental fat,near,,,in_vocab
+peritoneum,peritoneal lining,near,,,near
+peritoneum,peritoneum,ood,,,near
+ascites,peritoneal fluid,near,,,near
+ascites,ascites,ood,,,near
+urinary_bladder,urinary bladder,exact,urinary bladder,5098,in_vocab
+urinary_bladder,bladder,exact,bladder,126,in_vocab
+bladder_wall,bladder wall,exact,bladder wall,1000000,in_vocab
+bladder_wall,urinary bladder wall,near,,,in_vocab
+perivesical_fat,perivesical fat,near,,,ood
+urethra,urethra,ood,,,ood
+prostate,prostate,exact,prostate,3003,in_vocab
+prostate,prostate gland,exact,prostate gland,1000000,in_vocab
+prostate_peripheral_zone,prostate peripheral zone,exact,prostate peripheral zone,269,in_vocab
+prostate_peripheral_zone,peripheral zone of the prostate,near,peripheral prostate zone,1000000,in_vocab
+prostate_transition_zone,prostate transitional zone,exact,prostate transitional zone,32,in_vocab
+prostate_transition_zone,central gland,near,central gland of prostate,1000000,in_vocab
+prostate_transition_zone,transition zone of the prostate,near,prostate central zone and transitional zone,1000000,in_vocab
+seminal_vesicle,seminal vesicles,exact,seminal vesicles,1000000,in_vocab
+seminal_vesicle,left seminal vesicle,exact,seminal vesicles,1000000,in_vocab
+seminal_vesicle,right seminal vesicle,exact,seminal vesicles,1000000,in_vocab
+neurovascular_bundle,left neurovascular bundle,near,prostate neurovascular bundle complex,1000000,near
+neurovascular_bundle,right neurovascular bundle,near,prostate neurovascular bundle complex,1000000,near
+uterus,uterus,exact,uterus,583,in_vocab
+uterus,uterine body,exact,uterine body,1000000,in_vocab
+uterus,womb,exact,womb,1000000,in_vocab
+endometrium,endometrial cavity,exact,endometrial cavity,1000000,in_vocab
+endometrium,endometrium,ood,,,in_vocab
+myometrium,myometrial tissue,exact,myometrial tissue,1000000,in_vocab
+myometrium,uterine muscular wall,exact,uterine muscular wall,1000000,in_vocab
+myometrium,myometrium,ood,,,in_vocab
+junctional_zone,junctional zone of the uterus,near,,,ood
+cervix,cervix,exact,cervix,949,in_vocab
+cervix,uterine cervix,exact,uterine cervix,1000000,in_vocab
+cervix,cervix uteri,exact,cervix uteri,1000000,in_vocab
+cervical_stroma,cervical stroma,near,,,near
+parametrium,left parametrium,ood,,,ood
+parametrium,right parametrium,ood,,,ood
+parametrium,left parametrial tissue,near,,,ood
+parametrium,right parametrial tissue,near,,,ood
+vagina,vagina,ood,,,ood
+vagina_upper_two_thirds,upper vagina,ood,,,ood
+ovary,left ovary,ood,,,ood
+ovary,right ovary,ood,,,ood
+adnexa,left adnexa,ood,,,ood
+adnexa,right adnexa,ood,,,ood
+adnexa,left ovary and fallopian tube,near,,,ood
+adnexa,right ovary and fallopian tube,near,,,ood
+pelvic_sidewall,left obturator internus muscle,exact,left obturator internus muscle,78,in_vocab
+pelvic_sidewall,right obturator internus muscle,exact,right obturator internus muscle,78,in_vocab
+pelvic_sidewall,left pelvic sidewall,ood,,,in_vocab
+pelvic_sidewall,right pelvic sidewall,ood,,,in_vocab
+obturator_internus,left obturator internus muscle,exact,left obturator internus muscle,78,in_vocab
+obturator_internus,right obturator internus muscle,exact,right obturator internus muscle,78,in_vocab
+levator_ani,levator ani muscle,near,,,near
+levator_ani,pelvic floor muscles,near,,,near
+external_urethral_sphincter,external urethral sphincter,near,,,near
+iliopsoas,left iliopsoas muscle,exact,left iliopsoas muscle,1000000,in_vocab
+iliopsoas,right iliopsoas muscle,exact,right iliopsoas muscle,1000000,in_vocab
+psoas,left psoas major muscle,exact,left psoas major muscle,78,in_vocab
+psoas,right psoas major muscle,exact,right psoas major muscle,78,in_vocab
+psoas,left psoas muscle,exact,left psoas muscle,1000000,in_vocab
+psoas,right psoas muscle,exact,right psoas muscle,1000000,in_vocab
+quadratus_lumborum,left quadratus lumborum muscle,exact,left quadratus lumborum muscle,1000000,in_vocab
+quadratus_lumborum,right quadratus lumborum muscle,exact,right quadratus lumborum muscle,1000000,in_vocab
+gluteus,left gluteal muscles,exact,left gluteal muscles,1000000,in_vocab
+gluteus,right gluteal muscles,exact,right gluteal muscles,1000000,in_vocab
+autochthon,erector spinae,exact,erector spinae,1000000,in_vocab
+autochthon,left erector spinae muscle,exact,erector spinae,1000000,in_vocab
+autochthon,right erector spinae muscle,exact,erector spinae,1000000,in_vocab
+rectus_abdominis,left rectus abdominis muscle,exact,left rectus abdominis muscle,1000000,in_vocab
+rectus_abdominis,right rectus abdominis muscle,exact,right rectus abdominis muscle,1000000,in_vocab
+abdominal_wall,anterior abdominal wall,near,left anterior abdominal wall vein,1000000,near
+abdominal_wall,abdominal wall muscles,near,,,near
+subcutaneous_fat,subcutaneous fat,exact,subcutaneous fat,1000000,in_vocab
+subcutaneous_fat,subcutaneous adipose tissue,near,,,in_vocab
+subcutaneous_fat,SAT,ood,,,in_vocab
+visceral_fat,visceral fat,exact,visceral fat,1000000,in_vocab
+visceral_fat,intra-abdominal fat,near,,,in_vocab
+visceral_fat,torso fat,near,,,in_vocab
+visceral_fat,VAT,ood,,,in_vocab
+skeletal_muscle,skeletal muscle,near,skeletal muscle tissue,1000000,near
+body_trunk,body,near,c1 vertebral body,1000000,near
+ln_mediastinal,mediastinal lymph nodes,exact,mediastinal lymph nodes,192,in_vocab
+ln_mediastinal,mediastinal nodes,exact,mediastinal node,1000000,in_vocab
+ln_mediastinal,thoracic lymph nodes,exact,thoracic lymph nodes,1000000,in_vocab
+ln_hilar,hilar lymph nodes,exact,hilar lymph nodes,1000000,in_vocab
+ln_hilar,left hilar lymph nodes,exact,hilar lymph nodes,1000000,in_vocab
+ln_hilar,right hilar lymph nodes,exact,hilar lymph nodes,1000000,in_vocab
+ln_hilar,left pulmonary hilar nodes,near,,,in_vocab
+ln_hilar,right pulmonary hilar nodes,near,,,in_vocab
+ln_supraclavicular,left supraclavicular lymph nodes,near,,,ood
+ln_supraclavicular,right supraclavicular lymph nodes,near,,,ood
+ln_axillary,left axillary lymph nodes,near,,,ood
+ln_axillary,right axillary lymph nodes,near,,,ood
+ln_axillary,left axillary nodes,near,,,ood
+ln_axillary,right axillary nodes,near,,,ood
+ln_internal_mammary,left internal mammary lymph nodes,near,,,near
+ln_internal_mammary,right internal mammary lymph nodes,near,,,near
+ln_celiac,celiac lymph nodes,near,,,near
+ln_celiac,coeliac nodes,near,,,near
+ln_hepatic_hilar,hepatic hilar lymph nodes,near,,,near
+ln_hepatic_hilar,portal lymph nodes,near,,,near
+ln_hepatic_hilar,hepatoduodenal ligament nodes,near,,,near
+ln_perigastric,gastric lymph nodes,near,,,near
+ln_perigastric,perigastric lymph nodes,near,,,near
+ln_renal_hilar,left renal hilar lymph nodes,near,,,near
+ln_renal_hilar,right renal hilar lymph nodes,near,,,near
+ln_paraaortic,para-aortic lymph nodes,exact,para-aortic lymph nodes,1000000,in_vocab
+ln_paraaortic,retroperitoneal lymph nodes,near,,,in_vocab
+ln_paraaortic,paracaval lymph nodes,near,,,in_vocab
+ln_paraaortic,aortocaval lymph nodes,near,,,in_vocab
+ln_mesenteric,mesenteric lymph nodes,near,,,near
+ln_pericolic,pericolic lymph nodes,near,,,ood
+ln_pericolic,mesocolic lymph nodes,near,,,ood
+ln_common_iliac,left common iliac lymph nodes,near,,,near
+ln_common_iliac,right common iliac lymph nodes,near,,,near
+ln_external_iliac,left external iliac lymph nodes,near,,,near
+ln_external_iliac,right external iliac lymph nodes,near,,,near
+ln_internal_iliac,left internal iliac lymph nodes,near,,,near
+ln_internal_iliac,right internal iliac lymph nodes,near,,,near
+ln_internal_iliac,left hypogastric lymph nodes,near,,,near
+ln_internal_iliac,right hypogastric lymph nodes,near,,,near
+ln_obturator,left obturator lymph nodes,near,,,near
+ln_obturator,right obturator lymph nodes,near,,,near
+ln_presacral,presacral lymph nodes,near,,,ood
+ln_inguinal,left inguinal lymph nodes,near,,,ood
+ln_inguinal,right inguinal lymph nodes,near,,,ood
+ln_pelvic,pelvic lymph nodes,near,,,near
+ln_abdominal,abdominal lymph nodes,near,,,near
+ln_abdominal,enlarged abdominal lymph nodes,near,,,near

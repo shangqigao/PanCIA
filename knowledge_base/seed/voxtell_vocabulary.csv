@@ -1,0 +1,1048 @@
+name,train_volumes,source
+1st left rib,4108,table10_train
+1st right rib,4108,table10_train
+a double/fenestrated right gonadal,1,table10_train
+abdominal aorta,120,table10_train
+abdominal aorta false lumen,120,table10_train
+abdominal aorta segment 1,120,table10_train
+abdominal aorta segment 1 false lumen,120,table10_train
+abdominal tissue,533,table10_train
+adrenal glands,140,table10_train
+airways,162,table10_train
+anterior choroidal part of the right internal carotid artery,1,table10_train
+anterior communicating artery partially fenestrated,1,table10_train
+anterior hippocampus,260,table10_train
+aorta,5057,table10_train+table7_test
+aorta vessel tree,56,table10_train
+aorta with arch branches,110,table10_train
+aorta with branches and coronary arteries,27,table10_train
+aorta zone 0,50,table10_train
+aorta zone 1,50,table10_train
+aorta zone 2,50,table10_train
+aorta zone 3,50,table10_train
+aorta zone 4,50,table10_train
+aorta zone 5,50,table10_train
+aorta zone 6,50,table10_train
+aorta zone 7,50,table10_train
+aorta zone 8,50,table10_train
+aorta zone 9,50,table10_train
+aortic arch,135,table10_train
+aortic arch false lumen,120,table10_train
+aortic intimal tear,120,table10_train
+aortic valve,27,table10_train
+artery,250,table10_train
+arytenoid cartilage,84,table10_train
+ascending aorta,101,table10_train
+ascending aorta false lumen,120,table10_train
+atrium wall,10,table10_train
+azygos,15,table10_train
+azygos vein,2,table10_train
+basal ganglia,30,table10_train
+basilar artery,302,table10_train
+biliary system,20,table10_train
+bladder,126,table10_train
+bones,2070,table10_train+table7_test
+brachiocephalic artery,1812,table10_train
+brachiocephalic vein,1,table10_train
+brachiocephalic veins,15,table10_train
+brain,4330,table10_train
+brain lesion,655,table10_train
+brain tumor,186,table10_train
+brainstem,7360,table10_train+table7_test
+bral veins,25,table10_train
+breast lesion,1506,table10_train
+bridge,532,table10_train
+bronchi,583,table10_train
+buccal mucosa,84,table10_train
+c1 vertebra,4504,table10_train
+c2 vertebra,4504,table10_train
+c3 vertebra,4504,table10_train
+c4 vertebra,4504,table10_train
+c5 vertebra,4504,table10_train
+c6 vertebra,4504,table10_train
+c7 vertebra,4504,table10_train
+calcification in left anterior descending,32,table10_train
+calcification in left circumflex,32,table10_train
+calcification in right coronary artery,32,table10_train
+carpal left,1597,table10_train
+carpal right,1597,table10_train
+celiac artery,50,table10_train
+celiac trunk,533,table10_train
+celiac trunk / artery of the gut,120,table10_train
+cerebellar vermis anterior,10,table10_train
+cerebellar vermis inferior posterior,10,table10_train
+cerebellar vermis superior posterior,10,table10_train
+cerebellum,70,table10_train
+cerebral microbleed,72,table10_train
+cerebrospinal fluid,4133,table10_train
+cervical esophagus,84,table10_train
+cervix,949,table10_train
+chiasma opticum,3636,table10_train+table7_test
+clinically insignificant prostate lesion,140,table10_train
+clinically significant prostate lesion,140,table10_train
+cochlea,210,table10_train
+coeliac trunk,1,table10_train
+colon,3506,table10_train
+colon cancer primaries,126,table10_train
+colorectal liver metastases,171,table10_train
+common bile duct,482,table10_train
+common carotid artery,1,table10_train
+common hepatic artery,1,table10_train
+coronary artery,1000,table10_train
+corpus callosum,10,table10_train
+cortical gray matter,30,table10_train
+covid,209,table10_train
+cricopharyngeal inlet,84,table10_train
+crown,532,table10_train
+cystic component,261,table10_train
+dc,3644,table10_train
+deep gray matter,40,table10_train
+deep superficial veins,1,table10_train
+descending aorta,135,table10_train
+descending aorta false lumen,120,table10_train
+descending branch of the right lateral circumflex artery,1,table10_train
+duodenum,4073,table10_train+table7_test
+edema,2840,table10_train
+enhancing tumor,4681,table10_train
+esophagus,7549,table10_train+table7_test
+excised myocardium,27,table10_train
+external carotid artery,1,table10_train
+external jugular vein,1,table10_train
+extra-axial space,40,table10_train
+eye inferior rectus muscle,400,table10_train
+eye lateral rectus muscle,400,table10_train
+eye medial rectus muscle,400,table10_train
+eye superior oblique muscle,400,table10_train
+eye superior rectus muscle,400,table10_train
+eyeball globe,400,table10_train
+facial vein,1,table10_train
+false aortic lumen,39,table10_train
+false lumen,100,table10_train
+false lumen thrombus,100,table10_train
+fat,533,table10_train
+fdg-avid lung adenocarcinoma,5,table10_train
+fdg-avid non-small cell lung cancer,69,table10_train
+fdg-avid tumor,1159,table10_train+table7_test
+femoral articular cartilage,100,table10_train
+femur,100,table10_train
+fourth ventricle,10,table10_train
+gallbladder,5606,table10_train+table7_test
+gastroduodenal artery,1,table10_train
+gonads,886,table10_train
+gray matter,489,table10_train
+gross tumor volume,500,table10_train
+head neck lesion,245,table10_train
+head neck lymph node,245,table10_train
+head neck metastatic lymph nodes,674,table10_train
+head neck primary tumor,674,table10_train
+heart,2855,table10_train+table7_test
+heart tissue,533,table10_train
+hemiazygos vein,1,table10_train
+hepatic artery,120,table10_train
+hepatic artery proper,1,table10_train
+hepatic tumor,303,table10_train
+hepatic vessels,494,table10_train+table7_test
+hepatocellular carcinoma,179,table10_train+table7_test
+hie lesion,85,table10_train
+ileal branches of the superior mesenteric vein,1,table10_train
+implant,532,table10_train
+infarction,30,table10_train
+inferior mesenteric artery,2,table10_train
+inferior mesenteric vein,2,table10_train
+inferior rectal veins,1,table10_train
+inferior vena cava,5016,table10_train+table7_test
+innominate artery,120,table10_train
+innominate artery segment 1,120,table10_train
+innominate artery segment 1 false lumen,120,table10_train
+insular segment of the right middle cerebral artery,1,table10_train
+internal carotid artery,1,table10_train
+internal jugular vein,1,table10_train
+intervertebra disc,16,table10_train
+intervertebral discs,616,table10_train
+jejunal branches of the superior mesenteric vein,1,table10_train
+jejunum and ileum,3600,table10_train
+kidney,3972,table10_train
+kidney cyst,489,table10_train
+kidney masses,489,table10_train
+kidney tumor,559,table10_train
+l1 l2 disc,447,table10_train
+l1 vertebra,5546,table10_train
+l2 l3 disc,447,table10_train
+l2 vertebra,5546,table10_train
+l3 l4 disc,447,table10_train
+l3 vertebra,5546,table10_train
+l4 l5 disc,447,table10_train
+l4 vertebra,5546,table10_train
+l5 s1 disc,447,table10_train
+l5 vertebra,5546,table10_train
+l6 vertebra,2743,table10_train
+lacrimal gland,400,table10_train
+larynx,3455,table10_train+table7_test
+larynx glottis,204,table10_train
+larynx supraglottic,204,table10_train
+lateral ventricles,80,table10_train
+left a1,1,table10_train
+left a1 and a2 of anterior cerebral artery,50,table10_train
+left a2,1,table10_train
+left a3 of anterior cerebral artery,50,table10_train
+left accumbens area,3644,table10_train
+left acl ligament,78,table10_train
+left adductor brevis,1,table10_train
+left adductor brevis muscle,78,table10_train
+left adductor longus,1,table10_train
+left adductor longus muscle,78,table10_train
+left adductor magnus,1,table10_train
+left adductor magnus muscle,78,table10_train
+left adductor minimus,1,table10_train
+left adrenal gland,5423,table10_train+table7_test
+left adrenal tumor,20,table10_train
+left amygdala,3654,table10_train
+left anterior cerebral artery,250,table10_train
+left anterior choroidal artery,51,table10_train
+left anterior choroidal artery part of the internal carotid,1,table10_train
+left anterior eyeball,84,table10_train
+left anterior inferior cerebellar artery,50,table10_train
+left anterior internal frontal artery,1,table10_train
+left ascending lumbar vein,1,table10_train
+left atrial appendage,1228,table10_train
+left atrial scars,60,table10_train
+left atrium,2516,table10_train+table7_test
+left atrium and pulmonary veins,137,table10_train
+left atrium endocardium,154,table10_train
+left atrium wall,154,table10_train
+left autochthon,4514,table10_train
+left banks superior temporal sulcus,10,table10_train
+left basal vein of rosenthal,25,table10_train
+left biceps femoris long head muscle,78,table10_train
+left biceps femoris short head muscle,78,table10_train
+left brachiocephalic vein,1761,table10_train
+left brain lateral ventricle,158,table10_train
+left breast,1086,table10_train+table7_test
+left calcaneous bone,78,table10_train
+left carotid artery,98,table10_train
+left carotid terminus,1,table10_train
+left caudal anterior cingulate,10,table10_train
+left caudal middle frontal,10,table10_train
+left caudate,3654,table10_train
+left caudate nucleus,158,table10_train
+left cerebellar hemisphere,10,table10_train
+left cerebellum cortex,3644,table10_train
+left cerebellum white matter,3644,table10_train
+left cerebral cortex,3644,table10_train
+left cerebral white matter,3654,table10_train
+left cheek,533,table10_train
+left clavicula,3974,table10_train
+left cochlea,3539,table10_train+table7_test
+left colic artery,1,table10_train
+left colic vein,1,table10_train
+left common carotid artery,1931,table10_train
+left common carotid artery false lumen,120,table10_train
+left common femoral artery,1,table10_train
+left common femoral vein,1,table10_train
+left common iliac artery,172,table10_train
+left common iliac artery false lumen,120,table10_train
+left common iliac vein,1,table10_train
+left coronary artery,30,table10_train
+left cuboid bone,78,table10_train
+left cuneus,10,table10_train
+left deep circumflex iliac artery,1,table10_train
+left deep femoral artery,1,table10_train
+left entorhinal,10,table10_train
+left epigastric vein,1,table10_train
+left eustachian tube bone,120,table10_train
+left extensor digitorum longus muscle,78,table10_train
+left extensor hallucis longus muscle,78,table10_train
+left external carotid artery,25,table10_train
+left external iliac artery,51,table10_train
+left external iliac vein,1,table10_train
+left external oblique,1,table10_train
+left eye,3505,table10_train+table7_test
+left eyeball neck,533,table10_train
+left femoral artery,121,table10_train
+left femoral head,604,table10_train
+left femoral vein,1,table10_train
+left femur,3974,table10_train
+left femur bone,78,table10_train
+left femur distal cartilage,78,table10_train
+left femur head cartilage,78,table10_train
+left fibula,1597,table10_train
+left fibula bone,78,table10_train
+left fingers,1597,table10_train
+left flexor digitorum longus muscle,78,table10_train
+left flexor hallucis longus muscle,78,table10_train
+left frontal pole,10,table10_train
+left fusiform gyrus,10,table10_train
+left gastric artery,1,table10_train
+left gastrocnemius lateral muscle,78,table10_train
+left gastrocnemius medial muscle,78,table10_train
+left gemellus inferior,1,table10_train
+left gemellus superior,1,table10_train
+left gluteus maximus,4611,table10_train
+left gluteus maximus muscle,78,table10_train
+left gluteus medius,4611,table10_train
+left gluteus medius muscle,78,table10_train
+left gluteus minimus,4071,table10_train
+left gluteus minimus muscle,78,table10_train
+left gonadal vein,2,table10_train
+left gracilis,1,table10_train
+left gracilis muscle,78,table10_train
+left great saphenous vein,1,table10_train
+left hepatic artery,1,table10_train
+left hepatic vein,1,table10_train
+left hip bone,5720,table10_train
+left hippocampus,3932,table10_train
+left hippocampus cornu ammonis 1,20,table10_train
+left hippocampus cornu ammonis 2,20,table10_train
+left hippocampus cornu ammonis 3,20,table10_train
+left hippocampus cornu ammonis 4 and gyrus dentatus,20,table10_train
+left hippocampus entorhinal cortex,20,table10_train
+left hippocampus subiculum,20,table10_train
+left hippocampus tail,20,table10_train
+left humerus,3974,table10_train
+left iliac artery,4514,table10_train
+left iliac vena,4514,table10_train
+left iliacus,1,table10_train
+left iliocostalis lumborum,1,table10_train
+left iliopsoas,4610,table10_train
+left illiacus muscle,78,table10_train
+left inferior alveolar canal,532,table10_train
+left inferior epigastric artery,1,table10_train
+left inferior gemellus muscle,78,table10_train
+left inferior gluteal artery,1,table10_train
+left inferior gluteal vein,1,table10_train
+left inferior lateral ventricle,3644,table10_train
+left inferior parietal,10,table10_train
+left inferior rectal vein,1,table10_train
+left inferior temporal,10,table10_train
+left inferior vesical veins,1,table10_train
+left inner ear,50,table10_train
+left insula,10,table10_train
+left intermediate cuneiform bone,78,table10_train
+left intermediate internal frontal artery,1,table10_train
+left internal auditory canal,120,table10_train
+left internal carotid artery,833,table10_train
+left internal iliac artery,51,table10_train
+left internal iliac vein,1,table10_train
+left internal jugular vein,533,table10_train
+left internal oblique,1,table10_train
+left internal pudendal artery and vein,1,table10_train
+left ischiocavernosus,1,table10_train
+left isthmus cingulate,10,table10_train
+left kidney,5666,table10_train+table7_test
+left kidney cyst,1228,table10_train
+left lacrimal gland,3419,table10_train+table7_test
+left lateral circumflex artery,1,table10_train
+left lateral circumflex vein,1,table10_train
+left lateral cuneiform bone,78,table10_train
+left lateral occipital,10,table10_train
+left lateral orbitofrontal,10,table10_train
+left lateral ventricle,3654,table10_train
+left lcl ligament,78,table10_train
+left lens,3505,table10_train+table7_test
+left lenticulostriate arteries,1,table10_train
+left lentiform nucleus,158,table10_train
+left lingual gyrus,10,table10_train
+left longissimus thoracis,97,table10_train
+left lung,4404,table10_train+table7_test
+left lung lower lobe,3454,table10_train
+left lung upper lobe,3454,table10_train
+left m1,1,table10_train
+left m1 of middle cerebral artery,50,table10_train
+left m2 of middle cerebral artery,50,table10_train
+left m2-branches,1,table10_train
+left m3 of middle cerebral artery,50,table10_train
+left m3/m4,1,table10_train
+left mandible,170,table10_train
+left mandibular incisive canal,532,table10_train
+left mastoid process,120,table10_train
+left maxillary artery,25,table10_train
+left maxillary sinus,532,table10_train
+left mcl ligament,78,table10_train
+left medial cuneiform bone,78,table10_train
+left medial orbitofrontal,10,table10_train
+left medial orbitofrontal artery,1,table10_train
+left metacarpal,1597,table10_train
+left metatarsal,1597,table10_train
+left middle cerebral artery,250,table10_train
+left middle ear,170,table10_train
+left middle meningeal artery,26,table10_train
+left middle temporal,10,table10_train
+left navicular bone,78,table10_train
+left nucleus accumbens,10,table10_train
+left obturator artery,1,table10_train
+left obturator externus,1,table10_train
+left obturator externus muscle,78,table10_train
+left obturator internus,1,table10_train
+left obturator internus muscle,78,table10_train
+left obturator veins,1,table10_train
+left ophthalmic artery,50,table10_train
+left opthalmic artery,1,table10_train
+left optic nerve,3636,table10_train+table7_test
+left p1,1,table10_train
+left p1 and p2 of posterior cerebral artery,50,table10_train
+left p2,1,table10_train
+left p3,1,table10_train
+left p3 and p4 of posterior cerebral artery,50,table10_train
+left p4/p5,1,table10_train
+left pallidum,3654,table10_train
+left paracentral lobule,10,table10_train
+left parahippocampal gyrus,10,table10_train
+left paraopthalmic part of the internal carotid,1,table10_train
+left parotid gland,3636,table10_train+table7_test
+left pars opercularis,10,table10_train
+left pars orbitalis,10,table10_train
+left pars triangularis,10,table10_train
+left patella,1597,table10_train
+left patella bone,78,table10_train
+left patella cartilage,78,table10_train
+left pcl ligament,78,table10_train
+left pectineus,1,table10_train
+left pectineus muscle,78,table10_train
+left pelvis acetabulum cartilage,78,table10_train
+left pelvis bone,78,table10_train
+left pericalcarine,10,table10_train
+left pericallosal artery,1,table10_train
+left peroneus longus muscle,78,table10_train
+left phalanges bone,78,table10_train
+left piriformis,1,table10_train
+left piriformis muscle,78,table10_train
+left plantaris muscle,78,table10_train
+left polar frontal artery,1,table10_train
+left popliteus muscle,78,table10_train
+left portal vein,1,table10_train
+left postcentral gyrus,10,table10_train
+left posterior cingulate,10,table10_train
+left posterior communicating artery,301,table10_train
+left posterior communicating part of the internal carotid,1,table10_train
+left posterior eyeball,84,table10_train
+left posterior inferior cerebellar artery,50,table10_train
+left posteromedial central arteries,1,table10_train
+left precentral gyrus,10,table10_train
+left precuneus,10,table10_train
+left psoas,1,table10_train
+left psoas major muscle,78,table10_train
+left putamen,3654,table10_train
+left quadratis femoris muscle,78,table10_train
+left quadratus lumborum,1,table10_train
+left radius,1597,table10_train
+left rectus abdominis,1,table10_train
+left rectus femoris,1,table10_train
+left rectus femoris muscle,78,table10_train
+left renal artery,171,table10_train
+left renal vein,1,table10_train
+left rostral anterior cingulate,10,table10_train
+left rostral middle frontal,10,table10_train
+left sacral veins,1,table10_train
+left sartorius,1,table10_train
+left sartorius muscle,78,table10_train
+left scapula,3974,table10_train
+left semimembranosus,1,table10_train
+left semimembranosus muscle,78,table10_train
+left semitendinosus,1,table10_train
+left semitendinosus muscle,78,table10_train
+left soleus muscle,78,table10_train
+left spinalis thoracis,1,table10_train
+left subclavian artery,1931,table10_train
+left subclavian artery false lumen,120,table10_train
+left submandibular gland,3586,table10_train+table7_test
+left superficial temporal artery,25,table10_train
+left superior cerebellar artery,51,table10_train
+left superior frontal,10,table10_train
+left superior gemellus muscle,78,table10_train
+left superior gluteal artery,1,table10_train
+left superior gluteal vein,1,table10_train
+left superior parietal,10,table10_train
+left superior temporal,10,table10_train
+left supramarginal gyrus,10,table10_train
+left talus bone,78,table10_train
+left talus cartilage,78,table10_train
+left tarsal,1597,table10_train
+left temporal lobe,120,table10_train
+left temporal lobes,50,table10_train
+left temporal pole,10,table10_train
+left temporomandibular joint,170,table10_train
+left tensor fascia lata,1,table10_train
+left tensor fasciae latae muscle,78,table10_train
+left thalamus,3654,table10_train
+left thyroid,2226,table10_train
+left tibia,1597,table10_train
+left tibia bone,78,table10_train
+left tibia distal cartilage,78,table10_train
+left tibia lateral cartilage,78,table10_train
+left tibia medial cartilage,78,table10_train
+left tibialis anterior muscle,78,table10_train
+left tibialis posterior muscle,78,table10_train
+left toes,1597,table10_train
+left transverse temporal,10,table10_train
+left transversus abdominis,1,table10_train
+left tympanic cavity,120,table10_train
+left ulna,1597,table10_train
+left unknown cortex,10,table10_train
+left ureter,1,table10_train
+left vastus intermedius,1,table10_train
+left vastus intermedius muscle,78,table10_train
+left vastus lateralis,1,table10_train
+left vastus lateralis muscle,78,table10_train
+left vastus medialis muscle,78,table10_train
+left ventral dc,3644,table10_train
+left ventral diencephalon,10,table10_train
+left ventricle,703,table10_train+table7_test
+left ventricle wall,3234,table10_train
+left ventricular cavity,2503,table10_train
+left ventricular myocardium,849,table10_train
+left vertebral artery,50,table10_train
+left vestibular semicircular canal,120,table10_train
+lesion,1093,table10_train+table7_test
+lingual canal,532,table10_train
+lips,3419,table10_train+table7_test
+liver,8669,table10_train+table7_test
+liver cancer,131,table10_train
+liver cyst,20,table10_train
+liver lesion,4469,table10_train
+liver segment 1,243,table10_train
+liver segment 2,243,table10_train
+liver segment 3,243,table10_train
+liver segment 4,193,table10_train
+liver segment 4a,50,table10_train
+liver segment 4b,50,table10_train
+liver segment 5,243,table10_train
+liver segment 6,243,table10_train
+liver segment 7,243,table10_train
+liver segment 8,243,table10_train
+liver tumor,114,table10_train
+liver without tumor or vessels,20,table10_train
+lower jawbone,532,table10_train
+lower left canine,532,table10_train
+lower left canine pulp,532,table10_train
+lower left central incisor,532,table10_train
+lower left central incisor pulp,532,table10_train
+lower left first molar,532,table10_train
+lower left first molar pulp,532,table10_train
+lower left first premolar,532,table10_train
+lower left first premolar pulp,532,table10_train
+lower left lateral incisor,532,table10_train
+lower left lateral incisor pulp,532,table10_train
+lower left second molar,532,table10_train
+lower left second molar pulp,532,table10_train
+lower left second premolar,532,table10_train
+lower left second premolar pulp,532,table10_train
+lower right canine,532,table10_train
+lower right canine pulp,532,table10_train
+lower right central incisor,532,table10_train
+lower right central incisor pulp,532,table10_train
+lower right first molar,532,table10_train
+lower right first molar pulp,532,table10_train
+lower right first premolar,532,table10_train
+lower right first premolar pulp,532,table10_train
+lower right lateral incisor,532,table10_train
+lower right lateral incisor pulp,532,table10_train
+lower right second molar,532,table10_train
+lower right second molar pulp,532,table10_train
+lower right second premolar,532,table10_train
+lower right second premolar pulp,532,table10_train
+lung,3427,table10_train+table7_test
+lung lesion,1075,table10_train
+lung nodule,481,table10_train
+lung tumor,113,table10_train
+malignant melanoma tumor,670,table10_train
+mandible,3466,table10_train+table7_test
+mediastinal lymph node,393,table10_train
+mediastinal lymph nodes,192,table10_train
+mediastinal tissue,533,table10_train
+metal,20,table10_train
+metastasectomy site,20,table10_train
+middle colic vein,1,table10_train
+middle hepatic vein,1,table10_train
+middle sacral artery,1,table10_train
+middle sacral vein,1,table10_train
+middle temporal vein,1,table10_train
+mitral valve,27,table10_train
+multiple sclerosis lesion,366,table10_train
+municating artery,300,table10_train
+muscles,533,table10_train
+myocardial infarction,100,table10_train
+myocardium,700,table10_train
+nasal cavity,533,table10_train
+nasopharynx cancer,50,table10_train
+nd left rib,4108,table10_train
+nd right rib,4108,table10_train
+necrosis/non-enhancing tumor core,2183,table10_train
+necrotic tumor,294,table10_train
+no reflow,100,table10_train
+non-enhancing tumor core,1943,table10_train
+non-small cell lung cancer,78,table10_train
+nonenhancing tumor,261,table10_train
+optic nerve,400,table10_train
+oral cavity,204,table10_train
+orbital fat,400,table10_train
+pancreas,7934,table10_train+table7_test
+pancreas parenchyma,482,table10_train
+pancreas tumor,423,table10_train+table7_test
+pancreatic arteries,482,table10_train
+pancreatic duct,482,table10_train
+pancreatic ductal adenocarcinoma lesion,482,table10_train
+pancreatic veins,482,table10_train
+paraopthalmic part of right internal carotid artery,1,table10_train
+pharyngeal constrictor muscle,120,table10_train
+pharynx,532,table10_train
+pituitary gland,254,table10_train
+pleura lesion,245,table10_train
+pleural effusion,78,table10_train
+portal splenic vein,1597,table10_train
+portal vein,21,table10_train
+portal vein and splenic vein,2947,table10_train
+portal veins,191,table10_train
+posterior auricular vein,1,table10_train
+posterior communicating part of right internal carotid artery,1,table10_train
+posterior hippocampus,260,table10_train
+prostate,3003,table10_train
+prostate and uterus,360,table10_train
+prostate central gland,237,table10_train
+prostate peripheral zone,269,table10_train
+prostate transitional zone,32,table10_train
+prostate tumor,188,table10_train
+psma-avid tumor,597,table10_train
+pulmonary arterial tree,15,table10_train
+pulmonary artery,593,table10_train+table7_test
+pulmonary artery tree,316,table10_train
+pulmonary artery trunk,1713,table10_train
+pulmonary embolism,35,table10_train
+pulmonary vein,1349,table10_train
+pulp,532,table10_train
+rd left rib,4108,table10_train
+rd right rib,4108,table10_train
+rd ventricle,3644,table10_train
+rectum,1281,table10_train+table7_test
+renal artery,70,table10_train
+renal vein,70,table10_train
+resection cavity,1943,table10_train
+rib cartilage,1761,table10_train
+ribs,654,table10_train
+right a1,1,table10_train
+right a1 and a2 of anterior cerebral artery,50,table10_train
+right a2,1,table10_train
+right a3 of anterior cerebral artery,50,table10_train
+right accumbens area,3644,table10_train
+right acl ligament,78,table10_train
+right adductor brevis,1,table10_train
+right adductor brevis muscle,78,table10_train
+right adductor longus,1,table10_train
+right adductor longus muscle,78,table10_train
+right adductor magnus,1,table10_train
+right adductor magnus muscle,78,table10_train
+right adductor minimus,1,table10_train
+right adrenal gland,5423,table10_train+table7_test
+right adrenal tumor,20,table10_train
+right amygdala,3654,table10_train
+right anterior cerebral artery,250,table10_train
+right anterior choroidal artery,51,table10_train
+right anterior eyeball,84,table10_train
+right anterior inferior cerebellar artery,50,table10_train
+right anterior internal frontal artery,1,table10_train
+right anterior temporal artery branch,1,table10_train
+right artery of central sulcus,1,table10_train
+right artery of precentral gyrus,1,table10_train
+right atrium,2386,table10_train+table7_test
+right autochthon,4514,table10_train
+right banks superior temporal sulcus,10,table10_train
+right basal vein of rosenthal,25,table10_train
+right biceps femoris long head muscle,78,table10_train
+right biceps femoris short head muscle,78,table10_train
+right brachiocephalic vein,1761,table10_train
+right brain lateral ventricle,158,table10_train
+right breast,1086,table10_train+table7_test
+right calcaneous bone,78,table10_train
+right calcarine branches,1,table10_train
+right carotid artery,98,table10_train
+right carotid terminus,1,table10_train
+right caudal anterior cingulate,10,table10_train
+right caudal middle frontal,10,table10_train
+right caudate,3654,table10_train
+right caudate nucleus,158,table10_train
+right cerebellar hemisphere,10,table10_train
+right cerebellum cortex,3644,table10_train
+right cerebellum white matter,3644,table10_train
+right cerebral cortex,3644,table10_train
+right cerebral white matter,3654,table10_train
+right cheek,533,table10_train
+right clavicula,3974,table10_train
+right cochlea,3539,table10_train+table7_test
+right colic vein,1,table10_train
+right common carotid artery,1761,table10_train
+right common femoral artery,1,table10_train
+right common femoral vein,1,table10_train
+right common iliac artery,172,table10_train
+right common iliac artery false lumen,120,table10_train
+right common iliac vein,2,table10_train
+right coronary artery,30,table10_train
+right cuboid bone,78,table10_train
+right cuneus,10,table10_train
+right deep circumflex iliac artery,1,table10_train
+right deep femoral artery,1,table10_train
+right deep femoral vein,1,table10_train
+right entorhinal,10,table10_train
+right epigastric vein,1,table10_train
+right eustachian tube bone,120,table10_train
+right extensor digitorum longus muscle,78,table10_train
+right extensor hallucis longus muscle,78,table10_train
+right external carotid artery,25,table10_train
+right external iliac artery,51,table10_train
+right external iliac vein,1,table10_train
+right external oblique,1,table10_train
+right eye,3505,table10_train+table7_test
+right eyeball,533,table10_train
+right femoral artery,121,table10_train
+right femoral head,604,table10_train
+right femoral vein,1,table10_train
+right femur,3974,table10_train
+right femur bone,78,table10_train
+right femur distal cartilage,78,table10_train
+right femur head cartilage,78,table10_train
+right fibula,1597,table10_train
+right fibula bone,78,table10_train
+right fingers,1597,table10_train
+right flexor digitorum longus muscle,78,table10_train
+right flexor hallucis longus muscle,78,table10_train
+right frontal pole,10,table10_train
+right fusiform gyrus,10,table10_train
+right gastric artery,1,table10_train
+right gastrocnemius lateral muscle,78,table10_train
+right gastrocnemius medial muscle,78,table10_train
+right gastroepiploic vein,1,table10_train
+right gluteus maximus,4611,table10_train
+right gluteus maximus muscle,78,table10_train
+right gluteus medius,4611,table10_train
+right gluteus medius muscle,78,table10_train
+right gluteus minimus,4071,table10_train
+right gluteus minimus muscle,78,table10_train
+right gonadal vein,1,table10_train
+right gracilis,1,table10_train
+right gracilis muscle,78,table10_train
+right great saphenous vein,1,table10_train
+right hepatic artery,1,table10_train
+right hip bone,5720,table10_train
+right hippocampus,3932,table10_train
+right hippocampus cornu ammonis 1,20,table10_train
+right hippocampus cornu ammonis 2,20,table10_train
+right hippocampus cornu ammonis 3,20,table10_train
+right hippocampus cornu ammonis 4 and gyrus dentatus,20,table10_train
+right hippocampus entorhinal cortex,20,table10_train
+right hippocampus subiculum,20,table10_train
+right hippocampus tail,20,table10_train
+right humerus,3974,table10_train
+right iliac artery,4514,table10_train
+right iliac vena,4514,table10_train
+right iliacus,1,table10_train
+right ilicostalis lumborum,1,table10_train
+right iliopsoas,4610,table10_train
+right illiacus muscle,78,table10_train
+right inferior alveolar canal,532,table10_train
+right inferior epigastric artery,1,table10_train
+right inferior gemellus,1,table10_train
+right inferior gemellus muscle,78,table10_train
+right inferior gluteal artery,1,table10_train
+right inferior gluteal vein,1,table10_train
+right inferior lateral ventricle,3644,table10_train
+right inferior parietal,10,table10_train
+right inferior rectal veins,1,table10_train
+right inferior temporal,10,table10_train
+right inferior vesical veins,1,table10_train
+right inner ear,50,table10_train
+right insula,10,table10_train
+right intermediate cuneiform bone,78,table10_train
+right intermediate internal frontal artery,1,table10_train
+right internal auditory canal,120,table10_train
+right internal carotid artery,833,table10_train
+right internal iliac artery,51,table10_train
+right internal iliac vein,1,table10_train
+right internal jugular vein,533,table10_train
+right internal oblique,1,table10_train
+right internal pudendal artery and vein,1,table10_train
+right ischiocavernosus,1,table10_train
+right isthmus cingulate,10,table10_train
+right kidney,5603,table10_train+table7_test
+right kidney cyst,1228,table10_train
+right lacrimal gland,3419,table10_train+table7_test
+right lateral circumflex artery,1,table10_train
+right lateral cuneiform bone,78,table10_train
+right lateral frontobasal artery,1,table10_train
+right lateral occipital,10,table10_train
+right lateral orbitofrontal,10,table10_train
+right lateral ventricle,3654,table10_train
+right lcl ligament,78,table10_train
+right lens,3505,table10_train+table7_test
+right lenticolstriate arteries,1,table10_train
+right lentiform nucleus,158,table10_train
+right lingual gyrus,10,table10_train
+right longissimus thoracis,97,table10_train
+right lung,4404,table10_train+table7_test
+right lung lower lobe,3454,table10_train
+right lung middle lobe,3454,table10_train
+right lung upper lobe,3454,table10_train
+right m1,1,table10_train
+right m1 of middle cerebral artery,50,table10_train
+right m2 of middle cerebral artery,50,table10_train
+right m3 of middle cerebral artery,50,table10_train
+right mandible,170,table10_train
+right mandibular incisive canal,532,table10_train
+right mastoid process,120,table10_train
+right maxillary artery,25,table10_train
+right maxillary sinus,532,table10_train
+right mcl ligament,78,table10_train
+right medial cuneiform bone,78,table10_train
+right medial frontobasal artery,1,table10_train
+right medial occipital artery,1,table10_train
+right medial orbitofrontal,10,table10_train
+right metacarpal,1597,table10_train
+right metatarsal,1597,table10_train
+right middle cerebral artery,250,table10_train
+right middle ear,170,table10_train
+right middle meningeal artery,26,table10_train
+right middle temporal,10,table10_train
+right middle temporal artery branch,1,table10_train
+right navicular bone,78,table10_train
+right nucleus accumbens,10,table10_train
+right obturator artery,1,table10_train
+right obturator externus,1,table10_train
+right obturator externus muscle,78,table10_train
+right obturator internus,1,table10_train
+right obturator internus muscle,78,table10_train
+right obturator veins,1,table10_train
+right ophthalmic artery,50,table10_train
+right opthalmic artery,1,table10_train
+right optic nerve,3636,table10_train+table7_test
+right p1,1,table10_train
+right p1 and p2 of posterior cerebral artery,50,table10_train
+right p2,1,table10_train
+right p3 and p4 of posterior cerebral artery,50,table10_train
+right pallidum,3654,table10_train
+right paracentral lobule,10,table10_train
+right parahippocampal gyrus,10,table10_train
+right paramedian artery branch,1,table10_train
+right parietal branches of the middle cerebral artery,1,table10_train
+right parietal cortical branches of the insular part of the middle cerebral artery,1,table10_train
+right parietooccipital branches,1,table10_train
+right parotid gland,3636,table10_train+table7_test
+right pars opercularis,10,table10_train
+right pars orbitalis,10,table10_train
+right pars triangularis,10,table10_train
+right patella,1597,table10_train
+right patella bone,78,table10_train
+right patella cartilage,78,table10_train
+right pcl ligament,78,table10_train
+right pectineus,1,table10_train
+right pectineus muscle,78,table10_train
+right pelvis acetabulum cartilage,78,table10_train
+right pelvis bone,78,table10_train
+right pericalcarine,10,table10_train
+right peroneus longus muscle,78,table10_train
+right phalanges bone,78,table10_train
+right piriformis,1,table10_train
+right piriformis muscle,78,table10_train
+right plantaris muscle,78,table10_train
+right polar frontal artery,1,table10_train
+right polar temporal artery,1,table10_train
+right popliteus muscle,78,table10_train
+right portal vein,1,table10_train
+right postcentral gyrus,10,table10_train
+right posterior cerebral artery,250,table10_train
+right posterior cingulate,10,table10_train
+right posterior communicating artery,301,table10_train
+right posterior eyeball,84,table10_train
+right posterior inferior cerebellar artery,50,table10_train
+right posterior insular part of the middle cerebral artery,1,table10_train
+right posterior parietal artery,1,table10_train
+right posterior temporal artery branch of the mca,1,table10_train
+right posterior temporal branches of the pca,1,table10_train
+right posteromedial central arteries,1,table10_train
+right precentral gyrus,10,table10_train
+right precuneal branches,1,table10_train
+right precuneus,10,table10_train
+right prefrontal artery,1,table10_train
+right psoas,1,table10_train
+right psoas major muscle,78,table10_train
+right pubic veins,1,table10_train
+right putamen,3654,table10_train
+right quadratus femoris,1,table10_train
+right quadratus femoris muscle,78,table10_train
+right quadratus lumborum,1,table10_train
+right radius,1597,table10_train
+right rectus abdominis,1,table10_train
+right rectus femoris,1,table10_train
+right rectus femoris muscle,78,table10_train
+right renal artery,171,table10_train
+right renal vein,1,table10_train
+right rostral anterior cingulate,10,table10_train
+right rostral middle frontal,10,table10_train
+right sartorius,1,table10_train
+right sartorius muscle,78,table10_train
+right scapula,3974,table10_train
+right semimembranosus,1,table10_train
+right semimembranosus muscle,78,table10_train
+right semitendinosus,1,table10_train
+right semitendinosus muscle,78,table10_train
+right soleus muscle,78,table10_train
+right spinalis thoracis,1,table10_train
+right subclavian artery,1761,table10_train
+right submandibular gland,3586,table10_train+table7_test
+right superficial temporal artery,25,table10_train
+right superior cerebellar artery,51,table10_train
+right superior frontal,10,table10_train
+right superior gemellus,1,table10_train
+right superior gemellus muscle,78,table10_train
+right superior gluteal vein,1,table10_train
+right superior parietal,10,table10_train
+right superior temporal,10,table10_train
+right superior terminal branch of the middle cerebral artery,1,table10_train
+right supramarginal gyrus,10,table10_train
+right talus bone,78,table10_train
+right talus cartilage,78,table10_train
+right tarsal,1597,table10_train
+right temporal branch,1,table10_train
+right temporal lobe,120,table10_train
+right temporal lobes,50,table10_train
+right temporal pole,10,table10_train
+right temporomandibular joint,170,table10_train
+right tensor fascia lata,1,table10_train
+right tensor fasciae latae muscle,78,table10_train
+right thalamus,3654,table10_train
+right thyroid,2226,table10_train
+right tibia,1597,table10_train
+right tibia bone,78,table10_train
+right tibia distal cartilage,78,table10_train
+right tibia lateral cartilage,78,table10_train
+right tibia medial cartilage,78,table10_train
+right tibialis anterior muscle,78,table10_train
+right tibialis posterior muscle,78,table10_train
+right toes,1597,table10_train
+right transverse temporal,10,table10_train
+right transversus abdominis,1,table10_train
+right tympanic cavity,120,table10_train
+right ulna,1597,table10_train
+right unknown cortex,10,table10_train
+right ureter,1,table10_train
+right vastus intermedius,1,table10_train
+right vastus intermedius muscle,78,table10_train
+right vastus lateralis,1,table10_train
+right vastus lateralis muscle,78,table10_train
+right vastus medialis muscle,78,table10_train
+right ventral diencephalon,10,table10_train
+right ventricle,2800,table10_train+table7_test
+right ventricular cavity,279,table10_train
+right vertebral artery,50,table10_train
+right vestibular semicircular canal,120,table10_train
+s1 vertebra,1228,table10_train
+sacrum,5720,table10_train+table7_test
+short gastric veins,1,table10_train
+sigmoid veins,1,table10_train
+skin,886,table10_train+table7_test
+skull,3358,table10_train
+small bowel,50,table10_train
+specified,42,table10_train
+spinal canal,1383,table10_train+table7_test
+spinal cord,5433,table10_train+table7_test
+spleen,6823,table10_train+table7_test
+splenic artery,121,table10_train
+splenic vein,1,table10_train
+sternum,3454,table10_train
+sternum manubrium,533,table10_train
+stomach,5840,table10_train+table7_test
+stones,20,table10_train
+straight sinus,25,table10_train
+stroke,453,table10_train
+subclavian and carotid arteries,15,table10_train
+subclavian artery,1,table10_train
+subclavian vein,1,table10_train
+superficial temporal veins,1,table10_train
+superior mesenteric artery,171,table10_train
+superior mesenteric vein,1,table10_train
+superior posterior pancreaticoduodenal vein,1,table10_train
+superior rectal artery,1,table10_train
+superior sagittal sinus,26,table10_train
+superior vena cava,1289,table10_train+table7_test
+surrounding non-enhancing hyperintensity,1943,table10_train
+t1 vertebra,4559,table10_train
+t10 t11 disc,447,table10_train
+t10 vertebra,5546,table10_train
+t11 t12 disc,447,table10_train
+t11 vertebra,5546,table10_train
+t12 l1 disc,447,table10_train
+t12 vertebra,5546,table10_train
+t13 vertebra,80,table10_train
+t2 vertebra,4559,table10_train
+t3 vertebra,4559,table10_train
+t4 vertebra,4559,table10_train
+t5 vertebra,4559,table10_train
+t6 vertebra,4559,table10_train
+t7 vertebra,5099,table10_train
+t8 vertebra,5099,table10_train
+t9 t10 disc,447,table10_train
+t9 vertebra,5546,table10_train
+th left rib,4108,table10_train
+th right rib,4108,table10_train
+th ventricle,3644,table10_train
+third a2 of anterior cerebral artery,50,table10_train
+third a3 of anterior cerebral artery,50,table10_train
+third ventricle,10,table10_train
+thoracic aorta,30,table10_train
+thymus,886,table10_train
+thyroid gland,1446,table10_train
+tibia,100,table10_train
+tibial articular cartilage,100,table10_train
+trachea,2018,table10_train+table7_test
+transverse cervical veins,1,table10_train
+true aortic lumen,39,table10_train
+true lumen,100,table10_train
+upper jawbone,532,table10_train
+upper left canine,532,table10_train
+upper left canine pulp,532,table10_train
+upper left central incisor,532,table10_train
+upper left central incisor pulp,532,table10_train
+upper left first molar,532,table10_train
+upper left first molar pulp,532,table10_train
+upper left first premolar,532,table10_train
+upper left first premolar pulp,532,table10_train
+upper left lateral incisor,532,table10_train
+upper left lateral incisor pulp,532,table10_train
+upper left second molar,532,table10_train
+upper left second molar pulp,532,table10_train
+upper left second premolar,532,table10_train
+upper left second premolar pulp,532,table10_train
+upper right canine,532,table10_train
+upper right canine pulp,532,table10_train
+upper right central incisor,532,table10_train
+upper right central incisor pulp,532,table10_train
+upper right first molar,532,table10_train
+upper right first molar pulp,532,table10_train
+upper right first premolar,532,table10_train
+upper right first premolar pulp,532,table10_train
+upper right lateral incisor,532,table10_train
+upper right lateral incisor pulp,532,table10_train
+upper right second molar,532,table10_train
+upper right second molar pulp,532,table10_train
+upper right second premolar,532,table10_train
+upper right second premolar pulp,532,table10_train
+urinary bladder,5098,table10_train+table7_test
+uterus,583,table10_train
+vein of galen,25,table10_train
+venous system,20,table10_train
+vertebrae,616,table10_train
+vertebral artery,1,table10_train
+vestibular schwannoma,210,table10_train
+white matter,519,table10_train
+white matter hyperintensities,60,table10_train
+white matter lesions,30,table10_train
+carcinoma,,table7_test
+esophageal cancer,,table7_test
+fdg-avid breast cancer,,table7_test
+inferior constrictor muscle,,table7_test
+large intestine,,table7_test
+left hipbone,,table7_test
+middle constrictor muscle,,table7_test
+ms lesion,,table7_test
+portal vessels,,table7_test
+right hipbone,,table7_test
+small intestine,,table7_test
+soft tissue lesion,,table7_test
+superior constrictor muscle,,table7_test
+tumor,,table7_test
