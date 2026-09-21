@@ -1,4 +1,4 @@
-version: 0.3.0
+version: 0.3.1
 entities:
 - id: vertebra_C1
   name: C1 vertebra
@@ -565,6 +565,9 @@ entities:
   - MR
   coverage_tier: in_vocab
   priority: 1
+  volume_ml:
+    min: 120
+    max: 350
   is_anchor: true
   anchor:
     span:
@@ -617,6 +620,9 @@ entities:
   - MR
   coverage_tier: in_vocab
   priority: 1
+  volume_ml:
+    min: 150
+    max: 600
   is_anchor: true
   anchor:
     span:
@@ -1340,7 +1346,7 @@ entities:
   coverage_tier: in_vocab
   priority: 1
   volume_ml:
-    min: 1500
+    min: 1000
     max: 4500
   ct_hu:
   - -950

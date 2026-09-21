@@ -25,6 +25,7 @@
    "ts_name": "vertebrae_T11",
    "volume_ml": 30,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": false
@@ -35,6 +36,7 @@
    "ts_name": "vertebrae_T12",
    "volume_ml": 30,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": false
@@ -45,6 +47,7 @@
    "ts_name": "vertebrae_L1",
    "volume_ml": 30,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": false
@@ -55,6 +58,7 @@
    "ts_name": "vertebrae_L2",
    "volume_ml": 30,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": false
@@ -65,6 +69,7 @@
    "ts_name": "vertebrae_L3",
    "volume_ml": 30,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": false
@@ -75,6 +80,7 @@
    "ts_name": "vertebrae_L4",
    "volume_ml": 30,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": false
@@ -85,6 +91,7 @@
    "ts_name": "kidney_left",
    "volume_ml": 160,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -95,6 +102,7 @@
    "ts_name": "kidney_right",
    "volume_ml": 150,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -105,6 +113,7 @@
    "ts_name": "liver",
    "volume_ml": 1500,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -115,6 +124,7 @@
    "ts_name": "spleen",
    "volume_ml": 200,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -125,6 +135,7 @@
    "ts_name": "aorta",
    "volume_ml": 60,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -135,6 +146,7 @@
    "ts_name": "inferior_vena_cava",
    "volume_ml": 40,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -145,6 +157,7 @@
    "ts_name": "pancreas",
    "volume_ml": 70,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -155,6 +168,7 @@
    "ts_name": "adrenal_gland_left",
    "volume_ml": 5,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -165,6 +179,7 @@
    "ts_name": "colon",
    "volume_ml": 400,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -175,6 +190,7 @@
    "ts_name": "iliopsoas_left",
    "volume_ml": 200,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -185,6 +201,7 @@
    "ts_name": "iliopsoas_right",
    "volume_ml": 200,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -195,9 +212,10 @@
    "ts_name": "urinary_bladder",
    "volume_ml": 5,
    "truncated": false,
+   "partial": false,
    "plausible": false,
    "why": [
-    "volume 5 ml outside [10,1600]"
+    "volume 5 ml below 10"
    ],
    "is_anchor": true
   }
@@ -1101,30 +1119,6 @@
    "from_anchor": "kidney"
   },
   {
-   "entity": "aorta",
-   "side": null,
-   "terms": [
-    "aorta",
-    "thoracic aorta",
-    "abdominal aorta"
-   ],
-   "tier": 2,
-   "list": "A",
-   "gate": {
-    "kind": "ts_bbox",
-    "ts_entity": "aorta",
-    "side": null,
-    "dilate_mm": 10
-   },
-   "priority": 1,
-   "reason": [
-    "host anchor kidney",
-    "renal_artery -supplied_by-> aorta (hop 2)"
-   ],
-   "relation": "supplied_by",
-   "from_anchor": "kidney"
-  },
-  {
    "entity": "inferior_vena_cava",
    "side": null,
    "terms": [
@@ -1146,6 +1140,30 @@
     "staging: vascular_invasion"
    ],
    "relation": "drained_by",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "aorta",
+   "side": null,
+   "terms": [
+    "aorta",
+    "thoracic aorta",
+    "abdominal aorta"
+   ],
+   "tier": 2,
+   "list": "A",
+   "gate": {
+    "kind": "ts_bbox",
+    "ts_entity": "aorta",
+    "side": null,
+    "dilate_mm": 10
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "renal_artery -supplied_by-> aorta (hop 2)"
+   ],
+   "relation": "supplied_by",
    "from_anchor": "kidney"
   },
   {
@@ -1788,11 +1806,35 @@
    "n": 6
   },
   {
+   "step": "midline",
+   "x_mm": 0,
+   "source": "midline_structures"
+  },
+  {
+   "step": "header_handedness",
+   "sign": 1,
+   "note": "+1 RAS (+x = patient left), -1 x-mirrored header",
+   "source": "anatomy",
+   "votes": [
+    [
+     "liver<spleen",
+     1,
+     150.0
+    ],
+    [
+     "inferior_vena_cava<aorta",
+     1,
+     25.0
+    ]
+   ],
+   "agreement": true
+  },
+  {
    "step": "found_plausibility",
    "entity": "urinary_bladder",
    "side": null,
    "fail": [
-    "volume 5 ml outside [10,1600]"
+    "volume 5 ml below 10"
    ]
   },
   {

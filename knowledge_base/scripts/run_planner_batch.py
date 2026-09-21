@@ -31,9 +31,21 @@ def _init(kb_path, args):
     ARGS = args
 
 
-def img_name_from_csv(p: str, ts_obj: str) -> str:
-    b = os.path.basename(p)[:-len('_structures.csv')]
-    return b[:-len(ts_obj) - 1] if ts_obj and b.endswith('_' + ts_obj) else b
+def img_name_from_csv(p: str, ts_obj: str, ts_dir: str) -> str:
+    """img_name = path of the TS table relative to --ts_dir, minus `_<ts_obj>_structures.csv`; nested layouts
+    (Radiology/<CT|MR>/<Project>/<series_uid>/<desc>) are preserved so the same relative path resolves the tumour masks."""
+    rel = os.path.relpath(p, ts_dir)[:-len('_structures.csv')]
+    return rel[:-len(ts_obj) - 1] if ts_obj and rel.endswith('_' + ts_obj) else rel
+
+
+def meta_lookup(meta: dict, img_name: str) -> dict:
+    """Match metadata by full img_name, else by any path component (e.g. the series_uid folder)."""
+    if img_name in meta:
+        return meta[img_name]
+    for part in reversed(img_name.split(os.sep)):
+        if part in meta:
+            return meta[part]
+    return {}
 
 
 def expected_host_for(kb, meta):
@@ -72,7 +84,7 @@ def plan_one(job):
         d['input'] = dict(img_name=img_name, structures_csv=csv_path, tumour_mask=tumour_mask, modality=modality,
                           cancer_type=meta.get('cancer_type'), sex=meta.get('sex'), kb_version=KB.meta.get('version'),
                           ts_task=ts.task, fov_z_mm=list(ts.fov_z_mm), n_structures=len(ts.structures), diagnostics=diag)
-        os.makedirs(ARGS.out_dir, exist_ok=True)
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
         with open(out_path, 'w') as f:
             json.dump(d, f, indent=1)
         tiers = [p.tier for p in plan.prompts]
@@ -100,7 +112,7 @@ def main():
     ap.add_argument('--ts_dir', required=True, help='root containing *_structures.csv (searched recursively)')
     ap.add_argument('--ts_obj', default='organ', help='seg_obj suffix used when TS was run (strip it to get img_name)')
     ap.add_argument('--out_dir', required=True)
-    ap.add_argument('--meta_csv', default=None, help='img_name, modality, cancer_type [, host, sex, site]; host = KB anchor id, required for cancer types not in tumour_prompts.yaml')
+    ap.add_argument('--meta_csv', default=None, help='key column img_name OR series_uid; then modality, cancer_type [, host, sex, site]; host = KB anchor id, required for cancer types not in tumour_prompts.yaml')
     ap.add_argument('--tumour_dir', action='append', default=None, help='repeatable; order = rater priority (VT, then BP)')
     ap.add_argument('--tumour_obj', default='tumor')
     ap.add_argument('--tumour_prompt', choices=['never', 'if_no_vt', 'always'], default='if_no_vt',
@@ -111,18 +123,31 @@ def main():
     ap.add_argument('--overwrite', action='store_true')
     args = ap.parse_args()
 
-    csvs = sorted(glob.glob(os.path.join(args.ts_dir, '**', '*_structures.csv'), recursive=True))
-    if args.limit:
-        csvs = csvs[:args.limit]
     meta = {}
     if args.meta_csv:
         with open(args.meta_csv, newline='') as f:
             for r in csv.DictReader(f):
-                meta[r['img_name']] = r
+                meta[r.get('img_name') or r['series_uid']] = r
+    # enumerate TS tables: from the metadata (site/series_uid → one folder each; fast on network mounts) when possible,
+    # else a recursive glob over --ts_dir
+    csvs, missing_dirs = [], 0
+    if meta and all(('site' in r or ('modality' in r and 'cancer_type' in r)) and 'series_uid' in r for r in meta.values()):
+        for r in meta.values():
+            site = r.get('site') or f"{r['modality']}/{r['cancer_type']}"
+            site = site.split('Radiology/')[-1]                     # site is stored as Radiology/<CT|MR>/<project>
+            d = os.path.join(args.ts_dir, site, r['series_uid'])
+            if not os.path.isdir(d):
+                missing_dirs += 1; continue
+            csvs += sorted(glob.glob(os.path.join(d, f'*_{args.ts_obj}_structures.csv')))
+        print(f'{len(csvs)} TS tables located from metadata; {missing_dirs} series without a TS folder', flush=True)
+    else:
+        csvs = sorted(glob.glob(os.path.join(args.ts_dir, '**', '*_structures.csv'), recursive=True))
+    if args.limit:
+        csvs = csvs[:args.limit]
     jobs = []
     for p in csvs:
-        name = img_name_from_csv(p, args.ts_obj)
-        m = dict(meta.get(name, {})); m['img_name'] = name
+        name = img_name_from_csv(p, args.ts_obj, args.ts_dir)
+        m = dict(meta_lookup(meta, name)); m['img_name'] = name
         jobs.append((p, m))
     print(f'{len(jobs)} TS outputs; {sum(1 for _, m in jobs if len(m) > 1)} with metadata', flush=True)
 

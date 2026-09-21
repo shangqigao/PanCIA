@@ -43,7 +43,7 @@ def test_abdominal_ct_kirc():
     verts = [TSStructure(f'vertebrae_{l}', 30, (0, -80, z)) for l, z in [('T11', 150), ('T12', 120), ('L1', 90), ('L2', 60), ('L3', 30), ('L4', 0)]]
     ts = TSOutput(task='total', fov_z_mm=(-20, 170), tumour_centroid_mm=(70, -60, 80), tumour_host_guess='kidney', structures=verts + [
         TSStructure('kidney_left', 160, (70, -60, 80)), TSStructure('kidney_right', 150, (-70, -60, 90)), TSStructure('liver', 1500, (-60, 20, 120)),
-        TSStructure('spleen', 200, (90, -40, 130)), TSStructure('aorta', 60, (-5, -70, 80)), TSStructure('inferior_vena_cava', 40, (20, -60, 80)),
+        TSStructure('spleen', 200, (90, -40, 130)), TSStructure('aorta', 60, (5, -70, 80)), TSStructure('inferior_vena_cava', 40, (-20, -60, 80)),
         TSStructure('pancreas', 70, (0, -20, 100)), TSStructure('adrenal_gland_left', 5, (60, -70, 120)), TSStructure('colon', 400, (0, 40, 40)),
         TSStructure('iliopsoas_left', 200, (35, -70, 40)), TSStructure('iliopsoas_right', 200, (-35, -70, 40)), TSStructure('urinary_bladder', 5, (0, 60, -10))])
     plan = Planner(KB).plan(ts, modality='CT', cancer_type='TCGA-KIRC', sex='male', include_tumour_prompt=True)

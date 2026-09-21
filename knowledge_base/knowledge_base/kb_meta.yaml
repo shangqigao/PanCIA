@@ -1,6 +1,6 @@
 name: PanCIA anchor-centric anatomical knowledge base
-version: 0.3.0
-date: '2026-09-19'
+version: 0.3.1
+date: '2026-09-20'
 author: Shangqi Gao (Crispin Lab) with Claude
 status: draft v0.1 — not yet pilot-verified
 vertebral_order:

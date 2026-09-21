@@ -9,7 +9,7 @@ OUT = os.path.join(os.path.dirname(__file__), 'knowledge_base')
 os.makedirs(OUT, exist_ok=True)
 TS = json.load(open(os.path.join(os.path.dirname(__file__), 'seed', 'ts_class_maps.json')))
 TS_ALL = {task: set(v.values()) for task, v in TS.items()}
-VERSION = '0.3.0'
+VERSION = '0.3.1'
 TODAY = str(datetime.date.today())
 
 # ------------------------------------------------------------------ helpers
@@ -118,11 +118,11 @@ for lvl in VERTEBRAL_ORDER[:-1]:
         ts={'total': f'vertebrae_{lvl}'} if f'vertebrae_{lvl}' in TS_ALL['total'] else None, tier='in_vocab', prio=3, sources=('TS',))
 ent('spine', 'Spine', 'bone', vt='spine', aliases=('vertebral column', 'lumbar spine', 'thoracic spine'), ts={'total_mr': 'vertebrae'},
     tier='in_vocab', prio=1, anchor=A(['C1', 'coccyx'], 'midline', 'posterior', 'obligatory'), notes='systemic anchor: cranio-caudal ruler; TS total_mr gives one merged class, use VoxTell per level if needed')
-ent('sacrum', 'Sacrum', 'bone', vt='sacrum', ts={'total': 'sacrum', 'total_mr': 'sacrum'}, tier='in_vocab', prio=1,
+ent('sacrum', 'Sacrum', 'bone', vt='sacrum', ts={'total': 'sacrum', 'total_mr': 'sacrum'}, tier='in_vocab', prio=1, vol=dict(min=120, max=350),
     anchor=A(['S1', 'S5'], 'midline', 'posterior', 'obligatory'))
 ent('coccyx', 'Coccyx', 'bone', vt='coccyx', tier='near', prio=3)
 ent('hip', 'Hip bone (ilium, ischium, pubis)', 'bone', lat='bilateral', vt='{side} hip bone', aliases=('{side} pelvis bone', '{side} iliac bone'),
-    ts={'total': {'left': 'hip_left', 'right': 'hip_right'}, 'total_mr': {'left': 'hip_left', 'right': 'hip_right'}}, tier='in_vocab', prio=1,
+    ts={'total': {'left': 'hip_left', 'right': 'hip_right'}, 'total_mr': {'left': 'hip_left', 'right': 'hip_right'}}, tier='in_vocab', prio=1, vol=dict(min=150, max=600),
     anchor=A(['L5', 'coccyx'], 'bilateral', 'mid', 'obligatory'))
 ent('femur', 'Femur (proximal)', 'bone', lat='bilateral', vt='{side} femur', ts={'total': {'left': 'femur_left', 'right': 'femur_right'}, 'total_mr': {'left': 'femur_left', 'right': 'femur_right'}}, tier='in_vocab', prio=3)
 ent('sternum', 'Sternum', 'bone', vt='sternum', ts={'total': 'sternum'}, tier='in_vocab', prio=3)
@@ -169,7 +169,7 @@ ent('axillary_vessels', 'Axillary artery and vein', 'vessel_artery', lat='bilate
 
 # ---- thorax
 ent('lung', 'Lung', 'organ', lat='bilateral', vt='{side} lung', ts={'total': {'left': 'lung_upper_lobe_left', 'right': 'lung_upper_lobe_right'}, 'total_mr': {'left': 'lung_left', 'right': 'lung_right'}},
-    tier='in_vocab', prio=1, hu=(-950, -600), vol={'min': 1500, 'max': 4500},
+    tier='in_vocab', prio=1, hu=(-950, -600), vol={'min': 1000, 'max': 4500},
     anchor=A(['T1', 'T12'], 'bilateral', 'mid', 'obligatory', prior=[('heart', 'lateral_to', (0, 30))]), notes='TS total: merge lobes per side; lobes are has_part entities')
 for side_lobes in [('left', ['upper', 'lower']), ('right', ['upper', 'middle', 'lower'])]:
     for lobe in side_lobes[1]:

@@ -25,6 +25,7 @@
    "ts_name": "urinary_bladder",
    "volume_ml": 180,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -35,6 +36,7 @@
    "ts_name": "sacrum",
    "volume_ml": 150,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -45,6 +47,7 @@
    "ts_name": "hip_left",
    "volume_ml": 300,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -55,6 +58,7 @@
    "ts_name": "hip_right",
    "volume_ml": 300,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -65,6 +69,7 @@
    "ts_name": "iliac_artery_left",
    "volume_ml": 8,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -75,6 +80,7 @@
    "ts_name": "iliac_artery_right",
    "volume_ml": 8,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -85,6 +91,7 @@
    "ts_name": "colon",
    "volume_ml": 250,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -95,6 +102,7 @@
    "ts_name": "femur_left",
    "volume_ml": 200,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": false
@@ -105,6 +113,7 @@
    "ts_name": "femur_right",
    "volume_ml": 200,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": false
@@ -115,6 +124,7 @@
    "ts_name": "iliopsoas_left",
    "volume_ml": 120,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -125,6 +135,7 @@
    "ts_name": "iliopsoas_right",
    "volume_ml": 120,
    "truncated": false,
+   "partial": false,
    "plausible": true,
    "why": [],
    "is_anchor": true
@@ -2066,6 +2077,18 @@
     "L3",
     "coccyx"
    ]
+  },
+  {
+   "step": "midline",
+   "x_mm": 0,
+   "source": "midline_structures"
+  },
+  {
+   "step": "header_handedness",
+   "sign": 1,
+   "note": "+1 RAS (+x = patient left), -1 x-mirrored header",
+   "source": "assumed_ras",
+   "votes": []
   },
   {
    "step": "expected",

@@ -15,6 +15,13 @@ from .planner import TSOutput, TSStructure
 from .kb import KnowledgeBase
 
 
+def _spacing(affine):
+    """Voxel size per array axis = column norms of the affine (valid for oblique / coronal / sagittal acquisitions,
+    where the affine diagonal can be zero)."""
+    import numpy as np
+    return np.linalg.norm(np.asarray(affine)[:3, :3], axis=0)
+
+
 def _as_bool(v) -> bool:
     return str(v).strip().lower() in ('1', 'true', 't', 'yes')
 
@@ -89,7 +96,7 @@ def host_prior_region(kb, host, md, label_names, task, spacing, expand_mm=30.0, 
     return box, sorted(used)
 
 
-def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task, spacing, envelope_mm=10.0, min_inside=0.5):
+def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task, spacing, envelope_mm=10.0, min_inside=0.5, min_component_ml=0.5):
     """Data-driven update of the host prior: for each candidate host (KB.spread_hosts) present in the scan, count the
     set-based evidence that a validated tumour component lies in its region — 2 agreement, 1 one rater, 0 none.
     Candidates with a TS class use the TS envelope; candidates without one use the KB prior region; candidates with
@@ -105,10 +112,15 @@ def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task
             inter &= m
         if not inter.any():
             inter = None
+    vox_ml = float(np.prod(spacing)) / 1000.0
+    min_vox = max(1, int(round(min_component_ml / vox_ml)))
     comp_cache = []
     for m in nonempty:
         lab, k = ndimage.label(m, structure=np.ones((3, 3, 3)))
-        comp_cache.append((lab, k))
+        sizes = np.bincount(lab.ravel())
+        comp_cache.append((lab, [j for j in range(1, k + 1) if sizes[j] >= min_vox]))   # only measurable components count as evidence
+    if inter is not None and inter.sum() < min_vox:
+        inter = None
     out = []
     for c in candidates:
         c = dict(c)
@@ -131,9 +143,9 @@ def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task
         if inter is not None and float((inter & region).sum()) / float(inter.sum()) >= min_inside:
             ev = 2
         else:
-            for lab, k in comp_cache:
+            for lab, comps in comp_cache:
                 hit = False
-                for j in range(1, k + 1):
+                for j in comps:
                     comp = lab == j
                     if float((comp & region).sum()) / float(comp.sum()) >= min_inside:
                         hit = True; break
@@ -147,7 +159,7 @@ def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task
 
 def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[KnowledgeBase], task: str, label_names: dict,
                    expected_host: Optional[str] = None, envelope_mm: float = 10.0, min_inside: float = 0.5,
-                   cancer_type: Optional[str] = None) -> Tuple[Optional[Tuple[float, float, float]], Optional[str], dict]:
+                   cancer_type: Optional[str] = None, min_component_ml: float = 0.5) -> Tuple[Optional[Tuple[float, float, float]], Optional[str], dict]:
     """Validated tumour evidence for the planner.
 
     BP and VT disagree completely on ~60 % of series, so a raw centroid is unreliable. Evidence is therefore taken
@@ -190,7 +202,7 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
             if expected_host:
                 labs = _host_ts_labels(kb, task, label_names, expected_host)
                 hm = np.isin(md, labs) if labs else None
-                spacing = np.abs(np.diag(ref.affine)[:3])
+                spacing = _spacing(ref.affine)
                 if hm is not None and hm.any():
                     envelope = ndimage.distance_transform_edt(~hm, sampling=spacing) <= envelope_mm
                     diag['host_ts_volume_ml'] = round(float(hm.sum() * np.prod(spacing) / 1000), 1)
@@ -207,11 +219,17 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
         n = int(m.sum())
         return float((m & envelope).sum()) / n if (envelope is not None and n) else None
 
+    vox_ml = float(np.prod(_spacing(ref.affine))) / 1000.0
+    min_vox = max(1, int(round(min_component_ml / vox_ml)))
+
     def validated_components(m):
         lab, k = ndimage.label(m, structure=np.ones((3, 3, 3)))
+        sizes = np.bincount(lab.ravel())
         keep = np.zeros_like(m)
         n_keep = 0
         for c in range(1, k + 1):
+            if sizes[c] < min_vox:                     # sub-measurable fragment: never evidence
+                continue
             comp = lab == c
             if inside_frac(comp) >= min_inside:
                 keep |= comp; n_keep += 1
@@ -227,6 +245,9 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
         if not inter.any():
             inter = None
     diag['agreement_voxels'] = int(inter.sum()) if inter is not None else 0
+    if inter is not None and inter.sum() < min_vox:
+        inter = None                                   # agreement below the measurable floor is not evidence
+    diag['min_component_voxels'] = min_vox
     if envelope is None:
         td = inter if inter is not None else nonempty[0][1]
         evidence = 'unverified_agreement' if inter is not None else f'unverified_{nonempty[0][0]}'
@@ -257,8 +278,8 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
                                                 frac=round(float((labs == top).sum()) / int(src.sum()), 3),
                                                 basis='agreement' if inter is not None else nonempty[0][0])
         if md is not None and kb is not None and expected_host:
-            spacing = np.abs(np.diag(ref.affine)[:3])
-            hosts = host_candidates_evidence(kb, kb.spread_hosts(expected_host, cancer_type), masks, names, md, label_names, task, spacing, envelope_mm, min_inside)
+            spacing = _spacing(ref.affine)
+            hosts = host_candidates_evidence(kb, kb.spread_hosts(expected_host, cancer_type), masks, names, md, label_names, task, spacing, envelope_mm, min_inside, min_component_ml)
             for h in hosts:
                 h['kept'] = h['cls'] == 'primary' or (h['evidence'] or 0) >= 1
                 h['contact_check'] = (not h['kept']) and h['in_fov'] and h['cls'] == 'local_invasion'
@@ -291,9 +312,9 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
                         diag['host_conflict_ignored'] = f'{ent[0]} ({frac:.2f}) vs expected {expected_host}'
                     break
     if md is not None and kb is not None and expected_host:
-        spacing = np.abs(np.diag(ref.affine)[:3])
+        spacing = _spacing(ref.affine)
         cands = kb.spread_hosts(expected_host, cancer_type)
-        hosts = host_candidates_evidence(kb, cands, masks, names, md, label_names, task, spacing, envelope_mm, min_inside)
+        hosts = host_candidates_evidence(kb, cands, masks, names, md, label_names, task, spacing, envelope_mm, min_inside, min_component_ml)
         for h in hosts:
             h['kept'] = h['cls'] == 'primary' or (h['evidence'] or 0) >= 1          # secondary hosts earn prompts only with data-driven evidence
             h['contact_check'] = (not h['kept']) and h['in_fov'] and h['cls'] == 'local_invasion'   # neighbours: tumour-contact check on TS masks, no prompts

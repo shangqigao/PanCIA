@@ -104,6 +104,15 @@ class Planner:
             for task, v in (ent.get('ts') or {}).items():
                 names += list(v.values()) if isinstance(v, dict) else [v]
             hit = [found[n] for n in names if n in found]
+            # a landmark is only trusted if its structure is reasonably complete: not truncated at the volume edge and
+            # not a small fragment (< 25 % of the entity's minimum volume) — partial hips/sacrum at the FOV edge would
+            # otherwise push the frame to the coccyx and make every pelvic organ 'expected'
+            vr = ent.get('volume_ml')
+            complete = [h for h in hit if not h.truncated and (not vr or h.volume_ml >= 0.25 * vr['min'])]
+            if hit and not complete:
+                log.append(dict(step='frame_landmark_skipped', landmark=lm['id'], reason='truncated or partial structure',
+                                volumes_ml=[round(h.volume_ml, 1) for h in hit]))
+            hit = complete
             if hit:
                 use = lm.get('use', 'centroid')
                 zs = [h.zmax_mm if use == 'top' else h.zmin_mm if use == 'bottom' else h.centroid_mm[2] for h in hit]
@@ -123,10 +132,53 @@ class Planner:
         return dict(span=None, method='none', confidence='low')
 
     # ------------------------------------------------------------ 2. anchors
+    MIDLINE_ENTITIES = ('spine', 'spinal_cord', 'aorta', 'sacrum', 'esophagus', 'trachea', 'urinary_bladder', 'inferior_vena_cava')
+
+    def midline_x(self, ts: TSOutput) -> Tuple[float, str]:
+        """Patient midline x (RAS mm): median centroid x of found midline structures; else mean of all structure
+        centroids; else 0. The scanner origin is NOT assumed to be on the midline."""
+        m = self.kb.ts_to_entity.get(ts.task, {})
+        xs = [s.centroid_mm[0] for s in ts.structures if m.get(s.ts_name, (None,))[0] in self.MIDLINE_ENTITIES]
+        if xs:
+            xs.sort(); return xs[len(xs) // 2], 'midline_structures'
+        if ts.structures:
+            return sum(s.centroid_mm[0] for s in ts.structures) / len(ts.structures), 'all_structures_mean'
+        return 0.0, 'origin'
+
+    # asymmetric organ pairs (a, b): in a correct RAS+ header, x(b) - x(a) > 0 (b is on the patient's left of a)
+    HANDEDNESS_PAIRS = (('liver', 'spleen'), ('liver', 'stomach'), ('inferior_vena_cava', 'aorta'), ('gallbladder', 'spleen'), ('liver', 'heart'))
+
+    def header_handedness(self, ts: TSOutput) -> Tuple[int, dict]:
+        """+1 if the image header follows RAS+ (+x = patient left), -1 if the header is x-mirrored. Decided from
+        asymmetric anatomy TS found (liver is right of spleen/stomach/heart; IVC right of aorta) — never from the header
+        alone, because TS labels sides from image content while the header can be mirrored (seen on TCGA MR). A
+        laterality check against the header without this would flag every bilateral organ as mismatched."""
+        m = self.kb.ts_to_entity.get(ts.task, {})
+        x = {}
+        for s in ts.structures:
+            ent = m.get(s.ts_name, (None,))[0]
+            if ent in {a for p in self.HANDEDNESS_PAIRS for a in p} and not s.truncated or ent in ('liver', 'spleen', 'aorta', 'inferior_vena_cava'):
+                x.setdefault(ent, []).append(s.centroid_mm[0])
+        votes = []
+        for a, b in self.HANDEDNESS_PAIRS:
+            if a in x and b in x:
+                d = sum(x[b]) / len(x[b]) - sum(x[a]) / len(x[a])
+                if abs(d) >= 15:
+                    votes.append((f'{a}<{b}', 1 if d > 0 else -1, round(d, 1)))
+        if not votes:
+            return 1, dict(source='assumed_ras', votes=[])
+        sign = 1 if sum(v[2] for v in votes) >= 0 else -1          # weighted by separation: liver–spleen (~150 mm) outweighs IVC–aorta (~25 mm)
+        return sign, dict(source='anatomy', votes=votes, agreement=all(v[1] == sign for v in votes))
+
     def map_found(self, ts: TSOutput, log) -> List[dict]:
         kb = self.kb
         out = []
         m = kb.ts_to_entity.get(ts.task, {})
+        mid_x, mid_src = self.midline_x(ts)
+        hand, hinfo = self.header_handedness(ts)
+        self._hand = hand
+        log.append(dict(step='midline', x_mm=round(mid_x, 1), source=mid_src))
+        log.append(dict(step='header_handedness', sign=hand, note='+1 RAS (+x = patient left), -1 x-mirrored header', **hinfo))
         for s in ts.structures:
             if s.ts_name not in m:
                 continue
@@ -134,13 +186,19 @@ class Planner:
             e = kb.entities[eid]
             plaus = True; why = []
             vr = e.get('volume_ml')
-            if vr and not (0.5 * vr['min'] <= s.volume_ml <= 2.0 * vr['max']):
-                plaus = False; why.append(f'volume {s.volume_ml:.0f} ml outside [{0.5*vr["min"]:.0f},{2*vr["max"]:.0f}]')
+            partial = False
+            if vr and s.volume_ml > 2.0 * vr['max']:
+                plaus = False; why.append(f'volume {s.volume_ml:.0f} ml above {2*vr["max"]:.0f} (leakage / merged)')
+            elif vr and s.volume_ml < 0.5 * vr['min']:
+                if s.truncated:
+                    partial = True; why.append(f'partial: {s.volume_ml:.0f} ml, cut by the field of view')   # present, not missing
+                else:
+                    plaus = False; why.append(f'volume {s.volume_ml:.0f} ml below {0.5*vr["min"]:.0f}')
             if side and e['laterality'] == 'bilateral':
-                x = s.centroid_mm[0]   # RAS: +x = patient left
-                if (side == 'left' and x < 0) or (side == 'right' and x > 0):
-                    plaus = False; why.append('laterality mismatch vs affine')
-            out.append(dict(entity=eid, side=side, ts_name=s.ts_name, volume_ml=s.volume_ml, truncated=s.truncated, plausible=plaus, why=why, is_anchor=e.get('is_anchor', False)))
+                dx = hand * (s.centroid_mm[0] - mid_x)   # patient-left-positive offset from the midline, header handedness corrected
+                if (side == 'left' and dx < 0) or (side == 'right' and dx > 0):
+                    plaus = False; why.append(f'laterality mismatch: centroid {dx:+.0f} mm from midline for side {side}')
+            out.append(dict(entity=eid, side=side, ts_name=s.ts_name, volume_ml=s.volume_ml, truncated=s.truncated, partial=partial, plausible=plaus, why=why, is_anchor=e.get('is_anchor', False)))
             if not plaus:
                 log.append(dict(step='found_plausibility', entity=eid, side=side, fail=why))
         return out
@@ -243,8 +301,7 @@ class Planner:
                 host_side = min(cands, key=lambda fs: sum((a - b) ** 2 for a, b in zip(fs[1].centroid_mm, ts.tumour_centroid_mm)))[0]['side']
             else:
                 # no TS mask of the host (e.g. breast): side from the tumour x offset to the midline (spine/aorta/sacrum if found), only when clearly lateral
-                mid = [ts.by_name()[f['ts_name']].centroid_mm[0] for f in found if f['entity'] in ('spine', 'aorta', 'sacrum')]
-                dx = ts.tumour_centroid_mm[0] - (sum(mid) / len(mid) if mid else 0.0)
+                dx = getattr(self, '_hand', 1) * (ts.tumour_centroid_mm[0] - self.midline_x(ts)[0])
                 host_side = ('left' if dx > 0 else 'right') if abs(dx) >= 30 else None
         # no validated tumour evidence on a bilateral host → both sides are prompted (never guess a side)
         log.append(dict(step='host', host=host, side=host_side or ('both' if host and kb.entities[host]['laterality'] == 'bilateral' else None),
