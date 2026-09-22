@@ -66,3 +66,37 @@ if __name__ == '__main__':
     print('  prompts:', len(p2.prompts)); [print('  ', p.tier, p.list, p.priority, p.entity, p.side, '|', p.terms[0], '|', p.gate.get('kind'), '|', p.reason[-1]) for p in p2.prompts]
     open(os.path.join(os.path.dirname(__file__), 'example_plan_cesc_mr.json'), 'w').write(p1.to_json())
     open(os.path.join(os.path.dirname(__file__), 'example_plan_kirc_ct.json'), 'w').write(p2.to_json())
+
+
+def test_secondary_host_evidence_topology():
+    """v0.4.2: a single rater's isolated blob in a neighbouring organ is a lesion hypothesis, not host evidence;
+    only a component growing out of the validated primary tumour into the neighbour counts (evidence 1);
+    agreement inside the neighbour counts as evidence 2."""
+    import numpy as np
+    from pancia_kb.adapter import host_candidates_evidence
+    kb = KB
+    task = 'total'
+    names_ts = {1: 'liver', 2: 'stomach', 3: 'kidney_left'}
+    md = np.zeros((60, 60, 30), np.int16)
+    md[5:30, 10:50, :] = 1            # liver
+    md[32:50, 10:30, :] = 2           # stomach (2 mm gap from liver → inside each other's 10 mm envelope)
+    md[32:50, 34:55, :] = 3           # kidney
+    sp = (1.0, 1.0, 3.0)
+    vt = np.zeros(md.shape, bool); vt[15:22, 25:35, 10:18] = True                      # primary tumour, in liver
+    bp = vt.copy()
+    bp[40:46, 40:50, 10:18] = True                                                     # isolated BP blob in kidney (1.4 ml)
+    cands = kb.spread_hosts('liver', 'TCGA-LIHC')
+    hosts = host_candidates_evidence(kb, cands, [vt, bp], ['rater_0', 'rater_1'], md, names_ts, task, sp, primary_tumour=vt & bp)
+    h = {x['entity']: x for x in hosts}
+    assert h['liver']['evidence'] == 2
+    assert h['kidney']['evidence'] == 0 and h['kidney'].get('isolated_lesions') == [('rater_1', 1.4)]
+    assert h['stomach']['evidence'] == 0 and not h['stomach'].get('isolated_lesions')
+    # BP component that grows out of the agreed tumour across the boundary into the stomach → local invasion evidence 1
+    bp2 = vt.copy(); bp2[15:45, 25:30, 10:18] = True
+    hosts = host_candidates_evidence(kb, cands, [vt, bp2], ['rater_0', 'rater_1'], md, names_ts, task, sp, primary_tumour=vt & bp2)
+    h = {x['entity']: x for x in hosts}
+    assert h['stomach']['evidence'] == 1, h['stomach']
+    # without a validated primary tumour the same component is only a hypothesis
+    hosts = host_candidates_evidence(kb, cands, [vt, bp2], ['rater_0', 'rater_1'], md, names_ts, task, sp, primary_tumour=None)
+    h = {x['entity']: x for x in hosts}
+    assert h['stomach']['evidence'] == 0            # no validated primary → nothing to grow out of; no single-rater secondary evidence

@@ -1,5 +1,23 @@
-version: 0.4.1
+version: 0.4.3
 landmarks:
+- id: lung_apex
+  entity: lung
+  level: T1
+  tolerance: 1
+  use: top
+  how: most cranial lung voxel (apex); valid when the lung is not cut at the top of the FOV even if its base is
+- id: heart_centre
+  entity: heart
+  level: T7
+  tolerance: 2
+  use: centroid
+  how: heart centroid (T5–T9)
+- id: clavicle_level
+  entity: clavicle
+  level: T1
+  tolerance: 1
+  use: centroid
+  how: clavicle centroid (C7–T2)
 - id: carina
   entity: trachea
   level: T4

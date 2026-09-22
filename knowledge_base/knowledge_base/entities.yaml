@@ -1,4 +1,4 @@
-version: 0.4.1
+version: 0.4.3
 entities:
 - id: vertebra_C1
   name: C1 vertebra
@@ -1045,6 +1045,9 @@ entities:
   - MR
   coverage_tier: in_vocab
   priority: 1
+  volume_ml:
+    min: 80
+    max: 450
   ct_hu:
   - 150
   - 500
@@ -1760,6 +1763,7 @@ entities:
       - 0
       - 30
   notes: 'TS total: merge lobes per side; lobes are has_part entities'
+  found_from_parts: true
   sources:
   - TS
   - FMA
@@ -1908,6 +1912,9 @@ entities:
   - MR
   coverage_tier: in_vocab
   priority: 2
+  volume_ml:
+    min: 15
+    max: 80
   is_anchor: true
   anchor:
     span:
@@ -4576,9 +4583,6 @@ entities:
     abdominal_muscles:
       left: psoas_major_left
       right: psoas_major_right
-    total:
-      left: iliopsoas_left
-      right: iliopsoas_right
   modality:
   - CT
   - MR
@@ -4601,6 +4605,7 @@ entities:
       - 0
       - 15
   notes: TS total merges psoas into iliopsoas
+  implied_by_whole: true
   sources:
   - TS
   - FMA

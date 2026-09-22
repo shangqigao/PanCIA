@@ -100,6 +100,10 @@ def plan_one(job):
                    host=ts.tumour_host_guess, hosts=';'.join(f"{h['entity']}:{h['cls'][:3]}:ev{h.get('evidence')}:w{h.get('weight')}" for h in plan.hosts), n_secondary_hosts=sum(h['role'] == 'secondary' for h in plan.hosts), tumour_evidence=diag.get('tumour_evidence'), tumour_voxels=diag.get('tumour_voxels'),
                    overlap_host=diag.get('overlap_host'), overlap_host_frac=diag.get('overlap_host_frac'), host_override=diag.get('host_override'),
                    n_plausibility_flags=sum(1 for l in plan.log if l.get('step') == 'found_plausibility'),
+                   handedness=next((f"{l.get('sign')}:{l.get('source')}" for l in plan.log if l.get('step') == 'header_handedness'), ''),
+                   n_found_derived=sum(1 for l in plan.log if l.get('step') in ('found_from_parts', 'found_implied_by_whole')),
+                   agreement_elsewhere=(diag.get('agreement_elsewhere') or {}).get('entity', ''),
+                   n_isolated_lesions=sum(len(h.get('isolated_lesions') or []) for h in (diag.get('hosts') or [])),
                    seconds=round(time.time() - t0, 2))
     except Exception as e:  # keep the batch going; record the failure
         row.update(status='error', error=f'{type(e).__name__}: {e}', trace=traceback.format_exc()[-800:])

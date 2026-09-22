@@ -9,12 +9,140 @@ sys.path.append(relative_path)
 
 import pydicom
 import argparse
+import csv
 import pathlib
+import tarfile
 import json
 import joblib
 
 from tiatoolbox import logger
 from tiatoolbox.wsicore.wsireader import WSIReader 
+
+
+OV04_ALLOWED_MODALITIES = {"CT", "MR"}
+
+
+def _parse_modalities(value):
+    """Return the modalities present in a metadata field such as ``CT\\MR``."""
+    normalized = str(value or "").upper()
+    for separator in ("\\", ",", ";", "|", "/"):
+        normalized = normalized.replace(separator, " ")
+    return {item for item in normalized.split() if item}
+
+
+def _resolve_ov04_folder(row, data_root, dataset_root):
+    """Resolve the directory containing an OV04 archive."""
+    folder = (row.get("RDS folder") or row.get("dirName") or "").strip()
+    if not folder:
+        return None
+
+    folder_path = pathlib.Path(folder).expanduser()
+    if folder_path.is_absolute():
+        return folder_path
+
+    candidates = (dataset_root / folder_path, data_root / folder_path)
+    return next((path for path in candidates if path.exists()), candidates[0])
+
+
+def _safe_extract_tar(archive_path, output_dir):
+    """Extract an archive while rejecting links and paths outside output_dir."""
+    output_dir = pathlib.Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    resolved_output = output_dir.resolve()
+
+    with tarfile.open(archive_path, "r:*") as archive:
+        members = archive.getmembers()
+        for member in members:
+            member_path = (output_dir / member.name).resolve()
+            if resolved_output not in member_path.parents and member_path != resolved_output:
+                raise ValueError(
+                    f"Unsafe path in OV04 archive {archive_path}: {member.name}"
+                )
+            if member.issym() or member.islnk():
+                raise ValueError(
+                    f"Links are not allowed in OV04 archive {archive_path}: "
+                    f"{member.name}"
+                )
+        archive.extractall(output_dir, members=members)
+
+
+def _ov04_archive_paths(row, archive_dir):
+    """Construct the CT/MR archive paths represented by one metadata row."""
+    patient_id = (row.get("AnonPatientID") or "").strip()
+    dir_name = (row.get("dirName") or "").strip()
+    modalities = _parse_modalities(row.get("ModalitiesInStudy"))
+    if not patient_id or not dir_name:
+        return []
+
+    return [
+        archive_dir / f"{patient_id}_{dir_name}_{modality}.tar"
+        for modality in sorted(modalities.intersection(OV04_ALLOWED_MODALITIES))
+    ]
+
+
+def get_ov04_series_paths(data_dir, dataset, csv_path, extract_dir):
+    """Extract and find CT/MR DICOM series referenced by the OV04 CSV."""
+    data_root = pathlib.Path(data_dir)
+    dataset_root = data_root / dataset
+    csv_path = pathlib.Path(csv_path)
+    extract_root = pathlib.Path(extract_dir).expanduser()
+    extract_root.mkdir(parents=True, exist_ok=True)
+    if not csv_path.is_file():
+        raise FileNotFoundError(f"OV04 CSV does not exist: {csv_path}")
+
+    series_paths = set()
+    with csv_path.open(newline="", encoding="utf-8-sig") as csv_file:
+        reader = csv.DictReader(csv_file)
+        required_columns = {"ModalitiesInStudy", "RDS folder"}
+        missing_columns = required_columns.difference(reader.fieldnames or [])
+        if missing_columns:
+            raise ValueError(
+                f"OV04 CSV is missing required column(s): {sorted(missing_columns)}"
+            )
+
+        for row in reader:
+            modalities = _parse_modalities(row.get("ModalitiesInStudy"))
+            if not modalities.intersection(OV04_ALLOWED_MODALITIES):
+                continue
+
+            archive_dir = _resolve_ov04_folder(row, data_root, dataset_root)
+            if archive_dir is None or not archive_dir.exists():
+                logger.warning(
+                    "Skipping OV04 row %s: folder does not exist (%s)",
+                    row.get("OV04_ID", "<unknown>"),
+                    archive_dir,
+                )
+                continue
+            if archive_dir.is_file():
+                archive_dir = archive_dir.parent
+
+            archive_paths = _ov04_archive_paths(row, archive_dir)
+            for archive_path in archive_paths:
+                if not archive_path.is_file():
+                    logger.warning(
+                        "Skipping missing OV04 archive for row %s: %s",
+                        row.get("OV04_ID", "<unknown>"),
+                        archive_path,
+                    )
+                    continue
+
+                # Never create generated data beside archives in the shared folder.
+                extraction_dir = extract_root / archive_path.stem
+                has_extracted_dicoms = (
+                    extraction_dir.exists()
+                    and any(extraction_dir.rglob("*.dcm"))
+                )
+                if not has_extracted_dicoms:
+                    logger.info("Extracting OV04 archive %s", archive_path)
+                    _safe_extract_tar(archive_path, extraction_dir)
+
+                # A tar contains multiple series, potentially at arbitrary depths.
+                series_paths.update(
+                    dicom_path.parent
+                    for dicom_path in extraction_dir.rglob("*.dcm")
+                )
+
+    return sorted(series_paths, key=str)
 
 def is_included_dicom(ds):
     desc = ds.get("SeriesDescription", "").lower()
@@ -49,10 +177,39 @@ if __name__ == "__main__":
     parser.add_argument('--dataset', default="TCGA", type=str)
     parser.add_argument('--modality', default="radiology", type=str)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
+    parser.add_argument(
+        '--csv_path', '--csv',
+        default=None,
+        type=str,
+        help=(
+            "Optional dataset metadata CSV. For OV04 radiology, only CT/MR "
+            "series referenced by this CSV are considered."
+        ),
+    )
+    parser.add_argument(
+        '--extract_dir',
+        default=None,
+        type=str,
+        help=(
+            "Directory for extracted OV04 DICOM archives. Defaults to "
+            "<save_dir>/<dataset>_extracted; the shared archive directory is "
+            "never modified."
+        ),
+    )
     args = parser.parse_args()
 
     if args.modality == 'radiology':
-        series_paths = pathlib.Path(f"{args.data_dir}/{args.dataset}").rglob('1.3.6*')
+        if args.dataset.upper() == "OV04" and args.csv_path is not None:
+            extract_dir = args.extract_dir or str(
+                pathlib.Path(args.save_dir) / f"{args.dataset}_extracted"
+            )
+            series_paths = get_ov04_series_paths(
+                args.data_dir, args.dataset, args.csv_path, extract_dir
+            )
+        else:
+            series_paths = pathlib.Path(
+                f"{args.data_dir}/{args.dataset}"
+            ).rglob('1.3.6*')
     elif args.modality == 'pathology':
         series_paths = pathlib.Path(f"{args.data_dir}/{args.dataset}").rglob('*.svs')
     else:
@@ -66,11 +223,17 @@ if __name__ == "__main__":
             raw_dicoms = []
             for dicom in dicom_files:
                 ds = pydicom.dcmread(dicom, stop_before_pixels=True)
-                if is_included_dicom(ds):
+                is_allowed_modality = (
+                    args.dataset.upper() != "OV04"
+                    or args.csv_path is None
+                    or str(ds.get("Modality", "")).upper()
+                    in OV04_ALLOWED_MODALITIES
+                )
+                if is_allowed_modality and is_included_dicom(ds):
                     raw_dicoms.append(True)
                 else:
                     raw_dicoms.append(False)
-            if all(raw_dicoms):
+            if raw_dicoms and all(raw_dicoms):
                 return ("included", str(path))
             else:
                 logger.info(f"Excluding series {path.name}")
@@ -100,4 +263,3 @@ if __name__ == "__main__":
     data_dict = {"included series": included_series, "excluded series": excluded_series}
     with open(save_path, "w") as f:
         json.dump(data_dict, f, indent=4)
-

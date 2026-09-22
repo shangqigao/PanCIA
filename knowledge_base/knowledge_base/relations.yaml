@@ -1,4 +1,4 @@
-version: 0.4.1
+version: 0.4.3
 relations:
 - src: kidney
   type: has_part
@@ -2361,6 +2361,12 @@ relations:
   side_link: same
   direction: medial
   contact: near
+- src: iliopsoas
+  type: has_part
+  dst: psoas
+  side_link: same
+  note: 'TS total/total_mr segment the iliopsoas; psoas major presence is implied by it (planner: implied_by_whole), its own extent needs the
+    abdominal_muscles task or VoxTell'
 - src: skeletal_muscle
   type: has_part
   dst: psoas
@@ -2385,6 +2391,21 @@ relations:
   type: has_part
   dst: pectoralis_major
   side_link: any
+- src: lung
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: lung_apex ≈ T1
+- src: heart
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: heart_centre ≈ T7
+- src: clavicle
+  type: landmark_for
+  dst: spine
+  side_link: any
+  note: clavicle_level ≈ T1
 - src: trachea
   type: landmark_for
   dst: spine

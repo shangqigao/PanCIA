@@ -9,7 +9,7 @@ OUT = os.path.join(os.path.dirname(__file__), 'knowledge_base')
 os.makedirs(OUT, exist_ok=True)
 TS = json.load(open(os.path.join(os.path.dirname(__file__), 'seed', 'ts_class_maps.json')))
 TS_ALL = {task: set(v.values()) for task, v in TS.items()}
-VERSION = '0.4.1'
+VERSION = '0.4.3'
 TODAY = str(datetime.date.today())
 
 # ------------------------------------------------------------------ helpers
@@ -17,7 +17,7 @@ E = []   # entities
 R = []   # relations
 
 def ent(id, name, category, *, lat='none', vt=None, aliases=(), ts=None, modality=('CT', 'MR'),
-        tier='assumed_in_vocab', vol=None, hu=None, mr=None, prio=2, anchor=None, notes=None, sources=('TS', 'FMA')):
+        tier='assumed_in_vocab', vol=None, hu=None, mr=None, prio=2, anchor=None, notes=None, sources=('TS', 'FMA'), found_from_parts=False, implied_by_whole=False):
     """Register an entity. ts = {task: name_or_{side:name}}. vt = VoxTell main term (may contain {side})."""
     if ts:
         for task, names in ts.items():
@@ -33,6 +33,8 @@ def ent(id, name, category, *, lat='none', vt=None, aliases=(), ts=None, modalit
     if anchor: e['is_anchor'] = True; e['anchor'] = anchor
     else: e['is_anchor'] = False
     if notes: e['notes'] = notes
+    if found_from_parts: e['found_from_parts'] = True     # planner: presence of any has_part child counts as presence of this anchor (lung ← lobes on the TS CT task)
+    if implied_by_whole: e['implied_by_whole'] = True     # planner: when this anchor has no TS class on the task, a found has_part parent implies its presence (psoas ⊂ iliopsoas)
     e['sources'] = list(sources)
     E.append(e); return id
 
@@ -98,6 +100,9 @@ REGIONS = [
 
 # ------------------------------------------------------------------ landmarks (non-vertebral, with vertebral level)
 LANDMARKS = [
+ dict(id='lung_apex', entity='lung', level='T1', tolerance=1, use='top', how='most cranial lung voxel (apex); valid when the lung is not cut at the top of the FOV even if its base is'),
+ dict(id='heart_centre', entity='heart', level='T7', tolerance=2, use='centroid', how='heart centroid (T5–T9)'),
+ dict(id='clavicle_level', entity='clavicle', level='T1', tolerance=1, use='centroid', how='clavicle centroid (C7–T2)'),
  dict(id='carina', entity='trachea', level='T4', tolerance=1, use='bottom', how='caudal end of trachea mask'),
  dict(id='diaphragm_dome', entity='liver', level='T10', tolerance=1, use='top', how='most cranial liver voxel (right dome)'),
  dict(id='xiphoid', entity='sternum', level='T9', tolerance=1, use='bottom', how='caudal end of sternum mask'),
@@ -134,7 +139,7 @@ ent('humerus', 'Humerus', 'bone', lat='bilateral', vt='{side} humerus', ts={'tot
 ent('spinal_cord', 'Spinal cord', 'nerve', vt='spinal cord', ts={'total': 'spinal_cord', 'total_mr': 'spinal_cord'}, tier='in_vocab', prio=3)
 
 # ---- great vessels (systemic anchors)
-ent('aorta', 'Aorta', 'vessel_artery', vt='aorta', aliases=('thoracic aorta', 'abdominal aorta'), ts={'total': 'aorta', 'total_mr': 'aorta'}, tier='in_vocab', prio=1, hu=(150, 500),
+ent('aorta', 'Aorta', 'vessel_artery', vt='aorta', aliases=('thoracic aorta', 'abdominal aorta'), ts={'total': 'aorta', 'total_mr': 'aorta'}, tier='in_vocab', prio=1, hu=(150, 500), vol={'min': 80, 'max': 450},
     anchor=A(['T4', 'L4'], 'midline', 'posterior', 'obligatory'), notes='systemic anchor; bifurcation = L4 landmark')
 ent('inferior_vena_cava', 'Inferior vena cava', 'vessel_vein', vt='inferior vena cava', aliases=('IVC',), ts={'total': 'inferior_vena_cava', 'total_mr': 'inferior_vena_cava'}, tier='in_vocab', prio=1,
     anchor=A(['T8', 'L5'], 'right', 'posterior', 'obligatory', prior=[('aorta', 'right_of', (10, 40))]))
@@ -168,14 +173,14 @@ ent('uterine_artery', 'Uterine artery', 'vessel_artery', lat='bilateral', vt='{s
 ent('axillary_vessels', 'Axillary artery and vein', 'vessel_artery', lat='bilateral', vt='{side} axillary vessels', aliases=('{side} axillary artery', '{side} axillary vein'), tier='near', prio=3)
 
 # ---- thorax
-ent('lung', 'Lung', 'organ', lat='bilateral', vt='{side} lung', ts={'total': {'left': 'lung_upper_lobe_left', 'right': 'lung_upper_lobe_right'}, 'total_mr': {'left': 'lung_left', 'right': 'lung_right'}},
+ent('lung', 'Lung', 'organ', lat='bilateral', vt='{side} lung', ts={'total': {'left': 'lung_upper_lobe_left', 'right': 'lung_upper_lobe_right'}, 'total_mr': {'left': 'lung_left', 'right': 'lung_right'}}, found_from_parts=True,
     tier='in_vocab', prio=1, hu=(-950, -600), vol={'min': 1000, 'max': 4500},
     anchor=A(['T1', 'T12'], 'bilateral', 'mid', 'obligatory', prior=[('heart', 'lateral_to', (0, 30))]), notes='TS total: merge lobes per side; lobes are has_part entities')
 for side_lobes in [('left', ['upper', 'lower']), ('right', ['upper', 'middle', 'lower'])]:
     for lobe in side_lobes[1]:
         ent(f'lung_{side_lobes[0]}_{lobe}_lobe', f'{side_lobes[0].title()} {lobe} lobe', 'organ', lat=side_lobes[0], vt=f'{side_lobes[0]} {lobe} lobe of lung',
             ts={'total': f'lung_{lobe}_lobe_{side_lobes[0]}'}, tier='in_vocab', prio=2)
-ent('trachea', 'Trachea', 'duct', vt='trachea', ts={'total': 'trachea'}, tier='in_vocab', prio=2, anchor=A(['C6', 'T4'], 'midline', 'mid', 'obligatory'))
+ent('trachea', 'Trachea', 'duct', vt='trachea', ts={'total': 'trachea'}, tier='in_vocab', prio=2, vol={'min': 15, 'max': 80}, anchor=A(['C6', 'T4'], 'midline', 'mid', 'obligatory'))
 ent('main_bronchus', 'Main bronchus', 'duct', lat='bilateral', vt='{side} main bronchus', aliases=('{side} mainstem bronchus',), tier='in_vocab', prio=2)
 ent('bronchial_tree', 'Bronchial tree / airways', 'duct', vt='airways', aliases=('bronchi', 'airway tree'), tier='in_vocab', prio=3)
 ent('pleura', 'Pleura', 'fascia', lat='bilateral', vt='{side} pleura', aliases=('{side} pleural surface',), tier='near', prio=2)
@@ -284,7 +289,7 @@ ent('levator_ani', 'Levator ani / pelvic floor', 'muscle', vt='levator ani muscl
 ent('external_urethral_sphincter', 'External urethral sphincter', 'muscle', vt='external urethral sphincter', tier='ood', prio=3)
 ent('iliopsoas', 'Iliopsoas', 'muscle', lat='bilateral', vt='{side} iliopsoas muscle', ts={'total': {'left': 'iliopsoas_left', 'right': 'iliopsoas_right'}, 'total_mr': {'left': 'iliopsoas_left', 'right': 'iliopsoas_right'}}, tier='in_vocab', prio=2,
     anchor=A(['L1', 'coccyx'], 'bilateral', 'posterior', 'obligatory'))
-ent('psoas', 'Psoas major', 'muscle', lat='bilateral', vt='{side} psoas muscle', aliases=('{side} psoas major muscle',), ts={'abdominal_muscles': {'left': 'psoas_major_left', 'right': 'psoas_major_right'}, 'total': {'left': 'iliopsoas_left', 'right': 'iliopsoas_right'}}, tier='in_vocab', prio=2,
+ent('psoas', 'Psoas major', 'muscle', lat='bilateral', vt='{side} psoas muscle', aliases=('{side} psoas major muscle',), ts={'abdominal_muscles': {'left': 'psoas_major_left', 'right': 'psoas_major_right'}}, implied_by_whole=True, tier='in_vocab', prio=2,
     anchor=A(['T12', 'L5'], 'bilateral', 'posterior', 'obligatory', prior=[('spine', 'lateral_to', (0, 15))]), notes='TS total merges psoas into iliopsoas')
 ent('quadratus_lumborum', 'Quadratus lumborum', 'muscle', lat='bilateral', vt='{side} quadratus lumborum muscle', ts={'abdominal_muscles': {'left': 'quadratus_lumborum_left', 'right': 'quadratus_lumborum_right'}}, tier='near', prio=3)
 ent('gluteus', 'Gluteal muscles', 'muscle', lat='bilateral', vt='{side} gluteal muscles', ts={'total': {'left': 'gluteus_maximus_left', 'right': 'gluteus_maximus_right'}, 'total_mr': {'left': 'gluteus_maximus_left', 'right': 'gluteus_maximus_right'}}, tier='in_vocab', prio=3, notes='merge maximus/medius/minimus')
@@ -542,6 +547,7 @@ rel('spine', 'adjacent_to', 'psoas', side='any', direction='lateral', contact='a
 rel('sacrum', 'adjacent_to', 'rectum', side='any', direction='anterior', contact='separated_by_presacral_fat'); rel('sacrum', 'adjacent_to', 'hip', side='any', direction='lateral', contact='abuts', note='sacroiliac joint'); rel('sacrum', 'adjacent_to', 'iliac_artery', side='any', direction='anterior_lateral', contact='near')
 rel('hip', 'adjacent_to', 'urinary_bladder', direction='medial', contact='near'); rel('hip', 'adjacent_to', 'obturator_internus', direction='medial', contact='abuts'); rel('hip', 'adjacent_to', 'iliopsoas', direction='medial', contact='abuts'); rel('hip', 'adjacent_to', 'gluteus', direction='posterior_lateral', contact='abuts'); rel('hip', 'adjacent_to', 'femur', direction='inferior_lateral', contact='abuts', note='hip joint')
 rel('pelvic_sidewall', 'has_part', 'obturator_internus', staging=[L]); rel('pelvic_sidewall', 'adjacent_to', 'iliac_artery', direction='superior', contact='near'); rel('pelvic_sidewall', 'adjacent_to', 'ln_obturator', direction='medial', contact='near')
+rel('iliopsoas', 'has_part', 'psoas', side='same', note='TS total/total_mr segment the iliopsoas; psoas major presence is implied by it (planner: implied_by_whole), its own extent needs the abdominal_muscles task or VoxTell')
 rel('skeletal_muscle', 'has_part', 'psoas', side='any'); rel('skeletal_muscle', 'has_part', 'autochthon', side='any'); rel('skeletal_muscle', 'has_part', 'rectus_abdominis', side='any'); rel('skeletal_muscle', 'has_part', 'iliopsoas', side='any'); rel('skeletal_muscle', 'has_part', 'gluteus', side='any'); rel('skeletal_muscle', 'has_part', 'pectoralis_major', side='any')
 # landmarks
 for lm in LANDMARKS: rel(lm['entity'], 'landmark_for', 'spine', side='any', note=f"{lm['id']} ≈ {lm['level']}")

@@ -1,6 +1,6 @@
 name: PanCIA anchor-centric anatomical knowledge base
-version: 0.4.1
-date: '2026-09-21'
+version: 0.4.3
+date: '2026-09-22'
 author: Shangqi Gao (Crispin Lab) with Claude
 status: draft v0.1 — not yet pilot-verified
 vertebral_order:
@@ -37,9 +37,9 @@ vertebral_order:
 counts:
   entities: 191
   anchors: 33
-  relations: 364
+  relations: 368
   regions: 14
-  landmarks: 10
+  landmarks: 13
 sources:
   TS: TotalSegmentator class maps (map_to_binary.py, fetched 2026-09-18)
   VoxTell: arXiv 2511.11450; repo MIC-DKFZ/VoxTell (no shipped vocabulary; coverage tiers are assumptions until pilot)

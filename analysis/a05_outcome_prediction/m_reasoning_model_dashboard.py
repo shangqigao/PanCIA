@@ -233,8 +233,10 @@ def bootstrap_auc(labels: np.ndarray, scores: np.ndarray, seed: int = 42) -> tup
     return float(auc),float(low),float(high)
 
 
-def detection_data(volumes: pd.DataFrame, level: str) -> pd.DataFrame:
-    data=volumes[volumes["class"]=="endometrioma"].copy()
+def detection_data(
+    volumes: pd.DataFrame, level: str, class_name: str = "endometrioma"
+) -> pd.DataFrame:
+    data=volumes[volumes["class"]==class_name].copy()
     if level=="scan": return data
     if level!="patient": raise ValueError(level)
     return (data.groupby(["model","stage","domain","case_id"],as_index=False)
@@ -243,8 +245,11 @@ def detection_data(volumes: pd.DataFrame, level: str) -> pd.DataFrame:
                  gt_endometrioma_case_volume_mm3=("gt_endometrioma_case_volume_mm3","first")))
 
 
-def plot_sensitivity_specificity(volumes: pd.DataFrame, output: Path, level: str) -> None:
-    data=detection_data(volumes,level)
+def plot_sensitivity_specificity(
+    volumes: pd.DataFrame, output: Path, level: str,
+    class_name: str = "endometrioma",
+) -> None:
+    data=detection_data(volumes,level,class_name)
     fig,axes=plt.subplots(2,2,figsize=(14,9),sharey=True)
     for row,cohort in enumerate(("D1","D2")):
         for col,stage in enumerate(("pre","post")):
@@ -257,10 +262,11 @@ def plot_sensitivity_specificity(volumes: pd.DataFrame, output: Path, level: str
                 axis.plot(threshold,spec,color=MODEL_COLORS[model],linewidth=2,linestyle="--",label=f"{model} spec")
             axis.set_xscale("symlog",linthresh=10); axis.set_ylim(-.02,1.02); axis.grid(alpha=.2)
             axis.set_title(f"{cohort} · {stage.title()} · n={len(subset)}")
-            axis.set_xlabel("Predicted endometrioma volume threshold (mm³)")
+            axis.set_xlabel(f"Predicted {class_name} volume threshold (mm³)")
             axis.set_ylabel("Sensitivity / specificity")
             axis.legend(frameon=False,fontsize=8,ncol=2)
-    fig.suptitle(f"{level.title()}-level binary endometrioma detection · solid sensitivity, dashed specificity\nPost threshold 0 means at least one accepted candidate (volume > 0 mm³)",fontsize=14)
+    score_label="direct endometrioma score" if class_name=="endometrioma" else "ovary-volume surrogate score"
+    fig.suptitle(f"{level.title()}-level binary endometrioma detection using {score_label} · solid sensitivity, dashed specificity",fontsize=14)
     save_figure(fig,output)
 
 
@@ -295,8 +301,11 @@ def safe_corr(x: pd.Series,y: pd.Series,method: str) -> float:
     return float(pearsonr(x,y).statistic if method=="pearson" else spearmanr(x,y).statistic)
 
 
-def plot_volume_correlations(volumes: pd.DataFrame, output: Path, positive_only: bool) -> None:
-    data=detection_data(volumes,"patient")
+def plot_volume_correlations(
+    volumes: pd.DataFrame, output: Path, positive_only: bool,
+    class_name: str = "endometrioma",
+) -> None:
+    data=detection_data(volumes,"patient",class_name)
     if positive_only: data=data[data.gt_endometrioma_case_volume_mm3>0]
     fig,axes=plt.subplots(3,2,figsize=(14,14))
     for row,model in enumerate(MODELS):
@@ -311,16 +320,18 @@ def plot_volume_correlations(volumes: pd.DataFrame, output: Path, positive_only:
             limits=[0,max(axis.get_xlim()[1],axis.get_ylim()[1])]; axis.plot(limits,limits,color="black",linewidth=.8,linestyle=":")
             axis.set_xlim(limits); axis.set_ylim(limits); axis.grid(alpha=.2); axis.legend(frameon=False,fontsize=8)
             axis.set_title(f"{model} · {cohort}")
-            axis.set_xlabel("log10(GT volume mm³ + 1)"); axis.set_ylabel("log10(predicted volume mm³ + 1)")
+            axis.set_xlabel("log10(GT endometrioma volume mm³ + 1)"); axis.set_ylabel(f"log10(predicted {class_name} volume mm³ + 1)")
     population="GT-positive patients only (secondary sensitivity analysis)" if positive_only else "all patients, including GT volume = 0 (primary continuous detection)"
-    fig.suptitle(f"Patient maximum predicted volume versus case GT volume\n{population}",fontsize=14)
+    fig.suptitle(f"Patient maximum predicted {class_name} volume versus case GT endometrioma volume\n{population}",fontsize=14)
     save_figure(fig,output)
 
 
-def plot_correlation_summary(volumes: pd.DataFrame, output: Path) -> None:
+def plot_correlation_summary(
+    volumes: pd.DataFrame, output: Path, class_name: str = "endometrioma"
+) -> None:
     fig,axes=plt.subplots(2,2,figsize=(14,9),sharey=True)
     for row,level in enumerate(("scan","patient")):
-        data=detection_data(volumes,level)
+        data=detection_data(volumes,level,class_name)
         for col,domain in enumerate(("D1","D2")):
             axis=axes[row,col]; x=np.arange(len(MODELS)); width=.18
             for stage_index,stage in enumerate(("pre","post")):
@@ -336,11 +347,62 @@ def plot_correlation_summary(volumes: pd.DataFrame, output: Path) -> None:
             axis.set_xticks(x,MODELS); axis.set_title(f"{domain} · {level}-level · all {'scans' if level=='scan' else 'patients'}")
     axes[0,0].set_ylabel("Correlation with case GT volume"); axes[1,0].set_ylabel("Correlation with case GT volume")
     axes[0,0].legend(frameon=False,fontsize=8,ncol=2)
-    fig.suptitle("Continuous endometrioma detection across zero and nonzero GT burden\nRaw physical volumes; patient score = maximum scan volume",fontsize=14)
+    fig.suptitle(f"Continuous endometrioma detection using predicted {class_name} volume\nAll zero/nonzero GT burdens; patient score = maximum scan volume",fontsize=14)
     save_figure(fig,output)
 
 
-def summary_tables(metrics: pd.DataFrame, volumes: pd.DataFrame) -> tuple[str, str]:
+def analyze_endometrioma_effect_on_ovary(
+    metrics: pd.DataFrame, volumes: pd.DataFrame, output: Path, results_path: Path
+) -> pd.DataFrame:
+    labels=(volumes[(volumes.model=="baseline")&(volumes.stage=="pre")&(volumes["class"]=="endometrioma")]
+            [["scan_name","endometrioma_label"]].drop_duplicates("scan_name"))
+    data=(metrics[(metrics["class"]=="ovary")&metrics.eligible.fillna(False)]
+          .merge(labels,on="scan_name",how="inner",validate="many_to_one"))
+    data["domain"]=np.where(data.cohort.eq("external_test"),"D2","D1")
+    patients=(data.groupby(["model","stage","domain","case_id","endometrioma_label"],as_index=False)
+              .agg(dice=("dice","mean"),annotated_scans=("scan_name","nunique")))
+    rng=np.random.default_rng(42); rows=[]
+    for model in MODELS:
+        for domain in ("D1","D2"):
+            for stage in ("pre","post"):
+                subset=patients[(patients.model==model)&(patients.domain==domain)&(patients.stage==stage)]
+                negative=subset.loc[subset.endometrioma_label==0,"dice"].to_numpy(float)
+                positive=subset.loc[subset.endometrioma_label==1,"dice"].to_numpy(float)
+                observed=float(positive.mean()-negative.mean())
+                boot=np.empty(5000)
+                for index in range(len(boot)):
+                    boot[index]=rng.choice(positive,len(positive),replace=True).mean()-rng.choice(negative,len(negative),replace=True).mean()
+                combined=np.r_[negative,positive]; n_positive=len(positive); perm=np.empty(10000)
+                for index in range(len(perm)):
+                    shuffled=rng.permutation(combined); perm[index]=shuffled[-n_positive:].mean()-shuffled[:-n_positive].mean()
+                p_value=(1+np.sum(np.abs(perm)>=abs(observed)))/(len(perm)+1)
+                rows.append({"model":model,"domain":domain,"stage":stage,"negative_patients":len(negative),"positive_patients":len(positive),
+                             "negative_mean_dice":negative.mean(),"positive_mean_dice":positive.mean(),"dice_difference_positive_minus_negative":observed,
+                             "difference_ci_2.5%":np.quantile(boot,.025),"difference_ci_97.5%":np.quantile(boot,.975),"permutation_p":p_value})
+    results=pd.DataFrame(rows); results.to_csv(results_path,index=False)
+    fig,axes=plt.subplots(3,2,figsize=(14,13),sharey=True); colors={0:"#72b7b2",1:"#e45756"}
+    rng_points=np.random.default_rng(7)
+    for row,model in enumerate(MODELS):
+        for col,domain in enumerate(("D1","D2")):
+            axis=axes[row,col]; positions=[]; values=[]; box_colors=[]; labels_text=[]; position=1
+            for stage in ("pre","post"):
+                for label in (0,1):
+                    v=patients[(patients.model==model)&(patients.domain==domain)&(patients.stage==stage)&(patients.endometrioma_label==label)].dice.to_numpy(float)
+                    positions.append(position); values.append(v); box_colors.append(colors[label]); labels_text.append(f"{stage}\n{'Absent' if label==0 else 'Present'}"); position+=1
+                position+=.5
+            boxes=axis.boxplot(values,positions=positions,widths=.65,patch_artist=True,showfliers=False,medianprops={"color":"black","linewidth":1.5})
+            for box,color in zip(boxes["boxes"],box_colors): box.set_facecolor(color); box.set_alpha(.72)
+            for pos,v in zip(positions,values): axis.scatter(pos+rng_points.normal(0,.045,len(v)),v,s=18,color="#26384a",alpha=.5)
+            axis.set_xticks(positions,labels_text); axis.set_ylim(-.02,1.02); axis.grid(axis="y",alpha=.2); axis.set_title(f"{model} · {domain}")
+    for axis in axes[:,0]: axis.set_ylabel("Patient-mean ovary Dice")
+    fig.suptitle("Effect of endometrioma presence on ovary segmentation\nOnly ovary-annotated scans; each point is one patient",fontsize=14)
+    save_figure(fig,output)
+    return results
+
+
+def summary_tables(
+    metrics: pd.DataFrame, volumes: pd.DataFrame, ovary_effect: pd.DataFrame
+) -> tuple[str, str, str]:
     eligible=metrics[(metrics["class"]=="endometrioma")&metrics.eligible.fillna(False)&(metrics.gt_volume_mm3>0)]
     segmentation=(eligible.groupby(["model","cohort","stage"]).dice.mean().unstack(["cohort","stage"])
                   .reindex(index=MODELS,columns=pd.MultiIndex.from_product([COHORTS,("pre","post")])))
@@ -400,9 +462,66 @@ def summary_tables(metrics: pd.DataFrame, volumes: pd.DataFrame) -> tuple[str, s
                 burden_parts.append(f'<td><strong>{formatted}</strong></td>' if np.isclose(value,best[column]) else f'<td>{formatted}</td>')
             burden_parts.append('</tr>')
     burden_parts.append('</tbody></table>'); burden_html=''.join(burden_parts)
-    detection_html=(f'<section class="table-panel"><h3>Binary detection summary</h3><p>All positive and negative scans/patients; post-reasoning sensitivity, specificity and balanced accuracy use accepted physical volume &gt; 0 mm³.</p>{binary_html}</section>'
-                    f'<section class="table-panel"><h3>Continuous detection summary</h3><p>All patients, including GT-negative patients with zero burden; patient score is maximum scan volume.</p>{burden_html}</section>')
-    return segmentation_html,detection_html
+    ovary_binary_rows=[]
+    for level in ("scan","patient"):
+        ovary=detection_data(volumes,level,"ovary")
+        for model in MODELS:
+            development=ovary[(ovary.model==model)&(ovary.stage=="post")&(ovary.domain=="D1")]
+            dev_truth=development.endometrioma_label.to_numpy(dtype=bool); dev_score=development.volume_mm3.to_numpy(float)
+            thresholds,sens,spec,_=sensitivity_specificity(dev_truth,dev_score); selected=float(thresholds[np.nanargmax((sens+spec)/2)])
+            for domain in ("D1","D2"):
+                z=ovary[(ovary.model==model)&(ovary.stage=="post")&(ovary.domain==domain)]
+                truth=z.endometrioma_label.to_numpy(dtype=bool); score=z.volume_mm3.to_numpy(float); prediction=score>selected
+                tp=np.sum(prediction&truth); fn=np.sum(~prediction&truth); tn=np.sum(~prediction&~truth); fp=np.sum(prediction&~truth)
+                sensitivity=tp/(tp+fn); specificity=tn/(tn+fp)
+                ovary_binary_rows.append({"Level":level.title(),"Model":model,"Centre":domain,"n":len(z),"D1 threshold (mm³)":selected,"AUROC":roc_auc_score(truth,score),
+                                          "Sensitivity":sensitivity,"Specificity":specificity,"Balanced accuracy":(sensitivity+specificity)/2})
+    ovary_binary=pd.DataFrame(ovary_binary_rows); ovary_metric_columns=("AUROC","Sensitivity","Specificity","Balanced accuracy")
+    ovary_binary_parts=['<table class="summary-table grouped-table"><thead><tr><th>Level</th><th>Centre</th><th>Model</th><th>n</th><th>D1 threshold (mm³)</th>'+''.join(f'<th>{c}</th>' for c in ovary_metric_columns)+'</tr></thead><tbody>']
+    for level in ("Scan","Patient"):
+        for centre_index,centre in enumerate(("D1","D2")):
+            group=ovary_binary[(ovary_binary.Level==level)&(ovary_binary.Centre==centre)].set_index("Model").reindex(MODELS).reset_index(); best={c:group[c].max() for c in ovary_metric_columns}
+            for model_index,row in group.iterrows():
+                ovary_binary_parts.append('<tr class="group-start">' if model_index==0 else '<tr>')
+                if centre_index==0 and model_index==0: ovary_binary_parts.append(f'<th rowspan="6" class="level-cell">{level}</th>')
+                if model_index==0: ovary_binary_parts.append(f'<th rowspan="3" class="centre-cell">{centre}</th>')
+                ovary_binary_parts.extend([f'<td>{row.Model}</td>',f'<td>{int(row.n)}</td>',f'<td>{row["D1 threshold (mm³)"]:.0f}</td>'])
+                for column in ovary_metric_columns:
+                    value=float(row[column]); formatted=f'{value:.2f}'; ovary_binary_parts.append(f'<td><strong>{formatted}</strong></td>' if np.isclose(value,best[column]) else f'<td>{formatted}</td>')
+                ovary_binary_parts.append('</tr>')
+    ovary_binary_parts.append('</tbody></table>'); ovary_binary_html=''.join(ovary_binary_parts)
+
+    ovary_patient=detection_data(volumes,"patient","ovary"); ovary_burden=[]
+    for model in MODELS:
+        for domain in ("D1","D2"):
+            z=ovary_patient[(ovary_patient.model==model)&(ovary_patient.stage=="post")&(ovary_patient.domain==domain)]
+            ovary_burden.append({"Centre":domain,"Model":model,"Patients":len(z),"Pearson r":safe_corr(z.gt_endometrioma_case_volume_mm3,z.volume_mm3,"pearson"),"Spearman ρ":safe_corr(z.gt_endometrioma_case_volume_mm3,z.volume_mm3,"spearman")})
+    ovary_burden=pd.DataFrame(ovary_burden); ovary_burden_parts=['<table class="summary-table grouped-table"><thead><tr><th>Level</th><th>Centre</th><th>Model</th><th>Patients</th><th>Pearson r</th><th>Spearman ρ</th></tr></thead><tbody>']
+    for centre_index,centre in enumerate(("D1","D2")):
+        group=ovary_burden[ovary_burden.Centre==centre].set_index("Model").reindex(MODELS).reset_index(); best={c:group[c].max() for c in ("Pearson r","Spearman ρ")}
+        for model_index,row in group.iterrows():
+            ovary_burden_parts.append('<tr class="group-start">' if model_index==0 else '<tr>')
+            if centre_index==0 and model_index==0: ovary_burden_parts.append('<th rowspan="6" class="level-cell">Patient</th>')
+            if model_index==0: ovary_burden_parts.append(f'<th rowspan="3" class="centre-cell">{centre}</th>')
+            ovary_burden_parts.extend([f'<td>{row.Model}</td>',f'<td>{int(row.Patients)}</td>'])
+            for column in ("Pearson r","Spearman ρ"):
+                value=float(row[column]); formatted=f'{value:.2f}'; ovary_burden_parts.append(f'<td><strong>{formatted}</strong></td>' if np.isclose(value,best[column]) else f'<td>{formatted}</td>')
+            ovary_burden_parts.append('</tr>')
+    ovary_burden_parts.append('</tbody></table>'); ovary_burden_html=''.join(ovary_burden_parts)
+    detection_html=(f'<section class="table-panel"><h3>Binary detection using predicted endometrioma volume</h3><p>All positive and negative scans/patients; post-reasoning sensitivity, specificity and balanced accuracy use accepted physical volume &gt; 0 mm³.</p>{binary_html}</section>'
+                    f'<section class="table-panel"><h3>Continuous detection using predicted endometrioma volume</h3><p>All patients, including GT-negative patients with zero burden; patient score is maximum scan volume.</p>{burden_html}</section>'
+                    f'<section class="table-panel"><h3>Binary detection using predicted ovary volume</h3><p>Ovary volume is a surrogate endometrioma score. Each post-reasoning threshold is selected on D1 by maximum balanced accuracy and then fixed for D2.</p>{ovary_binary_html}</section>'
+                    f'<section class="table-panel"><h3>Continuous detection using predicted ovary volume</h3><p>All patients, including zero GT burden; patient score is maximum predicted ovary volume.</p>{ovary_burden_html}</section>')
+    ovary_display=ovary_effect.copy()
+    ovary_display["Endometrioma absent Dice"]=ovary_display.negative_mean_dice
+    ovary_display["Endometrioma present Dice"]=ovary_display.positive_mean_dice
+    ovary_display["Difference (present − absent)"]=ovary_display.dice_difference_positive_minus_negative
+    ovary_display["95% CI"]=ovary_display.apply(lambda row:f"[{row['difference_ci_2.5%']:.2f}, {row['difference_ci_97.5%']:.2f}]",axis=1)
+    ovary_display["Permutation p"]=ovary_display.permutation_p
+    ovary_display=ovary_display[["domain","model","stage","negative_patients","positive_patients","Endometrioma absent Dice","Endometrioma present Dice","Difference (present − absent)","95% CI","Permutation p"]]
+    ovary_display.columns=["Centre","Model","Stage","Absent n","Present n","Absent Dice","Present Dice","Difference","95% CI","Permutation p"]
+    ovary_html=ovary_display.to_html(index=False,float_format=lambda x:f"{x:.3f}",classes="summary-table",border=0)
+    return segmentation_html,detection_html,ovary_html
 
 
 def write_dashboard(
@@ -411,10 +530,11 @@ def write_dashboard(
     threshold: float,
     metrics: pd.DataFrame,
     volumes: pd.DataFrame,
+    ovary_effect: pd.DataFrame,
 ) -> None:
     nav="".join(f'<a href="#part-{i}">Part {i}: {title}</a>' for i,(title,_,_) in enumerate(parts,1))
     rendered=[]
-    segmentation_table,detection_tables=summary_tables(metrics,volumes)
+    segmentation_table,detection_tables,ovary_table=summary_tables(metrics,volumes,ovary_effect)
     for part_index,(part_title,part_description,figures) in enumerate(parts,1):
         figures_html="".join(
             f'<section><h3>{title}</h3><p>{description}</p><img src="figures/{filename}" alt="{title}"></section>'
@@ -422,7 +542,8 @@ def write_dashboard(
         )
         tables=""
         if part_index==1:
-            tables=f'<section class="table-panel"><h3>Segmentation summary</h3><p>Mean positive-only endometrioma Dice on annotated scans. Post includes fully rejected predictions as Dice 0.</p>{segmentation_table}</section>'
+            tables=(f'<section class="table-panel"><h3>Segmentation summary</h3><p>Mean positive-only endometrioma Dice on annotated scans. Post includes fully rejected predictions as Dice 0.</p>{segmentation_table}</section>'
+                    f'<section class="table-panel"><h3>Does endometrioma presence degrade ovary segmentation?</h3><p>Patient-level comparison using only ovary-annotated scans. Difference = mean Dice in endometrioma-present patients minus mean Dice in endometrioma-absent patients; negative values indicate degradation. Confidence intervals use patient bootstrap and p-values use patient-label permutation.</p>{ovary_table}</section>')
         elif part_index==2:
             tables=detection_tables
         rendered.append(f'<div class="part" id="part-{part_index}"><div class="part-head"><span>Part {part_index}</span><h2>{part_title}</h2><p>{part_description}</p></div>{tables}{figures_html}</div>')
@@ -446,6 +567,7 @@ def main() -> None:
         ("Endometrioma segmentation","Localization and delineation are evaluated only where voxel annotations exist.",[
             ("Segmentation dataset and task denominators","The first panel gives the annotated segmentation cohorts; detection denominators are shown separately for context.","02_dataset_overview.png"),
             ("Positive-only segmentation performance","Dice on annotated positive scans; a fully rejected prediction remains Dice 0.","pre_post_positive_dice.png"),
+            ("Endometrioma presence versus ovary segmentation","Only ovary-annotated scans; patient-level Dice distributions are separated by endometrioma presence.","03b_endometrioma_effect_on_ovary.png"),
             (f"GT recall at {args.threshold:g}","Annotated scans containing at least one recovered GT voxel.","04_gt_recall_threshold.png"),
             ("GT recall across centres and modalities","Median voxel recall and IQR on class-annotated scans only.","05_gt_recall_centres_modalities.png"),
         ]),
@@ -456,23 +578,32 @@ def main() -> None:
             ("Binary detection — scan level","All positive and negative scans. Threshold 0 uses volume > 0 mm³.","07_scan_sensitivity_specificity.png"),
             ("Binary detection — patient level","All positive and negative patients; patient score is maximum scan volume.","08_patient_sensitivity_specificity.png"),
             ("Binary operating point — any accepted candidate","Post-reasoning sensitivity, specificity, balanced accuracy, PPV and NPV at accepted physical volume > 0 mm³.","08b_zero_volume_operating_point.png"),
+            ("Ovary-volume surrogate — scan-level binary detection","All scans; predicted ovary physical volume is used as the endometrioma score.","08c_ovary_scan_sensitivity_specificity.png"),
+            ("Ovary-volume surrogate — patient-level binary detection","All patients; score is maximum predicted ovary volume across scans.","08d_ovary_patient_sensitivity_specificity.png"),
             ("Continuous detection — all scans and patients","Primary burden analysis includes GT-negative subjects with GT volume 0; raw-volume Pearson and Spearman are shown.","09_all_population_correlation_summary.png"),
+            ("Ovary-volume surrogate — continuous detection","All scans and patients; predicted ovary volume is correlated with case GT endometrioma burden.","09b_ovary_all_population_correlation_summary.png"),
             ("Continuous detection — patient scatter","All patients, including zero burden; plot is log-transformed for display while raw and log Pearson plus Spearman are reported.","10_all_patient_volume_correlation.png"),
+            ("Ovary-volume surrogate — patient scatter","All patients, including zero burden; maximum predicted ovary volume versus case GT endometrioma volume.","10b_ovary_all_patient_volume_correlation.png"),
             ("Positive-only burden sensitivity analysis","Secondary analysis asks whether burden is ranked after disease is known.","11_positive_patient_volume_correlation.png"),
         ]),
         ("Ovarian cancer risk — future work","Placeholder: among patients with endometrioma, test whether endometrioma burden, ovary volume and radiomics predict ovarian-cancer risk after outcomes and leakage-safe splits are available.",[]),
     ]
     volumes=pd.read_csv(root/"tables"/"all_scan_pre_post_volumes.csv")
+    ovary_effect=analyze_endometrioma_effect_on_ovary(metrics,volumes,output/"03b_endometrioma_effect_on_ovary.png",root/"tables"/"endometrioma_effect_on_ovary_segmentation.csv")
     plot_candidate_survival(root,output/"01_candidate_survival.png",args.threshold); plot_dataset_overview(metrics,volumes,output/"02_dataset_overview.png")
     plot_probability_correlations(root,output/"03_probability_channel_correlations.png"); plot_gt_recall(root,output/"04_gt_recall_threshold.png",args.threshold)
     plot_gt_recall_centres(root,output/"05_gt_recall_centres_modalities.png",args.threshold); plot_physical_volumes(volumes,output/"06_pre_post_physical_volume.png")
     plot_sensitivity_specificity(volumes,output/"07_scan_sensitivity_specificity.png","scan")
     plot_sensitivity_specificity(volumes,output/"08_patient_sensitivity_specificity.png","patient")
     plot_zero_operating_point(volumes,output/"08b_zero_volume_operating_point.png")
+    plot_sensitivity_specificity(volumes,output/"08c_ovary_scan_sensitivity_specificity.png","scan","ovary")
+    plot_sensitivity_specificity(volumes,output/"08d_ovary_patient_sensitivity_specificity.png","patient","ovary")
     plot_correlation_summary(volumes,output/"09_all_population_correlation_summary.png")
+    plot_correlation_summary(volumes,output/"09b_ovary_all_population_correlation_summary.png","ovary")
     plot_volume_correlations(volumes,output/"10_all_patient_volume_correlation.png",False)
+    plot_volume_correlations(volumes,output/"10b_ovary_all_patient_volume_correlation.png",False,"ovary")
     plot_volume_correlations(volumes,output/"11_positive_patient_volume_correlation.png",True)
-    write_dashboard(root/"reasoning_model_comparison_dashboard.html",parts,args.threshold,metrics,volumes)
+    write_dashboard(root/"reasoning_model_comparison_dashboard.html",parts,args.threshold,metrics,volumes,ovary_effect)
     print(root/"reasoning_model_comparison_dashboard.html")
 
 

@@ -1,4 +1,4 @@
-# PanCIA anchor-centric anatomical knowledge base (v0.4.1, draft)
+# PanCIA anchor-centric anatomical knowledge base (v0.4.3, draft)
 
 Knowledge that lets a **deterministic planner** turn a TotalSegmentator (TS) result into VoxTell prompts for any
 scan, any cancer type: which anchors *should* be in the field of view, where they must be, which surrounding
@@ -73,11 +73,19 @@ python scripts/run_planner_batch.py --kb knowledge_base --ts_dir <TS save_dir> -
     --out_dir <plans dir> --meta_csv scan_meta.csv --tumour_dir <VT save_dir> --tumour_dir <BP save_dir> \
     --tumour_obj tumor --workers 8
 ```
+Cost: the planner itself is ~1 ms per scan; the adapter (`load_ts_output`) is 1–2 s, dominated by the Euclidean distance
+transforms that build the 10 mm host envelopes (one per candidate host, computed on the host's bounding box since v0.4.2;
+before that every envelope was a full-volume transform and a scan took 5–8 s single-threaded, 15–30 s with contended
+workers). Expect roughly 4,968 scans / 8 workers ≈ 15–20 min for the cohort.
+
+Audit of the host set on real plans (which rater supports each secondary host, with what component):
+`python scripts/audit_host_evidence.py --plan_dir <plans dir>/MR/TCGA-LIHC --limit 20 [--remap OLD=NEW]`.
+
 Pipeline position: the **initial tumour masks (BiomedParse 2D and VoxTell 3D, already computed for the cohort) and the
 TotalSegmentator organs are both inputs to the planner**. `--tumour_dir` is repeatable (VT first, then BP).
 
 **Cancer type (and site) is the primary anchor for the host; tumour masks only supply evidence that is consistent
-with it.** BP and VT have zero overlap on ~60 % of series, so a raw centroid is unreliable. The adapter builds the
+with it.** BP and VT have zero overlap on ~38 % of series (multi-component BP; 62 % with largest-component BP), so a raw centroid is unreliable. The adapter builds the
 expected host's envelope (its TS mask dilated 10 mm) and accepts, in order: the agreement `T_BP ∩ T_VT` if ≥50 % of it
 lies in the envelope; else the connected components of VT, then BP, that lie ≥50 % inside; else nothing. With
 nothing validated the centroid is `None`, the cancer-type host is kept, a bilateral host is prompted on **both** sides
@@ -130,8 +138,13 @@ have invaded neighbours or spread. `tumour_prompts.spread` defines the data-agno
 type / explicit `host`), local-invasion neighbours (0.3; the anchors linked to the primary by `adjacent_to` /
 `invested_by`, derived from the relation graph so unseen cancers are covered) and cancer-specific distant sites
 (0.15; liver, lung, adrenal, spine … per cancer). The data-driven update is set-based: for every candidate present in
-the scan, evidence = 2 if the BP∩VT agreement lies in its TS envelope, 1 if one rater's component does, 0 otherwise;
-weight = prior × (1 + evidence). The primary is always kept; a secondary host earns prompts only with evidence ≥ 1
+the scan, evidence = 2 if the BP∩VT agreement lies in its TS envelope; 1 (local-invasion neighbours only) if one
+rater's connected component contains part of the validated primary tumour and extends ≥ 0.5 ml into the neighbour
+beyond the primary envelope, i.e. one object growing across the organ boundary; 0 otherwise. Any other measurable
+single-rater object in a neighbour's region is recorded as an `isolated_lesions` hypothesis (rater, ml) for the
+arbitration step, never as host evidence (v0.4.2 — the multi-component BiomedParse masks drop 1–80 ml blobs in
+kidney, stomach, heart and lung on liver MR; before this rule they created 2–4 false secondary hosts per scan and
+exhausted the prompt budget). Distant sites therefore need agreement to be prompted. weight = prior × (1 + evidence). The primary is always kept; a secondary host earns prompts only with evidence ≥ 1
 (its own extent plus a 1-hop *extent* profile: capsule/fascia, vessels, node stations, neighbours — no sub-parts);
 evidence-0 neighbours in the FOV are kept as `contact_check` hosts, tested for tumour–organ contact on TS masks in
 the reasoning layer without VoxTell prompts. The coarse KB prior box is never used as evidence for a secondary host.
@@ -156,6 +169,55 @@ existence gate are deferred to stage 2, once the pilot shows where set/topology 
 Run-time components still to implement on top of this: the single VoxTell call per scan
 (`voxtell-predict -i img -o out -p <all terms of the plan>`), gate resolution on actual masks, the set/topology
 reasoning module implementing `qc_rules.yaml`, and evidence write-back.
+
+## Pilot findings on 300 real plans (v0.4.2, 22 Sep 2026) and the rules they added
+- **Header handedness on pelvic MR.** 83/114 BLCA MR scans had no asymmetric organ pair in the FOV, handedness fell back
+  to "assume RAS", the headers are x-mirrored (as on every TCGA CT/MR seen so far) → 1,040 false `laterality mismatch`
+  flags, hips / iliac vessels / iliopsoas "implausible" and re-prompted, median 8 implausible-missing per scan and the
+  60-prompt cap hit with 25 drops. New second vote: TS's own sided labels — for every bilateral entity found on both
+  sides, sign(x_left − x_right), separation-weighted (`header_handedness.source = ts_sided_pairs`). Effect on a pelvic MR:
+  implausible 13 → 0, missing 17 → 8 (the eight are the pelvic organs TS has no class for), prompts 60 → 50, drops 0.
+- **Lung on the CT task.** `lung` mapped to the upper lobe only, so on abdominal CT (lower lobes in FOV) the lung was
+  "missing" on 119/120 scans and two VoxTell prompts were spent per scan. Anchors flagged `found_from_parts` (lung) are
+  now found when any `has_part` child is found (lobes merged per side: volume sum, truncated if any part is → `partial`).
+- **Psoas vs iliopsoas.** Both entities claimed TS `iliopsoas_*` on the CT task, so `iliopsoas` was never found on CT and
+  `psoas` never on MR (2 prompts per scan on 300/300). `iliopsoas` owns the TS classes; `psoas` is `implied_by_whole`
+  (`iliopsoas has_part psoas`): present by containment, no own extent, no prompt. Its own mask needs the TS
+  `abdominal_muscles` task or an explicit VoxTell prompt.
+- **Primary host is never overridden.** 12/300 plans had the host replaced by the organ TS assigns to the BP∩VT
+  agreement (LIHC → stomach ×5, KIRC → liver ×2/bladder ×1, BLCA → kidney/stomach/prostate). These are boundary or
+  leakage cases; the cancer type stays the primary, the neighbour gets evidence 2 as a secondary host, and the event is
+  recorded as `diagnostics.agreement_elsewhere` (summary column `agreement_elsewhere`).
+- **Budget.** Median prompts 60 with 45–62 % of scans dropping tier-2 items (bladder and liver profiles alone exceed
+  the cap on large-FOV scans). Drops are lowest-priority first (OOD 3 → rare 2 → default) and never touch tier 0/1 or
+  tumour prompts; whether to raise `budget.max_prompts_per_scan` is a VoxTell-cost decision, not a KB one.
+- Summary columns added: `handedness`, `n_found_derived`, `agreement_elsewhere`, `n_isolated_lesions`.
+
+## Full-cohort run (4,968 plans, 22 Sep 2026) → v0.4.3 rules
+Healthy: 0 errors, median 3 s/scan; host = cancer-type host on every scan; header handedness −1 on 4,647 scans
+(`anatomy` 3,886, `ts_sided_pairs` 761), `assumed_ras` only where TS found ≤ 4 structures (breast MR); tumour evidence
+none on 7.5 %; OOD hosts validated in the KB prior region (CESC 366/368, OV 362/369, UCEC 282/368). Four problems:
+- **Frame on scans without vertebrae or abdominal landmarks** (BRCA MR 426/634 `assumed_after_ruler`): the provisional
+  T10–coccyx span made kidney / duodenum / iliopsoas "missing" on ~600 breast MRs (36 tier-1 prompts each, 80 % budget
+  drops). Now: thoracic landmarks added (`lung_apex` T1 top, `heart_centre` T7, `clavicle_level` T1, aorta/trachea
+  volume ranges so fragments are not read as landmarks); landmark truncation is judged at the end the landmark reads
+  (a liver cut at the bottom still has a dome); and when no landmark exists the span is the **host's KB span widened to
+  the FOV length (~30 mm/level) and shifted to cover the anchors TS found** (`assumed_from_host_and_found`) — the scan was
+  acquired for the cancer, so it is centred on the host. Breast MR: missing 39 → 9, prompts 60 → 35, drops 31 → 0;
+  36 mm pelvic CT slab: T10–coccyx → S1–S4.
+- **Secondary-host evidence too permissive for pelvic OOD hosts** (CESC bladder ev2 42/368, OV colon ev2 64/369, UCEC
+  bladder ev2 23/285): with a 10 mm envelope every cervix tumour "invades" the bladder. Secondary regions are now the
+  TS mask dilated 3 mm (`secondary_envelope_mm`): the claim must enter the neighbour. The primary keeps 10 mm.
+  Local-invasion evidence 1 no longer needs the component to lie mostly in the neighbour (it is mostly in the primary by
+  definition): it must contain part of the validated primary tumour and put ≥ 0.5 ml inside the neighbour.
+- **Lung host envelope on CT** was the KB prior box (LUAD 79/91, LUSC 110/116 `prior_region_*`) because the lung's TS
+  classes are the lobes: `_host_ts_labels` now includes has_part children of `found_from_parts` anchors → `host_ts_envelope`.
+- Remaining flags are real: laterality mismatches concentrate on `iliac_artery` / `iliac_vein` (TS swaps sides at the
+  bifurcation), volume flags on TS fragments (1 ml adrenal, 17 ml aorta). `breast/left|right` is a completion prompt on
+  every CT whose frame reaches T7 (76–146 per cohort; sex is not a filter by design) — decide whether breast should be
+  an anchor on CT at all. `gallbladder` missing on 331/559 LIHC MR: presence is variable (cholecystectomy), keep as prompt.
+- Budget: median 60 prompts and tier-2 drops on 30–90 % of scans persist (bladder / liver / uterus profiles); raising
+  `budget.max_prompts_per_scan` is a VoxTell-cost decision.
 
 ## Coverage tiers (from VoxTell's published vocabulary, v0.4.1)
 Two fetched sources: the **VoxTell v1.1 label set** behind its Hugging Face text embeddings

@@ -44,9 +44,13 @@ def fov_z_from_table(rows) -> Tuple[float, float]:
 
 
 def _host_ts_labels(kb, task, label_names, host):
-    """TS label ids (all sides) that map to the host entity."""
+    """TS label ids (all sides) that map to the host entity — including the labels of its has_part children when the
+    anchor is `found_from_parts` (lung on the CT task = the five lobes, which map to lobe entities)."""
     ts_map = kb.ts_to_entity.get(task, {})
-    return [lab for lab, name in label_names.items() if ts_map.get(name, (None,))[0] == host]
+    ents = {host}
+    if kb.entities.get(host, {}).get('found_from_parts'):
+        ents |= {r['dst'] for r in kb.out_edges.get(host, []) if r['type'] == 'has_part'}
+    return [lab for lab, name in label_names.items() if ts_map.get(name, (None,))[0] in ents]
 
 
 def host_prior_region(kb, host, md, label_names, task, spacing, expand_mm=30.0, depth=2):
@@ -96,11 +100,59 @@ def host_prior_region(kb, host, md, label_names, task, spacing, expand_mm=30.0, 
     return box, sorted(used)
 
 
-def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task, spacing, envelope_mm=10.0, min_inside=0.5, min_component_ml=0.5):
+def _envelope(hm, spacing, envelope_mm):
+    """Boolean region within envelope_mm of a mask, computed on the mask's bounding box (± envelope) instead of the
+    whole volume: the Euclidean distance transform is the planner's only expensive step (~0.3 s per full 512² volume
+    and ~10 candidate hosts per scan)."""
+    import numpy as np
+    from scipy import ndimage
+    sl = ndimage.find_objects(hm.astype(np.int8))[0]
+    pad = [int(np.ceil(envelope_mm / float(sp))) + 1 for sp in spacing]
+    box = tuple(slice(max(0, a.start - p), min(n, a.stop + p)) for a, p, n in zip(sl, pad, hm.shape))
+    out = np.zeros(hm.shape, bool)
+    out[box] = ndimage.distance_transform_edt(~hm[box], sampling=spacing) <= envelope_mm
+    return out
+
+
+def _components(m, min_vox):
+    """Connected components (26-connectivity) of a boolean mask as (label image, [(id, slices, n_vox)] for the components
+    with >= min_vox voxels). Per-component work is then done inside the component's bounding box only."""
+    import numpy as np
+    from scipy import ndimage
+    lab, k = ndimage.label(m, structure=np.ones((3, 3, 3)))
+    sizes = np.bincount(lab.ravel())
+    objs = ndimage.find_objects(lab)
+    comps = [(j, objs[j - 1], int(sizes[j])) for j in range(1, k + 1) if sizes[j] >= min_vox and objs[j - 1] is not None]
+    return lab, k, comps
+
+
+def _frac_in(lab, j, sl, n, region):
+    """fraction of component j (bounding box sl, n voxels) lying inside a boolean region."""
+    return float(((lab[sl] == j) & region[sl]).sum()) / n
+
+
+
+def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task, spacing, envelope_mm=10.0, min_inside=0.5, min_component_ml=0.5,
+                             primary_tumour=None, primary_envelope=None, secondary_envelope_mm=3.0):
     """Data-driven update of the host prior: for each candidate host (KB.spread_hosts) present in the scan, count the
     set-based evidence that a validated tumour component lies in its region — 2 agreement, 1 one rater, 0 none.
     Candidates with a TS class use the TS envelope; candidates without one use the KB prior region; candidates with
     neither region (not in FOV / no landmarks) get evidence None and keep their prior only.
+    Set/topology rules for a SECONDARY host (v0.4.2; BiomedParse masks are multi-component and drop isolated blobs in
+    neighbouring organs, so an isolated single-rater component is not evidence of spread):
+      * evidence 2 — the raters' agreement region lies >= min_inside inside the host region (as before);
+      * evidence 1 — only for a `local_invasion` host, from one rater's connected component that CONTAINS part of the
+        validated primary tumour (`primary_tumour`, the region the centroid was taken from) and extends by at least
+        min_component_ml into the host region outside the primary envelope — one object growing across the organ
+        boundary (local invasion is contiguous by definition). Without a validated primary tumour no single-rater
+        secondary evidence is possible;
+      * any other measurable single-rater component that lies >= min_inside in a secondary host region is recorded in
+        `isolated_lesions` (rater, ml) — a metastasis / false-positive hypothesis for the arbitration step — and gives
+        evidence 0; `distant` hosts therefore need agreement to be prompted.
+    The PRIMARY is validated in a wide envelope (envelope_mm, 10 mm: an exophytic tumour may sit outside the TS organ);
+    a SECONDARY host's region is its TS mask dilated by secondary_envelope_mm (3 mm ≈ one voxel): 'the tumour claim
+    enters the neighbour', not 'the tumour is near the neighbour' — with 10 mm every cervix tumour was bladder invasion
+    (CESC 42/368 bladder ev2, OV 64/369 colon ev2 in the first full run).
     weight = prior × (1 + evidence). Returns the candidate list with evidence, weight, in_fov, region kind."""
     import numpy as np
     from scipy import ndimage
@@ -116,25 +168,33 @@ def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task
     min_vox = max(1, int(round(min_component_ml / vox_ml)))
     comp_cache = []
     for m in nonempty:
-        lab, k = ndimage.label(m, structure=np.ones((3, 3, 3)))
-        sizes = np.bincount(lab.ravel())
-        comp_cache.append((lab, [j for j in range(1, k + 1) if sizes[j] >= min_vox]))   # only measurable components count as evidence
+        lab, k, comps = _components(m, min_vox)           # only measurable components count as evidence
+        comp_cache.append((lab, comps))
     if inter is not None and inter.sum() < min_vox:
         inter = None
-    out = []
+    regions = []
     for c in candidates:
         c = dict(c)
         labs = _host_ts_labels(kb, task, label_names, c['entity'])
         region, kind = None, None
         hm = np.isin(md, labs) if labs else None
         if hm is not None and hm.any():
-            region, kind = ndimage.distance_transform_edt(~hm, sampling=spacing) <= envelope_mm, 'ts_envelope'
+            # the primary's TS envelope was already computed by tumour_summary → reuse instead of a second distance transform
+            if c['cls'] == 'primary':
+                region = primary_envelope if primary_envelope is not None else _envelope(hm, spacing, envelope_mm)
+            else:
+                region = _envelope(hm, spacing, secondary_envelope_mm)
+            kind = 'ts_envelope'
         elif not labs and c['cls'] == 'primary':
             # the KB prior box is coarse: acceptable for the primary (no alternative), never as evidence for a secondary host
             region, used = host_prior_region(kb, c['entity'], md, label_names, task, spacing)
             kind = 'kb_prior_region' if region is not None else None
         c['in_fov'] = region is not None
         c['region'] = kind
+        regions.append((c, region))
+    primary_region = next((r for c, r in regions if c['cls'] == 'primary'), None)
+    out = []
+    for c, region in regions:
         if region is None:
             c['evidence'] = None
             c['weight'] = round(c['prior'], 3)
@@ -143,14 +203,28 @@ def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task
         if inter is not None and float((inter & region).sum()) / float(inter.sum()) >= min_inside:
             ev = 2
         else:
-            for lab, comps in comp_cache:
+            isolated = []
+            for (lab, comps), rname in zip(comp_cache, [n for n, m in zip(names, masks) if m.any()]):
                 hit = False
-                for j in comps:
-                    comp = lab == j
-                    if float((comp & region).sum()) / float(comp.sum()) >= min_inside:
+                for j, sl, n in comps:
+                    comp = lab[sl] == j
+                    # local invasion: one connected object that contains part of the validated primary tumour and puts at
+                    # least a measurable volume inside the neighbour (beyond the primary envelope) — it is mostly in the
+                    # primary by definition, so no 'majority inside the neighbour' test here
+                    if c['cls'] == 'local_invasion' and primary_tumour is not None and primary_region is not None \
+                            and bool((comp & primary_tumour[sl]).any()):
+                        if int((comp & region[sl] & ~primary_region[sl]).sum()) >= min_vox:
+                            hit = True; break
+                        continue                                  # the validated primary component itself, not touching this neighbour
+                    if _frac_in(lab, j, sl, n, region) < min_inside:
+                        continue
+                    if c['cls'] == 'primary':
                         hit = True; break
+                    isolated.append((rname, round(n * vox_ml, 1)))
                 ev += int(hit)
             ev = min(ev, 1) if ev else 0            # single-rater support counts once; two raters' separate components ≠ agreement
+            if isolated:
+                c['isolated_lesions'] = isolated    # single-rater objects in this host's region, disjoint from the primary: hypotheses, not evidence
         c['evidence'] = ev
         c['weight'] = round(c['prior'] * (1 + ev), 3)
         out.append(c)
@@ -204,7 +278,7 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
                 hm = np.isin(md, labs) if labs else None
                 spacing = _spacing(ref.affine)
                 if hm is not None and hm.any():
-                    envelope = ndimage.distance_transform_edt(~hm, sampling=spacing) <= envelope_mm
+                    envelope = _envelope(hm, spacing, envelope_mm)
                     diag['host_ts_volume_ml'] = round(float(hm.sum() * np.prod(spacing) / 1000), 1)
                     diag['validation_region'] = 'host_ts_envelope'
                 else:
@@ -223,16 +297,12 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
     min_vox = max(1, int(round(min_component_ml / vox_ml)))
 
     def validated_components(m):
-        lab, k = ndimage.label(m, structure=np.ones((3, 3, 3)))
-        sizes = np.bincount(lab.ravel())
+        lab, k, comps = _components(m, min_vox)          # sub-measurable fragments are never evidence
         keep = np.zeros_like(m)
         n_keep = 0
-        for c in range(1, k + 1):
-            if sizes[c] < min_vox:                     # sub-measurable fragment: never evidence
-                continue
-            comp = lab == c
-            if inside_frac(comp) >= min_inside:
-                keep |= comp; n_keep += 1
+        for c, sl, n in comps:
+            if _frac_in(lab, c, sl, n, envelope) >= min_inside:
+                keep[sl] |= lab[sl] == c; n_keep += 1
         return keep, n_keep, k
 
     nonempty = [(n, m) for n, m in zip(names, masks) if m.any()]
@@ -306,15 +376,19 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
                     diag.update(overlap_host=ent[0], overlap_host_frac=round(frac, 3), overlap_ts_class=label_names.get(int(lab)))
                     if expected_host is None:
                         host = ent[0]
-                    elif ent[0] != expected_host and inter is not None and frac >= 0.5:
-                        host = ent[0]; diag['host_override'] = 'agreement lies in another anchor'
                     elif ent[0] != expected_host:
+                        # the cancer type stays the primary anchor (v0.4.2): an agreed lesion that TS labels as a neighbour
+                        # is the boundary / invasion case — it earns that neighbour evidence 2 as a secondary host below,
+                        # it does not replace the primary. Recorded for the audit and the arbitration step.
                         diag['host_conflict_ignored'] = f'{ent[0]} ({frac:.2f}) vs expected {expected_host}'
+                        if inter is not None and frac >= 0.5:
+                            diag['agreement_elsewhere'] = dict(entity=ent[0], frac=round(frac, 3))
                     break
     if md is not None and kb is not None and expected_host:
         spacing = _spacing(ref.affine)
         cands = kb.spread_hosts(expected_host, cancer_type)
-        hosts = host_candidates_evidence(kb, cands, masks, names, md, label_names, task, spacing, envelope_mm, min_inside, min_component_ml)
+        hosts = host_candidates_evidence(kb, cands, masks, names, md, label_names, task, spacing, envelope_mm, min_inside, min_component_ml,
+                                         primary_tumour=td, primary_envelope=envelope if diag.get('validation_region') == 'host_ts_envelope' else None)
         for h in hosts:
             h['kept'] = h['cls'] == 'primary' or (h['evidence'] or 0) >= 1          # secondary hosts earn prompts only with data-driven evidence
             h['contact_check'] = (not h['kept']) and h['in_fov'] and h['cls'] == 'local_invasion'   # neighbours: tumour-contact check on TS masks, no prompts

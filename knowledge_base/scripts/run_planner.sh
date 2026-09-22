@@ -21,7 +21,7 @@ TS_OBJ="${TS_OBJ:-organ}"
 TUMOUR_OBJ="${TUMOUR_OBJ:-tumor}"
 WORKERS="${WORKERS:-8}"
 LIMIT="${LIMIT:-0}"
-PYTHON="${PYTHON:-python3}"
+PYTHON="${PYTHON:-python}"
 
 TS_DIR="$SEG_ROOT/TotalSegmentator/Radiology"
 VT_DIR="$SEG_ROOT/VoxTell/Radiology"
@@ -63,7 +63,8 @@ print(f"{len(rows)} rows: ok={len(ok)} skipped={sum(r['status']=='skipped' for r
 def tab(name, key):
     c = collections.Counter(r.get(key) or '' for r in ok)
     print(f"  {name}: " + ', '.join(f"{k or '-'}={v}" for k, v in c.most_common(12)))
-tab('frame', 'frame_method'); tab('tumour evidence', 'tumour_evidence'); tab('task', 'task')
+tab('frame', 'frame_method'); tab('tumour evidence', 'tumour_evidence'); tab('task', 'task'); tab('header handedness', 'handedness'); tab('agreement elsewhere (primary kept)', 'agreement_elsewhere')
+print(f"  laterality flags: {sum(int(r.get('n_plausibility_flags') or 0) for r in ok)} over {len(ok)} scans; isolated single-rater lesions: {sum(int(r.get('n_isolated_lesions') or 0) for r in ok)}")
 sec = collections.Counter()
 for r in ok:
     for h in (r.get('hosts') or '').split(';'):
