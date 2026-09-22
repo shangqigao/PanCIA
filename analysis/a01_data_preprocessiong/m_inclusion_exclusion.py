@@ -66,17 +66,18 @@ def _safe_extract_tar(archive_path, output_dir):
 
 
 def _ov04_archive_paths(row, archive_dir):
-    """Construct the CT/MR archive paths represented by one metadata row."""
+    """Recursively find the CT/MR archives represented by one metadata row."""
     patient_id = (row.get("AnonPatientID") or "").strip()
     dir_name = (row.get("dirName") or "").strip()
     modalities = _parse_modalities(row.get("ModalitiesInStudy"))
     if not patient_id or not dir_name:
         return []
 
-    return [
-        archive_dir / f"{patient_id}_{dir_name}_{modality}.tar"
-        for modality in sorted(modalities.intersection(OV04_ALLOWED_MODALITIES))
-    ]
+    archive_paths = set()
+    for modality in sorted(modalities.intersection(OV04_ALLOWED_MODALITIES)):
+        archive_name = f"{patient_id}_{dir_name}_{modality}.tar"
+        archive_paths.update(archive_dir.rglob(archive_name))
+    return sorted((path for path in archive_paths if path.is_file()), key=str)
 
 
 def get_ov04_series_paths(data_dir, dataset, csv_path, extract_dir):
@@ -115,18 +116,31 @@ def get_ov04_series_paths(data_dir, dataset, csv_path, extract_dir):
             if archive_dir.is_file():
                 archive_dir = archive_dir.parent
 
-            archive_paths = _ov04_archive_paths(row, archive_dir)
-            for archive_path in archive_paths:
-                if not archive_path.is_file():
-                    logger.warning(
-                        "Skipping missing OV04 archive for row %s: %s",
-                        row.get("OV04_ID", "<unknown>"),
-                        archive_path,
-                    )
-                    continue
+            try:
+                rds_folder_relative = archive_dir.relative_to(dataset_root)
+            except ValueError:
+                # Absolute folders outside <data_dir>/OV04 retain their final
+                # folder name without allowing an absolute extraction path.
+                rds_folder_relative = pathlib.Path(archive_dir.name)
 
+            archive_paths = _ov04_archive_paths(row, archive_dir)
+            if not archive_paths:
+                logger.warning(
+                    "Skipping OV04 row %s: no matching CT/MR archive found "
+                    "under %s",
+                    row.get("OV04_ID", "<unknown>"),
+                    archive_dir,
+                )
+                continue
+
+            for archive_path in archive_paths:
                 # Never create generated data beside archives in the shared folder.
-                extraction_dir = extract_root / archive_path.stem
+                relative_archive = archive_path.relative_to(archive_dir)
+                extraction_dir = (
+                    extract_root
+                    / rds_folder_relative
+                    / relative_archive.with_suffix("")
+                )
                 has_extracted_dicoms = (
                     extraction_dir.exists()
                     and any(extraction_dir.rglob("*.dcm"))
