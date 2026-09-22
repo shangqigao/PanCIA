@@ -65,6 +65,19 @@ def _safe_extract_tar(archive_path, output_dir):
         archive.extractall(output_dir, members=members)
 
 
+def _tar_has_archive_root(archive_path):
+    """Return whether all TAR content is wrapped in ``<archive stem>/``."""
+    archive_stem = pathlib.Path(archive_path).stem
+    with tarfile.open(archive_path, "r:*") as archive:
+        top_level_names = {
+            pathlib.PurePosixPath(member.name).parts[0]
+            for member in archive.getmembers()
+            if pathlib.PurePosixPath(member.name).parts
+            and pathlib.PurePosixPath(member.name).parts[0] not in {".", ""}
+        }
+    return top_level_names == {archive_stem}
+
+
 def _ov04_archive_paths(row, archive_dir):
     """Recursively find the CT/MR archives represented by one metadata row."""
     patient_id = (row.get("AnonPatientID") or "").strip()
@@ -136,14 +149,19 @@ def get_ov04_series_paths(data_dir, dataset, csv_path, extract_dir):
             for archive_path in archive_paths:
                 # Never create generated data beside archives in the shared folder.
                 relative_archive = archive_path.relative_to(archive_dir)
-                extraction_dir = (
+                extraction_parent = (
                     extract_root
                     / rds_folder_relative
-                    / relative_archive.with_suffix("")
+                    / relative_archive.parent
                 )
-                has_extracted_dicoms = (
-                    extraction_dir.exists()
-                    and any(extraction_dir.rglob("*.dcm"))
+                series_root = extraction_parent / archive_path.stem
+                extraction_dir = (
+                    extraction_parent
+                    if _tar_has_archive_root(archive_path)
+                    else series_root
+                )
+                has_extracted_dicoms = series_root.exists() and any(
+                    series_root.rglob("*.dcm")
                 )
                 if not has_extracted_dicoms:
                     logger.info("Extracting OV04 archive %s", archive_path)
@@ -152,7 +170,7 @@ def get_ov04_series_paths(data_dir, dataset, csv_path, extract_dir):
                 # A tar contains multiple series, potentially at arbitrary depths.
                 series_paths.update(
                     dicom_path.parent
-                    for dicom_path in extraction_dir.rglob("*.dcm")
+                    for dicom_path in series_root.rglob("*.dcm")
                 )
 
     return sorted(series_paths, key=str)
