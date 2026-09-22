@@ -30,9 +30,9 @@ def _parse_modalities(value):
     return {item for item in normalized.split() if item}
 
 
-def _resolve_ov04_folder(row, data_root, dataset_root):
-    """Resolve the directory containing an OV04 archive."""
-    folder = (row.get("RDS folder") or row.get("dirName") or "").strip()
+def _resolve_ov04_folder(row, dataset_root):
+    """Resolve ``RDS folder`` relative to ``<data_dir>/OV04``."""
+    folder = (row.get("RDS folder") or "").strip()
     if not folder:
         return None
 
@@ -40,8 +40,7 @@ def _resolve_ov04_folder(row, data_root, dataset_root):
     if folder_path.is_absolute():
         return folder_path
 
-    candidates = (dataset_root / folder_path, data_root / folder_path)
-    return next((path for path in candidates if path.exists()), candidates[0])
+    return dataset_root / folder_path
 
 
 def _safe_extract_tar(archive_path, output_dir):
@@ -105,7 +104,7 @@ def get_ov04_series_paths(data_dir, dataset, csv_path, extract_dir):
             if not modalities.intersection(OV04_ALLOWED_MODALITIES):
                 continue
 
-            archive_dir = _resolve_ov04_folder(row, data_root, dataset_root)
+            archive_dir = _resolve_ov04_folder(row, dataset_root)
             if archive_dir is None or not archive_dir.exists():
                 logger.warning(
                     "Skipping OV04 row %s: folder does not exist (%s)",
