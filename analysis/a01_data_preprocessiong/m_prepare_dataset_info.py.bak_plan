@@ -70,42 +70,7 @@ def prepare_MAMAMIA_info(img_dir, lab_dir=None, lab_mode=None, img_format='nifti
     }
     return dataset_info
 
-def _plan_path_for_image(img_path, planner_dir):
-    """Planner output for one NIfTI: <planner_dir>/<Modality>/<project>/<series_uid>/<series>_plan.json. Accepts the Planner
-    root (…/Planner) or its Radiology subfolder (…/Planner/Radiology)."""
-    parts = pathlib.Path(str(img_path)).parts
-    rel = pathlib.Path(*parts[-4:-1]) / (parts[-1].replace('.nii.gz', '') + '_plan.json')
-    root = pathlib.Path(planner_dir)
-    for cand in (root / rel, root / 'Radiology' / rel):
-        if cand.is_file():
-            return cand
-    return None
-
-
-def load_plan_prompts(plan_path, plan_lists=None):
-    """Read a planner *_plan.json into VoxTell prompt jobs.
-
-    Returns dict(plan=<path>, kb_version=…, jobs=[…]); every job keeps the planner fields (entity, side, list, tier, terms,
-    gate, priority, relation, from_anchor, reason) and gets the VoxTell output name '<entity>[_<side>]_<seg_obj>' with
-    seg_obj = 'tumor' for tier-T prompts and 'organ' for anatomy prompts. plan_lists (e.g. ['T'] or ['T', 'A', 'B'])
-    restricts the planner lists; None = all."""
-    with open(plan_path, 'r') as f:
-        plan = json.load(f)
-    keep = None if not plan_lists else {str(x) for x in plan_lists}
-    jobs = []
-    for i, p in enumerate(plan.get('prompts', [])):
-        if keep is not None and str(p.get('list')) not in keep:
-            continue
-        seg_obj = 'tumor' if p.get('list') == 'T' else 'organ'
-        name = p['entity'] + (f"_{p['side']}" if p.get('side') else '') + f'_{seg_obj}'
-        jobs.append(dict(p, plan_index=i, seg_obj=seg_obj, name=name))
-    return dict(plan=str(plan_path), kb_version=(plan.get('input') or {}).get('kb_version'), jobs=jobs)
-
-
-def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti', seg_obj='tumor',
-                                planner_dir=None, plan_lists=None):
-    """planner_dir: if given, prompts come from each image's planner '*_plan.json' (text_prompts[i] = dict(plan, kb_version,
-    jobs)); images without a plan keep the single cancer-type prompt."""
+def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti', seg_obj='tumor'):
     assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
     with open(img_json, 'r') as f:
         data = json.load(f)
@@ -128,15 +93,6 @@ def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_forma
             else:
                 prompts.append(f"{img_site} on {img_mod}")
     
-    plan_paths = [None] * len(images)
-    if planner_dir is not None:
-        for i, img_path in enumerate(images):
-            pp = _plan_path_for_image(img_path, planner_dir)
-            if pp is not None:
-                prompts[i] = load_plan_prompts(pp, plan_lists)
-                plan_paths[i] = str(pp)
-        print(f'planner prompts: {sum(p is not None for p in plan_paths)}/{len(images)} images have a plan')
-
     if lab_dir is not None:
         lab_paths = [str(p).split('/TCGA_NIFTI/')[-1] for p in images]
         lab_paths = [f"{lab_dir}/{lab_mode}/{p}".replace('.nii.gz', f'_{seg_obj}.nii.gz') for p in lab_paths]
@@ -148,7 +104,6 @@ def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_forma
         'img_paths': images,
         'lab_paths': lab_paths,
         'text_prompts': prompts,
-        'plan_paths': plan_paths,
         'modality': modality,
         'site': site,
         'meta_list': None,
@@ -157,10 +112,7 @@ def prepare_TCGA_radiology_info(img_json, lab_dir=None, lab_mode=None, img_forma
 
     return dataset_info
 
-def prepare_CPTAC_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti', seg_obj='tumor',
-                                 planner_dir=None, plan_lists=None):
-    """planner_dir: if given, prompts come from each image's planner '*_plan.json' (text_prompts[i] = dict(plan, kb_version,
-    jobs)); images without a plan keep the single cancer-type prompt."""
+def prepare_CPTAC_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti', seg_obj='tumor'):
     assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
     with open(img_json, 'r') as f:
         data = json.load(f)
@@ -183,15 +135,6 @@ def prepare_CPTAC_radiology_info(img_json, lab_dir=None, lab_mode=None, img_form
             else:
                 prompts.append(f"{img_site} on {img_mod}")
     
-    plan_paths = [None] * len(images)
-    if planner_dir is not None:
-        for i, img_path in enumerate(images):
-            pp = _plan_path_for_image(img_path, planner_dir)
-            if pp is not None:
-                prompts[i] = load_plan_prompts(pp, plan_lists)
-                plan_paths[i] = str(pp)
-        print(f'planner prompts: {sum(p is not None for p in plan_paths)}/{len(images)} images have a plan')
-
     if lab_dir is not None:
         lab_paths = [str(p).split('/CPTAC_NIFTI/')[-1] for p in images]
         lab_paths = [f"{lab_dir}/{lab_mode}/{p}".replace('.nii.gz', f'_{seg_obj}.nii.gz') for p in lab_paths]
@@ -203,7 +146,6 @@ def prepare_CPTAC_radiology_info(img_json, lab_dir=None, lab_mode=None, img_form
         'img_paths': images,
         'lab_paths': lab_paths,
         'text_prompts': prompts,
-        'plan_paths': plan_paths,
         'modality': modality,
         'site': site,
         'meta_list': None,
@@ -240,46 +182,6 @@ def prepare_EndoMRI_info(img_dir, lab_dir=None, lab_mode=None, img_format='nifti
         'lab_paths': lab_paths,
         'text_prompts': text_prompts,
         'modality': ['MRI']*len(img_paths),
-        'site': ['pelvis']*len(img_paths),
-        'meta_list': None,
-        'img_format': ['nifti']*len(img_paths)
-    }
-    return dataset_info
-
-def prepare_OV04_endometriosis_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti'):
-    assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
-    with open(img_json, 'r') as f:
-        data = json.load(f)
-    img_paths = data['included nifti']
-    modality = []
-    for img_path in img_paths:
-        folds = str(img_path).split('/')
-        img_mod = {'MR': 'MRI', 'CT': 'CT'}[folds[-3].split('_')[-1]]
-        modality.append(img_mod)
-    
-    if lab_dir is not None:
-        lab_paths = [str(p).split('/OV04_endometriosis_NIFTI/')[-1] for p in images]
-        lab_paths = [f"{lab_dir}/{lab_mode}/{p}".replace('.nii.gz', f'_{seg_obj}.nii.gz') for p in lab_paths]
-    else:
-        lab_paths = [None]*len(img_paths)
-
-    text_prompts = [
-        [
-            "endometrioma in pelvis",
-            "ovary",
-            "uterus",
-            "tumor in pelvis and cervix",
-            "tumor in pelvis and uterus",
-            "tumor in pelvis and ovaries"
-        ]
-    ]*len(img_paths)
-    
-    dataset_info = {
-        'name': 'OV04_endometriosis',
-        'img_paths': img_paths,
-        'lab_paths': lab_paths,
-        'text_prompts': text_prompts,
-        'modality': modality,
         'site': ['pelvis']*len(img_paths),
         'meta_list': None,
         'img_format': ['nifti']*len(img_paths)

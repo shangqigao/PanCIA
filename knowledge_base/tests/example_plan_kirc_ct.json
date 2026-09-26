@@ -185,7 +185,7 @@
    "is_anchor": true
   },
   {
-   "entity": "psoas",
+   "entity": "iliopsoas",
    "side": "left",
    "ts_name": "iliopsoas_left",
    "volume_ml": 200,
@@ -196,7 +196,7 @@
    "is_anchor": true
   },
   {
-   "entity": "psoas",
+   "entity": "iliopsoas",
    "side": "right",
    "ts_name": "iliopsoas_right",
    "volume_ml": 200,
@@ -218,6 +218,48 @@
     "volume 5 ml below 10"
    ],
    "is_anchor": true
+  },
+  {
+   "entity": "psoas",
+   "side": "left",
+   "ts_name": null,
+   "volume_ml": null,
+   "truncated": false,
+   "partial": false,
+   "plausible": true,
+   "why": [
+    "implied by iliopsoas"
+   ],
+   "is_anchor": true,
+   "implied_by_whole": [
+    "iliopsoas"
+   ],
+   "centroid_mm": [
+    35,
+    -70,
+    40
+   ]
+  },
+  {
+   "entity": "psoas",
+   "side": "right",
+   "ts_name": null,
+   "volume_ml": null,
+   "truncated": false,
+   "partial": false,
+   "plausible": true,
+   "why": [
+    "implied by iliopsoas"
+   ],
+   "is_anchor": true,
+   "implied_by_whole": [
+    "iliopsoas"
+   ],
+   "centroid_mm": [
+    -35,
+    -70,
+    40
+   ]
   }
  ],
  "anchors_expected": [
@@ -365,24 +407,6 @@
     "region": "peritoneal_cavity"
    },
    "ts_has_class": true
-  },
-  {
-   "entity": "iliopsoas",
-   "side": "left",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": true
-  },
-  {
-   "entity": "iliopsoas",
-   "side": "right",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": true
   }
  ],
  "anchors_absent_candidates": [
@@ -394,24 +418,56 @@
    "entity": "kidney",
    "side": "left",
    "terms": [
+    "left kidney tumor",
+    "left kidney mass",
+    "left kidney lesion"
+   ],
+   "tier": 3,
+   "list": "T",
+   "gate": {
+    "kind": "tumour_host",
+    "anchor": "kidney",
+    "anchor_side": "left",
+    "dilate_mm": 10,
+    "filter": "lesion_admission_gate",
+    "host_class": "primary",
+    "host_prior": 1.0
+   },
+   "priority": 1,
+   "reason": [
+    "tier T tumour prompt on primary host (prior 1.0)",
+    "phrase tier in_vocab (kidney tumor)"
+   ],
+   "relation": "tumour_of",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "kidney",
+   "side": "left",
+   "terms": [
     "clear cell renal cell carcinoma in the left kidney",
     "renal cell carcinoma in the left kidney",
     "left kidney tumor"
    ],
-   "tier": 2,
+   "tier": 3,
    "list": "T",
    "gate": {
-    "kind": "inside",
+    "kind": "tumour_host",
     "anchor": "kidney",
-    "dilate_mm": 20
+    "anchor_side": "left",
+    "dilate_mm": 10,
+    "filter": "lesion_admission_gate",
+    "host_class": "primary",
+    "host_prior": 1.0,
+    "ensemble": true
    },
    "priority": 1,
    "reason": [
-    "tumour prompt on host",
+    "primary alias ensemble: initial VoxTell tumour mask absent",
     "also tumour_near profile: spleen -adjacent_to-> kidney"
    ],
-   "relation": "adjacent_to",
-   "from_anchor": "spleen"
+   "relation": "tumour_of",
+   "from_anchor": "kidney"
   },
   {
    "entity": "lung",
@@ -624,46 +680,6 @@
    "from_anchor": null
   },
   {
-   "entity": "iliopsoas",
-   "side": "left",
-   "terms": [
-    "left iliopsoas muscle"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 3,
-   "reason": [
-    "expected in FOV ['T11', 'L4'] (presence=obligatory)",
-    "TS class exists but missing/implausible"
-   ],
-   "relation": null,
-   "from_anchor": null
-  },
-  {
-   "entity": "iliopsoas",
-   "side": "right",
-   "terms": [
-    "right iliopsoas muscle"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 3,
-   "reason": [
-    "expected in FOV ['T11', 'L4'] (presence=obligatory)",
-    "TS class exists but missing/implausible"
-   ],
-   "relation": null,
-   "from_anchor": null
-  },
-  {
    "entity": "renal_cortex",
    "side": "left",
    "terms": [
@@ -760,8 +776,8 @@
    "entity": "gerota_fascia",
    "side": "left",
    "terms": [
-    "left Gerota's fascia",
-    "left renal fascia"
+    "left renal fascia",
+    "left Gerota's fascia"
    ],
    "tier": 2,
    "list": "B",
@@ -1077,30 +1093,6 @@
    "from_anchor": "kidney"
   },
   {
-   "entity": "inferior_vena_cava",
-   "side": null,
-   "terms": [
-    "inferior vena cava",
-    "IVC"
-   ],
-   "tier": 2,
-   "list": "A",
-   "gate": {
-    "kind": "ts_bbox",
-    "ts_entity": "inferior_vena_cava",
-    "side": null,
-    "dilate_mm": 10
-   },
-   "priority": 1,
-   "reason": [
-    "host anchor kidney",
-    "renal_vein -drained_by-> inferior_vena_cava (hop 2)",
-    "staging: vascular_invasion"
-   ],
-   "relation": "drained_by",
-   "from_anchor": "kidney"
-  },
-  {
    "entity": "aorta",
    "side": null,
    "terms": [
@@ -1122,6 +1114,30 @@
     "renal_artery -supplied_by-> aorta (hop 2)"
    ],
    "relation": "supplied_by",
+   "from_anchor": "kidney"
+  },
+  {
+   "entity": "inferior_vena_cava",
+   "side": null,
+   "terms": [
+    "inferior vena cava",
+    "IVC"
+   ],
+   "tier": 2,
+   "list": "A",
+   "gate": {
+    "kind": "ts_bbox",
+    "ts_entity": "inferior_vena_cava",
+    "side": null,
+    "dilate_mm": 10
+   },
+   "priority": 1,
+   "reason": [
+    "host anchor kidney",
+    "renal_vein -drained_by-> inferior_vena_cava (hop 2)",
+    "staging: vascular_invasion"
+   ],
+   "relation": "drained_by",
    "from_anchor": "kidney"
   },
   {
@@ -1748,6 +1764,22 @@
    ]
   },
   {
+   "step": "found_implied_by_whole",
+   "entity": "psoas",
+   "side": "left",
+   "whole": [
+    "iliopsoas"
+   ]
+  },
+  {
+   "step": "found_implied_by_whole",
+   "entity": "psoas",
+   "side": "right",
+   "whole": [
+    "iliopsoas"
+   ]
+  },
+  {
    "step": "expected",
    "n": 16,
    "sex_recorded": "male",
@@ -1787,14 +1819,6 @@
     [
      "small_bowel",
      null
-    ],
-    [
-     "iliopsoas",
-     "left"
-    ],
-    [
-     "iliopsoas",
-     "right"
     ]
    ]
   },
@@ -1803,6 +1827,22 @@
    "host": "kidney",
    "side": "left",
    "source": "tumour_evidence"
+  },
+  {
+   "step": "tumour_prompts",
+   "n": 1,
+   "hosts": [
+    [
+     "kidney",
+     "primary",
+     [
+      "left"
+     ]
+    ]
+   ],
+   "side_excluded": [],
+   "alias_ensemble": true,
+   "vt_initial_largest_ml": null
   },
   {
    "step": "hosts",
@@ -1820,11 +1860,6 @@
    "step": "ts_only",
    "n": 0,
    "items": []
-  },
-  {
-   "step": "tumour_prompt",
-   "included": true,
-   "host": "kidney"
   }
  ]
 }

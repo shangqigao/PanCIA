@@ -1,4 +1,4 @@
-version: 0.4.3
+version: 0.5.5
 generic_templates:
 - tumor in the {host}
 - '{host} tumor'
@@ -25,6 +25,11 @@ spread:
     neighbours are checked for tumour contact in the reasoning layer)
   planner: primary → 2-hop profile; kept secondary hosts → 1-hop profile + tumour-near anchors around their validated component; fusion assigns
     every atom to the host whose extent it overlaps most → primary lesion + secondary lesions per host
+  reach_mm: 10.0
+  reach: 'v0.5.4 distance test: a neighbour is a LOCAL-INVASION host only where the validated primary tumour mask lies within reach_mm of the
+    neighbour TS mask (per side for paired organs); farther → distant if the organ is a distant site of the cancer, else not a host; neighbour
+    without TS mask → side_link prior; no validated primary → no restriction. Paired primary: tumour validated in one organ → that side primary,
+    other side distant; in both → both primary.'
   distant_default:
   - liver
   - lung
@@ -75,13 +80,16 @@ spread:
     TCGA-UCEC:
     - lung
     - liver
+    - omentum
     TCGA-OV:
+    - omentum
     - liver
     - spleen
     - small_bowel
     - colon
     TCGA-STAD:
     - liver
+    - omentum
     - ovary
     - lung
     TCGA-ESCA:
@@ -90,12 +98,14 @@ spread:
     - adrenal
     TCGA-COAD:
     - liver
+    - omentum
     - lung
     TCGA-READ:
     - liver
     - lung
     TCGA-PAAD:
     - liver
+    - omentum
     - lung
 cancer_types:
   TCGA-KIRC:

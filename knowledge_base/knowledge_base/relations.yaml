@@ -1,4 +1,4 @@
-version: 0.4.3
+version: 0.5.5
 relations:
 - src: kidney
   type: has_part
@@ -416,6 +416,17 @@ relations:
   staging:
   - confined
   - location
+  - adjacent_invasion
+  note: 'UCEC T2: cervical stromal invasion (has_part anchor with an invasion tag = invasion route)'
+- src: uterus
+  type: adjacent_to
+  dst: vagina
+  side_link: any
+  direction: inferior
+  contact: continuous_via_cervix
+  staging:
+  - adjacent_invasion
+  note: 'UCEC T3b: vaginal involvement'
 - src: uterus
   type: invested_by
   dst: peritoneum
@@ -694,6 +705,33 @@ relations:
   staging:
   - beyond_capsule
   note: FIGO IC capsule rupture / surface
+- src: ovary
+  type: adjacent_to
+  dst: colon
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: 'FIGO IIB pelvic extension: sigmoid (left) / caecum (right); colon is also an OV distant (peritoneal) site'
+- src: ovary
+  type: adjacent_to
+  dst: rectum
+  side_link: any
+  direction: posterior_inferior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: 'FIGO IIB: pouch of Douglas / rectosigmoid'
+- src: ovary
+  type: adjacent_to
+  dst: urinary_bladder
+  side_link: any
+  direction: anterior_medial
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: 'FIGO IIB: bladder peritoneum; IVA-equivalent mucosa rare'
 - src: ovary
   type: adjacent_to
   dst: omentum
@@ -1128,9 +1166,10 @@ relations:
   type: has_part
   dst: rectum
   side_link: any
+  no_expand: true
   staging:
   - location
-  note: TS colon class includes rectum
+  note: TS colon class includes rectum; rectal relations (READ) are not walked from the colon
 - src: colon
   type: invested_by
   dst: peritoneum
@@ -2456,3 +2495,148 @@ relations:
   dst: spine
   side_link: any
   note: bladder_dome ≈ S3
+- src: spine
+  type: has_part
+  dst: vertebra_C1
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_C2
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_C3
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_C4
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_C5
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_C6
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_C7
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T1
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T2
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T3
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T4
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T5
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T6
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T7
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T8
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T9
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T10
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T11
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_T12
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_L1
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_L2
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_L3
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_L4
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_L5
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_S1
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_S2
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_S3
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_S4
+  side_link: any
+  no_expand: true
+- src: spine
+  type: has_part
+  dst: vertebra_S5
+  side_link: any
+  no_expand: true

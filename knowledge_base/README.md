@@ -1,4 +1,4 @@
-# PanCIA anchor-centric anatomical knowledge base (v0.4.3, draft)
+# PanCIA anchor-centric anatomical knowledge base (v0.5.5, draft)
 
 Knowledge that lets a **deterministic planner** turn a TotalSegmentator (TS) result into VoxTell prompts for any
 scan, any cancer type: which anchors *should* be in the field of view, where they must be, which surrounding
@@ -218,6 +218,112 @@ none on 7.5 %; OOD hosts validated in the KB prior region (CESC 366/368, OV 362/
   an anchor on CT at all. `gallbladder` missing on 331/559 LIHC MR: presence is variable (cholecystectomy), keep as prompt.
 - Budget: median 60 prompts and tier-2 drops on 30–90 % of scans persist (bladder / liver / uterus profiles); raising
   `budget.max_prompts_per_scan` is a VoxTell-cost decision.
+
+## v0.5.0 — tier-T tumour prompts and the lesion admission gate (22 Sep 2026)
+**Where to look is decided by the graph, what to keep by set/topology after inference.** For every host of the spread set
+that is in the FOV (primary; `adjacent_to` / `invested_by` neighbours; cancer-specific distant sites) the plan carries one
+tier-T prompt **"`<host term>` tumor"** (`entity.tumour_phrase`, graded against VoxTell's vocabulary: in_vocab for lung,
+liver, kidney, adrenal, pancreas, colon, bladder, prostate, cervix, oesophagus, breast; `near` elsewhere — 'X metastasis'
+wordings are not used, they are mostly OOD). Prompts are unconditioned: never gated on what BiomedParse or the initial
+VoxTell mask found. The primary's cancer-specific phrases are added as an **alias ensemble only when the initial VoxTell
+mask is empty or < 0.5 ml** (a wording ensemble, never a second rater). BiomedParse is frozen. Tier-T prompts are
+protected like tier 1; the budget is 80. Gate = host region (10 mm primary / 3 mm secondary) recorded on the prompt, but
+tumour claims are **not** filtered by the 80 % output rule — they go to the stage-3 lesion admission gate
+(`qc_rules.lesion_*`): contact with a spread-set host (removes 75 % of BP components), the shape gate calibrated on
+2,870 series (`lesion_shape_slab`: median in-plane cover ≥ 0.4 & aspect ≤ 0.25 → reject, BP 16 % / VT 0.03 %;
+`lesion_shape_organ_like`: |L|/|H| ≥ 0.6 & Dice2D ≥ 0.6 → reject single-model, weight × 0.3 two-model), then admission
+by host class (primary: two-model, or the largest feasible single-model lesion; local invasion: two-model or contiguous
+extension; distant: BP ∩ VT-prompted-for-that-site only) and a reliability weight vector for the graph.
+Summary columns: `n_tierT_tumour`, `tumour_hosts` (`entity[/side]:pri|loc|dis:<phrase tier>|ens`). Typical: 8–11
+tumour prompts on a liver MR (liver + 7 neighbours, bilateral kidneys/adrenals). Also fixed: `run_planner_batch.py`
+detected the initial VoxTell mask by directory equality, which failed on the nested layout, so the old tumour prompt was
+always added.
+
+**v0.5.1 (24 Sep, after the first v0.5.0 cohort run).** (1) Distant sites in the FOV now stay in `plan.hosts` as
+`distant_watch` (no profile prompts, but their tier-T tumour prompt — previously they were dropped without evidence, so
+KIRC lung / LIHC lung–spine / BLCA liver–lung never got a prompt). (2) Single-rater local-invasion evidence (ev1) is
+accepted only when the primary tumour itself is agreement-backed: if the primary rests on one rater, that rater's blob
+spilling into a neighbour is the same single claim (v0.5.0 run: 839 ev1 hosts, 295 from single-rater primaries; LUSC
+heart ev1 41/116, LIHC stomach 75/559). Those become `isolated_lesions` hypotheses for the stage-3 gate.
+
+**v0.5.2 (24 Sep).** `entity.tumour_host` (false for heart, aorta, IVC, iliac vessels, trachea, iliopsoas, psoas,
+thyroid) — these are contact/invasion partners of a primary (T4 great vessels / heart, IVC tumour thrombus via the
+`drained_by` profile), never hosts where a lesion of these cancers arises or seeds; `spread_hosts` skips them, which
+removes 'heart tumor' (1,070 scans), 'iliac artery tumor' (614), 'aorta tumor' (268), 'trachea tumor' (236) and the
+iliopsoas / thyroid prompts of the v0.5.1 run. The v0.5.1 run otherwise confirmed the fixes: distant prompts present
+(lung 6,550, spine 1,877, liver on pelvic cohorts), single-rater ev1 hosts 0 (was 295), tier-T median 8.
+
+**v0.5.3 (25 Sep) — anatomical plausibility of the spread set.** Invasion routes now carry `side_link`
+(left / right / same / any) and must carry a staging tag; `Planner.spread_sides()` applies them once the primary side is
+known. The v0.5.2 run had prompted impossible direct invasions: left-kidney primaries → liver (603 / 613) and
+duodenum (577), right-kidney primaries → spleen (515 / 528), LIHC → left kidney (817 / 855) and left adrenal (721), and
+lung primaries → liver as "local invasion" (192 / 207; the diaphragm edge has no staging, liver is a distant site only).
+A side-excluded local host that is also a distant site of the cancer (KIRC liver) is kept as distant (prior 0.15); side
+unknown → no restriction. Local invasion means contiguous growth (T3/T4 staging); a lesion in a non-contiguous
+organ is haematogenous spread and is prompted as distant when that organ is a distant site of the cancer. A bilateral
+primary with a resolved side now also prompts the **contralateral organ** as a distant-class host (synchronous bilateral /
+contralateral metastasis: right kidney for a left RCC, other ovary, other breast, other lung). Sex is not used to select
+hosts (recorded only). `Planner.spread_targets()`: for a bilateral destination, the side that growth cannot reach
+is still prompted as distant when the organ is a distant site of the cancer (LIHC → left adrenal, left RCC → right
+adrenal); profile prompts are made only for the reachable sides. Kept as rare but documented: HCC → right kidney /
+duodenum / colon, kidney → colon / pancreas, pancreas-tail → left kidney, esophagus → lung, ovary → spleen / colon.
+
+**v0.5.4 (25 Sep) — local invasion by distance, paired primaries.** (1) *Distance test*: a neighbour of the primary is a
+local-invasion host only where the validated primary tumour (agreement, or one rater validated in the host region) lies
+within `tumour_prompts.spread.reach_mm` = 10 mm of the neighbour's TS mask, per side for paired organs
+(`hosts[].reach`, `reach_mm`; distances > 30 mm recorded as None). Farther → distant if the organ is a distant site of
+the cancer (sigmoid tumour → liver distant), else not a host (pancreatic-head tumour → spleen). This generalises
+`side_link` to position within long / large organs (colon segment, pancreas head vs tail, gastric region, liver lobe,
+oesophageal level, central vs peripheral lung). Neighbours without a TS mask keep the `side_link` prior; no validated
+primary → no restriction. (2) *Paired primary organs*: the adapter records which side(s) hold validated tumour
+(`primary_sides`). One side → that organ is the primary, the other side is a distant-class host (never local
+invasion); both sides → both primary, no contralateral prompt; none → both primary (side unknown). (3) New invasion
+routes: UCEC → cervix (T2; the uterus `has_part` cervix edge now carries an invasion tag, and `has_part` edges with
+`adjacent_invasion` count as routes) and vagina (T3b); OV → colon, rectum, bladder (FIGO IIB pelvic extension; colon
+also stays an OV distant site). (4) Secondary hosts without a TS class get the KB prior region to establish FOV (so cervix / vagina / ovary / uterus
+can receive tier-T prompts; never evidence; only if the organ's span is in the frame); their distance is re-tested at
+stage 3 on the prompted VoxTell organ mask. (5) Frame: TS labels the sacrum as one class, so vertebra frames stopped at
+S1 and organs spanning S2–coccyx were never expected; a whole, non-truncated sacrum now extends the frame to the
+coccyx (more completion prompts on pelvic scans). Cost ≈ +1 s per scan (label bounding boxes, cropped distance maps).
+
+**v0.5.5 (25 Sep) — fixes from the per-case graph review (KIRC, LIHC, COAD, OV, UCEC).**
+- *Hosts.* The spine is a host found from the TS vertebra classes (it was never prompted before). The omentum is a new
+  peritoneal host: an anchor with presence `variable` and a KB prior region, added to the OV / UCEC / STAD / COAD / PAAD
+  distant lists. `peritoneal_spread` edges are not invasion routes. The contralateral ovary is primary-class, since
+  bilateral disease is FIGO IB / T1b (`contralateral_class`); kidney, lung and breast keep the other side as distant.
+- *Primary out of FOV.* When the primary host has no TS mask and its canonical span is outside the scan frame (OV on a
+  T9–L4 CT), there is no validation region and no primary evidence. The plan then has no primary prompt or profile.
+  Local-invasion neighbours become distant if they are metastatic sites of the cancer, otherwise they are dropped, and
+  lesions stay distant hypotheses. The frame is estimated in the adapter before tumour validation.
+- *Distance test.* Distance is measured from the full extent of the validated tumour: every measurable rater component
+  overlapping the validated core. KIRC left adrenal: 13.7 mm from the core, 9.3 mm from the full extent.
+- *Fewer irrelevant prompts.*
+  - A missing anchor without a TS class gets its completion prompt, but a profile only if it is the primary or a
+    reachable local host. Before, LIHC got 25 pelvic prompts and UCEC 17 breast / axilla prompts.
+  - Tumour-near profiles are limited to reachable local hosts (capsule, vessels, nodes; not their neighbours). The
+    centroid test was dropped: OV had 10 anchors, about 60 prompts.
+  - `colon has_part rectum` no longer walks the rectal relations (`no_expand`).
+  - Prompts per case: KIRC 31→36 (spine, left adrenal and colon now included), LIHC 80→52, COAD 80→58, UCEC 80→62,
+    OV 80→6 (primary out of FOV). No budget drops.
+- *Wording.*
+  - Sex-specific names are never used for sex-neutral structures: 'gonadal vein', not 'testicular vein'.
+  - Tier-T main phrase is always '<host> tumor' ('vagina tumor'); a better-graded vocabulary string is kept as an alias.
+  - 'primary' is stripped from non-primary tumour prompts: 'colon tumor' when the colon is an invasion site.
+  - 'renal vein' stays unsided on purpose: the vocabulary has 70 training volumes for 'renal vein' against 1 for
+    'left renal vein', and the side is carried by the gate.
+- *v0.5.5b, after the cohort run.* 'Primary out of FOV' was too eager: 446 scans, including renal MR with a landmark frame
+  'L3–coccyx', breast MR 'S4–coccyx', and pelvic CT whose truncated sacrum still shows the upper pelvis. It now needs
+  all three of:
+  - a TS-vertebrae frame;
+  - the host span at least 2 levels beyond the frame edge;
+  - for pelvic hosts, no sacrum or hip found at all.
+  Re-evaluated on the saved plans, 196 remain (chest CT of OV / UCEC / BLCA, pelvic CT of LIHC …), listed in
+  `clinical/planner_primary_out_of_fov_v055b.csv`. The primary validation region no longer applies the strict
+  span-overlap test.
+- *v0.5.5c.* In the header-handedness vote from TS side labels, pairs cut by the field of view now vote too
+  (non-truncated centroids are preferred when both exist). In 3 CESC MR scans a single uncut iliac or gluteus pair had
+  outvoted both hips and femora, giving up to 11 laterality flags; all 3 now resolve to −1. A 300-scan MR sample and
+  the other 761 scans decided by side labels are unchanged.
 
 ## Coverage tiers (from VoxTell's published vocabulary, v0.4.1)
 Two fetched sources: the **VoxTell v1.1 label set** behind its Hugging Face text embeddings

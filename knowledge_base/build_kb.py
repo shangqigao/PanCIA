@@ -9,7 +9,7 @@ OUT = os.path.join(os.path.dirname(__file__), 'knowledge_base')
 os.makedirs(OUT, exist_ok=True)
 TS = json.load(open(os.path.join(os.path.dirname(__file__), 'seed', 'ts_class_maps.json')))
 TS_ALL = {task: set(v.values()) for task, v in TS.items()}
-VERSION = '0.4.3'
+VERSION = '0.5.5'
 TODAY = str(datetime.date.today())
 
 # ------------------------------------------------------------------ helpers
@@ -43,8 +43,9 @@ def A(span, lr, ap, presence, prior=(), span_var=1):
     return dict(span=list(span), span_var=span_var, position=dict(lr=lr, ap=ap), presence=presence,
                 spatial_prior=[dict(landmark=l, relation=r, dist_mm=list(d)) for l, r, d in prior])
 
-def rel(src, type, dst, *, side='same', direction=None, contact=None, staging=(), tier=None, prio=None, note=None):
+def rel(src, type, dst, *, side='same', direction=None, contact=None, staging=(), tier=None, prio=None, note=None, expand=True):
     d = dict(src=src, type=type, dst=dst, side_link=side)
+    if not expand: d['no_expand'] = True     # profile: prompt the part itself but never walk its own relations (v0.5.5)
     if direction: d['direction'] = direction
     if contact: d['contact'] = contact
     if staging: d['staging'] = list(staging)
@@ -121,7 +122,7 @@ VERTEBRAL_ORDER = [f'C{i}' for i in range(1, 8)] + [f'T{i}' for i in range(1, 13
 for lvl in VERTEBRAL_ORDER[:-1]:
     ent(f'vertebra_{lvl}', f'{lvl} vertebra', 'bone', vt=f'{lvl} vertebra', aliases=(f'vertebra {lvl}',),
         ts={'total': f'vertebrae_{lvl}'} if f'vertebrae_{lvl}' in TS_ALL['total'] else None, tier='in_vocab', prio=3, sources=('TS',))
-ent('spine', 'Spine', 'bone', vt='spine', aliases=('vertebral column', 'lumbar spine', 'thoracic spine'), ts={'total_mr': 'vertebrae'},
+ent('spine', 'Spine', 'bone', vt='spine', aliases=('vertebral column', 'lumbar spine', 'thoracic spine'), ts={'total_mr': 'vertebrae'}, found_from_parts=True,
     tier='in_vocab', prio=1, anchor=A(['C1', 'coccyx'], 'midline', 'posterior', 'obligatory'), notes='systemic anchor: cranio-caudal ruler; TS total_mr gives one merged class, use VoxTell per level if needed')
 ent('sacrum', 'Sacrum', 'bone', vt='sacrum', ts={'total': 'sacrum', 'total_mr': 'sacrum'}, tier='in_vocab', prio=1, vol=dict(min=120, max=350),
     anchor=A(['S1', 'S5'], 'midline', 'posterior', 'obligatory'))
@@ -249,7 +250,9 @@ ent('rectum', 'Rectum', 'hollow_organ', vt='rectum', ts=None, tier='in_vocab', p
 ent('mesorectum', 'Mesorectum / mesorectal fascia', 'fascia', vt='mesorectal fascia', aliases=('mesorectum',), tier='ood', prio=3, notes='experimental')
 ent('anal_canal', 'Anal canal', 'hollow_organ', vt='anal canal', aliases=('anus',), tier='near', prio=3)
 ent('mesentery', 'Mesentery', 'fat', vt='mesentery', aliases=('mesenteric fat',), tier='near', prio=3)
-ent('omentum', 'Greater omentum', 'fat', vt='omentum', aliases=('greater omentum', 'omental fat'), tier='near', prio=3)
+ent('omentum', 'Greater omentum', 'fat', vt='omentum', aliases=('greater omentum', 'omental fat'), tier='near', prio=3,
+    anchor=A(['L1', 'L5'], 'midline', 'anterior', 'variable', prior=[('stomach', 'inferior_to', (0, 60)), ('colon', 'anterior_to', (0, 30)), ('small_bowel', 'anterior_to', (0, 30))]),
+    notes='v0.5.5: peritoneal / omental host (FIGO III omental disease, peritoneal carcinomatosis); no TS class, located by the KB prior region')
 ent('peritoneum', 'Peritoneum', 'fascia', vt='peritoneum', aliases=('peritoneal lining',), tier='ood', prio=3)
 ent('ascites', 'Ascites', 'space', vt='ascites', aliases=('peritoneal fluid',), tier='in_vocab', prio=2)
 
@@ -378,7 +381,8 @@ rel('liver', 'drains_lymph_to', 'ln_hepatic_hilar', side='any', staging=[N]); re
 rel('liver', 'lies_in', 'peritoneal_cavity', side='any'); rel('liver', 'lies_in', 'upper_abdomen', side='any')
 
 # -- uterus / cervix / vagina / ovary (full depth, completion targets)
-for p in ['endometrium', 'myometrium', 'junctional_zone', 'cervix']: rel('uterus', 'has_part', p, side='any', staging=[S, L], note='UCEC T1a/T1b = depth of myometrial invasion' if p == 'myometrium' else None)
+for p in ['endometrium', 'myometrium', 'junctional_zone', 'cervix']: rel('uterus', 'has_part', p, side='any', staging=[S, L] + ([ADJ] if p == 'cervix' else []), note='UCEC T1a/T1b = depth of myometrial invasion' if p == 'myometrium' else ('UCEC T2: cervical stromal invasion (has_part anchor with an invasion tag = invasion route)' if p == 'cervix' else None))
+rel('uterus', 'adjacent_to', 'vagina', side='any', direction='inferior', contact='continuous_via_cervix', staging=[ADJ], note='UCEC T3b: vaginal involvement')
 rel('uterus', 'invested_by', 'peritoneum', side='any', staging=[C], note='uterine serosa; UCEC T3a')
 rel('uterus', 'adjacent_to', 'urinary_bladder', side='any', direction='anterior_inferior', contact='abuts', staging=[ADJ], note='UCEC/CESC T4: bladder mucosa')
 rel('uterus', 'adjacent_to', 'rectum', side='any', direction='posterior', contact='near', staging=[ADJ], note='T4: rectal mucosa')
@@ -406,6 +410,9 @@ rel('ovary', 'has_part', 'adnexa', staging=[L]); rel('ovary', 'adjacent_to', 'ut
 rel('ovary', 'adjacent_to', 'iliac_artery', direction='posterior_lateral', contact='near', staging=[W], note='ovarian fossa')
 rel('ovary', 'adjacent_to', 'colon_sigmoid', side='left', direction='posterior', contact='near', staging=[ADJ]); rel('ovary', 'adjacent_to', 'small_bowel', side='any', direction='superior', contact='near', staging=[ADJ])
 rel('ovary', 'invested_by', 'peritoneum', side='any', staging=[C], note='FIGO IC capsule rupture / surface')
+rel('ovary', 'adjacent_to', 'colon', side='any', direction='posterior', contact='near', staging=[ADJ], note='FIGO IIB pelvic extension: sigmoid (left) / caecum (right); colon is also an OV distant (peritoneal) site')
+rel('ovary', 'adjacent_to', 'rectum', side='any', direction='posterior_inferior', contact='near', staging=[ADJ], note='FIGO IIB: pouch of Douglas / rectosigmoid')
+rel('ovary', 'adjacent_to', 'urinary_bladder', side='any', direction='anterior_medial', contact='near', staging=[ADJ], note='FIGO IIB: bladder peritoneum; IVA-equivalent mucosa rare')
 rel('ovary', 'adjacent_to', 'omentum', side='any', direction='superior', contact='near', staging=['peritoneal_spread'], note='FIGO III omental disease')
 rel('ovary', 'drained_by', 'gonadal_vein', staging=[]); rel('ovary', 'drains_lymph_to', 'ln_paraaortic', side='any', staging=[N]); rel('ovary', 'drains_lymph_to', 'ln_external_iliac', side='any', staging=[N]); rel('ovary', 'drains_lymph_to', 'ln_obturator', side='any', staging=[N])
 rel('ovary', 'lies_in', 'pelvis_true', side='any')
@@ -454,7 +461,7 @@ rel('rectum', 'lies_in', 'pelvis_true', side='any'); rel('rectum', 'lies_in', 'p
 
 # -- colon
 for seg in ['cecum', 'ascending', 'transverse', 'descending', 'sigmoid']: rel('colon', 'has_part', f'colon_{seg}', side='any', staging=[L])
-rel('colon', 'has_part', 'rectum', side='any', staging=[L], note='TS colon class includes rectum')
+rel('colon', 'has_part', 'rectum', side='any', staging=[L], expand=False, note='TS colon class includes rectum; rectal relations (READ) are not walked from the colon')
 rel('colon', 'invested_by', 'peritoneum', side='any', staging=[C], note='T4a visceral peritoneum'); rel('colon', 'invested_by', 'mesentery', side='any', staging=[C], note='T3 pericolic fat')
 rel('colon', 'adjacent_to', 'liver', side='any', direction='superior', contact='near', staging=[ADJ], note='T4b'); rel('colon', 'adjacent_to', 'stomach', side='any', direction='superior', contact='near', staging=[ADJ])
 rel('colon', 'adjacent_to', 'spleen', side='any', direction='superior', contact='near', staging=[ADJ]); rel('colon', 'adjacent_to', 'kidney', side='any', direction='posterior', contact='near', staging=[ADJ])
@@ -551,6 +558,8 @@ rel('iliopsoas', 'has_part', 'psoas', side='same', note='TS total/total_mr segme
 rel('skeletal_muscle', 'has_part', 'psoas', side='any'); rel('skeletal_muscle', 'has_part', 'autochthon', side='any'); rel('skeletal_muscle', 'has_part', 'rectus_abdominis', side='any'); rel('skeletal_muscle', 'has_part', 'iliopsoas', side='any'); rel('skeletal_muscle', 'has_part', 'gluteus', side='any'); rel('skeletal_muscle', 'has_part', 'pectoralis_major', side='any')
 # landmarks
 for lm in LANDMARKS: rel(lm['entity'], 'landmark_for', 'spine', side='any', note=f"{lm['id']} ≈ {lm['level']}")
+# v0.5.5: the spine as a tumour host (bone metastasis) is the union of the TS vertebra classes on the CT task
+for lvl in VERTEBRAL_ORDER[:-1]: rel('spine', 'has_part', f'vertebra_{lvl}', side='any', expand=False)
 
 # ================================================================== TUMOUR PROMPTS
 TUMOUR = dict(
@@ -566,12 +575,14 @@ TUMOUR = dict(
    weight='prior × (1 + evidence)  — a score for ordering and budgeting, not a probability; primary is always kept',
    keep_secondary='evidence ≥ 1 (a validated tumour component in that organ) OR weight ≥ 0.3 with the organ in the FOV and TS-found (local-invasion neighbours are checked for tumour contact in the reasoning layer)',
    planner='primary → 2-hop profile; kept secondary hosts → 1-hop profile + tumour-near anchors around their validated component; fusion assigns every atom to the host whose extent it overlaps most → primary lesion + secondary lesions per host',
+   reach_mm=10.0,
+   reach='v0.5.4 distance test: a neighbour is a LOCAL-INVASION host only where the validated primary tumour mask lies within reach_mm of the neighbour TS mask (per side for paired organs); farther → distant if the organ is a distant site of the cancer, else not a host; neighbour without TS mask → side_link prior; no validated primary → no restriction. Paired primary: tumour validated in one organ → that side primary, other side distant; in both → both primary.',
    distant_default=['liver', 'lung', 'adrenal', 'spine'],
    distant_by_cancer={
      'TCGA-KIRC': ['lung', 'liver', 'adrenal', 'spine', 'pancreas'], 'TCGA-KIRP': ['lung', 'liver', 'spine'], 'TCGA-KICH': ['liver', 'lung'],
      'TCGA-LIHC': ['lung', 'adrenal', 'spine'], 'TCGA-BRCA': ['liver', 'lung', 'spine'], 'TCGA-LUAD': ['adrenal', 'liver', 'spine'], 'TCGA-LUSC': ['adrenal', 'liver', 'spine'],
-     'TCGA-BLCA': ['liver', 'lung', 'spine'], 'TCGA-PRAD': ['spine', 'hip', 'sacrum'], 'TCGA-CESC': ['liver', 'lung', 'spine'], 'TCGA-UCEC': ['lung', 'liver'], 'TCGA-OV': ['liver', 'spleen', 'small_bowel', 'colon'],
-     'TCGA-STAD': ['liver', 'ovary', 'lung'], 'TCGA-ESCA': ['liver', 'lung', 'adrenal'], 'TCGA-COAD': ['liver', 'lung'], 'TCGA-READ': ['liver', 'lung'], 'TCGA-PAAD': ['liver', 'lung']}),
+     'TCGA-BLCA': ['liver', 'lung', 'spine'], 'TCGA-PRAD': ['spine', 'hip', 'sacrum'], 'TCGA-CESC': ['liver', 'lung', 'spine'], 'TCGA-UCEC': ['lung', 'liver', 'omentum'], 'TCGA-OV': ['omentum', 'liver', 'spleen', 'small_bowel', 'colon'],
+     'TCGA-STAD': ['liver', 'omentum', 'ovary', 'lung'], 'TCGA-ESCA': ['liver', 'lung', 'adrenal'], 'TCGA-COAD': ['liver', 'omentum', 'lung'], 'TCGA-READ': ['liver', 'lung'], 'TCGA-PAAD': ['liver', 'omentum', 'lung']}),
  cancer_types={
   'TCGA-KIRC': dict(host='kidney', phrases=['clear cell renal cell carcinoma in the {side} kidney', 'renal cell carcinoma in the {side} kidney', '{side} kidney tumor', 'renal tumor']),
   'TCGA-KIRP': dict(host='kidney', phrases=['papillary renal cell carcinoma in the {side} kidney', 'renal cell carcinoma in the {side} kidney', '{side} kidney tumor']),
@@ -610,7 +621,14 @@ PROMPT_RULES = dict(version=VERSION,
  single_pass=dict(rule='ONE VoxTell call per scan with the complete plan; no re-planning after inference. TS + KB are sufficient to compile every prompt (host from cancer type / tumour overlap; profiles of TS-unnameable missing anchors are planned up front and simply come back empty if the anchor is absent)',
                   why='a second pass doubles orchestration and failure modes for little gain; VoxTell embeds text once and runs the image encoder once, so extra prompts are cheap'),
  tiers=dict(tier0='ruler prompts if TS vertebrae and fallback landmarks are missing: spine, sacrum, hip bone (used by the reasoning layer for frame/laterality)', tier1='missing anchors from completion under spatial-prior gates — never dropped by the budget', tier2='profile items (1–2 hop) of host / TS-unnameable missing / tumour-near anchors — trimmed by the budget', note='tiers order and budget prompts; they are NOT separate inference passes'),
- budget=dict(max_prompts_per_scan=60, order='tumour/ruler prompts, then tier, then priority; host-derived items get a one-step priority boost', drop_order='tier-2 items, lowest priority first; tier 0/1 and tumour prompts are protected'),
+ budget=dict(max_prompts_per_scan=80, order='tumour/ruler prompts, then tier, then priority; host-derived items get a one-step priority boost', drop_order='tier-2 items, lowest priority first; tier 0/1 and tumour (tier T) prompts are protected',
+             note='raised 60 → 80 in v0.5 so the 4–7 spread-set tumour prompts are not paid for by the host profile'),
+ tumour_prompts=dict(version='0.5',
+             rule='one tier-T prompt "<host term> tumor" per spread-set host (primary, local-invasion neighbours, cancer-specific distant sites) that is in the FOV — unconditioned: never gated on what BP or the initial VoxTell mask found',
+             phrase='entity.tumour_phrase.main (+2 aliases); tier in_vocab / near / ood recorded per prompt for the reliability weight',
+             alias_ensemble_primary='the cancer-specific phrases (tumour_prompts.cancer_types[...].phrases) are added for the PRIMARY only when the initial VoxTell tumour mask is empty or below 0.5 ml — a wording ensemble, never a second rater',
+             raters='BiomedParse is frozen (never re-run); VT-initial and VT-prompted are the same model asked different questions and count as ONE model for lesion support',
+             gate='tumour-host region (host mask, dilate 10 mm primary / 3 mm secondary) — NOT applied as the 80 % output filter: tumour claims are admitted by the stage-3 lesion gate (qc_rules.lesion_admission)'),
  modality=dict(CT='prefer TS mask when TS reliability ≥ 0.8; VoxTell refine host + vessels', MR='TS reliability from pilot; completion always on for pelvic anchors'),
  encoder_reuse='VoxTell embeds text once; image encoder per volume; pass all prompts of a scan in one predict call (voxtell-predict -p ...)',
 )
@@ -652,6 +670,16 @@ QC_RULES = dict(version=VERSION,
  dict(id='atom_not_in_other_organ', basis='set', applies='atoms', check='|atom ∩ C_other| / |atom| ≤ 0.2 for every non-host organ consensus C_other; a BP/VT tumour component inside a non-host organ is that organ, not tumour', on_fail='drop_atom'),
  dict(id='tumour_topology', basis='topology', applies='fused tumour', check='fused = A ∪ kept atoms; fill internal holes (genus 0 per component); components ranked by volume; RECIST index lesion = largest measurable', on_fail='n/a'),
  dict(id='tumour_vs_anatomy_disjoint', basis='set', applies='fused tumour vs final anatomy masks', check='fused tumour removed from every anatomy mask except the host (host keeps organ ∪ tumour for extent measures; organ parenchyma = host \\ tumour for normal-tissue features)', on_fail='subtract'),
+ # ---- v0.5 lesion admission gate (after the VoxTell pass; H = TS ∪ VoxTell organ mask, VoxTell alone for OOD hosts)
+ dict(id='lesion_contact', basis='set', applies='every tumour claim component ≥ 0.5 ml (BP, VT-initial, VT-prompted)', check='component ∩ dilate(H_host, 3 mm) ≠ ∅ for some spread-set host; 75 % of BP components (28.5k of 37.9k) fail this on the TS-host cohorts', on_fail='reject: no_host_contact'),
+ dict(id='lesion_shape_slab', basis='geometry', applies='every claim with a host reference', check='median per-slice in-plane cover |L_k ∩ H_k| / |H_k| ≥ 0.4 AND aspect (z-extent / in-plane diameter) ≤ 0.25 → organ-shaped slab, the slice-wise 2D artefact. Calibrated 22 Sep 2026 on 9,451 BP / 3,499 VT host-contacting components: BP 16.1 %, VT 0.03 %; 18 % of BP index lesions', on_fail='reject: slab'),
+ dict(id='lesion_shape_organ_like', basis='geometry', applies='every claim with a host reference', check='|L| / |H| ≥ 0.6 AND median per-slice Dice(L_k, H_k) ≥ 0.6 → the claim is the organ (VT 3.0 % of contacting components, 19 % of its largest bladder components; BP 0.5 %)', on_fail='reject if single-model claim; two-model claim kept with weight × 0.3'),
+ dict(id='lesion_shape_no_reference', basis='geometry', applies='claims without a host reference (cover / Dice undefined)', check='aspect < 0.3 → weight × 0.5', on_fail='weight only, never reject'),
+ dict(id='lesion_admission_primary', basis='set+topology', applies='primary host in span', check='two-model lesion (BP ∩ VT ≥ 0.5 ml in dilate(H,10 mm)) → admitted. Single-model lesion kept if feasible: contact with dilate(H,3 mm) AND ≥ 50 % inside dilate(H,10 mm); the largest feasible one is admitted (primary_single_claim); further ones only if RECIST-measurable and ≥ 80 % inside H. primary_in_fov / primary_lesion recorded; primary outside the span → no node, no penalty', on_fail='ledger: primary_infeasible'),
+ dict(id='lesion_reach', basis='topology', applies='local-invasion hosts at plan time', check='min distance(validated primary tumour, neighbour TS mask, per side) ≤ reach_mm (10 mm) → local_invasion; else distant if the neighbour is a distant site of the cancer, else not a host. Neighbours without a TS class (uterus, cervix, vagina, ovary on CT) are not measured at plan time; stage 3 re-tests the same distance on the prompted VoxTell organ mask', on_fail='reclassify'),
+ dict(id='lesion_admission_local_invasion', basis='set+topology', applies='adjacent_to / invested_by neighbours within reach of the primary (tumour_prompts.spread.reach_mm)', check='two-model lesion ≥ 50 % inside dilate(H_nb,3 mm), OR contiguous extension of an admitted primary lesion ≥ 0.5 ml beyond the primary envelope', on_fail='ledger: isolated_single_model'),
+ dict(id='lesion_admission_distant', basis='set', applies='cancer-specific distant sites', check='BP ∩ VT-prompted-for-that-site ≥ 0.5 ml, ≥ 50 % inside dilate(H_site,3 mm), prompted mask coherent (≥ 80 % inside its gate, not a fragment spray). VT-initial ignored (it was prompted by the primary phrase)', on_fail='ledger: unsupported_distant'),
+ dict(id='lesion_weight', basis='set+geometry', applies='admitted lesions (factors also stored for rejected ones)', check='factor vector in [0,1]: support (models agreeing, Dice between claims; prompted VT < independent claim), host consistency (inside fraction, contact, host prior), prompt coherence and phrase tier, saturating size above 0.5 ml, contiguity with the primary lesion, shape (cover / aspect / vol ratio). Scalar = product; vector kept as graph node features', on_fail='n/a'),
  ],
  deferred_rules=[
  dict(id='volume_range', basis='prior', check='volume_ml within entity.volume_ml ×[0.5, 2.0]', status='flag-only in the planner (triggers re-query), never rejection; kept as KB prior for the cohort audit'),
@@ -780,6 +808,12 @@ def align_voxtell(E):
         for _, ph, g, v in scored:
             if ph not in seen:
                 seen.add(ph); ordered.append((ph, g, v))
+        # v0.5.5: sex-specific wording ('testicular vein', 'ovarian vein') is never used for a sex-neutral structure: sex is
+        # unknown to the planner and the prompt must be correct for either sex
+        pres = (e.get('anchor') or {}).get('presence', '')
+        if not pres.startswith('sex_'):
+            neutral = [o for o in ordered if not _re.search(r'testicular|ovarian|spermatic', o[0])]
+            if neutral: ordered = neutral
         new_main, gmain, vmain = ordered[0]
         tier = {'exact': 'in_vocab', 'rare': 'rare', 'near': 'near', 'ood': 'ood'}[gmain]
         if vt['main'] != new_main or e.get('coverage_tier') != tier:
@@ -790,6 +824,82 @@ def align_voxtell(E):
                                      source=(vmain['src'] if vmain else None))
     print(f'voxtell alignment: {changed} entities changed (main phrase or tier)')
 align_voxtell(E)
+
+
+def _grade_tumour(phrase):
+    """grade a tumour phrase: sided form first ('left adrenal tumor'), else the unsided label ('kidney tumor' — VoxTell's
+    tumour classes are mostly unsided; the side word is still sent, the host gate does the split)."""
+    rank = {'exact': 0, 'rare': 1, 'near': 2, 'ood': 3}
+    best = _grade(phrase, 'left' if '{side}' in phrase else None)
+    if '{side}' in phrase:
+        g2, v2 = _grade(phrase.replace('{side}', '').strip(), None)
+        if rank[g2] < rank[best[0]]:
+            best = (g2, v2)
+    return best
+
+
+def tumour_phrases(E):
+    """v0.5: one tumour prompt per spread-set host, phrased as '<host term> tumor' (the graph decides WHERE, the phrase stays
+    in VoxTell's vocabulary; 'X metastasis' wordings are mostly OOD). For every anchor: candidates = '<main term> tumor',
+    '<main term> mass', '<main term> lesion', 'tumor in the <main term>', 'cancer of the <main term>' with the side word
+    removed for the vocabulary check; graded exact / near / ood against VOCAB like the anatomy phrases; the in-vocabulary
+    phrase (if any) becomes tumour_phrase.main, the rest are aliases; tumour_phrase.tier records the grade so the
+    reliability weight can discount prompted claims from OOD wording. Bladder → 'bladder tumor' (exact), kidney →
+    'kidney tumor' (exact), stomach → 'stomach tumor' (ood: VoxTell has no gastric tumour class)."""
+    # hand-checked wordings where VoxTell's label uses another form than '<main term> tumor' (all present in labels.json)
+    OVERRIDE = {'adrenal': ['{side} adrenal tumor'], 'colon': ['colon primary tumor', 'colon cancer'], 'esophagus': ['esophageal cancer', 'esophageal malignant tumor'],
+                'breast': ['{side} breast lesion', 'primary breast tumor'], 'urinary_bladder': ['bladder tumor', 'urinary bladder cancer', 'malignant bladder tumor'],
+                'cervix': ['cervix tumor', 'cervical cancer'], 'liver': ['liver tumor', 'liver lesion', 'primary liver tumor'], 'lung': ['{side} lung tumor', 'lung lesion', 'primary lung tumor']}
+    n_exact = 0
+    for e in E:
+        if not e.get('is_anchor'):
+            continue
+        term = e['voxtell']['main']
+        if e['id'] in OVERRIDE:
+            ph = OVERRIDE[e['id']]
+            g0, v0 = _grade_tumour(ph[0])
+            e['tumour_phrase'] = dict(main=ph[0], aliases=ph[1:3], tier=('in_vocab' if g0 == 'exact' else g0), vocab_match=(v0['name'] if v0 else None), source='hand_checked',
+                                      unsided_label=bool(v0 and '{side}' in ph[0] and 'left' not in v0['name'] and 'right' not in v0['name']))
+            n_exact += g0 == 'exact'
+            continue
+        base = _SIDE.sub('', term.replace('{side}', '')).strip()
+        base = _re.sub(r'\s+', ' ', base)
+        cands = [f'{base} tumor', f'{base} mass', f'{base} lesion', f'tumor in the {base}', f'cancer of the {base}', f'{base} cancer']
+        graded = []
+        for c in cands:
+            g, v = _grade_tumour(('{side} ' + c) if '{side}' in term else c)
+            graded.append((g, c, v))
+        rank = {'exact': 0, 'rare': 1, 'near': 2, 'ood': 3}
+        graded.sort(key=lambda x: (rank[x[0]], cands.index(x[1])))
+        # v0.5.5: the main phrase is always '<host> tumor' (consistent wording; 'X metastasis' / 'X lesion' are not used as main);
+        # a better-graded vocabulary string is kept as an alias
+        tum = [x for x in graded if x[1] == f'{base} tumor'][0]
+        graded = [tum] + [x for x in graded if x is not tum]
+        g0, c0, v0 = graded[0]
+        main = c0
+        sided = '{side} ' if '{side}' in term else ''
+        e['tumour_phrase'] = dict(main=(sided + main).strip(), aliases=[(sided + c).strip() for _, c, _ in graded[1:3]], tier=('in_vocab' if g0 == 'exact' else g0),
+                                  vocab_match=(v0['name'] if v0 else None), unsided_label=bool(v0 and sided and 'left' not in v0['name'] and 'right' not in v0['name']))
+        n_exact += g0 == 'exact'
+    print(f'tumour phrases: {n_exact} anchors with an in-vocabulary "<host> tumor" phrase')
+
+
+tumour_phrases(E)
+# Anchors that are never a tumour HOST (v0.5.1): great vessels, heart, airway, muscles, thyroid — adjacency to a primary is
+# a contact/invasion relation (T4 great vessels, T4 heart, tumour thrombus in the IVC handled by the drained_by / invested_by
+# profile), not a place where a lesion of these cancers arises or seeds. Excluding them from spread_hosts removes their
+# tier-T prompt ('heart tumor' on 1,070 scans in the v0.5.0 run) and their evidence bookkeeping; the graph still records
+# tumour–organ contact for them.
+# v0.5.5: paired organs whose contralateral involvement is still the PRIMARY disease stage: bilateral ovarian tumour = FIGO IB / T1b
+# (common in high-grade serous carcinoma). Kidney (synchronous = separate primary), lung (M1a) and breast (usually a second primary)
+# keep the contralateral organ as a distant-class host.
+CONTRALATERAL_PRIMARY = {'ovary'}
+for _e in E:
+    if _e['id'] in CONTRALATERAL_PRIMARY: _e['contralateral_class'] = 'primary'
+NOT_TUMOUR_HOST = {'heart', 'aorta', 'inferior_vena_cava', 'iliac_artery', 'iliac_vein', 'trachea', 'iliopsoas', 'psoas', 'thyroid'}
+for _e in E:
+    if _e.get('is_anchor'):
+        _e['tumour_host'] = _e['id'] not in NOT_TUMOUR_HOST
 for _e in E:
     if _e['id'] in ('subcutaneous_fat', 'visceral_fat', 'skeletal_muscle') and _e.get('is_anchor'):
         _e['is_anchor'] = False; _e.pop('anchor', None)

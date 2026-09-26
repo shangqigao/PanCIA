@@ -44,7 +44,6 @@ def extract_radiology_segmentation(
         ts_roi_subset=None,
         ts_threads=4,
         ts_body_seg=False,
-        voxtell_prompt_batch=0,
     ):
     """extract segmentation from radiology images
     Args:
@@ -82,8 +81,6 @@ def extract_radiology_segmentation(
             dataset=dataset,
             seg_obj=seg_obj,
             img_paths=img_paths,
-            text_prompts=text_prompts,
-            prompt_batch=voxtell_prompt_batch,
             save_dir=save_dir,
             format=img_format,
             site=site,
@@ -373,8 +370,6 @@ def extract_VoxTell_segmentation(
         seg_obj,
         img_paths,
         save_dir,
-        text_prompts=None,
-        prompt_batch=0,
         format='nifti',
         site='kidney',
         model_root=None,
@@ -389,8 +384,6 @@ def extract_VoxTell_segmentation(
     directory. The checkpoint is downloaded there only when the required model
     files are missing.
     """
-
-    plan_mode = text_prompts is not None and any(isinstance(t, dict) for t in text_prompts)
 
     # VoxTell is installed in a separate environment. Keep every backend-specific
     # import local so BiomedParse can run without VoxTell (and vice versa).
@@ -461,11 +454,6 @@ def extract_VoxTell_segmentation(
         else:
             img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
 
-        if plan_mode and isinstance(text_prompts[idx], dict):
-            _voxtell_plan_segment(predictor, reader_writer, img_path, img_name, text_prompts[idx], save_dir,
-                                  prompt_batch=prompt_batch, skip_exist=skip_exist)
-            continue
-
         save_mask_path = save_dir / f"{img_name}_{seg_obj}.nii.gz"
         if save_mask_path.exists() and skip_exist:
             logger.info("%s has existed, skip!", save_mask_path.name)
@@ -487,89 +475,6 @@ def extract_VoxTell_segmentation(
         reader_writer.write_seg(mask, str(save_mask_path), properties)
 
     return
-
-def _plan_prompt_list(plan):
-    """Unique VoxTell prompts of one plan -> [dict(text, file, jobs, planner fields)].
-
-    Each job gives its main phrase as '<name>.nii.gz'; alias-ensemble jobs (gate.ensemble) and tier-1 completion jobs also
-    give their aliases as '<name>_a2/_a3.nii.gz'. A phrase repeated across jobs is prompted once."""
-    entries, by_text = [], {}
-    for job in plan['jobs']:
-        gate = job.get('gate') or {}
-        n_terms = 3 if (gate.get('ensemble') or job.get('tier') == 1) else 1
-        for k, text in enumerate(job.get('terms', [])[:n_terms]):
-            key = text.strip().lower()
-            if key in by_text:
-                by_text[key]['jobs'].append(job['plan_index'])
-                continue
-            fname = job['name'] + ('' if k == 0 else f'_a{k + 1}')
-            if any(e['file'] == fname + '.nii.gz' for e in entries):
-                fname += f"_j{job['plan_index']}"
-            e = dict(text=text, file=fname + '.nii.gz', jobs=[job['plan_index']], entity=job['entity'], side=job.get('side'),
-                     list=job.get('list'), tier=job.get('tier'), seg_obj=job['seg_obj'], term_rank=k + 1,
-                     host_class=gate.get('host_class'), host_prior=gate.get('host_prior'), gate=gate,
-                     relation=job.get('relation'), from_anchor=job.get('from_anchor'))
-            entries.append(e)
-            by_text[key] = e
-    return entries
-
-
-def _voxtell_plan_segment(predictor, reader_writer, img_path, img_name, plan, save_dir, prompt_batch=0, skip_exist=False):
-    """One VoxTell pass with all planned prompts of a scan.
-
-    Writes <save_dir>/<img_name>_plan/<entity>[_<side>]_<tumor|organ>[_a2|_a3].nii.gz (one binary mask per prompt, no
-    gating) and <save_dir>/<img_name>_plan_manifest.json. VoxTell batches only the text embedding; its sliding window keeps
-    logits for every prompt of the call, so prompt_batch=0 (all prompts in one call) is halved on CUDA out-of-memory."""
-    import hashlib, json, time
-    import torch
-    t0 = time.time()
-    entries = _plan_prompt_list(plan)
-    out_dir = pathlib.Path(save_dir) / f"{img_name}_plan"
-    manifest_path = pathlib.Path(save_dir) / f"{img_name}_plan_manifest.json"
-    with open(plan['plan'], 'rb') as f:
-        plan_sha1 = hashlib.sha1(f.read()).hexdigest()[:16]
-
-    done = {}
-    if skip_exist and manifest_path.exists():
-        m = json.load(open(manifest_path))
-        if m.get('plan_sha1') == plan_sha1:
-            done = {e['file']: e for e in m['masks'] if e.get('status') == 'done' and (out_dir / e['file']).exists()}
-    todo = [e for e in entries if e['file'] not in done]
-    if not todo:
-        logger.info("%s: all %d planned masks exist, skip!", img_name, len(entries))
-        return
-
-    image, properties = reader_writer.read_images([str(img_path)])
-    embeddings = predictor.embed_text_prompts([e['text'] for e in todo])      # (1, n_prompts, dim)
-    vox_ml = float(np.prod(properties['spacing'])) / 1000.0
-    out_dir.mkdir(parents=True, exist_ok=True)
-    step = len(todo) if prompt_batch <= 0 else min(prompt_batch, len(todo))
-    start, n_calls = 0, 0
-    while start < len(todo):
-        stop = min(start + step, len(todo))
-        try:
-            prediction = predictor.predict_single_image(image, text_embeddings=embeddings[:, start:stop])
-        except RuntimeError as err:
-            if 'out of memory' not in str(err).lower() or step == 1:
-                raise
-            torch.cuda.empty_cache()
-            step = max(1, step // 2)
-            logger.warning("%s: out of memory, retrying with %d prompts per call", img_name, step)
-            continue
-        n_calls += 1
-        for k, e in enumerate(todo[start:stop]):
-            mask = np.asarray(prediction[k], dtype=np.uint8)
-            reader_writer.write_seg(mask, str(out_dir / e['file']), properties)
-            done[e['file']] = dict(e, status='done', voxels=int(mask.sum()), ml=round(float(mask.sum()) * vox_ml, 3))
-        start = stop
-
-    manifest = dict(image=str(img_path), img_name=img_name, plan=plan['plan'], plan_sha1=plan_sha1, kb_version=plan.get('kb_version'),
-                    model='VoxTell v1.1', n_prompts=len(entries), n_calls=n_calls, prompts_per_call=step,
-                    seconds=round(time.time() - t0, 1), masks=[done[e['file']] for e in entries])
-    with open(manifest_path, 'w') as f:
-        json.dump(manifest, f, indent=1, default=str)
-    logger.info("%s: %d masks, %d call(s), %.1f s", img_name, len(entries), n_calls, time.time() - t0)
-
 
 def extract_TotalSegmentator_segmentation(
         dataset,
@@ -867,13 +772,6 @@ if __name__ == "__main__":
         nargs='*',
         help='Additional TotalSegmentator tasks run per image, e.g. body lung_vessels tissue_types',
     )
-    parser.add_argument('--planner_dir', default=None, type=str,
-                        help='Planner output root (…/TCGA_Seg/Planner or …/Planner/Radiology): prompts come from each image\'s *_plan.json')
-    parser.add_argument('--plan_lists', default=None, nargs='*', help='Planner lists to run, e.g. T (tumour prompts only) or T A B; default all')
-    parser.add_argument('--voxtell_prompt_batch', default=0, type=int,
-                        help='Prompts per VoxTell call; 0 = all planned prompts in one call, halved automatically on CUDA out-of-memory')
-    parser.add_argument('--start', default=0, type=int, help='First image index (for sharding)')
-    parser.add_argument('--end', default=None, type=int, help='Stop before this image index (default: all)')
     args = parser.parse_args()
 
     save_dir = pathlib.Path(args.save_dir) / args.model
@@ -889,17 +787,13 @@ if __name__ == "__main__":
         dataset_info = prepare_TCGA_radiology_info(
             img_json=args.radiology,
             img_format=args.format,
-            seg_obj=args.seg_obj,
-            planner_dir=args.planner_dir,
-            plan_lists=args.plan_lists,
+            seg_obj=args.seg_obj
         )
     elif args.dataset == 'CPTAC':
         dataset_info = prepare_CPTAC_radiology_info(
             img_json=args.radiology,
             img_format=args.format,
-            seg_obj=args.seg_obj,
-            planner_dir=args.planner_dir,
-            plan_lists=args.plan_lists,
+            seg_obj=args.seg_obj
         )
     else:
         raise ValueError(f'Dataset {args.dataset} is currently unsupported')
@@ -907,18 +801,17 @@ if __name__ == "__main__":
     # extract radiology segmentation
     # warning: do not run this function in a loop
     logger.info(f"starting segmentation on {dataset_info['name']}...")
-    sl = slice(args.start, args.end)
     extract_radiology_segmentation(
         dataset=args.dataset,
         seg_obj=args.seg_obj,
-        img_paths=dataset_info['img_paths'][sl],
-        text_prompts=dataset_info['text_prompts'][sl],
+        img_paths=dataset_info['img_paths'][3200:],
+        text_prompts=dataset_info['text_prompts'][3200:],
         model_mode=args.model,
         save_dir=save_dir,
-        modality=dataset_info['modality'][sl],
-        site=dataset_info['site'][sl],
+        modality=dataset_info['modality'][3200:],
+        site=dataset_info['site'][3200:],
         meta_list=dataset_info['meta_list'],
-        img_format=dataset_info['img_format'][sl],
+        img_format=dataset_info['img_format'][3200:],
         beta_params=None,
         keep_largest=args.keep_largest,
         prompt_ensemble=False,
@@ -934,5 +827,4 @@ if __name__ == "__main__":
         ts_roi_subset=args.ts_roi_subset,
         ts_threads=args.ts_threads,
         ts_body_seg=args.ts_body_seg,
-        voxtell_prompt_batch=args.voxtell_prompt_batch,
     )

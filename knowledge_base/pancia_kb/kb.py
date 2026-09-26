@@ -87,7 +87,7 @@ class KnowledgeBase:
                         continue
                     seen.add(key)
                     out.append(dict(r, hop=h + 1))
-                    if h == 0 and r['type'] in ('has_part', 'supplied_by', 'drained_by', 'has_duct', 'invested_by'):
+                    if h == 0 and r['type'] in ('has_part', 'supplied_by', 'drained_by', 'has_duct', 'invested_by') and not r.get('no_expand'):
                         nxt.add(r['dst'])   # only follow structural edges into a second hop
             frontier = nxt
         return out
@@ -99,13 +99,21 @@ class KnowledgeBase:
         prior = sp.get('prior', dict(primary=1.0, local_invasion=0.3, distant=0.15))
         out = [dict(entity=primary, cls='primary', prior=prior['primary'])]
         seen = {primary}
+        distant = (sp.get('distant_by_cancer') or {}).get(cancer_type or '', sp.get('distant_default', []))
         for r in self.out_edges.get(primary, []):
             d = self.entities.get(r['dst'])
-            if r['type'] in ('adjacent_to', 'invested_by') and d and d.get('is_anchor') and r['dst'] not in seen:
-                seen.add(r['dst']); out.append(dict(entity=r['dst'], cls='local_invasion', prior=prior['local_invasion'], via=r['type']))
-        distant = (sp.get('distant_by_cancer') or {}).get(cancer_type or '', sp.get('distant_default', []))
+            # an invasion route needs an invasion staging tag: 'lung adjacent_to liver, separated_by_diaphragm' is anatomy,
+            # not a route along which a lung cancer invades the liver (the liver is a distant site for lung cancer instead)
+            if (r['type'] in ('adjacent_to', 'invested_by') or (r['type'] == 'has_part' and 'adjacent_invasion' in (r.get('staging') or []))) and d and d.get('is_anchor') and d.get('tumour_host', True) and r.get('staging') and set(r['staging']) - {'peritoneal_spread', 'nodal', 'location', 'confined'} and r['dst'] not in seen:
+                seen.add(r['dst'])
+                out.append(dict(entity=r['dst'], cls='local_invasion', prior=prior['local_invasion'], via=r['type'],
+                                side_link=r.get('side_link', 'any'), also_distant=r['dst'] in distant))
+        # side_link (v0.5.3): 'right' / 'left' = the route exists only on that side (kidney→liver right only, kidney→spleen
+        # left only, liver→kidney/adrenal right only); 'same' = destination on the primary's side (kidney→adrenal).
+        # The planner applies it once the primary side is known; a side-excluded local host that is also a distant site
+        # of this cancer falls back to 'distant' (a left RCC cannot invade the liver but can metastasise to it).
         for e in distant:
-            if e in self.entities and self.entities[e].get('is_anchor') and e not in seen:
+            if e in self.entities and self.entities[e].get('is_anchor') and self.entities[e].get('tumour_host', True) and e not in seen:
                 seen.add(e); out.append(dict(entity=e, cls='distant', prior=prior['distant']))
         return out
 

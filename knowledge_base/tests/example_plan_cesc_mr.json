@@ -139,6 +139,48 @@
    "plausible": true,
    "why": [],
    "is_anchor": true
+  },
+  {
+   "entity": "psoas",
+   "side": "left",
+   "ts_name": null,
+   "volume_ml": null,
+   "truncated": false,
+   "partial": false,
+   "plausible": true,
+   "why": [
+    "implied by iliopsoas"
+   ],
+   "is_anchor": true,
+   "implied_by_whole": [
+    "iliopsoas"
+   ],
+   "centroid_mm": [
+    50,
+    -10,
+    0
+   ]
+  },
+  {
+   "entity": "psoas",
+   "side": "right",
+   "ts_name": null,
+   "volume_ml": null,
+   "truncated": false,
+   "partial": false,
+   "plausible": true,
+   "why": [
+    "implied by iliopsoas"
+   ],
+   "is_anchor": true,
+   "implied_by_whole": [
+    "iliopsoas"
+   ],
+   "centroid_mm": [
+    -50,
+    -10,
+    0
+   ]
   }
  ],
  "anchors_expected": [
@@ -454,24 +496,6 @@
     "fallback_region": "pelvis_true"
    },
    "ts_has_class": false
-  },
-  {
-   "entity": "psoas",
-   "side": "left",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": false
-  },
-  {
-   "entity": "psoas",
-   "side": "right",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": false
   }
  ],
  "anchors_absent_candidates": [
@@ -487,24 +511,55 @@
    "entity": "cervix",
    "side": null,
    "terms": [
+    "cervix tumor",
+    "cervical cancer"
+   ],
+   "tier": 3,
+   "list": "T",
+   "gate": {
+    "kind": "tumour_host",
+    "anchor": "cervix",
+    "anchor_side": null,
+    "dilate_mm": 10,
+    "filter": "lesion_admission_gate",
+    "host_class": "primary",
+    "host_prior": 1.0
+   },
+   "priority": 1,
+   "reason": [
+    "tier T tumour prompt on primary host (prior 1.0)",
+    "phrase tier in_vocab (cervix tumor)"
+   ],
+   "relation": "tumour_of",
+   "from_anchor": "cervix"
+  },
+  {
+   "entity": "cervix",
+   "side": null,
+   "terms": [
     "cervical cancer",
     "cervix tumor",
     "cervical carcinoma"
    ],
-   "tier": 2,
+   "tier": 3,
    "list": "T",
    "gate": {
-    "kind": "inside",
+    "kind": "tumour_host",
     "anchor": "cervix",
-    "dilate_mm": 20
+    "anchor_side": null,
+    "dilate_mm": 10,
+    "filter": "lesion_admission_gate",
+    "host_class": "primary",
+    "host_prior": 1.0,
+    "ensemble": true
    },
    "priority": 1,
    "reason": [
-    "tumour prompt on host",
+    "primary alias ensemble: initial VoxTell tumour mask absent",
     "also promoted profile: uterus -has_part-> cervix"
    ],
-   "relation": "has_part",
-   "from_anchor": "uterus"
+   "relation": "tumour_of",
+   "from_anchor": "cervix"
   },
   {
    "entity": "rectum",
@@ -917,48 +972,6 @@
    ],
    "relation": "adjacent_to",
    "from_anchor": "uterus"
-  },
-  {
-   "entity": "psoas",
-   "side": "left",
-   "terms": [
-    "left psoas major muscle",
-    "left psoas muscle"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 2,
-   "reason": [
-    "expected in FOV ['L3', 'coccyx'] (presence=obligatory)",
-    "not nameable by TS in this task"
-   ],
-   "relation": null,
-   "from_anchor": null
-  },
-  {
-   "entity": "psoas",
-   "side": "right",
-   "terms": [
-    "right psoas major muscle",
-    "right psoas muscle"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 2,
-   "reason": [
-    "expected in FOV ['L3', 'coccyx'] (presence=obligatory)",
-    "not nameable by TS in this task"
-   ],
-   "relation": null,
-   "from_anchor": null
   },
   {
    "entity": "iliac_vein",
@@ -2047,6 +2060,500 @@
    ],
    "relation": "has_part",
    "from_anchor": "colon"
+  },
+  {
+   "entity": "mesentery",
+   "side": null,
+   "terms": [
+    "mesentery",
+    "mesenteric fat"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "shell",
+    "inner_mm": 0,
+    "outer_mm": 40,
+    "anchor": "colon",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -invested_by-> mesentery (hop 1)",
+    "staging: beyond_capsule"
+   ],
+   "relation": "invested_by",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "liver",
+   "side": null,
+   "terms": [
+    "liver",
+    "hepatic parenchyma"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "colon",
+    "anchor_side": null,
+    "neighbour_found": false,
+    "direction": "superior"
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -adjacent_to-> liver (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "stomach",
+   "side": null,
+   "terms": [
+    "stomach",
+    "gastric organ"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "colon",
+    "anchor_side": null,
+    "neighbour_found": false,
+    "direction": "superior"
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -adjacent_to-> stomach (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "spleen",
+   "side": null,
+   "terms": [
+    "spleen"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "colon",
+    "anchor_side": null,
+    "neighbour_found": false,
+    "direction": "superior"
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -adjacent_to-> spleen (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "kidney",
+   "side": "left",
+   "terms": [
+    "left kidney",
+    "left renal organ"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "colon",
+    "anchor_side": null,
+    "neighbour_found": false,
+    "direction": "posterior"
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -adjacent_to-> kidney (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "kidney",
+   "side": "right",
+   "terms": [
+    "right kidney",
+    "right renal organ"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "colon",
+    "anchor_side": null,
+    "neighbour_found": false,
+    "direction": "posterior"
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -adjacent_to-> kidney (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "duodenum",
+   "side": null,
+   "terms": [
+    "duodenum"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "colon",
+    "anchor_side": null,
+    "neighbour_found": false,
+    "direction": "posterior"
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -adjacent_to-> duodenum (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "pancreas",
+   "side": null,
+   "terms": [
+    "pancreas"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "colon",
+    "anchor_side": null,
+    "neighbour_found": false,
+    "direction": "posterior"
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -adjacent_to-> pancreas (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "superior_mesenteric_artery",
+   "side": null,
+   "terms": [
+    "superior mesenteric artery",
+    "SMA"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
+    "anchor": "colon",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -supplied_by-> superior_mesenteric_artery (hop 1)",
+    "staging: vascular_invasion"
+   ],
+   "relation": "supplied_by",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "superior_mesenteric_vein",
+   "side": null,
+   "terms": [
+    "SMV",
+    "superior mesenteric vein"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "corridor",
+    "from_": "anchor_hilum",
+    "to": "parent_trunk",
+    "radius_mm": 15,
+    "anchor": "colon",
+    "anchor_side": null
+   },
+   "priority": 2,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -drained_by-> superior_mesenteric_vein (hop 1)",
+    "staging: vascular_invasion"
+   ],
+   "relation": "drained_by",
+   "from_anchor": "colon"
+  },
+  {
+   "entity": "mesorectum",
+   "side": null,
+   "terms": [
+    "mesorectal fascia",
+    "mesorectum"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "shell",
+    "inner_mm": 0,
+    "outer_mm": 40,
+    "anchor": "rectum",
+    "anchor_side": null
+   },
+   "priority": 3,
+   "reason": [
+    "promoted anchor rectum",
+    "rectum -invested_by-> mesorectum (hop 1)",
+    "staging: beyond_capsule"
+   ],
+   "relation": "invested_by",
+   "from_anchor": "rectum"
+  },
+  {
+   "entity": "ln_inguinal",
+   "side": "left",
+   "terms": [
+    "left inguinal lymph nodes"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "region",
+    "defined_by": "vessels_and_vertebral_levels",
+    "anchor": "rectum",
+    "anchor_side": null
+   },
+   "priority": 3,
+   "reason": [
+    "promoted anchor rectum",
+    "rectum -drains_lymph_to-> ln_inguinal (hop 1)",
+    "staging: N (low rectal/anal)"
+   ],
+   "relation": "drains_lymph_to",
+   "from_anchor": "rectum"
+  },
+  {
+   "entity": "ln_inguinal",
+   "side": "right",
+   "terms": [
+    "right inguinal lymph nodes"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "region",
+    "defined_by": "vessels_and_vertebral_levels",
+    "anchor": "rectum",
+    "anchor_side": null
+   },
+   "priority": 3,
+   "reason": [
+    "promoted anchor rectum",
+    "rectum -drains_lymph_to-> ln_inguinal (hop 1)",
+    "staging: N (low rectal/anal)"
+   ],
+   "relation": "drains_lymph_to",
+   "from_anchor": "rectum"
+  },
+  {
+   "entity": "junctional_zone",
+   "side": null,
+   "terms": [
+    "junctional zone of the uterus"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "uterus",
+    "anchor_side": null
+   },
+   "priority": 3,
+   "reason": [
+    "promoted anchor uterus",
+    "uterus -has_part-> junctional_zone (hop 1)",
+    "staging: confined,location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "uterus"
+  },
+  {
+   "entity": "vagina_upper_two_thirds",
+   "side": null,
+   "terms": [
+    "upper vagina"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "vagina",
+    "anchor_side": null
+   },
+   "priority": 3,
+   "reason": [
+    "promoted anchor vagina",
+    "vagina -has_part-> vagina_upper_two_thirds (hop 1)",
+    "staging: location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "vagina"
+  },
+  {
+   "entity": "urethra",
+   "side": null,
+   "terms": [
+    "urethra"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "neighbour_bbox_or_directional_shell",
+    "shell_mm": 30,
+    "anchor": "vagina",
+    "anchor_side": null,
+    "neighbour_found": false,
+    "direction": "anterior"
+   },
+   "priority": 3,
+   "reason": [
+    "promoted anchor vagina",
+    "vagina -adjacent_to-> urethra (hop 1)",
+    "staging: adjacent_invasion"
+   ],
+   "relation": "adjacent_to",
+   "from_anchor": "vagina"
+  },
+  {
+   "entity": "adnexa",
+   "side": "left",
+   "terms": [
+    "left adnexa",
+    "left ovary and fallopian tube"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "ovary",
+    "anchor_side": "left"
+   },
+   "priority": 3,
+   "reason": [
+    "promoted anchor ovary",
+    "ovary -has_part-> adnexa (hop 1)",
+    "staging: location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "ovary"
+  },
+  {
+   "entity": "adnexa",
+   "side": "right",
+   "terms": [
+    "right adnexa",
+    "right ovary and fallopian tube"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "inside",
+    "dilate_mm": 3,
+    "anchor": "ovary",
+    "anchor_side": "right"
+   },
+   "priority": 3,
+   "reason": [
+    "promoted anchor ovary",
+    "ovary -has_part-> adnexa (hop 1)",
+    "staging: location"
+   ],
+   "relation": "has_part",
+   "from_anchor": "ovary"
+  },
+  {
+   "entity": "perivesical_fat",
+   "side": null,
+   "terms": [
+    "perivesical fat"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "shell",
+    "inner_mm": 0,
+    "outer_mm": 40,
+    "anchor": "urinary_bladder",
+    "anchor_side": null
+   },
+   "priority": 3,
+   "reason": [
+    "tumour_near anchor urinary_bladder",
+    "urinary_bladder -invested_by-> perivesical_fat (hop 1)",
+    "staging: beyond_capsule"
+   ],
+   "relation": "invested_by",
+   "from_anchor": "urinary_bladder"
+  },
+  {
+   "entity": "ln_pericolic",
+   "side": null,
+   "terms": [
+    "pericolic lymph nodes",
+    "mesocolic lymph nodes"
+   ],
+   "tier": 2,
+   "list": "B",
+   "gate": {
+    "kind": "region",
+    "defined_by": "vessels_and_vertebral_levels",
+    "anchor": "colon",
+    "anchor_side": null
+   },
+   "priority": 3,
+   "reason": [
+    "tumour_near anchor colon",
+    "colon -drains_lymph_to-> ln_pericolic (hop 1)",
+    "staging: nodal"
+   ],
+   "relation": "drains_lymph_to",
+   "from_anchor": "colon"
   }
  ],
  "log": [
@@ -2074,8 +2581,46 @@
    "step": "header_handedness",
    "sign": 1,
    "note": "+1 RAS (+x = patient left), -1 x-mirrored header",
-   "source": "assumed_ras",
-   "votes": []
+   "source": "ts_sided_pairs",
+   "votes": [
+    [
+     "hip left-right",
+     1,
+     160
+    ],
+    [
+     "iliac_artery left-right",
+     1,
+     80
+    ],
+    [
+     "femur left-right",
+     1,
+     180
+    ],
+    [
+     "iliopsoas left-right",
+     1,
+     100
+    ]
+   ],
+   "agreement": true
+  },
+  {
+   "step": "found_implied_by_whole",
+   "entity": "psoas",
+   "side": "left",
+   "whole": [
+    "iliopsoas"
+   ]
+  },
+  {
+   "step": "found_implied_by_whole",
+   "entity": "psoas",
+   "side": "right",
+   "whole": [
+    "iliopsoas"
+   ]
   },
   {
    "step": "expected",
@@ -2149,14 +2694,6 @@
     [
      "ovary",
      "right"
-    ],
-    [
-     "psoas",
-     "left"
-    ],
-    [
-     "psoas",
-     "right"
     ]
    ]
   },
@@ -2165,6 +2702,22 @@
    "host": "cervix",
    "side": null,
    "source": "tumour_evidence"
+  },
+  {
+   "step": "tumour_prompts",
+   "n": 1,
+   "hosts": [
+    [
+     "cervix",
+     "primary",
+     [
+      null
+     ]
+    ]
+   ],
+   "side_excluded": [],
+   "alias_ensemble": true,
+   "vt_initial_largest_ml": null
   },
   {
    "step": "hosts",
@@ -2180,7 +2733,7 @@
   },
   {
    "step": "ts_only",
-   "n": 9,
+   "n": 11,
    "items": [
     [
      "sacrum",
@@ -2217,116 +2770,14 @@
     [
      "femur",
      "right"
-    ]
-   ]
-  },
-  {
-   "step": "tumour_prompt",
-   "included": true,
-   "host": "cervix"
-  },
-  {
-   "step": "budget",
-   "dropped": [
-    [
-     "mesentery",
-     null,
-     2
     ],
     [
-     "liver",
-     null,
-     2
+     "psoas",
+     "left"
     ],
     [
-     "stomach",
-     null,
-     2
-    ],
-    [
-     "spleen",
-     null,
-     2
-    ],
-    [
-     "kidney",
-     "left",
-     2
-    ],
-    [
-     "kidney",
-     "right",
-     2
-    ],
-    [
-     "duodenum",
-     null,
-     2
-    ],
-    [
-     "pancreas",
-     null,
-     2
-    ],
-    [
-     "superior_mesenteric_artery",
-     null,
-     2
-    ],
-    [
-     "superior_mesenteric_vein",
-     null,
-     2
-    ],
-    [
-     "mesorectum",
-     null,
-     3
-    ],
-    [
-     "ln_inguinal",
-     "left",
-     3
-    ],
-    [
-     "ln_inguinal",
-     "right",
-     3
-    ],
-    [
-     "junctional_zone",
-     null,
-     3
-    ],
-    [
-     "vagina_upper_two_thirds",
-     null,
-     3
-    ],
-    [
-     "urethra",
-     null,
-     3
-    ],
-    [
-     "adnexa",
-     "left",
-     3
-    ],
-    [
-     "adnexa",
-     "right",
-     3
-    ],
-    [
-     "perivesical_fat",
-     null,
-     3
-    ],
-    [
-     "ln_pericolic",
-     null,
-     3
+     "psoas",
+     "right"
     ]
    ]
   }

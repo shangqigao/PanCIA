@@ -5,16 +5,18 @@ Input : TS output summary (which classes found, volumes, centroids in mm, trunca
         from missing/incorrect records and from assuming anatomy from a label; existence is decided on the image).
 Output: Plan with tiered PromptJobs and a decision log. No model calls; pure KB logic.
 SINGLE PASS: the whole plan is compiled from TS + KB and sent to VoxTell in ONE call per scan. Tiers only order and
-budget prompts (0 ruler, 1 completion, 2 profile); nothing is re-planned after VoxTell.
+budget prompts (0 ruler, 1 completion, 2 profile, T tumour); nothing is re-planned after VoxTell.
 
 Steps
  1. frame        — vertebral span of the FOV from TS vertebrae, else fallback landmarks, else provisional span + tier-0 ruler prompts
  2. anchors      — TS-found classes → KB anchors (with plausibility), expected set from spans/presence, missing = expected − found
  3. tier 1       — completion prompts for missing anchors under spatial-prior gates
  4. tier 2       — profile prompts (List A refine / List B extend) for host, TS-unnameable missing, tumour-near and systemic anchors
+ 4b. tier T      — 'X tumor' prompt per spread-set host in the FOV (v0.5; unconditioned; admission decided after inference)
  5. budget       — priority cap, dedup, log
 """
 from __future__ import annotations
+import re as _re
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple
 import json
@@ -39,6 +41,9 @@ class TSOutput:
     tumour_centroid_mm: Optional[Tuple[float, float, float]] = None
     tumour_host_guess: Optional[str] = None     # PRIMARY host (cancer type / explicit host)
     hosts: List[dict] = field(default_factory=list)   # weighted host set from adapter: [{entity, cls, prior, evidence, weight, region}], primary first
+    vt_initial_largest_ml: Optional[float] = None     # largest component of the initial VoxTell tumour mask (None = no mask given)
+    primary_sides: Optional[List[str]] = None         # paired primary organ: sides holding validated tumour (adapter, v0.5.4)
+    primary_in_fov: bool = True                       # False: the primary host's span is outside the scan frame (adapter, v0.5.5)
 
     def by_name(self) -> Dict[str, TSStructure]:
         return {s.ts_name: s for s in self.structures}
@@ -49,7 +54,7 @@ class PromptJob:
     entity: str
     side: Optional[str]
     terms: List[str]
-    tier: int                    # 0 ruler | 1 completion | 2 profile — ordering/budget only; ONE VoxTell call
+    tier: int                    # 0 ruler | 1 completion | 2 profile | 3 tumour (list 'T', protected like tier 1) — ordering/budget only; ONE VoxTell call
     list: str                    # 'A' refine | 'B' extend | 'R' ruler | 'T' tumour
     gate: dict
     priority: int
@@ -94,7 +99,14 @@ class Planner:
             # z increases superiorly in RAS: map FOV z-range to levels by nearest vertebra, extrapolating one level beyond
             levels.sort(key=lambda x: -x[1])
             top, bot = levels[0][0], levels[-1][0]
-            log.append(dict(step='frame', method='ts_vertebrae', top=top, bottom=bot, n=len(levels)))
+            # TS labels the sacrum as ONE class besides vertebrae_S1: a whole (non-truncated) sacrum means the FOV reaches
+            # S5 / coccyx, so the true pelvis (cervix, vagina, rectum, prostate …) is in the frame (v0.5.4; before, pelvic
+            # frames stopped at S1 and organs spanning S2–coccyx were never 'expected')
+            sac = found.get('sacrum')
+            vmin = float(((kb.entities.get('sacrum') or {}).get('volume_ml') or {}).get('min', 0))
+            if bot in ('L5', 'S1') and sac is not None and not sac.truncated and sac.volume_ml >= 0.25 * vmin:
+                bot = 'coccyx'
+            log.append(dict(step='frame', method='ts_vertebrae', top=top, bottom=bot, n=len(levels), sacrum_extends=bot == 'coccyx'))
             return dict(span=[top, bot], method='ts_vertebrae', confidence='high')
         # fallback landmarks
         est = []
@@ -183,16 +195,14 @@ class Planner:
         # image content, so for every bilateral entity found on both sides the left one is at +x under RAS+ and at -x
         # under a mirrored header; the vote is the separation-weighted sum over pairs (hips ~150 mm, iliac vessels ~40 mm).
         # Without this every bilateral structure on a mirrored pelvic MR was flagged 'laterality mismatch' (v0.4.2 pilot).
+        # v0.5.5c: FOV-truncated pairs vote too — a hip or femur cut by the FOV still lies on its side, and on pelvic MR the only
+        # uncut pairs are often small, easily mislabelled vessels / muscles (3 CESC MR: one iliac or gluteus pair outvoted
+        # both femora and hips, giving 11 laterality flags). Non-truncated centroids are preferred when both exist.
         pairs = {}
-        for st in ts.structures:
+        for st in sorted(ts.structures, key=lambda q: bool(q.truncated)):
             ent, side = m.get(st.ts_name, (None, None))
-            if side in ('left', 'right') and not st.truncated:
-                pairs.setdefault(ent, {})[side] = st.centroid_mm[0]
-        if not any('left' in p and 'right' in p for p in pairs.values()):
-            for st in ts.structures:                          # fall back to truncated pairs rather than to nothing
-                ent, side = m.get(st.ts_name, (None, None))
-                if side in ('left', 'right'):
-                    pairs.setdefault(ent, {}).setdefault(side, st.centroid_mm[0])
+            if side in ('left', 'right'):
+                pairs.setdefault(ent, {}).setdefault(side, st.centroid_mm[0])
         for ent, p in pairs.items():
             if 'left' in p and 'right' in p and abs(p['left'] - p['right']) >= 15:
                 votes.append((f'{ent} left-right', 1 if p['left'] > p['right'] else -1, round(p['left'] - p['right'], 1)))
@@ -337,6 +347,62 @@ class Planner:
             g['neighbour_found'] = bool(key); g['direction'] = rel.get('direction')
         return g
 
+    def spread_sides(self, h: dict, host: Optional[str], host_side: Optional[str]):
+        """Sides at which secondary host h is anatomically reachable from the primary, or None if it is not reachable at all.
+        Returns (sides, cls, prior). Implements side_link (v0.5.3): left/right routes need the primary on that side (bilateral
+        primary) or restrict the destination side (unpaired primary); 'same' pins a bilateral destination to the primary's side.
+        Unknown primary side (no validated tumour) → no restriction. Side-excluded local hosts that are also distant sites of
+        the cancer are kept as distant with no side restriction."""
+        kb = self.kb
+        e = kb.entities[h['entity']]; bil = e['laterality'] == 'bilateral'
+        both = ['left', 'right'] if bil else [None]
+        if h.get('cls') != 'local_invasion' or not host:
+            return both, h.get('cls'), h.get('prior')
+        sl = h.get('side_link', 'any') or 'any'
+        prim_bil = kb.entities[host]['laterality'] == 'bilateral'
+        if sl in ('left', 'right'):
+            if prim_bil:
+                if host_side and host_side != sl:
+                    if h.get('also_distant'):
+                        return both, 'distant', kb.tumour_prompts.get('spread', {}).get('prior', {}).get('distant', 0.15)
+                    return None, None, None
+                return ([sl] if bil else [None]), h['cls'], h.get('prior')
+            return ([sl] if bil else [None]), h['cls'], h.get('prior')
+        if sl == 'same' and prim_bil and bil and host_side:
+            return [host_side], h['cls'], h.get('prior')
+        return both, h['cls'], h.get('prior')
+
+    def spread_targets(self, h: dict, host: Optional[str], host_side: Optional[str]):
+        """[(side, cls, prior)] for secondary host h: the sides reachable by contiguous growth keep h's class; for a bilateral
+        destination, the side(s) NOT reachable by growth are still prompted as distant when the organ is a distant site of the
+        cancer (also_distant) — e.g. LIHC → right adrenal local, left adrenal distant; left RCC → left adrenal local, right
+        adrenal distant. Unreachable and not a distant site → no entry."""
+        sides, cls, prior = self.spread_sides(h, host, host_side)
+        e = self.kb.entities[h['entity']]; bil = e['laterality'] == 'bilateral'
+        both = ['left', 'right'] if bil else [None]
+        dprior = self.kb.tumour_prompts.get('spread', {}).get('prior', {}).get('distant', 0.15)
+        out = [(sd, cls, prior) for sd in (sides or [])]
+        if h.get('also_distant') and cls != 'distant':
+            out += [(sd, 'distant', dprior) for sd in both if sd not in (sides or [])]
+        # distance test (v0.5.4): where the adapter measured the validated primary tumour against this neighbour's TS mask,
+        # the measurement replaces the side_link prior for that side — local only within reach_mm, else distant if the organ
+        # is a distant site of the cancer, else not a host. Sides without a measurement keep the side_link result.
+        reach = h.get('reach') or {}
+        if h.get('cls') == 'local_invasion' and reach:
+            reach = {(None if k == 'none' else k): v for k, v in reach.items()}
+            lprior = h.get('prior') if h.get('prior') is not None else 0.3
+            new = []
+            for sd in both:
+                if sd in reach:
+                    if reach[sd]:
+                        new.append((sd, 'local_invasion', lprior))
+                    elif h.get('also_distant'):
+                        new.append((sd, 'distant', dprior))
+                else:
+                    new += [t for t in out if t[0] == sd]
+            out = new
+        return out
+
     # ------------------------------------------------------------ main
     def plan(self, ts: TSOutput, modality: str, cancer_type: Optional[str] = None, sex: Optional[str] = None,
              include_tumour_prompt: bool = False) -> Plan:
@@ -406,8 +472,13 @@ class Planner:
         log.append(dict(step='completion', missing=[(m['entity'], m['side']) for m in missing]))
 
         # host side from the tumour centroid when the host is bilateral
-        host_side = None
-        if host and kb.entities[host]['laterality'] == 'bilateral' and ts.tumour_centroid_mm:
+        host_side = None; side_source = None
+        both_primary = bool(host and kb.entities[host]['laterality'] == 'bilateral' and ts.primary_sides and len(set(ts.primary_sides)) == 2)
+        if host and kb.entities[host]['laterality'] == 'bilateral' and ts.primary_sides and len(set(ts.primary_sides)) == 1:
+            host_side = ts.primary_sides[0]; side_source = 'validated_tumour_side'   # tumour in one organ only → that side
+        elif both_primary:
+            side_source = 'validated_tumour_both_sides'                               # tumour in both organs → both primary
+        elif host and kb.entities[host]['laterality'] == 'bilateral' and ts.tumour_centroid_mm:
             cands = [(f, ts.by_name()[f['ts_name']]) for f in found if f['entity'] == host and f['plausible'] and f['ts_name'] in ts.by_name()]
             if cands:
                 host_side = min(cands, key=lambda fs: sum((a - b) ** 2 for a, b in zip(fs[1].centroid_mm, ts.tumour_centroid_mm)))[0]['side']
@@ -417,29 +488,87 @@ class Planner:
                 host_side = ('left' if dx > 0 else 'right') if abs(dx) >= 30 else None
         # no validated tumour evidence on a bilateral host → both sides are prompted (never guess a side)
         log.append(dict(step='host', host=host, side=host_side or ('both' if host and kb.entities[host]['laterality'] == 'bilateral' else None),
-                        source='tumour_evidence' if ts.tumour_centroid_mm else 'cancer_type'))
+                        both_primary=both_primary, source=side_source or ('tumour_evidence' if ts.tumour_centroid_mm else 'cancer_type')))
 
-        # tumour prompts (only when no initial VT tumour mask exists — see include_tumour_prompt)
-        if host and include_tumour_prompt:
+        # tier T (v0.5): one tumour prompt "<host term> tumor" per spread-set host in the FOV — unconditioned on what BP or the
+        # initial VoxTell found (the graph decides where to look; the stage-3 lesion gate decides what to keep). Sides: the
+        # primary's resolved side if known, else both; secondaries always both. Gate = host region, NOT the 80 % output filter.
+        tumour_targets = []
+        primary_visible = bool(host) and getattr(ts, 'primary_in_fov', True) is not False
+        if host and not primary_visible:
+            log.append(dict(step='primary_not_in_fov', host=host, note='primary host span outside the scan frame: no primary prompt / profile; '
+                            'local-invasion neighbours become distant where the organ is a metastatic site, else they are dropped'))
+        if primary_visible:
+            tumour_targets.append((host, 'primary', 1.0, [host_side] if host_side else (['left', 'right'] if kb.entities[host]['laterality'] == 'bilateral' else [None])))
+            # bilateral primary with a resolved side: the contralateral organ is still prompted — distant class (synchronous
+            # bilateral / contralateral metastasis, haematogenous) unless the KB marks the pair as one disease stage
+            # (ovary: bilateral = FIGO IB / T1b → primary class, v0.5.5)
+            if host_side and kb.entities[host]['laterality'] == 'bilateral':
+                if kb.entities[host].get('contralateral_class') == 'primary':
+                    tumour_targets.append((host, 'primary', 1.0, ['right' if host_side == 'left' else 'left']))
+                else:
+                    tumour_targets.append((host, 'distant', kb.tumour_prompts.get('spread', {}).get('prior', {}).get('distant', 0.15),
+                                           ['right' if host_side == 'left' else 'left']))
+        side_excluded = []
+        for h in (ts.hosts or []):
+            if h.get('region') == 'kb_prior_region' and h['entity'] not in expected:
+                continue                                                     # organ without a TS class: the prior box alone is not enough, its span must be in the frame
+            if h['entity'] != host and h.get('region') is not None:          # in FOV: TS envelope or KB prior region exists
+                tg = self.spread_targets(h, host, host_side)
+                if not primary_visible and h.get('cls') == 'local_invasion':
+                    dp = kb.tumour_prompts.get('spread', {}).get('prior', {}).get('distant', 0.15)
+                    tg = [(t[0], 'distant', dp) for t in tg] if h.get('also_distant') else []
+                if not tg:
+                    side_excluded.append(h['entity']); continue
+                for c in dict.fromkeys(t[1] for t in tg):
+                    pr = [t[2] for t in tg if t[1] == c][0]
+                    tumour_targets.append((h['entity'], c, pr if pr is not None else 0.3, [t[0] for t in tg if t[1] == c]))
+        n_t = 0
+        for eid, cls, prior, sides in tumour_targets:
+            e = kb.entities.get(eid)
+            if not e or modality not in e.get('modality', ['CT', 'MR']): continue
+            tp = e.get('tumour_phrase') or dict(main=e['voxtell']['main'] + ' tumor', aliases=[], tier='ood')
+            for side in sides:
+                terms = [p.replace('{side}', side or '').replace('  ', ' ').strip() for p in [tp['main']] + list(tp.get('aliases', []))][:3]
+                if cls != 'primary':        # v0.5.5: 'colon primary tumor' is wrong wording for the colon as an invasion / metastatic site
+                    terms = [t2 for t2 in (_re.sub(r'\s+', ' ', t.replace('primary', '')).strip() for t in terms) if t2]
+                    terms = list(dict.fromkeys(terms))
+                dil = 10 if cls == 'primary' else 3
+                reason = [f'tier T tumour prompt on {cls} host (prior {prior})', f"phrase tier {tp.get('tier')}" + (f" ({tp.get('vocab_match')})" if tp.get('vocab_match') else '')]
+                prompts.append(PromptJob(eid, side, terms, 3, 'T', dict(kind='tumour_host', anchor=eid, anchor_side=side, dilate_mm=dil, filter='lesion_admission_gate', host_class=cls, host_prior=prior),
+                                         1, reason, relation='tumour_of', from_anchor=eid))
+                n_t += 1
+        # primary alias ensemble: cancer-specific phrases, only when the initial VoxTell mask is empty or sub-measurable
+        # (a wording ensemble — never a second rater); also when include_tumour_prompt is forced (no initial VT mask at all)
+        vt_empty = ts.vt_initial_largest_ml is not None and ts.vt_initial_largest_ml < 0.5
+        ensemble = bool(host) and (include_tumour_prompt or vt_empty)
+        if ensemble:
             ct = kb.tumour_prompts['cancer_types'].get(cancer_type or '', {})
             phrases = ct.get('phrases') or [t.replace('{host}', kb.entities[host]['name'].lower()) for t in kb.tumour_prompts['generic_templates']]
             sides = [host_side] if host_side else (['left', 'right'] if kb.entities[host]['laterality'] == 'bilateral' else [None])
             for side in sides:
                 terms = [p.replace('{side}', side or '').replace('  ', ' ').strip() for p in phrases[:3]]
-                prompts.append(PromptJob(host, side, terms, 2, 'T', dict(kind='inside', anchor=host, dilate_mm=20), 1, ['tumour prompt on host']))
+                prompts.append(PromptJob(host, side, terms, 3, 'T', dict(kind='tumour_host', anchor=host, anchor_side=side, dilate_mm=10, filter='lesion_admission_gate', host_class='primary', host_prior=1.0, ensemble=True),
+                                         1, ['primary alias ensemble: initial VoxTell tumour mask ' + ('absent' if ts.vt_initial_largest_ml is None else f'{ts.vt_initial_largest_ml} ml (< 0.5 ml)')],
+                                         relation='tumour_of', from_anchor=host))
+        log.append(dict(step='tumour_prompts', n=n_t, hosts=[(t[0], t[1], t[3]) for t in tumour_targets], side_excluded=side_excluded, reach_mm={h['entity']: h.get('reach_mm') for h in (ts.hosts or []) if h.get('reach_mm')}, alias_ensemble=ensemble, vt_initial_largest_ml=ts.vt_initial_largest_ml))
 
         # tier 2: profiles
         # promote only anchors TS cannot name (or the host); TS-nameable-but-missing anchors are usually FOV-edge and get no profile expansion
-        promoted = [(m['entity'], m['side']) for m in missing if (not m.get('ts_has_class') or m['entity'] == host) and m['entity'] not in self.systemic]
+        # v0.5.5: a missing anchor gets its completion prompt (above) but a profile only when it is the primary or a reachable
+        # local-invasion host of this cancer — before, every TS-unnameable anchor (breast, uterus, ovary, rectum …) was expanded
+        # on every scan (LIHC: 25 pelvic prompts, UCEC: 17 breast / axilla prompts)
+        spread_local = {t[0] for t in tumour_targets if t[1] in ('primary', 'local_invasion')}
+        promoted = [(m['entity'], m['side']) for m in missing if (not m.get('ts_has_class') or m['entity'] == host) and m['entity'] not in self.systemic
+                    and (m['entity'] == host or m['entity'] in spread_local) and (m['entity'] != host or primary_visible)]
+        # v0.5.5: tumour-near profiles only for spread-set neighbours the validated tumour can reach (distance test / side rules):
+        # the centroid test expanded any organ close to the tumour (KIRC small bowel, OV: 10 anchors ≈ 60 prompts)
         near = []
-        if ts.tumour_centroid_mm:
+        if ts.tumour_centroid_mm and primary_visible:
+            local_sides = {(t[0], sd) for t in tumour_targets if t[1] == 'local_invasion' for sd in t[3]}
             for f in found:
                 if not f['is_anchor'] or f['entity'] == host: continue
-                s = ts.by_name().get(f['ts_name'])
-                cen = s.centroid_mm if s is not None else f.get('centroid_mm')     # part-merged anchors carry their own centroid
-                if cen is None: continue
-                d = sum((a - b) ** 2 for a, b in zip(cen, ts.tumour_centroid_mm)) ** 0.5
-                if d <= self.tumour_near_mm + 60:    # centroid distance is coarse; run-time uses surface distance
+                if (f['entity'], f['side']) in local_sides or (f['entity'], None) in local_sides:
                     near.append((f['entity'], f['side']))
         # secondary hosts (spread): kept candidates other than the primary → 1-hop profile each
         hosts_out = []
@@ -455,10 +584,9 @@ class Planner:
             hosts_out.append(dict(entity=host, cls='primary', prior=1.0, evidence=None, weight=1.0, side=host_side, role='primary'))
         log.append(dict(step='hosts', hosts=[(h['entity'], h['role'], h['cls'], h.get('evidence'), h.get('weight')) for h in hosts_out]))
         targets = []
-        if host: targets.append((host, host_side, 2, 'host'))
+        if host and primary_visible: targets.append((host, host_side, 2, 'host'))
         for h in secondary:
-            sides = ['left', 'right'] if kb.entities[h['entity']]['laterality'] == 'bilateral' else [None]
-            for sd in sides:
+            for sd in [t[0] for t in self.spread_targets(h, host, host_side) if t[1] != 'distant']:   # profiles only where growth can reach
                 targets.append((h['entity'], sd, 1, f"secondary_host[{h['cls']},ev={h.get('evidence')}]"))
         for eid, side in promoted: targets.append((eid, side, 1 if eid != host else 2, 'promoted'))
         for eid, side in near: targets.append((eid, side, 1, 'tumour_near'))
@@ -467,7 +595,10 @@ class Planner:
         ts_only = []
         for eid, side, hops, why in targets:
             # secondary hosts: extent-relevant relations only (capsule/fascia, vessels, nodes) — no sub-parts (e.g. liver segments)
-            types = {'invested_by', 'supplied_by', 'drained_by', 'drains_lymph_to', 'adjacent_to'} if why.startswith('secondary_host') else None
+            # secondary hosts (evidence-backed): extent relations incl. their own neighbours; tumour-near (reachable, no evidence):
+            # capsule / vessels / nodes only — a neighbour's neighbours (colon → bladder, uterus) are not reachable from the primary
+            types = ({'invested_by', 'supplied_by', 'drained_by', 'drains_lymph_to', 'adjacent_to'} if why.startswith('secondary_host')
+                     else {'invested_by', 'supplied_by', 'drained_by', 'drains_lymph_to'} if why == 'tumour_near' else None)
             for r in kb.profile(eid, hops=hops, types=types):
                 dst = kb.entities.get(r['dst'])
                 if not dst: continue
@@ -510,7 +641,6 @@ class Planner:
         cap = kb.prompt_rules['budget']['max_prompts_per_scan']
         prompts.sort(key=lambda p: (0 if p.list in ('T', 'R') else 1, p.tier, p.priority))
         log.append(dict(step='ts_only', n=len(ts_only), items=[(t['entity'], t['side']) for t in ts_only]))
-        log.append(dict(step='tumour_prompt', included=include_tumour_prompt, host=host))
         # completion (tier 0/1) and tumour prompts are never dropped: they decide which anchors exist; the cap trims tier 2 only
         protected = [p for p in prompts if p.tier < 2 or p.list in ('T', 'R')]
         w2 = [p for p in prompts if not (p.tier < 2 or p.list in ('T', 'R'))]
