@@ -1,4 +1,4 @@
-version: 0.4.3
+version: 0.5.5
 entities:
 - id: vertebra_C1
   name: C1 vertebra
@@ -721,6 +721,7 @@ entities:
     presence: obligatory
     spatial_prior: []
   notes: 'systemic anchor: cranio-caudal ruler; TS total_mr gives one merged class, use VoxTell per level if needed'
+  found_from_parts: true
   sources:
   - TS
   - FMA
@@ -730,6 +731,15 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tumour_phrase:
+    main: spine tumor
+    aliases:
+    - spine mass
+    - spine lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: sacrum
   name: Sacrum
   category: bone
@@ -768,6 +778,15 @@ entities:
     unsided_label: false
     train_volumes: 5720
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: sacrum tumor
+    aliases:
+    - sacrum mass
+    - sacrum lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: coccyx
   name: Coccyx
   category: bone
@@ -835,6 +854,15 @@ entities:
     unsided_label: false
     train_volumes: null
     source: table7_test+hf_v1.1+hf_v1.1
+  tumour_phrase:
+    main: '{side} hip bone tumor'
+    aliases:
+    - '{side} hip bone mass'
+    - '{side} hip bone lesion'
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: femur
   name: Femur (proximal)
   category: bone
@@ -1072,6 +1100,15 @@ entities:
     unsided_label: false
     train_volumes: 5057
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: aorta tumor
+    aliases:
+    - aorta mass
+    - aorta lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: false
 - id: inferior_vena_cava
   name: Inferior vena cava
   category: vessel_vein
@@ -1113,6 +1150,15 @@ entities:
     unsided_label: false
     train_volumes: 5016
     source: table10_train+table7_test+hf_v1.1+hf_v1.1
+  tumour_phrase:
+    main: inferior vena cava tumor
+    aliases:
+    - inferior vena cava mass
+    - inferior vena cava lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: false
 - id: superior_vena_cava
   name: Superior vena cava
   category: vessel_vein
@@ -1183,6 +1229,15 @@ entities:
     unsided_label: false
     train_volumes: 4514
     source: table10_train+hf_v1.1
+  tumour_phrase:
+    main: '{side} iliac artery tumor'
+    aliases:
+    - '{side} iliac artery mass'
+    - '{side} iliac artery lesion'
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: false
 - id: iliac_vein
   name: Common/external iliac vein
   category: vessel_vein
@@ -1227,6 +1282,15 @@ entities:
     unsided_label: false
     train_volumes: 4514
     source: table10_train+hf_v1.1
+  tumour_phrase:
+    main: '{side} iliac vein tumor'
+    aliases:
+    - '{side} iliac vein mass'
+    - '{side} iliac vein lesion'
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: false
 - id: internal_iliac_artery
   name: Internal iliac artery
   category: vessel_artery
@@ -1503,26 +1567,24 @@ entities:
   category: vessel_vein
   laterality: bilateral
   voxtell:
-    main: '{side} testicular vein'
-    aliases:
-    - '{side} ovarian vein'
-    - '{side} gonadal vein'
+    main: '{side} gonadal vein'
+    aliases: []
   ts: {}
   modality:
   - CT
   - MR
-  coverage_tier: in_vocab
+  coverage_tier: rare
   priority: 3
   is_anchor: false
   sources:
   - TS
   - FMA
   voxtell_evidence:
-    grade: exact
-    vocab_match: left testicular vein
+    grade: rare
+    vocab_match: left gonadal vein
     unsided_label: false
-    train_volumes: null
-    source: hf_v1.1_labels
+    train_volumes: 2
+    source: table10_train+hf_v1.1
 - id: pulmonary_artery
   name: Pulmonary artery
   category: vessel_artery
@@ -1773,6 +1835,16 @@ entities:
     unsided_label: false
     train_volumes: 4404
     source: table10_train+table7_test+hf_v1.1+hf_v1.1
+  tumour_phrase:
+    main: '{side} lung tumor'
+    aliases:
+    - lung lesion
+    - primary lung tumor
+    tier: in_vocab
+    vocab_match: lung tumor
+    source: hand_checked
+    unsided_label: true
+  tumour_host: true
 - id: lung_left_upper_lobe
   name: Left upper lobe
   category: organ
@@ -1935,6 +2007,15 @@ entities:
     unsided_label: false
     train_volumes: 2018
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: trachea tumor
+    aliases:
+    - trachea mass
+    - trachea lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: false
 - id: main_bronchus
   name: Main bronchus
   category: duct
@@ -2070,6 +2151,15 @@ entities:
     unsided_label: false
     train_volumes: 2855
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: heart tumor
+    aliases:
+    - heart mass
+    - heart lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: false
 - id: pericardium
   name: Pericardium
   category: fascia
@@ -2140,6 +2230,15 @@ entities:
     unsided_label: false
     train_volumes: 7549
     source: table10_train+table7_test+hf_v1.1+hf_v1.1
+  tumour_phrase:
+    main: esophageal cancer
+    aliases:
+    - esophageal malignant tumor
+    tier: in_vocab
+    vocab_match: esophageal cancer
+    source: hand_checked
+    unsided_label: false
+  tumour_host: true
 - id: thyroid
   name: Thyroid gland
   category: gland
@@ -2174,6 +2273,15 @@ entities:
     unsided_label: false
     train_volumes: 1446
     source: table10_train+hf_v1.1
+  tumour_phrase:
+    main: thyroid gland tumor
+    aliases:
+    - thyroid gland mass
+    - thyroid gland lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: false
 - id: thymus
   name: Thymus / anterior mediastinal fat
   category: gland
@@ -2284,6 +2392,15 @@ entities:
     unsided_label: false
     train_volumes: 1086
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: '{side} breast lesion'
+    aliases:
+    - primary breast tumor
+    tier: in_vocab
+    vocab_match: breast lesion
+    source: hand_checked
+    unsided_label: true
+  tumour_host: true
 - id: fibroglandular_tissue
   name: Fibroglandular tissue
   category: organ
@@ -2431,6 +2548,16 @@ entities:
     unsided_label: false
     train_volumes: 8669
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: liver tumor
+    aliases:
+    - liver lesion
+    - primary liver tumor
+    tier: in_vocab
+    vocab_match: liver tumor
+    source: hand_checked
+    unsided_label: false
+  tumour_host: true
 - id: liver_segment_I
   name: Liver segment I
   category: organ
@@ -2690,6 +2817,15 @@ entities:
     unsided_label: false
     train_volumes: 5606
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: gallbladder tumor
+    aliases:
+    - gallbladder mass
+    - gallbladder lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: bile_duct
   name: Common bile duct
   category: duct
@@ -2787,6 +2923,15 @@ entities:
     unsided_label: false
     train_volumes: 6823
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: spleen tumor
+    aliases:
+    - spleen mass
+    - spleen lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: stomach
   name: Stomach
   category: hollow_organ
@@ -2833,6 +2978,15 @@ entities:
     unsided_label: false
     train_volumes: 5840
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: stomach tumor
+    aliases:
+    - stomach mass
+    - stomach lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: gastric_wall
   name: Gastric wall
   category: hollow_organ
@@ -2920,6 +3074,15 @@ entities:
     unsided_label: false
     train_volumes: 4073
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: duodenum tumor
+    aliases:
+    - duodenum mass
+    - duodenum lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: pancreas
   name: Pancreas
   category: organ
@@ -2968,6 +3131,15 @@ entities:
     unsided_label: false
     train_volumes: 7934
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: pancreas tumor
+    aliases:
+    - pancreas mass
+    - pancreas lesion
+    tier: in_vocab
+    vocab_match: pancreas tumor
+    unsided_label: false
+  tumour_host: true
 - id: pancreas_head
   name: Pancreatic head
   category: organ
@@ -3135,6 +3307,14 @@ entities:
     unsided_label: false
     train_volumes: 5423
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: '{side} adrenal tumor'
+    aliases: []
+    tier: in_vocab
+    vocab_match: left adrenal tumor
+    source: hand_checked
+    unsided_label: false
+  tumour_host: true
 - id: kidney
   name: Kidney
   category: organ
@@ -3196,6 +3376,15 @@ entities:
     unsided_label: false
     train_volumes: 5666
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: '{side} kidney tumor'
+    aliases:
+    - '{side} kidney mass'
+    - '{side} kidney lesion'
+    tier: in_vocab
+    vocab_match: kidney tumor
+    unsided_label: true
+  tumour_host: true
 - id: renal_cortex
   name: Renal cortex
   category: organ
@@ -3426,6 +3615,15 @@ entities:
     unsided_label: false
     train_volumes: null
     source: table7_test+hf_v1.1
+  tumour_phrase:
+    main: small intestine tumor
+    aliases:
+    - small intestine mass
+    - small intestine lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: colon
   name: Colon
   category: hollow_organ
@@ -3464,6 +3662,15 @@ entities:
     unsided_label: false
     train_volumes: null
     source: table7_test+hf_v1.1
+  tumour_phrase:
+    main: colon primary tumor
+    aliases:
+    - colon cancer
+    tier: in_vocab
+    vocab_match: colon primary tumor
+    source: hand_checked
+    unsided_label: false
+  tumour_host: true
 - id: colon_ascending
   name: Ascending colon
   category: hollow_organ
@@ -3623,6 +3830,15 @@ entities:
     unsided_label: false
     train_volumes: 1281
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: rectum tumor
+    aliases:
+    - rectum mass
+    - rectum lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: mesorectum
   name: Mesorectum / mesorectal fascia
   category: fascia
@@ -3711,7 +3927,33 @@ entities:
   - MR
   coverage_tier: in_vocab
   priority: 3
-  is_anchor: false
+  is_anchor: true
+  anchor:
+    span:
+    - L1
+    - L5
+    span_var: 1
+    position:
+      lr: midline
+      ap: anterior
+    presence: variable
+    spatial_prior:
+    - landmark: stomach
+      relation: inferior_to
+      dist_mm:
+      - 0
+      - 60
+    - landmark: colon
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 30
+    - landmark: small_bowel
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 30
+  notes: 'v0.5.5: peritoneal / omental host (FIGO III omental disease, peritoneal carcinomatosis); no TS class, located by the KB prior region'
   sources:
   - TS
   - FMA
@@ -3721,6 +3963,15 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tumour_phrase:
+    main: omentum tumor
+    aliases:
+    - omentum mass
+    - omentum lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: peritoneum
   name: Peritoneum
   category: fascia
@@ -3818,6 +4069,16 @@ entities:
     unsided_label: false
     train_volumes: 5098
     source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: bladder tumor
+    aliases:
+    - urinary bladder cancer
+    - malignant bladder tumor
+    tier: in_vocab
+    vocab_match: bladder tumor
+    source: hand_checked
+    unsided_label: false
+  tumour_host: true
 - id: bladder_wall
   name: Bladder wall
   category: hollow_organ
@@ -3943,6 +4204,15 @@ entities:
     unsided_label: false
     train_volumes: 3003
     source: table10_train+hf_v1.1
+  tumour_phrase:
+    main: prostate tumor
+    aliases:
+    - prostate mass
+    - prostate lesion
+    tier: in_vocab
+    vocab_match: prostate tumor
+    unsided_label: false
+  tumour_host: true
 - id: prostate_peripheral_zone
   name: Prostate peripheral zone
   category: gland
@@ -4040,6 +4310,15 @@ entities:
     unsided_label: true
     train_volumes: null
     source: hf_v1.1_labels
+  tumour_phrase:
+    main: seminal vesicles tumor
+    aliases:
+    - seminal vesicles mass
+    - seminal vesicles lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: neurovascular_bundle
   name: Neurovascular bundle
   category: nerve
@@ -4123,6 +4402,15 @@ entities:
     unsided_label: false
     train_volumes: 583
     source: table10_train+hf_v1.1
+  tumour_phrase:
+    main: uterus tumor
+    aliases:
+    - uterus mass
+    - uterus lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: endometrium
   name: Endometrium / uterine cavity
   category: organ
@@ -4252,6 +4540,15 @@ entities:
     unsided_label: false
     train_volumes: 949
     source: table10_train+hf_v1.1
+  tumour_phrase:
+    main: cervix tumor
+    aliases:
+    - cervical cancer
+    tier: in_vocab
+    vocab_match: cervix tumor
+    source: hand_checked
+    unsided_label: false
+  tumour_host: true
 - id: cervical_stroma
   name: Cervical stroma
   category: organ
@@ -4347,6 +4644,15 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tumour_phrase:
+    main: vagina tumor
+    aliases:
+    - vagina lesion
+    - cancer of the vagina
+    tier: ood
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: vagina_upper_two_thirds
   name: Upper two-thirds of vagina
   category: hollow_organ
@@ -4414,6 +4720,16 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tumour_phrase:
+    main: '{side} ovary tumor'
+    aliases:
+    - '{side} ovary lesion'
+    - '{side} tumor in the ovary'
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  contralateral_class: primary
+  tumour_host: true
 - id: adnexa
   name: Adnexa (ovary + tube)
   category: gland
@@ -4571,6 +4887,15 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tumour_phrase:
+    main: '{side} iliopsoas muscle tumor'
+    aliases:
+    - '{side} iliopsoas muscle mass'
+    - '{side} iliopsoas muscle lesion'
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: false
 - id: psoas
   name: Psoas major
   category: muscle
@@ -4615,6 +4940,15 @@ entities:
     unsided_label: false
     train_volumes: 78
     source: table10_train+hf_v1.1
+  tumour_phrase:
+    main: '{side} psoas major muscle tumor'
+    aliases:
+    - '{side} psoas major muscle mass'
+    - '{side} psoas major muscle lesion'
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: false
 - id: quadratus_lumborum
   name: Quadratus lumborum
   category: muscle
@@ -4782,6 +5116,15 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tumour_phrase:
+    main: subcutaneous fat tumor
+    aliases:
+    - subcutaneous fat mass
+    - subcutaneous fat lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: visceral_fat
   name: Visceral adipose tissue
   category: fat
@@ -4812,6 +5155,15 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tumour_phrase:
+    main: visceral fat tumor
+    aliases:
+    - visceral fat mass
+    - visceral fat lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
   notes: ' | not an anchor since v0.4.0: VoxTell has only whole-body fat / muscles labels and TS tissue_types is not run'
 - id: skeletal_muscle
   name: Skeletal muscle (whole)
@@ -4842,6 +5194,15 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tumour_phrase:
+    main: skeletal muscle tumor
+    aliases:
+    - skeletal muscle mass
+    - skeletal muscle lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
 - id: body_trunk
   name: Body (trunk)
   category: region

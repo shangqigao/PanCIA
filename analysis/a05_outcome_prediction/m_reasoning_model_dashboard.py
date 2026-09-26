@@ -250,7 +250,7 @@ def plot_sensitivity_specificity(
     class_name: str = "endometrioma",
 ) -> None:
     data=detection_data(volumes,level,class_name)
-    fig,axes=plt.subplots(2,2,figsize=(14,9),sharey=True)
+    fig,axes=plt.subplots(2,2,figsize=(14,9),sharey=False)
     for row,cohort in enumerate(("D1","D2")):
         for col,stage in enumerate(("pre","post")):
             axis=axes[row,col]
@@ -329,11 +329,12 @@ def plot_volume_correlations(
 def plot_correlation_summary(
     volumes: pd.DataFrame, output: Path, class_name: str = "endometrioma"
 ) -> None:
-    fig,axes=plt.subplots(2,2,figsize=(14,9),sharey=True)
+    fig,axes=plt.subplots(2,2,figsize=(14,9),sharey=False)
     for row,level in enumerate(("scan","patient")):
         data=detection_data(volumes,level,class_name)
         for col,domain in enumerate(("D1","D2")):
             axis=axes[row,col]; x=np.arange(len(MODELS)); width=.18
+            displayed_values=[]
             for stage_index,stage in enumerate(("pre","post")):
                 pearson_values=[]; spearman_values=[]
                 for model in MODELS:
@@ -343,7 +344,17 @@ def plot_correlation_summary(
                 offset=(-.27 if stage=="pre" else .09)
                 axis.bar(x+offset,pearson_values,width,color=STAGE_COLORS[stage],alpha=.9,label=f"{stage} Pearson")
                 axis.bar(x+offset+width,spearman_values,width,color=STAGE_COLORS[stage],alpha=.45,hatch="//",label=f"{stage} Spearman")
-            axis.axhline(0,color="black",linewidth=.8); axis.set_ylim(-1,1); axis.grid(axis="y",alpha=.2)
+                displayed_values.extend(pearson_values)
+                displayed_values.extend(spearman_values)
+            displayed=np.asarray(displayed_values,dtype=float)
+            finite=displayed[np.isfinite(displayed)]
+            if finite.size:
+                span=max(float(finite.max()-finite.min()),.1)
+                margin=max(.04,.18*span)
+                lower=min(0.0,float(finite.min())-margin)
+                upper=max(0.0,float(finite.max())+margin)
+                axis.set_ylim(lower,upper)
+            axis.axhline(0,color="black",linewidth=.8); axis.grid(axis="y",alpha=.2)
             axis.set_xticks(x,MODELS); axis.set_title(f"{domain} · {level}-level · all {'scans' if level=='scan' else 'patients'}")
     axes[0,0].set_ylabel("Correlation with case GT volume"); axes[1,0].set_ylabel("Correlation with case GT volume")
     axes[0,0].legend(frameon=False,fontsize=8,ncol=2)

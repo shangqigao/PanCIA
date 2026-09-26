@@ -93,7 +93,7 @@ def host_prior_region(kb, host, md, label_names, task, spacing, expand_mm=30.0, 
         return None, []
     idx = np.argwhere(m)
     lo, hi = idx.min(0), idx.max(0)
-    pad = np.ceil(expand_mm / spacing).astype(int)
+    pad = np.ceil(expand_mm / np.asarray(spacing, float)).astype(int)
     lo = np.maximum(lo - pad, 0); hi = np.minimum(hi + pad, np.asarray(md.shape) - 1)
     box = np.zeros(md.shape, bool)
     box[lo[0]:hi[0] + 1, lo[1]:hi[1] + 1, lo[2]:hi[2] + 1] = True
@@ -112,6 +112,81 @@ def _envelope(hm, spacing, envelope_mm):
     out = np.zeros(hm.shape, bool)
     out[box] = ndimage.distance_transform_edt(~hm[box], sampling=spacing) <= envelope_mm
     return out
+
+
+def _side_of(kb, task, name):
+    """Side of a TS class ('left' / 'right' / None) from the KB mapping, else from the class name."""
+    ent = kb.ts_to_entity.get(task, {}).get(name)
+    s = ent[1] if ent and len(ent) > 1 else None
+    if not s and name:
+        s = 'left' if name.endswith('_left') or '_left_' in name else ('right' if name.endswith('_right') or '_right_' in name else None)
+    return s
+
+
+def _labels_by_side(kb, task, label_names, entity):
+    """{side: [TS label ids]} for an entity (side None for unpaired organs)."""
+    out = {}
+    for lab in _host_ts_labels(kb, task, label_names, entity):
+        out.setdefault(_side_of(kb, task, label_names.get(lab)), []).append(lab)
+    return out
+
+
+def _span_in_frame(kb, entity, frame_span):
+    """True if the entity's canonical vertebral span overlaps the scan frame (or no frame / no span is known)."""
+    if not frame_span:
+        return True
+    a = (kb.entities.get(entity, {}).get('anchor') or {}).get('span')
+    if not a:
+        return True
+    try:
+        return kb.span_overlaps(a, list(frame_span))
+    except (ValueError, KeyError):
+        return True
+
+
+PELVIC_BONES = ('sacrum', 'hip_left', 'hip_right')
+
+
+def _primary_out_of_fov(kb, host, frame, found_names, min_gap_levels=2):
+    """Conservative test that the PRIMARY host is outside the scan (v0.5.5b). Declaring the primary absent loses its tumour, so
+    it needs all of: a reliable frame (TS vertebrae — landmark / assumed frames are too coarse: MR frames 'L3–coccyx' on renal
+    MR, 'S4–coccyx' on breast MR in the first run), the host's canonical span at least min_gap_levels vertebral levels beyond
+    the frame edge, and for a pelvic host no pelvic bone (sacrum / hip) found by TS at all (a truncated sacrum means the upper
+    pelvis is in the scan)."""
+    if not frame or frame.get('method') != 'ts_vertebrae' or not frame.get('span'):
+        return False
+    a = (kb.entities.get(host, {}).get('anchor') or {}).get('span')
+    if not a:
+        return False
+    try:
+        a0, a1 = kb.level_index(a[0]), kb.level_index(a[1])
+        f0, f1 = kb.level_index(frame['span'][0]), kb.level_index(frame['span'][1])
+    except (ValueError, KeyError):
+        return False
+    gap = max(a0 - f1, f0 - a1)
+    if gap < min_gap_levels:
+        return False
+    if a0 >= kb.level_index('S1') and any(n in (found_names or ()) for n in PELVIC_BONES):
+        return False
+    return True
+
+
+def _label_boxes(md):
+    """Bounding box per TS label (index = label - 1; None = label absent) — one pass over the volume."""
+    import numpy as np
+    from scipy import ndimage
+    a = md if np.issubdtype(md.dtype, np.integer) else md.astype(np.int32)
+    return ndimage.find_objects(a)
+
+
+def _lesion_distance(lesion, spacing, max_mm):
+    """(box, distance map in mm) around a lesion, cropped to its bounding box ± max_mm."""
+    import numpy as np
+    from scipy import ndimage
+    sl = ndimage.find_objects(lesion.astype(np.int8))[0]
+    pad = [int(np.ceil(max_mm / float(sp))) + 1 for sp in spacing]
+    box = tuple(slice(max(0, a.start - p), min(n, a.stop + p)) for a, p, n in zip(sl, pad, lesion.shape))
+    return box, ndimage.distance_transform_edt(~lesion[box], sampling=spacing)
 
 
 def _components(m, min_vox):
@@ -133,7 +208,7 @@ def _frac_in(lab, j, sl, n, region):
 
 
 def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task, spacing, envelope_mm=10.0, min_inside=0.5, min_component_ml=0.5,
-                             primary_tumour=None, primary_envelope=None, secondary_envelope_mm=3.0):
+                             primary_tumour=None, primary_envelope=None, secondary_envelope_mm=3.0, reach_tumour=None, reach_mm=10.0, reach_max_mm=30.0, label_boxes=None, frame_span=None, primary_in_fov=True):
     """Data-driven update of the host prior: for each candidate host (KB.spread_hosts) present in the scan, count the
     set-based evidence that a validated tumour component lies in its region — 2 agreement, 1 one rater, 0 none.
     Candidates with a TS class use the TS envelope; candidates without one use the KB prior region; candidates with
@@ -185,19 +260,69 @@ def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task
             else:
                 region = _envelope(hm, spacing, secondary_envelope_mm)
             kind = 'ts_envelope'
-        elif not labs and c['cls'] == 'primary':
-            # the KB prior box is coarse: acceptable for the primary (no alternative), never as evidence for a secondary host
-            region, used = host_prior_region(kb, c['entity'], md, label_names, task, spacing)
+        elif not labs:
+            # the KB prior box is coarse: acceptable for the primary (no alternative); for a secondary host without a TS class
+            # (cervix, vagina, uterus, ovary on CT) it only establishes that the organ is in the FOV — so it can get a tier-T
+            # prompt (v0.5.4) — and is never evidence. v0.5.5: only when the organ's canonical span lies in the scan frame
+            # (an abdominal CT ending at L4 has no ovary, whatever box the iliac landmarks give)
+            if (c['cls'] == 'primary' and not primary_in_fov) or (c['cls'] != 'primary' and not _span_in_frame(kb, c['entity'], frame_span)):
+                region = None
+            else:
+                region, used = host_prior_region(kb, c['entity'], md, label_names, task, spacing)
             kind = 'kb_prior_region' if region is not None else None
         c['in_fov'] = region is not None
         c['region'] = kind
         regions.append((c, region))
     primary_region = next((r for c, r in regions if c['cls'] == 'primary'), None)
+    # reach (v0.5.4): can the validated primary tumour have grown into this neighbour? local invasion needs the primary
+    # tumour mask within reach_mm of the neighbour's TS mask (per side for paired organs); recorded as reach / reach_mm
+    # (None = farther than reach_max_mm). Neighbours without a TS mask get no reach entry (planner falls back to side_link).
+    rt = reach_tumour if reach_tumour is not None else primary_tumour
+    if rt is not None and rt.any():
+        # v0.5.5: distance from the FULL extent of the validated tumour — every rater component (measurable) that overlaps the
+        # validated core — not from the agreement core alone, which underestimates large tumours (KIRC: 718 ml VT tumour,
+        # agreement core 13.7 mm from the adrenal it abuts)
+        ext = rt.copy()
+        for lab, comps in comp_cache:
+            for j, sl, n in comps:
+                comp = lab[sl] == j
+                if (comp & rt[sl]).any():
+                    ext[sl] |= comp
+        rt = ext
+        box, dist = _lesion_distance(rt, spacing, reach_max_mm)
+        if label_boxes is None:
+            label_boxes = _label_boxes(md)
+        present = {i + 1 for i, b in enumerate(label_boxes) if b is not None}
+        sub = md[box]
+        for c, region in regions:
+            if c['cls'] != 'local_invasion':
+                continue
+            reach, rmm = {}, {}
+            if c.get('region') == 'kb_prior_region':
+                # no TS class (uterus, cervix, vagina, ovary on CT): the prior box contains the tumour region and cannot measure
+                # distance → no reach entry; side_link prior at plan time, the distance is re-tested at stage 3 on the prompted
+                # VoxTell organ mask
+                continue
+            for side, labs in _labels_by_side(kb, task, label_names, c['entity']).items():
+                if not any(l in present for l in labs):
+                    continue                                  # this side not segmented → unknown, no entry
+                m = np.isin(sub, labs)
+                d = float(dist[m].min()) if m.any() else None
+                if d is not None and d > reach_max_mm:
+                    d = None
+                k = side or 'none'
+                rmm[k] = round(d, 1) if d is not None else None
+                reach[k] = d is not None and d <= reach_mm
+            if reach:
+                c['reach'] = reach; c['reach_mm'] = rmm
     out = []
     for c, region in regions:
         if region is None:
             c['evidence'] = None
             c['weight'] = round(c['prior'], 3)
+            out.append(c); continue
+        if c.get('region') == 'kb_prior_region' and c['cls'] != 'primary':
+            c['evidence'] = 0; c['weight'] = round(c['prior'], 3)
             out.append(c); continue
         ev = 0
         if inter is not None and float((inter & region).sum()) / float(inter.sum()) >= min_inside:
@@ -233,7 +358,7 @@ def host_candidates_evidence(kb, candidates, masks, names, md, label_names, task
 
 def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[KnowledgeBase], task: str, label_names: dict,
                    expected_host: Optional[str] = None, envelope_mm: float = 10.0, min_inside: float = 0.5,
-                   cancer_type: Optional[str] = None, min_component_ml: float = 0.5) -> Tuple[Optional[Tuple[float, float, float]], Optional[str], dict]:
+                   cancer_type: Optional[str] = None, min_component_ml: float = 0.5, frame_span=None, frame=None, found_names=None) -> Tuple[Optional[Tuple[float, float, float]], Optional[str], dict]:
     """Validated tumour evidence for the planner.
 
     BP and VT disagree completely on ~60 % of series, so a raw centroid is unreliable. Evidence is therefore taken
@@ -263,6 +388,13 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
             continue
         masks.append(np.asarray(m.dataobj) > 0); names.append(f'rater_{i}')
     diag = dict(tumour_raters=len(paths), tumour_raters_nonempty=int(sum(m.any() for m in masks)), expected_host=expected_host)
+    _sp = _spacing(ref.affine); _vox_ml = float(np.prod(_sp)) / 1000.0
+    for n, m in zip(names, masks):                   # per-rater totals (ml) and largest component (ml): the planner adds the primary
+        diag[f'{n}_total_ml'] = round(float(m.sum()) * _vox_ml, 2)     # alias ensemble when rater_0 (initial VoxTell) is empty / sub-measurable
+        if m.any():
+            _lab, _k = ndimage.label(m, structure=np.ones((3, 3, 3))); diag[f'{n}_largest_ml'] = round(float(np.bincount(_lab.ravel())[1:].max()) * _vox_ml, 2)
+        else:
+            diag[f'{n}_largest_ml'] = 0.0
     if not any(m.any() for m in masks):
         diag.update(tumour_voxels=0, tumour_evidence='none')
         return None, None, diag
@@ -281,6 +413,10 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
                     envelope = _envelope(hm, spacing, envelope_mm)
                     diag['host_ts_volume_ml'] = round(float(hm.sum() * np.prod(spacing) / 1000), 1)
                     diag['validation_region'] = 'host_ts_envelope'
+                elif _primary_out_of_fov(kb, expected_host, frame, found_names):
+                    # v0.5.5: the primary host is not in the scan (e.g. OV on an abdominal CT ending at L4): no validation
+                    # region, no primary evidence — a scan ordered to look for metastasis; lesions are distant hypotheses
+                    diag['validation_region'] = 'host_out_of_fov'; diag['primary_in_fov'] = False
                 else:
                     envelope, used = host_prior_region(kb, expected_host, md, label_names, task, spacing)
                     if envelope is not None:
@@ -318,7 +454,9 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
     if inter is not None and inter.sum() < min_vox:
         inter = None                                   # agreement below the measurable floor is not evidence
     diag['min_component_voxels'] = min_vox
-    if envelope is None:
+    if diag.get('primary_in_fov') is False:
+        td, evidence = None, 'primary_out_of_fov'
+    elif envelope is None:
         td = inter if inter is not None else nonempty[0][1]
         evidence = 'unverified_agreement' if inter is not None else f'unverified_{nonempty[0][0]}'
     else:
@@ -349,7 +487,8 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
                                                 basis='agreement' if inter is not None else nonempty[0][0])
         if md is not None and kb is not None and expected_host:
             spacing = _spacing(ref.affine)
-            hosts = host_candidates_evidence(kb, kb.spread_hosts(expected_host, cancer_type), masks, names, md, label_names, task, spacing, envelope_mm, min_inside, min_component_ml)
+            hosts = host_candidates_evidence(kb, kb.spread_hosts(expected_host, cancer_type), masks, names, md, label_names, task, spacing, envelope_mm, min_inside, min_component_ml,
+                                             frame_span=frame_span, primary_in_fov=diag.get('primary_in_fov', True))
             for h in hosts:
                 h['kept'] = h['cls'] == 'primary' or (h['evidence'] or 0) >= 1
                 h['contact_check'] = (not h['kept']) and h['in_fov'] and h['cls'] == 'local_invasion'
@@ -387,8 +526,42 @@ def tumour_summary(tumour_mask_path, ts_mask_path: Optional[str], kb: Optional[K
     if md is not None and kb is not None and expected_host:
         spacing = _spacing(ref.affine)
         cands = kb.spread_hosts(expected_host, cancer_type)
+        # single-rater local-invasion evidence needs an agreement-backed primary: if the primary itself rests on one rater, that
+        # rater's blob spilling into a neighbour is the same single claim, not a second one (v0.5: LUSC heart ev1 41/116,
+        # LIHC stomach ev1 75/559 were mostly BP blobs) → hypothesis (isolated_lesions), decided at the stage-3 gate
+        rmm = float((kb.tumour_prompts.get('spread') or {}).get('reach_mm', 10.0))
+        lboxes = _label_boxes(md)
+        # paired primary organ: which side(s) hold validated tumour (v0.5.4) — one side → that side is primary, the other is a
+        # distant-class host; both sides → both primary
+        if kb.entities[expected_host]['laterality'] == 'bilateral':
+            by_side = {sd: labs for sd, labs in _labels_by_side(kb, task, label_names, expected_host).items() if sd}
+            if len(by_side) == 2:
+                tb = ndimage.find_objects(td.astype(np.int8))[0]
+                lab_t, k_t = ndimage.label(td[tb], structure=np.ones((3, 3, 3)))
+                sizes = np.bincount(lab_t.ravel())
+                sides = set()
+                env_side = {}
+                for sd, labs in by_side.items():
+                    bx = [lboxes[l - 1] for l in labs if 0 < l <= len(lboxes) and lboxes[l - 1] is not None]
+                    if not bx: continue
+                    pad = [int(np.ceil(envelope_mm / float(q))) + 1 for q in spacing]
+                    box = tuple(slice(max(0, min(b[i].start for b in bx) - pad[i]), min(md.shape[i], max(b[i].stop for b in bx) + pad[i])) for i in range(3))
+                    env = np.zeros(md.shape, bool)
+                    env[box] = ndimage.distance_transform_edt(~np.isin(md[box], labs), sampling=spacing) <= envelope_mm
+                    env_side[sd] = env[tb]
+                for j in range(1, k_t + 1):
+                    if sizes[j] < min_vox: continue
+                    comp = lab_t == j
+                    fr = {sd: float((comp & e).sum()) / sizes[j] for sd, e in env_side.items()}
+                    if fr and max(fr.values()) >= min_inside:
+                        sides.add(max(fr, key=fr.get))
+                if sides:
+                    diag['primary_sides'] = sorted(sides)
+        # distance test uses the validated primary tumour (agreement or one rater validated in the host region)
         hosts = host_candidates_evidence(kb, cands, masks, names, md, label_names, task, spacing, envelope_mm, min_inside, min_component_ml,
-                                         primary_tumour=td, primary_envelope=envelope if diag.get('validation_region') == 'host_ts_envelope' else None)
+                                         primary_tumour=td if 'agreement' in evidence else None,
+                                         primary_envelope=envelope if diag.get('validation_region') == 'host_ts_envelope' else None,
+                                         reach_tumour=td, reach_mm=rmm, label_boxes=lboxes, frame_span=frame_span)
         for h in hosts:
             h['kept'] = h['cls'] == 'primary' or (h['evidence'] or 0) >= 1          # secondary hosts earn prompts only with data-driven evidence
             h['contact_check'] = (not h['kept']) and h['in_fov'] and h['cls'] == 'local_invasion'   # neighbours: tumour-contact check on TS masks, no prompts
@@ -428,12 +601,25 @@ def load_ts_output(structures_csv: str, labels_json: Optional[str] = None, image
         fov = fov_z_from_table(rows); diag['fov_source'] = 'structure_union'
 
     cen, host = None, None
+    # v0.5.5: the scan frame (vertebral span) is needed to decide whether a host without a TS class can be in the FOV
+    frame_span = None
+    if kb is not None:
+        from .planner import Planner as _P
+        _fr = _P(kb).estimate_frame(TSOutput(task=task, structures=structs, fov_z_mm=fov), [])
+        frame_span = _fr.get('span'); diag['frame_span'] = frame_span; diag['frame_method'] = _fr.get('method')
     tm = [tumour_mask] if isinstance(tumour_mask, str) else list(tumour_mask or [])
     tm = [q for q in tm if q and os.path.exists(q)]
     if tm:
-        cen, host, tdiag = tumour_summary(tm, ts_mask if os.path.exists(ts_mask) else None, kb, task, label_names, expected_host=expected_host, cancer_type=cancer_type)
+        cen, host, tdiag = tumour_summary(tm, ts_mask if os.path.exists(ts_mask) else None, kb, task, label_names, expected_host=expected_host, cancer_type=cancer_type, frame_span=frame_span,
+                                          frame=(_fr if kb is not None else None), found_names={x.ts_name for x in structs})
         diag.update(tdiag)
     hosts = [dict(entity=h['entity'], cls=h['cls'], prior=h['prior'], evidence=h['evidence'], weight=h['weight'], region=h['region'],
-                  role='primary' if h['cls'] == 'primary' else ('secondary' if h.get('kept') else 'contact_check'))
-             for h in diag.get('hosts', []) if h.get('kept') or h.get('contact_check')]
-    return TSOutput(task=task, structures=structs, fov_z_mm=fov, tumour_centroid_mm=cen, tumour_host_guess=host or expected_host, hosts=hosts), diag
+                  side_link=h.get('side_link', 'any'), also_distant=h.get('also_distant', False), reach=h.get('reach'), reach_mm=h.get('reach_mm'),
+                  role='primary' if h['cls'] == 'primary' else ('secondary' if h.get('kept') else ('contact_check' if h['cls'] == 'local_invasion' else 'distant_watch')))
+             for h in diag.get('hosts', []) if h.get('kept') or h.get('contact_check') or (h['cls'] == 'distant' and h.get('region') is not None)]
+    # distant_watch: cancer-specific distant site in the FOV without evidence — no profile prompts, but a tier-T tumour prompt (v0.5)
+    ts_out = TSOutput(task=task, structures=structs, fov_z_mm=fov, tumour_centroid_mm=cen, tumour_host_guess=host or expected_host, hosts=hosts)
+    ts_out.vt_initial_largest_ml = diag.get('rater_0_largest_ml')
+    ts_out.primary_sides = diag.get('primary_sides')
+    ts_out.primary_in_fov = diag.get('primary_in_fov', True)          # sides of a paired primary organ holding validated tumour     # None when no tumour masks were given
+    return ts_out, diag

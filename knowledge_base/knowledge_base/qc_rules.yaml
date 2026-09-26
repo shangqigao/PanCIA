@@ -1,4 +1,4 @@
-version: 0.4.3
+version: 0.5.5
 stage: '1: anatomical reasoning by SET THEORY and TOPOLOGY only. No statistical rejection (no MMD, KS, HU/intensity tests) at this stage; those
   rules are listed under deferred_rules and are not applied. Sex/presence class is never a filter: existence is decided on the image.'
 sets:
@@ -141,6 +141,60 @@ rules:
   check: fused tumour removed from every anatomy mask except the host (host keeps organ ∪ tumour for extent measures; organ parenchyma = host
     \ tumour for normal-tissue features)
   on_fail: subtract
+- id: lesion_contact
+  basis: set
+  applies: every tumour claim component ≥ 0.5 ml (BP, VT-initial, VT-prompted)
+  check: component ∩ dilate(H_host, 3 mm) ≠ ∅ for some spread-set host; 75 % of BP components (28.5k of 37.9k) fail this on the TS-host cohorts
+  on_fail: 'reject: no_host_contact'
+- id: lesion_shape_slab
+  basis: geometry
+  applies: every claim with a host reference
+  check: 'median per-slice in-plane cover |L_k ∩ H_k| / |H_k| ≥ 0.4 AND aspect (z-extent / in-plane diameter) ≤ 0.25 → organ-shaped slab, the
+    slice-wise 2D artefact. Calibrated 22 Sep 2026 on 9,451 BP / 3,499 VT host-contacting components: BP 16.1 %, VT 0.03 %; 18 % of BP index lesions'
+  on_fail: 'reject: slab'
+- id: lesion_shape_organ_like
+  basis: geometry
+  applies: every claim with a host reference
+  check: '|L| / |H| ≥ 0.6 AND median per-slice Dice(L_k, H_k) ≥ 0.6 → the claim is the organ (VT 3.0 % of contacting components, 19 % of its largest
+    bladder components; BP 0.5 %)'
+  on_fail: reject if single-model claim; two-model claim kept with weight × 0.3
+- id: lesion_shape_no_reference
+  basis: geometry
+  applies: claims without a host reference (cover / Dice undefined)
+  check: aspect < 0.3 → weight × 0.5
+  on_fail: weight only, never reject
+- id: lesion_admission_primary
+  basis: set+topology
+  applies: primary host in span
+  check: 'two-model lesion (BP ∩ VT ≥ 0.5 ml in dilate(H,10 mm)) → admitted. Single-model lesion kept if feasible: contact with dilate(H,3 mm)
+    AND ≥ 50 % inside dilate(H,10 mm); the largest feasible one is admitted (primary_single_claim); further ones only if RECIST-measurable and
+    ≥ 80 % inside H. primary_in_fov / primary_lesion recorded; primary outside the span → no node, no penalty'
+  on_fail: 'ledger: primary_infeasible'
+- id: lesion_reach
+  basis: topology
+  applies: local-invasion hosts at plan time
+  check: min distance(validated primary tumour, neighbour TS mask, per side) ≤ reach_mm (10 mm) → local_invasion; else distant if the neighbour
+    is a distant site of the cancer, else not a host. Neighbours without a TS class (uterus, cervix, vagina, ovary on CT) are not measured at
+    plan time; stage 3 re-tests the same distance on the prompted VoxTell organ mask
+  on_fail: reclassify
+- id: lesion_admission_local_invasion
+  basis: set+topology
+  applies: adjacent_to / invested_by neighbours within reach of the primary (tumour_prompts.spread.reach_mm)
+  check: two-model lesion ≥ 50 % inside dilate(H_nb,3 mm), OR contiguous extension of an admitted primary lesion ≥ 0.5 ml beyond the primary envelope
+  on_fail: 'ledger: isolated_single_model'
+- id: lesion_admission_distant
+  basis: set
+  applies: cancer-specific distant sites
+  check: BP ∩ VT-prompted-for-that-site ≥ 0.5 ml, ≥ 50 % inside dilate(H_site,3 mm), prompted mask coherent (≥ 80 % inside its gate, not a fragment
+    spray). VT-initial ignored (it was prompted by the primary phrase)
+  on_fail: 'ledger: unsupported_distant'
+- id: lesion_weight
+  basis: set+geometry
+  applies: admitted lesions (factors also stored for rejected ones)
+  check: 'factor vector in [0,1]: support (models agreeing, Dice between claims; prompted VT < independent claim), host consistency (inside fraction,
+    contact, host prior), prompt coherence and phrase tier, saturating size above 0.5 ml, contiguity with the primary lesion, shape (cover / aspect
+    / vol ratio). Scalar = product; vector kept as graph node features'
+  on_fail: n/a
 deferred_rules:
 - id: volume_range
   basis: prior

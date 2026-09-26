@@ -74,7 +74,7 @@ def plan_one(job):
         ts, diag = load_ts_output(csv_path, tumour_mask=tumour_mask, kb=KB, min_volume_ml=ARGS.min_volume_ml,
                                   expected_host=expected_host_for(KB, meta), cancer_type=meta.get('cancer_type'))
         modality = meta.get('modality') or diag.get('modality') or ('MR' if ts.task == 'total_mr' else 'CT')
-        has_vt = bool(tumour_mask) and ARGS.tumour_dir and os.path.dirname(tumour_mask[0]) == ARGS.tumour_dir[0]   # first --tumour_dir = VT
+        has_vt = bool(tumour_mask) and bool(ARGS.tumour_dir) and os.path.abspath(tumour_mask[0]).startswith(os.path.abspath(ARGS.tumour_dir[0]))   # first --tumour_dir = VT (nested layout)
         plan = Planner(KB).plan(ts, modality=modality, cancer_type=meta.get('cancer_type') or None, sex=meta.get('sex') or None,
                                 include_tumour_prompt=ARGS.tumour_prompt == 'always' or (ARGS.tumour_prompt == 'if_no_vt' and not has_vt))
         plan.log.insert(0, dict(step='tumour_evidence', evidence=diag.get('tumour_evidence'), voxels=diag.get('tumour_voxels'),
@@ -94,7 +94,8 @@ def plan_one(job):
                    missing=';'.join(f"{m['entity']}{'/' + m['side'] if m.get('side') else ''}" for m in plan.anchors_missing),
                    n_missing_implausible=sum(1 for m in plan.anchors_missing
                                              if any(f['entity'] == m['entity'] and f.get('side') == m.get('side') and not f['plausible'] for f in plan.anchors_found)),
-                   n_prompts=len(plan.prompts), n_tier0_ruler=tiers.count(0), n_tier1_completion=tiers.count(1), n_tier2_profile=tiers.count(2),
+                   n_prompts=len(plan.prompts), n_tier0_ruler=tiers.count(0), n_tier1_completion=tiers.count(1), n_tier2_profile=tiers.count(2), n_tierT_tumour=sum(p.list == 'T' for p in plan.prompts),
+                   tumour_hosts=';'.join(f"{p.entity}{'/' + p.side if p.side else ''}:{p.gate.get('host_class','')[:3]}:{'ens' if p.gate.get('ensemble') else p.reason[1].split()[2] if len(p.reason) > 1 else ''}" for p in plan.prompts if p.list == 'T'),
                    n_budget_dropped=sum(len(l['dropped']) for l in plan.log if l.get('step') == 'budget'),
                    n_ood=sum(1 for p in plan.prompts if KB.entities[p.entity].get('coverage_tier') == 'ood'),
                    host=ts.tumour_host_guess, hosts=';'.join(f"{h['entity']}:{h['cls'][:3]}:ev{h.get('evidence')}:w{h.get('weight')}" for h in plan.hosts), n_secondary_hosts=sum(h['role'] == 'secondary' for h in plan.hosts), tumour_evidence=diag.get('tumour_evidence'), tumour_voxels=diag.get('tumour_voxels'),

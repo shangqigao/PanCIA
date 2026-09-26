@@ -1,4 +1,4 @@
-version: 0.4.3
+version: 0.5.5
 templates:
   lateral: '{side} {term}'
   in_region: '{term} in the {region}'
@@ -36,9 +36,21 @@ tiers:
   tier2: profile items (1–2 hop) of host / TS-unnameable missing / tumour-near anchors — trimmed by the budget
   note: tiers order and budget prompts; they are NOT separate inference passes
 budget:
-  max_prompts_per_scan: 60
+  max_prompts_per_scan: 80
   order: tumour/ruler prompts, then tier, then priority; host-derived items get a one-step priority boost
-  drop_order: tier-2 items, lowest priority first; tier 0/1 and tumour prompts are protected
+  drop_order: tier-2 items, lowest priority first; tier 0/1 and tumour (tier T) prompts are protected
+  note: raised 60 → 80 in v0.5 so the 4–7 spread-set tumour prompts are not paid for by the host profile
+tumour_prompts:
+  version: '0.5'
+  rule: 'one tier-T prompt "<host term> tumor" per spread-set host (primary, local-invasion neighbours, cancer-specific distant sites) that is
+    in the FOV — unconditioned: never gated on what BP or the initial VoxTell mask found'
+  phrase: entity.tumour_phrase.main (+2 aliases); tier in_vocab / near / ood recorded per prompt for the reliability weight
+  alias_ensemble_primary: the cancer-specific phrases (tumour_prompts.cancer_types[...].phrases) are added for the PRIMARY only when the initial
+    VoxTell tumour mask is empty or below 0.5 ml — a wording ensemble, never a second rater
+  raters: BiomedParse is frozen (never re-run); VT-initial and VT-prompted are the same model asked different questions and count as ONE model
+    for lesion support
+  gate: 'tumour-host region (host mask, dilate 10 mm primary / 3 mm secondary) — NOT applied as the 80 % output filter: tumour claims are admitted
+    by the stage-3 lesion gate (qc_rules.lesion_admission)'
 modality:
   CT: prefer TS mask when TS reliability ≥ 0.8; VoxTell refine host + vessels
   MR: TS reliability from pilot; completion always on for pelvic anchors

@@ -129,8 +129,16 @@ def plot_positive_dice(
     models = list(RAW_SUBDIRS)
     colors = {"pre": "#4c78a8", "post": "#e45756"}
     x = np.arange(len(models))
-    fig, axes = plt.subplots(3, 3, figsize=(16, 13), sharey=True)
+    fig, axes = plt.subplots(3, 3, figsize=(16, 13), sharey=False)
     for row, class_name in enumerate(CLASS_INFO):
+        class_data = data.loc[data["class"].eq(class_name)]
+        finite_upper = class_data["mean_ci_high"].to_numpy(dtype=float)
+        finite_upper = finite_upper[np.isfinite(finite_upper)]
+        if class_name in {"endometrioma", "ovary"} and finite_upper.size:
+            observed_upper = float(finite_upper.max())
+            row_upper = min(1.02, observed_upper + max(0.04, 0.10 * observed_upper))
+        else:
+            row_upper = 1.02
         for column, cohort in enumerate(COHORT_ORDER):
             axis = axes[row, column]
             for offset, stage in ((-0.18, "pre"), (0.18, "post")):
@@ -151,7 +159,7 @@ def plot_positive_dice(
                     fmt="none", ecolor="black", capsize=3, linewidth=1,
                 )
             axis.set_xticks(x, models)
-            axis.set_ylim(0, 1.02)
+            axis.set_ylim(0, row_upper)
             axis.grid(axis="y", alpha=0.2)
             if row == 0:
                 axis.set_title(cohort.replace("_", " ").title())
