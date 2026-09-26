@@ -540,7 +540,7 @@ def _voxtell_plan_segment(predictor, reader_writer, img_path, img_name, plan, sa
         return
 
     image, properties = reader_writer.read_images([str(img_path)])
-    embeddings = predictor.embed_text_prompts([e['text'] for e in todo])      # (1, n_prompts, dim)
+    texts = [e['text'] for e in todo]
     vox_ml = float(np.prod(properties['spacing'])) / 1000.0
     out_dir.mkdir(parents=True, exist_ok=True)
     step = len(todo) if prompt_batch <= 0 else min(prompt_batch, len(todo))
@@ -548,7 +548,7 @@ def _voxtell_plan_segment(predictor, reader_writer, img_path, img_name, plan, sa
     while start < len(todo):
         stop = min(start + step, len(todo))
         try:
-            prediction = predictor.predict_single_image(image, text_embeddings=embeddings[:, start:stop])
+            prediction = predictor.predict_single_image(image, texts[start:stop])
         except RuntimeError as err:
             if 'out of memory' not in str(err).lower() or step == 1:
                 raise
