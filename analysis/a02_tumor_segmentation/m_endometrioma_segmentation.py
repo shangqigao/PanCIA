@@ -28,7 +28,7 @@ from inference_utils.inference import interactive_infer_image
 from inference_utils.processing_utils import read_dicom
 from inference_utils.processing_utils import read_nifti_inplane
 
-from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_EndoMRI_info
+from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_EndoMRI_info, prepare_OV04_endometriosis_radiology_info
 from peft import LoraConfig, get_peft_model
 
 from tiatoolbox import logger
@@ -143,13 +143,17 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
     for idx, (img_path, text_prompt) in enumerate(zip(img_paths, text_prompts)):
         logger.info("Segmenting image: {}/{}...".format(idx + 1, len(img_paths)))
 
-        img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        if f'/{dataset}_NIFTI/' in str(img_path):
+            img_name = str(img_path).split(f'/{dataset}_NIFTI/')[-1].replace(".nii.gz", "")
+        else:
+            img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
         save_prob_path = pathlib.Path(f"{save_dir}/{img_name}_{seg_obj}.nii.gz")
         if save_prob_path.exists() and skip_exist:
             logger.info(f"{save_prob_path.name} has existed, skip!")
             continue
 
         # read slices from dicom or nifti
+        logger.info(f"Modality is: {modality[idx]}")
         is_CT = modality[idx] == 'CT'
         ct_site = CT_SITES[site[idx]]
         if format[idx] == 'dicom':
@@ -247,6 +251,11 @@ if __name__ == "__main__":
             img_dir=args.radiology,
             img_format=args.format
         )
+    elif args.dataset == 'OV04_endometriosis':
+        dataset_info = prepare_OV04_endometriosis_radiology_info(
+            img_json=args.radiology,
+            img_format=args.format
+        )     
     else:
         raise ValueError(f'Dataset {args.dataset} is currently unsupported')
 

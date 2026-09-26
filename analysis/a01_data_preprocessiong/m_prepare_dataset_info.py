@@ -187,3 +187,43 @@ def prepare_EndoMRI_info(img_dir, lab_dir=None, lab_mode=None, img_format='nifti
         'img_format': ['nifti']*len(img_paths)
     }
     return dataset_info
+
+def prepare_OV04_endometriosis_radiology_info(img_json, lab_dir=None, lab_mode=None, img_format='nifti'):
+    assert pathlib.Path(img_json).suffix == '.json', 'only support loading info from json file'
+    with open(img_json, 'r') as f:
+        data = json.load(f)
+    img_paths = data['included nifti']
+    modality = []
+    for img_path in img_paths:
+        folds = str(img_path).split('/')
+        img_mod = {'MR': 'MRI', 'CT': 'CT'}[folds[-3].split('_')[-1]]
+        modality.append(img_mod)
+    
+    if lab_dir is not None:
+        lab_paths = [str(p).split('/OV04_endometriosis_NIFTI/')[-1] for p in images]
+        lab_paths = [f"{lab_dir}/{lab_mode}/{p}".replace('.nii.gz', f'_{seg_obj}.nii.gz') for p in lab_paths]
+    else:
+        lab_paths = [None]*len(img_paths)
+
+    text_prompts = [
+        [
+            "endometrioma in pelvis",
+            "ovary",
+            "uterus",
+            "tumor in pelvis and cervix",
+            "tumor in pelvis and uterus",
+            "tumor in pelvis and ovaries"
+        ]
+    ]*len(img_paths)
+    
+    dataset_info = {
+        'name': 'OV04_endometriosis',
+        'img_paths': img_paths,
+        'lab_paths': lab_paths,
+        'text_prompts': text_prompts,
+        'modality': modality,
+        'site': ['pelvis']*len(img_paths),
+        'meta_list': None,
+        'img_format': ['nifti']*len(img_paths)
+    }
+    return dataset_info

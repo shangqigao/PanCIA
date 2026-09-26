@@ -35,27 +35,31 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 
 #----------------Endometriosis--------------------
 # radiology exclusion and inclusion
-# data_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer"
+# data_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik"
 # save_dir="/home/sg2162/rds/hpc-work/Experiments/radiomics"
+# extract_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/OV04_endometriosis"
+# csv_path="/home/sg2162/rds/hpc-work/Experiments/clinical/OV04_endometriosis_has_radiology.csv"
 
 # python analysis/a01_data_preprocessiong/m_inclusion_exclusion.py \
 #             --data_dir $data_dir \
-#             --dataset CPTAC \
+#             --dataset OV04 \
+#             --csv_path $csv_path \
 #             --modality radiology \
-#             --save_dir $save_dir
+#             --save_dir $save_dir \
+#             --extract_dir $extract_dir
 
 # dicom to nifti (save to /parent/to/dataset/dataset_NIFTI)
-# series="/home/sg2162/rds/hpc-work/Experiments/radiomics/CPTAC_included_raw_series.json"
+# series="/home/sg2162/rds/hpc-work/Experiments/radiomics/OV04_included_raw_series.json"
 
 # python analysis/a01_data_preprocessiong/m_dicom2nii.py \
 #             --series $series \
-#             --dataset CPTAC
+#             --dataset OV04_endometriosis
 
 
 # Endometrioma segmentation
-# radiology="/home/sg2162/rds/hpc-work/EndoMRI_All"
-# save_dir="/home/sg2162/rds/hpc-work/EndoMRI_All/segmentations_r3"
-# srun python analysis/a02_tumor_segmentation/m_endometrioma_segmentation.py \
-#             --radiology $radiology \
-#             --dataset EndoMRI_All \
-#             --save_dir $save_dir
+radiology="/home/sg2162/rds/hpc-work/Experiments/radiomics/OV04_endometriosis_included_nifti.json"
+save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/OV04_endometriosis_Seg"
+srun python analysis/a02_tumor_segmentation/m_endometrioma_segmentation.py \
+            --radiology $radiology \
+            --dataset OV04_endometriosis \
+            --save_dir $save_dir
