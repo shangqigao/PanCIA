@@ -926,7 +926,7 @@ if __name__ == "__main__":
         zoom_in=False,
         voxtell_model_root=args.voxtell_model_root,
         device=args.device,
-        skip_exist=True,
+        skip_exist=False,
         ts_model_root=args.ts_model_root,
         ts_task=args.ts_task,
         ts_fast=args.ts_fast,

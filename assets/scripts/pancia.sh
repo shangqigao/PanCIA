@@ -15,9 +15,9 @@
 
 ## activate environment
 source ~/.bashrc
-conda activate PanCIA
+# conda activate PanCIA
 # conda activate /home/sg2162/rds/hpc-work/miniconda3/Qwen
-# conda activate /home/sg2162/rds/hpc-work/miniconda3/voxtell
+conda activate /home/sg2162/rds/hpc-work/miniconda3/voxtell
 
 # conda activate /home/sg2162/rds/hpc-work/miniconda3/totalseg
 # export TOTALSEG_HOME_DIR=/home/sg2162/rds/hpc-work/PanCIA/checkpoints/TotalSegmentator
@@ -84,18 +84,20 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 # pan-cancer segmentation
 radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
 save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg"
-srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-            --model BiomedParse \
-            --radiology $radiology \
-            --dataset TCGA \
-            --save_dir $save_dir
-
-# python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-#             --seg_obj organ \
-#             --model VoxTell \
+# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+#             --model BiomedParse \
 #             --radiology $radiology \
 #             --dataset TCGA \
 #             --save_dir $save_dir
+
+# if no planner_dir, VoxTell would segment tumor as default
+python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+            --model VoxTell \
+            --radiology $radiology \
+            --planner_dir "${save_dir}/Planner" \
+            --dataset TCGA \
+            --save_dir $save_dir \
+            --start 3200 
 
 # python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --seg_obj organ \
