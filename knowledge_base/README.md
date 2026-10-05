@@ -325,6 +325,36 @@ coccyx (more completion prompts on pelvic scans). Cost ≈ +1 s per scan (label 
   outvoted both hips and femora, giving up to 11 laterality flags; all 3 now resolve to −1. A 300-scan MR sample and
   the other 761 scans decided by side labels are unchanged.
 
+## Stage 3: lesion ledger and admission gate (`pancia_kb/ledger.py`, `scripts/run_lesion_ledger.py`, 28 Sep 2026)
+For each scan with a VoxTell plan manifest the ledger reads the TS organs, BP, the initial VT mask, the VT planned masks and
+the plan. It writes `Ledger/Radiology/<rel>_lesions.json` (every dropped claim and every lesion, with status, reason, factors
+and weight) and `_lesions.npz` (cropped masks of the admitted lesions for the graph stage). A cohort summary goes to
+`Ledger/Radiology/ledger_summary.csv`.
+
+- **Claims.** Connected components ≥ 0.5 ml of BP, VT-initial and each VT tumour prompt (VT-initial and VT-prompted are one
+  model).
+  - The prompt gate is applied here: a prompted claim must lie ≥ 50 % inside its host region. VoxTell answers "X tumor" with
+    the most salient tumour anywhere; in KIRC, "left lung tumor" and "spine tumor" returned the kidney mass.
+- **Host reference H.** TS organ ∪ VT organ mask (voxel majority of main + alias phrasings). The KB prior box is used only
+  for a primary that neither model can delineate; a secondary host without any organ mask gets no reference.
+- **Shape.**
+  - A slab (median cover ≥ 0.4, aspect ≤ 0.25) is dropped as a 2D artefact unless the other model claims the same voxels.
+  - Organ-shaped means |L|/|H| ≥ 0.6, per-slice Dice ≥ 0.6 and ≥ 80 % inside H. Such a claim is dropped if TS and VT agree
+    on the organ (Dice ≥ 0.7). Otherwise it is kept (weight × 0.3) on the primary host, or when the other model also claims
+    it; else it is dropped.
+- **Admission.**
+  - Primary: a two-model lesion, or the largest feasible single-model lesion. Extra lesions are kept as multifocal if they
+    are two-model, or single-model with ≥ 80 % inside H, LD ≥ 10 mm and ≥ 3 slices / ≥ 10 mm through-plane.
+  - If VoxTell put nothing in the primary organ under any prompt, BP is the only evidence there. Its largest feasible
+    lesion is kept as the primary (VT misses happen: LIHC 888259, confirmed by the user), but no BP-only extras
+    (`primary_extra_single_no_vt`).
+  - Local invasion: two-model **and** contiguous with an admitted primary lesion (≤ 3 mm). A separate lesion in a
+    neighbour is a metastasis: it follows the distant rule if the organ is a distant site of the cancer, and is rejected
+    otherwise.
+  - Distant: BP ∩ VT prompted for that site, with a coherent prompt.
+  - Contiguous extension of the primary into a neighbour is recorded as `extends_into`, which becomes a tumour–organ edge.
+- **Memory.** Host references and envelopes are stored as bounding boxes: 0.67 GB for a 512×512×99 CT.
+
 ## Coverage tiers (from VoxTell's published vocabulary, v0.4.1)
 Two fetched sources: the **VoxTell v1.1 label set** behind its Hugging Face text embeddings
 (`embeddings/voxtell_v1.1/labels.json`, 14,194 prompt strings = training classes + rewritten synonyms, 190 datasets;

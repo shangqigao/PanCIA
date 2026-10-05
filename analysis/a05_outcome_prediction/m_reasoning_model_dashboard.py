@@ -391,22 +391,35 @@ def analyze_endometrioma_effect_on_ovary(
                              "negative_mean_dice":negative.mean(),"positive_mean_dice":positive.mean(),"dice_difference_positive_minus_negative":observed,
                              "difference_ci_2.5%":np.quantile(boot,.025),"difference_ci_97.5%":np.quantile(boot,.975),"permutation_p":p_value})
     results=pd.DataFrame(rows); results.to_csv(results_path,index=False)
-    fig,axes=plt.subplots(3,2,figsize=(14,13),sharey=True); colors={0:"#72b7b2",1:"#e45756"}
-    rng_points=np.random.default_rng(7)
-    for row,model in enumerate(MODELS):
-        for col,domain in enumerate(("D1","D2")):
-            axis=axes[row,col]; positions=[]; values=[]; box_colors=[]; labels_text=[]; position=1
-            for stage in ("pre","post"):
-                for label in (0,1):
-                    v=patients[(patients.model==model)&(patients.domain==domain)&(patients.stage==stage)&(patients.endometrioma_label==label)].dice.to_numpy(float)
-                    positions.append(position); values.append(v); box_colors.append(colors[label]); labels_text.append(f"{stage}\n{'Absent' if label==0 else 'Present'}"); position+=1
-                position+=.5
-            boxes=axis.boxplot(values,positions=positions,widths=.65,patch_artist=True,showfliers=False,medianprops={"color":"black","linewidth":1.5})
-            for box,color in zip(boxes["boxes"],box_colors): box.set_facecolor(color); box.set_alpha(.72)
-            for pos,v in zip(positions,values): axis.scatter(pos+rng_points.normal(0,.045,len(v)),v,s=18,color="#26384a",alpha=.5)
-            axis.set_xticks(positions,labels_text); axis.set_ylim(-.02,1.02); axis.grid(axis="y",alpha=.2); axis.set_title(f"{model} · {domain}")
-    for axis in axes[:,0]: axis.set_ylabel("Patient-mean ovary Dice")
-    fig.suptitle("Effect of endometrioma presence on ovary segmentation\nOnly ovary-annotated scans; each point is one patient",fontsize=14)
+    fig,axes=plt.subplots(1,2,figsize=(11,5),sharey=True)
+    colors={0:"#72b7b2",1:"#e45756"}; labels_text={0:"Absence",1:"Presence"}
+    focused=patients[(patients.model=="r7")&(patients.stage=="post")]
+    panel_upper=[]; rng_points=np.random.default_rng(7)
+    for axis,domain in zip(axes,("D1","D2")):
+        values_by_label=[]; medians=[]; counts=[]
+        for label in (0,1):
+            values=focused[(focused.domain==domain)&(focused.endometrioma_label==label)].dice.dropna().to_numpy(float)
+            values_by_label.append(values); medians.append(float(np.median(values))); counts.append(len(values))
+            panel_upper.append(float(values.max()))
+        positions=np.arange(2)
+        boxes=axis.boxplot(values_by_label,positions=positions,widths=.62,patch_artist=True,
+                           showfliers=False,medianprops={"color":"black","linewidth":1.6},
+                           boxprops={"linewidth":1.2},whiskerprops={"linewidth":1.2},
+                           capprops={"linewidth":1.2},flierprops={"marker":"o","markersize":4,"alpha":.55})
+        for box,color in zip(boxes["boxes"],[colors[0],colors[1]]):
+            box.set_facecolor(color); box.set_alpha(.82)
+        for position,values,median,count in zip(positions,values_by_label,medians,counts):
+            jitter=rng_points.normal(0,.045,len(values))
+            axis.scatter(position+jitter,values,s=22,color="#26384a",alpha=.55,
+                         edgecolors="white",linewidths=.35,zorder=3)
+            axis.text(position,float(values.max())+.025,f"Median {median:.2f}\n(n={count})",
+                      ha="center",va="bottom",fontsize=9,zorder=5)
+        axis.set_xticks(positions,[labels_text[0],labels_text[1]])
+        axis.grid(axis="y",alpha=.2); axis.set_title(domain)
+    highest=max(panel_upper); adaptive_upper=min(1.02,highest+max(.12,.15*highest))
+    for axis in axes: axis.set_ylim(0,adaptive_upper)
+    axes[0].set_ylabel("Patient-mean ovary Dice")
+    fig.suptitle("Effect of endometrioma presence on ovary segmentation\nr7 · post-reasoning · ovary-annotated scans",fontsize=14)
     save_figure(fig,output)
     return results
 

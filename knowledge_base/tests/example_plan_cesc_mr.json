@@ -141,6 +141,25 @@
    "is_anchor": true
   },
   {
+   "entity": "spine",
+   "side": null,
+   "ts_name": "sacrum",
+   "volume_ml": 150,
+   "truncated": false,
+   "partial": false,
+   "plausible": true,
+   "why": [],
+   "is_anchor": true,
+   "from_parts": [
+    "sacrum"
+   ],
+   "centroid_mm": [
+    0.0,
+    -60.0,
+    -10.0
+   ]
+  },
+  {
    "entity": "psoas",
    "side": "left",
    "ts_name": null,
@@ -194,6 +213,7 @@
   "small_bowel",
   "colon",
   "rectum",
+  "omentum",
   "urinary_bladder",
   "prostate",
   "seminal_vesicle",
@@ -205,15 +225,6 @@
   "psoas"
  ],
  "anchors_missing": [
-  {
-   "entity": "spine",
-   "side": null,
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "ts_has_class": true
-  },
   {
    "entity": "aorta",
    "side": null,
@@ -317,6 +328,28 @@
      }
     ],
     "fallback_region": "pelvis_true"
+   },
+   "ts_has_class": false
+  },
+  {
+   "entity": "omentum",
+   "side": null,
+   "gate": {
+    "kind": "spatial_prior",
+    "constraints": [
+     {
+      "landmark": "colon",
+      "relation": "anterior_to",
+      "dist_mm": [
+       0,
+       30
+      ],
+      "sides": [
+       null
+      ]
+     }
+    ],
+    "fallback_region": null
    },
    "ts_has_class": false
   },
@@ -499,6 +532,7 @@
   }
  ],
  "anchors_absent_candidates": [
+  "omentum",
   "prostate",
   "seminal_vesicle",
   "uterus",
@@ -555,8 +589,7 @@
    },
    "priority": 1,
    "reason": [
-    "primary alias ensemble: initial VoxTell tumour mask absent",
-    "also promoted profile: uterus -has_part-> cervix"
+    "primary alias ensemble: initial VoxTell tumour mask absent"
    ],
    "relation": "tumour_of",
    "from_anchor": "cervix"
@@ -635,11 +668,10 @@
    "priority": 1,
    "reason": [
     "expected in FOV ['L3', 'coccyx'] (presence=sex_male)",
-    "not nameable by TS in this task",
-    "also promoted profile: rectum -adjacent_to-> seminal_vesicle"
+    "not nameable by TS in this task"
    ],
-   "relation": "adjacent_to",
-   "from_anchor": "rectum"
+   "relation": null,
+   "from_anchor": null
   },
   {
    "entity": "seminal_vesicle",
@@ -670,11 +702,10 @@
    "priority": 1,
    "reason": [
     "expected in FOV ['L3', 'coccyx'] (presence=sex_male)",
-    "not nameable by TS in this task",
-    "also promoted profile: rectum -adjacent_to-> seminal_vesicle"
+    "not nameable by TS in this task"
    ],
-   "relation": "adjacent_to",
-   "from_anchor": "rectum"
+   "relation": null,
+   "from_anchor": null
   },
   {
    "entity": "uterus",
@@ -718,11 +749,10 @@
    "priority": 1,
    "reason": [
     "expected in FOV ['L3', 'coccyx'] (presence=sex_female)",
-    "not nameable by TS in this task",
-    "also promoted profile: rectum -adjacent_to-> uterus"
+    "not nameable by TS in this task"
    ],
-   "relation": "adjacent_to",
-   "from_anchor": "rectum"
+   "relation": null,
+   "from_anchor": null
   },
   {
    "entity": "cervix",
@@ -755,28 +785,6 @@
    "reason": [
     "expected in FOV ['L3', 'coccyx'] (presence=sex_female)",
     "not nameable by TS in this task"
-   ],
-   "relation": null,
-   "from_anchor": null
-  },
-  {
-   "entity": "spine",
-   "side": null,
-   "terms": [
-    "spine",
-    "vertebral column",
-    "lumbar spine"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": null
-   },
-   "priority": 2,
-   "reason": [
-    "expected in FOV ['L3', 'coccyx'] (presence=obligatory)",
-    "TS class exists but missing/implausible"
    ],
    "relation": null,
    "from_anchor": null
@@ -825,29 +833,6 @@
    "from_anchor": null
   },
   {
-   "entity": "small_bowel",
-   "side": null,
-   "terms": [
-    "small intestine",
-    "jejunum and ileum",
-    "small bowel"
-   ],
-   "tier": 1,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "region": "peritoneal_cavity"
-   },
-   "priority": 2,
-   "reason": [
-    "expected in FOV ['L3', 'coccyx'] (presence=obligatory)",
-    "TS class exists but missing/implausible",
-    "also promoted profile: uterus -adjacent_to-> small_bowel"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "uterus"
-  },
-  {
    "entity": "prostate",
    "side": null,
    "terms": [
@@ -876,11 +861,10 @@
    "priority": 2,
    "reason": [
     "expected in FOV ['L3', 'coccyx'] (presence=sex_male)",
-    "TS class exists but missing/implausible",
-    "also promoted profile: rectum -adjacent_to-> prostate"
+    "TS class exists but missing/implausible"
    ],
-   "relation": "adjacent_to",
-   "from_anchor": "rectum"
+   "relation": null,
+   "from_anchor": null
   },
   {
    "entity": "vagina",
@@ -932,11 +916,10 @@
    "priority": 2,
    "reason": [
     "expected in FOV ['L3', 'coccyx'] (presence=sex_female)",
-    "not nameable by TS in this task",
-    "also promoted profile: uterus -adjacent_to-> ovary"
+    "not nameable by TS in this task"
    ],
-   "relation": "adjacent_to",
-   "from_anchor": "uterus"
+   "relation": null,
+   "from_anchor": null
   },
   {
    "entity": "ovary",
@@ -967,11 +950,10 @@
    "priority": 2,
    "reason": [
     "expected in FOV ['L3', 'coccyx'] (presence=sex_female)",
-    "not nameable by TS in this task",
-    "also promoted profile: uterus -adjacent_to-> ovary"
+    "not nameable by TS in this task"
    ],
-   "relation": "adjacent_to",
-   "from_anchor": "uterus"
+   "relation": null,
+   "from_anchor": null
   },
   {
    "entity": "iliac_vein",
@@ -1037,6 +1019,63 @@
    "reason": [
     "expected in FOV ['L3', 'coccyx'] (presence=obligatory)",
     "TS class exists but missing/implausible"
+   ],
+   "relation": null,
+   "from_anchor": null
+  },
+  {
+   "entity": "small_bowel",
+   "side": null,
+   "terms": [
+    "small intestine",
+    "jejunum and ileum",
+    "small bowel"
+   ],
+   "tier": 1,
+   "list": "B",
+   "gate": {
+    "kind": "region",
+    "region": "peritoneal_cavity"
+   },
+   "priority": 3,
+   "reason": [
+    "expected in FOV ['L3', 'coccyx'] (presence=obligatory)",
+    "TS class exists but missing/implausible"
+   ],
+   "relation": null,
+   "from_anchor": null
+  },
+  {
+   "entity": "omentum",
+   "side": null,
+   "terms": [
+    "omentum",
+    "greater omentum",
+    "omental fat"
+   ],
+   "tier": 1,
+   "list": "B",
+   "gate": {
+    "kind": "spatial_prior",
+    "constraints": [
+     {
+      "landmark": "colon",
+      "relation": "anterior_to",
+      "dist_mm": [
+       0,
+       30
+      ],
+      "sides": [
+       null
+      ]
+     }
+    ],
+    "fallback_region": null
+   },
+   "priority": 3,
+   "reason": [
+    "expected in FOV ['L3', 'coccyx'] (presence=variable)",
+    "not nameable by TS in this task"
    ],
    "relation": null,
    "from_anchor": null
@@ -1473,1087 +1512,6 @@
    ],
    "relation": "drains_lymph_to",
    "from_anchor": "cervix"
-  },
-  {
-   "entity": "levator_ani",
-   "side": null,
-   "terms": [
-    "levator ani muscle",
-    "pelvic floor muscles"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "rectum",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "inferior_lateral"
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor rectum",
-    "rectum -adjacent_to-> levator_ani (hop 1)",
-    "staging: wall_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "rectum"
-  },
-  {
-   "entity": "anal_canal",
-   "side": null,
-   "terms": [
-    "anal canal",
-    "anus"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "rectum",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "inferior"
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor rectum",
-    "rectum -adjacent_to-> anal_canal (hop 1)",
-    "staging: location"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "rectum"
-  },
-  {
-   "entity": "ln_mesenteric",
-   "side": null,
-   "terms": [
-    "mesenteric lymph nodes"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "defined_by": "vessels_and_vertebral_levels",
-    "anchor": "rectum",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor rectum",
-    "rectum -drains_lymph_to-> ln_mesenteric (hop 1)",
-    "staging: nodal"
-   ],
-   "relation": "drains_lymph_to",
-   "from_anchor": "rectum"
-  },
-  {
-   "entity": "endometrium",
-   "side": null,
-   "terms": [
-    "endometrial cavity",
-    "endometrium"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "uterus",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor uterus",
-    "uterus -has_part-> endometrium (hop 1)",
-    "staging: confined,location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "uterus"
-  },
-  {
-   "entity": "myometrium",
-   "side": null,
-   "terms": [
-    "myometrial tissue",
-    "uterine muscular wall",
-    "myometrium"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "uterus",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor uterus",
-    "uterus -has_part-> myometrium (hop 1)",
-    "staging: confined,location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "uterus"
-  },
-  {
-   "entity": "peritoneum",
-   "side": null,
-   "terms": [
-    "peritoneal lining",
-    "peritoneum"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "shell",
-    "inner_mm": 0,
-    "outer_mm": 40,
-    "anchor": "uterus",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor uterus",
-    "uterus -invested_by-> peritoneum (hop 1)",
-    "staging: beyond_capsule"
-   ],
-   "relation": "invested_by",
-   "from_anchor": "uterus"
-  },
-  {
-   "entity": "colon_sigmoid",
-   "side": null,
-   "terms": [
-    "sigmoid colon"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "uterus",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "posterior_superior"
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor uterus",
-    "uterus -adjacent_to-> colon_sigmoid (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "uterus"
-  },
-  {
-   "entity": "uterine_artery",
-   "side": "left",
-   "terms": [
-    "left uterine artery"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "corridor",
-    "from_": "anchor_hilum",
-    "to": "parent_trunk",
-    "radius_mm": 15,
-    "anchor": "uterus",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor uterus",
-    "uterus -supplied_by-> uterine_artery (hop 1)"
-   ],
-   "relation": "supplied_by",
-   "from_anchor": "uterus"
-  },
-  {
-   "entity": "uterine_artery",
-   "side": "right",
-   "terms": [
-    "right uterine artery"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "corridor",
-    "from_": "anchor_hilum",
-    "to": "parent_trunk",
-    "radius_mm": 15,
-    "anchor": "uterus",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor uterus",
-    "uterus -supplied_by-> uterine_artery (hop 1)"
-   ],
-   "relation": "supplied_by",
-   "from_anchor": "uterus"
-  },
-  {
-   "entity": "omentum",
-   "side": null,
-   "terms": [
-    "omentum",
-    "greater omentum",
-    "omental fat"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "ovary",
-    "anchor_side": "left",
-    "neighbour_found": false,
-    "direction": "superior"
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor ovary",
-    "ovary -adjacent_to-> omentum (hop 1)",
-    "staging: peritoneal_spread"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "ovary"
-  },
-  {
-   "entity": "gonadal_vein",
-   "side": "left",
-   "terms": [
-    "left testicular vein",
-    "left ovarian vein",
-    "left gonadal vein"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "corridor",
-    "from_": "anchor_hilum",
-    "to": "parent_trunk",
-    "radius_mm": 15,
-    "anchor": "ovary",
-    "anchor_side": "left"
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor ovary",
-    "ovary -drained_by-> gonadal_vein (hop 1)"
-   ],
-   "relation": "drained_by",
-   "from_anchor": "ovary"
-  },
-  {
-   "entity": "gonadal_vein",
-   "side": "right",
-   "terms": [
-    "right testicular vein",
-    "right ovarian vein",
-    "right gonadal vein"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "corridor",
-    "from_": "anchor_hilum",
-    "to": "parent_trunk",
-    "radius_mm": 15,
-    "anchor": "ovary",
-    "anchor_side": "right"
-   },
-   "priority": 2,
-   "reason": [
-    "promoted anchor ovary",
-    "ovary -drained_by-> gonadal_vein (hop 1)"
-   ],
-   "relation": "drained_by",
-   "from_anchor": "ovary"
-  },
-  {
-   "entity": "bladder_wall",
-   "side": null,
-   "terms": [
-    "bladder wall",
-    "urinary bladder wall"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "urinary_bladder",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor urinary_bladder",
-    "urinary_bladder -has_part-> bladder_wall (hop 1)",
-    "staging: confined"
-   ],
-   "relation": "has_part",
-   "from_anchor": "urinary_bladder"
-  },
-  {
-   "entity": "abdominal_wall",
-   "side": null,
-   "terms": [
-    "anterior abdominal wall",
-    "abdominal wall muscles"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "urinary_bladder",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "anterior_superior"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor urinary_bladder",
-    "urinary_bladder -adjacent_to-> abdominal_wall (hop 1)",
-    "staging: wall_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "urinary_bladder"
-  },
-  {
-   "entity": "obturator_internus",
-   "side": "left",
-   "terms": [
-    "left obturator internus muscle"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "hip",
-    "anchor_side": "left",
-    "neighbour_found": false,
-    "direction": "medial"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor hip",
-    "hip -adjacent_to-> obturator_internus (hop 1)"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "hip"
-  },
-  {
-   "entity": "gluteus",
-   "side": "left",
-   "terms": [
-    "left gluteal muscles"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "hip",
-    "anchor_side": "left",
-    "neighbour_found": false,
-    "direction": "posterior_lateral"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor hip",
-    "hip -adjacent_to-> gluteus (hop 1)"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "hip"
-  },
-  {
-   "entity": "obturator_internus",
-   "side": "right",
-   "terms": [
-    "right obturator internus muscle"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "hip",
-    "anchor_side": "right",
-    "neighbour_found": false,
-    "direction": "medial"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor hip",
-    "hip -adjacent_to-> obturator_internus (hop 1)"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "hip"
-  },
-  {
-   "entity": "gluteus",
-   "side": "right",
-   "terms": [
-    "right gluteal muscles"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "hip",
-    "anchor_side": "right",
-    "neighbour_found": false,
-    "direction": "posterior_lateral"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor hip",
-    "hip -adjacent_to-> gluteus (hop 1)"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "hip"
-  },
-  {
-   "entity": "internal_iliac_artery",
-   "side": "left",
-   "terms": [
-    "left internal iliac artery",
-    "left hypogastric artery"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "iliac_artery",
-    "anchor_side": "left"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor iliac_artery",
-    "iliac_artery -has_part-> internal_iliac_artery (hop 1)",
-    "staging: location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "iliac_artery"
-  },
-  {
-   "entity": "internal_iliac_artery",
-   "side": "right",
-   "terms": [
-    "right internal iliac artery",
-    "right hypogastric artery"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "iliac_artery",
-    "anchor_side": "right"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor iliac_artery",
-    "iliac_artery -has_part-> internal_iliac_artery (hop 1)",
-    "staging: location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "iliac_artery"
-  },
-  {
-   "entity": "colon_cecum",
-   "side": null,
-   "terms": [
-    "cecum"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "colon",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -has_part-> colon_cecum (hop 1)",
-    "staging: location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "colon_ascending",
-   "side": null,
-   "terms": [
-    "ascending colon"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "colon",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -has_part-> colon_ascending (hop 1)",
-    "staging: location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "colon_transverse",
-   "side": null,
-   "terms": [
-    "transverse colon"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "colon",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -has_part-> colon_transverse (hop 1)",
-    "staging: location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "colon_descending",
-   "side": null,
-   "terms": [
-    "descending colon"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "colon",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -has_part-> colon_descending (hop 1)",
-    "staging: location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "mesentery",
-   "side": null,
-   "terms": [
-    "mesentery",
-    "mesenteric fat"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "shell",
-    "inner_mm": 0,
-    "outer_mm": 40,
-    "anchor": "colon",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -invested_by-> mesentery (hop 1)",
-    "staging: beyond_capsule"
-   ],
-   "relation": "invested_by",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "liver",
-   "side": null,
-   "terms": [
-    "liver",
-    "hepatic parenchyma"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "colon",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "superior"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -adjacent_to-> liver (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "stomach",
-   "side": null,
-   "terms": [
-    "stomach",
-    "gastric organ"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "colon",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "superior"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -adjacent_to-> stomach (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "spleen",
-   "side": null,
-   "terms": [
-    "spleen"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "colon",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "superior"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -adjacent_to-> spleen (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "kidney",
-   "side": "left",
-   "terms": [
-    "left kidney",
-    "left renal organ"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "colon",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "posterior"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -adjacent_to-> kidney (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "kidney",
-   "side": "right",
-   "terms": [
-    "right kidney",
-    "right renal organ"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "colon",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "posterior"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -adjacent_to-> kidney (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "duodenum",
-   "side": null,
-   "terms": [
-    "duodenum"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "colon",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "posterior"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -adjacent_to-> duodenum (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "pancreas",
-   "side": null,
-   "terms": [
-    "pancreas"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "colon",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "posterior"
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -adjacent_to-> pancreas (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "superior_mesenteric_artery",
-   "side": null,
-   "terms": [
-    "superior mesenteric artery",
-    "SMA"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "corridor",
-    "from_": "anchor_hilum",
-    "to": "parent_trunk",
-    "radius_mm": 15,
-    "anchor": "colon",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -supplied_by-> superior_mesenteric_artery (hop 1)",
-    "staging: vascular_invasion"
-   ],
-   "relation": "supplied_by",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "superior_mesenteric_vein",
-   "side": null,
-   "terms": [
-    "SMV",
-    "superior mesenteric vein"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "corridor",
-    "from_": "anchor_hilum",
-    "to": "parent_trunk",
-    "radius_mm": 15,
-    "anchor": "colon",
-    "anchor_side": null
-   },
-   "priority": 2,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -drained_by-> superior_mesenteric_vein (hop 1)",
-    "staging: vascular_invasion"
-   ],
-   "relation": "drained_by",
-   "from_anchor": "colon"
-  },
-  {
-   "entity": "mesorectum",
-   "side": null,
-   "terms": [
-    "mesorectal fascia",
-    "mesorectum"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "shell",
-    "inner_mm": 0,
-    "outer_mm": 40,
-    "anchor": "rectum",
-    "anchor_side": null
-   },
-   "priority": 3,
-   "reason": [
-    "promoted anchor rectum",
-    "rectum -invested_by-> mesorectum (hop 1)",
-    "staging: beyond_capsule"
-   ],
-   "relation": "invested_by",
-   "from_anchor": "rectum"
-  },
-  {
-   "entity": "ln_inguinal",
-   "side": "left",
-   "terms": [
-    "left inguinal lymph nodes"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "defined_by": "vessels_and_vertebral_levels",
-    "anchor": "rectum",
-    "anchor_side": null
-   },
-   "priority": 3,
-   "reason": [
-    "promoted anchor rectum",
-    "rectum -drains_lymph_to-> ln_inguinal (hop 1)",
-    "staging: N (low rectal/anal)"
-   ],
-   "relation": "drains_lymph_to",
-   "from_anchor": "rectum"
-  },
-  {
-   "entity": "ln_inguinal",
-   "side": "right",
-   "terms": [
-    "right inguinal lymph nodes"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "defined_by": "vessels_and_vertebral_levels",
-    "anchor": "rectum",
-    "anchor_side": null
-   },
-   "priority": 3,
-   "reason": [
-    "promoted anchor rectum",
-    "rectum -drains_lymph_to-> ln_inguinal (hop 1)",
-    "staging: N (low rectal/anal)"
-   ],
-   "relation": "drains_lymph_to",
-   "from_anchor": "rectum"
-  },
-  {
-   "entity": "junctional_zone",
-   "side": null,
-   "terms": [
-    "junctional zone of the uterus"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "uterus",
-    "anchor_side": null
-   },
-   "priority": 3,
-   "reason": [
-    "promoted anchor uterus",
-    "uterus -has_part-> junctional_zone (hop 1)",
-    "staging: confined,location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "uterus"
-  },
-  {
-   "entity": "vagina_upper_two_thirds",
-   "side": null,
-   "terms": [
-    "upper vagina"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "vagina",
-    "anchor_side": null
-   },
-   "priority": 3,
-   "reason": [
-    "promoted anchor vagina",
-    "vagina -has_part-> vagina_upper_two_thirds (hop 1)",
-    "staging: location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "vagina"
-  },
-  {
-   "entity": "urethra",
-   "side": null,
-   "terms": [
-    "urethra"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "neighbour_bbox_or_directional_shell",
-    "shell_mm": 30,
-    "anchor": "vagina",
-    "anchor_side": null,
-    "neighbour_found": false,
-    "direction": "anterior"
-   },
-   "priority": 3,
-   "reason": [
-    "promoted anchor vagina",
-    "vagina -adjacent_to-> urethra (hop 1)",
-    "staging: adjacent_invasion"
-   ],
-   "relation": "adjacent_to",
-   "from_anchor": "vagina"
-  },
-  {
-   "entity": "adnexa",
-   "side": "left",
-   "terms": [
-    "left adnexa",
-    "left ovary and fallopian tube"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "ovary",
-    "anchor_side": "left"
-   },
-   "priority": 3,
-   "reason": [
-    "promoted anchor ovary",
-    "ovary -has_part-> adnexa (hop 1)",
-    "staging: location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "ovary"
-  },
-  {
-   "entity": "adnexa",
-   "side": "right",
-   "terms": [
-    "right adnexa",
-    "right ovary and fallopian tube"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "inside",
-    "dilate_mm": 3,
-    "anchor": "ovary",
-    "anchor_side": "right"
-   },
-   "priority": 3,
-   "reason": [
-    "promoted anchor ovary",
-    "ovary -has_part-> adnexa (hop 1)",
-    "staging: location"
-   ],
-   "relation": "has_part",
-   "from_anchor": "ovary"
-  },
-  {
-   "entity": "perivesical_fat",
-   "side": null,
-   "terms": [
-    "perivesical fat"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "shell",
-    "inner_mm": 0,
-    "outer_mm": 40,
-    "anchor": "urinary_bladder",
-    "anchor_side": null
-   },
-   "priority": 3,
-   "reason": [
-    "tumour_near anchor urinary_bladder",
-    "urinary_bladder -invested_by-> perivesical_fat (hop 1)",
-    "staging: beyond_capsule"
-   ],
-   "relation": "invested_by",
-   "from_anchor": "urinary_bladder"
-  },
-  {
-   "entity": "ln_pericolic",
-   "side": null,
-   "terms": [
-    "pericolic lymph nodes",
-    "mesocolic lymph nodes"
-   ],
-   "tier": 2,
-   "list": "B",
-   "gate": {
-    "kind": "region",
-    "defined_by": "vessels_and_vertebral_levels",
-    "anchor": "colon",
-    "anchor_side": null
-   },
-   "priority": 3,
-   "reason": [
-    "tumour_near anchor colon",
-    "colon -drains_lymph_to-> ln_pericolic (hop 1)",
-    "staging: nodal"
-   ],
-   "relation": "drains_lymph_to",
-   "from_anchor": "colon"
   }
  ],
  "log": [
@@ -2607,6 +1565,15 @@
    "agreement": true
   },
   {
+   "step": "found_from_parts",
+   "entity": "spine",
+   "side": null,
+   "parts": [
+    "sacrum"
+   ],
+   "volume_ml": 150
+  },
+  {
    "step": "found_implied_by_whole",
    "entity": "psoas",
    "side": "left",
@@ -2624,7 +1591,7 @@
   },
   {
    "step": "expected",
-   "n": 19,
+   "n": 20,
    "sex_recorded": "female",
    "sex_used_for_filtering": false,
    "span": [
@@ -2635,10 +1602,6 @@
   {
    "step": "completion",
    "missing": [
-    [
-     "spine",
-     null
-    ],
     [
      "aorta",
      null
@@ -2661,6 +1624,10 @@
     ],
     [
      "rectum",
+     null
+    ],
+    [
+     "omentum",
      null
     ],
     [
@@ -2701,6 +1668,7 @@
    "step": "host",
    "host": "cervix",
    "side": null,
+   "both_primary": false,
    "source": "tumour_evidence"
   },
   {
@@ -2716,6 +1684,7 @@
     ]
    ],
    "side_excluded": [],
+   "reach_mm": {},
    "alias_ensemble": true,
    "vt_initial_largest_ml": null
   },
@@ -2733,53 +1702,8 @@
   },
   {
    "step": "ts_only",
-   "n": 11,
-   "items": [
-    [
-     "sacrum",
-     null
-    ],
-    [
-     "iliac_artery",
-     "left"
-    ],
-    [
-     "iliac_artery",
-     "right"
-    ],
-    [
-     "hip",
-     "left"
-    ],
-    [
-     "hip",
-     "right"
-    ],
-    [
-     "iliopsoas",
-     "left"
-    ],
-    [
-     "femur",
-     "left"
-    ],
-    [
-     "iliopsoas",
-     "right"
-    ],
-    [
-     "femur",
-     "right"
-    ],
-    [
-     "psoas",
-     "left"
-    ],
-    [
-     "psoas",
-     "right"
-    ]
-   ]
+   "n": 0,
+   "items": []
   }
  ]
 }

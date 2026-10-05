@@ -1,4 +1,4 @@
-version: 0.5.5
+version: 0.5.6
 relation_types:
 - id: has_part
   meaning: sub-structure of the anchor; supports confined-to-organ and intra-organ location
@@ -6,6 +6,11 @@ relation_types:
     kind: inside
     dilate_mm: 3
   default_priority: 2
+  spatial:
+    inside: dst lies inside src (renal pelvis ⊂ kidney)
+    contiguous: separate structure continuous with / touching src (vessel branch, main bronchus, rectum, spinal cord)
+    group: src is a collection with no voxels of its own; dst is a member (spine ⊃ vertebrae)
+    encloses: dst contains src; kept as src has_part dst for the planner walk (ovary → adnexa)
 - id: invested_by
   meaning: capsule, fascia or fat compartment surrounding the anchor; supports beyond-capsule / compartment extension (T3-type criteria)
   gate:

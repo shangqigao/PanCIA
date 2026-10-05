@@ -4,12 +4,16 @@ Run:  python build_kb.py  → writes ./knowledge_base/*.yaml
 Content is authored in Python for consistency (shared helpers, TS class-map cross-check),
 then dumped to YAML which is the artefact of record.
 """
-import json, yaml, os, datetime
+import json, yaml, os, sys, datetime
+# v0.5.6: the VoxTell alignment ranks set-derived candidates, so the output depends on Python's string hashing. Pin it so
+# every build is byte-reproducible; hash seed 1 reproduces the v0.5.5c YAML the planner, VoxTell plan and ledger were run with.
+if os.environ.get('PYTHONHASHSEED') != '1':
+    os.execve(sys.executable, [sys.executable] + sys.argv, dict(os.environ, PYTHONHASHSEED='1'))
 OUT = os.path.join(os.path.dirname(__file__), 'knowledge_base')
 os.makedirs(OUT, exist_ok=True)
 TS = json.load(open(os.path.join(os.path.dirname(__file__), 'seed', 'ts_class_maps.json')))
 TS_ALL = {task: set(v.values()) for task, v in TS.items()}
-VERSION = '0.5.5'
+VERSION = '0.5.6'
 TODAY = str(datetime.date.today())
 
 # ------------------------------------------------------------------ helpers
@@ -60,7 +64,9 @@ def rel(src, type, dst, *, side='same', direction=None, contact=None, staging=()
 # always runs on the entire image; the gate then keeps only connected components lying inside the gate region.
 RELATION_TYPES = [
  dict(id='has_part', meaning='sub-structure of the anchor; supports confined-to-organ and intra-organ location',
-      gate=dict(kind='inside', dilate_mm=3), default_priority=2),
+      gate=dict(kind='inside', dilate_mm=3), default_priority=2,
+      spatial=dict(inside='dst lies inside src (renal pelvis ⊂ kidney)', contiguous='separate structure continuous with / touching src (vessel branch, main bronchus, rectum, spinal cord)',
+                   group='src is a collection with no voxels of its own; dst is a member (spine ⊃ vertebrae)', encloses='dst contains src; kept as src has_part dst for the planner walk (ovary → adnexa)')),
  dict(id='invested_by', meaning='capsule, fascia or fat compartment surrounding the anchor; supports beyond-capsule / compartment extension (T3-type criteria)',
       gate=dict(kind='shell', inner_mm=0, outer_mm=40), default_priority=1),
  dict(id='adjacent_to', meaning='physical neighbour; supports adjacent-organ invasion (T4-type criteria). Read in reverse it is the spatial prior for completion',
@@ -560,6 +566,22 @@ rel('skeletal_muscle', 'has_part', 'psoas', side='any'); rel('skeletal_muscle', 
 for lm in LANDMARKS: rel(lm['entity'], 'landmark_for', 'spine', side='any', note=f"{lm['id']} ≈ {lm['level']}")
 # v0.5.5: the spine as a tumour host (bone metastasis) is the union of the TS vertebra classes on the CT task
 for lvl in VERTEBRAL_ORDER[:-1]: rel('spine', 'has_part', f'vertebra_{lvl}', side='any', expand=False)
+
+# v0.5.6: spatial meaning of each has_part edge, read by the anatomical graph only (planner, VoxTell plan and ledger ignore it)
+HAS_PART_SPATIAL = {
+ ('aorta', 'celiac_trunk'): 'contiguous', ('aorta', 'superior_mesenteric_artery'): 'contiguous', ('aorta', 'renal_artery'): 'contiguous',
+ ('aorta', 'iliac_artery'): 'contiguous', ('iliac_artery', 'internal_iliac_artery'): 'contiguous', ('iliac_vein', 'internal_iliac_vein'): 'contiguous',
+ ('inferior_vena_cava', 'iliac_vein'): 'contiguous', ('inferior_vena_cava', 'renal_vein'): 'contiguous', ('inferior_vena_cava', 'hepatic_veins'): 'contiguous',
+ ('trachea', 'main_bronchus'): 'contiguous', ('lung', 'main_bronchus'): 'contiguous', ('colon', 'rectum'): 'contiguous', ('spine', 'spinal_cord'): 'contiguous',
+ ('spine', 'sacrum'): 'group', ('pelvic_sidewall', 'obturator_internus'): 'group',
+ ('ovary', 'adnexa'): 'encloses',
+}
+HAS_PART_SPATIAL.update({('spine', f'vertebra_{lvl}'): 'group' for lvl in VERTEBRAL_ORDER[:-1]})
+HAS_PART_SPATIAL.update({('skeletal_muscle', m): 'group' for m in ['psoas', 'autochthon', 'rectus_abdominis', 'iliopsoas', 'gluteus', 'pectoralis_major']})
+for r in R:
+    if r['type'] == 'has_part':
+        r['spatial'] = HAS_PART_SPATIAL.get((r['src'], r['dst']), 'inside')
+assert all(k in {(r['src'], r['dst']) for r in R if r['type'] == 'has_part'} for k in HAS_PART_SPATIAL), 'HAS_PART_SPATIAL names an edge the KB does not have'
 
 # ================================================================== TUMOUR PROMPTS
 TUMOUR = dict(

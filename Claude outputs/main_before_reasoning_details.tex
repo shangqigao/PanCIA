@@ -1,0 +1,290 @@
+\documentclass[fleqn,10pt]{olplainarticle}
+% Use option lineno for line numbers 
+
+\title{Conditional Probabilistic Anatomical Reasoning for Tumor Segmentation with Multimodal Priors}
+
+\author[1]{First Author}
+\author[2]{Second Author}
+\affil[1]{Address of first author}
+\affil[2]{Address of second author}
+
+\keywords{Keyword1, Keyword2, Keyword3}
+
+\begin{abstract}
+Please provide an abstract of no more than 300 words. Your abstract should explain the main contributions of your article, and should not contain any material that is not included in the main text. 
+\end{abstract}
+
+\begin{document}
+
+\flushbottom
+\maketitle
+\thispagestyle{empty}
+
+\section{Introduction}
+
+\section{Methodology}
+\subsection{Conditional Probabilistic Anatomical Reasoning}
+\label{sec:conditional_reasoning}
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figs/PGM.png}
+    \caption{ Anatomical Reasoning Graph.}
+    \label{fig:pgm}
+\end{figure}
+
+We formulate tumor segmentation as a conditional
+probabilistic anatomical reasoning problem that
+jointly infers tumors and their host anatomical
+structures by integrating image-dependent
+segmentation priors with anatomical and
+logical constraints.
+Let $X$ denote the observed medical image,
+$Z$ denote the tumor segmentation, and $H$
+denote the host anatomical segmentation.
+We further denote the cancer type by $C$
+and the data-agnostic anatomical knowledge
+base by $K$.
+Our framework consists of three complementary
+components: (1) observation consistency,
+(2) tumor reasoning, and (3) host reasoning.
+
+\paragraph{Image-Dependent Segmentation Priors.}
+
+We construct four complementary segmentation
+priors to provide image-dependent evidence
+for tumor and host anatomical reasoning.
+
+For tumor reasoning, we employ cancer-type
+prompting to obtain 2D and 3D tumor
+segmentation priors from BP and VT,
+respectively:
+\begin{equation}
+\label{eq:tumor_priors}
+\begin{aligned}
+B_C &= f_{\mathrm{BP}}(X,C),\\
+V_C &= f_{\mathrm{VT}}(X,C),
+\end{aligned}
+\end{equation}
+where $B_C$ provides slice-wise tumor
+segmentation evidence and $V_C$ provides
+volumetric tumor segmentation evidence.
+
+For host reasoning, we obtain two complementary
+anatomical segmentation priors.
+First, we leverage a data-agnostic anatomical
+knowledge base $K_C$ to construct anatomical
+prompts for VT, yielding a cancer-specific
+anatomical segmentation prior:
+\begin{equation}
+\label{eq:kb_prior}
+V_K = f_{\mathrm{VT}}(X,K_C).
+\end{equation}
+Second, we employ TotalSegmentator to
+generate a cancer-agnostic anatomical segmentation
+prior without explicit prompting:
+\begin{equation}
+\label{eq:ts_prior}
+T = f_{\mathrm{TS}}(X).
+\end{equation}
+Although the anatomical knowledge base itself
+is independent of the observed image, the
+corresponding VT segmentation output $V_K$
+is image-dependent.
+Consequently, the framework incorporates
+two tumor segmentation priors,
+$\{B_C,V_C\}$, and two host anatomical
+segmentation priors, $\{V_K,T\}$.
+
+\paragraph{Conditional Probabilistic Formulation.}
+
+Given the observed image, cancer type,
+and anatomical knowledge base, we model
+the joint conditional distribution of
+tumor and host segmentations as
+\begin{equation}
+\label{eq:conditional_joint}
+\boxed{
+p_\theta(Z,H\mid X,C,K)
+=
+\frac{1}{\mathcal{Z}_\theta(X,C,K)}
+\phi_{\mathrm{obs}}
+\phi_{\mathrm{tumor}}
+\phi_{\mathrm{host}}
+}
+\end{equation}
+where $\mathcal{Z}_\theta(X,C,K)$ is the
+normalizing partition function.
+The three nonnegative potentials are defined as
+\begin{equation}
+\label{eq:reasoning_potentials}
+\begin{aligned}
+\phi_{\mathrm{obs}}
+&=
+\phi_{\mathrm{obs}}(Z,H;X),\\
+\phi_{\mathrm{tumor}}
+&=
+\phi_{\mathrm{tumor}}(Z,H;B_C,V_C),\\
+\phi_{\mathrm{host}}
+&=
+\phi_{\mathrm{host}}(H;V_K,T).
+\end{aligned}
+\end{equation}
+This conditional formulation directly
+incorporates the image-dependent segmentation
+priors without assuming that they are
+independent of the observed image or
+constitute data-independent Bayesian priors.
+
+\paragraph{Observation Consistency.}
+
+The observation consistency potential
+evaluates whether a hypothesized tumor--host
+configuration is compatible with the
+observed imaging evidence. We employ statistical rejection to suppress
+candidate configurations that are inconsistent
+with the observed image, \textbf{while develop statistical recall to discover more candidates that are consistent with the accepted tumor characteristics}.
+Specifically, we define
+\begin{equation}
+\label{eq:observation_potential}
+\phi_{\mathrm{obs}}(Z,H;X)
+=
+\exp\left[
+-\lambda_{\mathrm{obs}}
+E_{\mathrm{obs}}(Z,H;X)
+\right],
+\end{equation}
+where $E_{\mathrm{obs}}$ is a nonnegative
+statistical inconsistency score and
+$\lambda_{\mathrm{obs}}$ controls the
+strength of observation consistency.
+Candidate configurations with greater
+statistical inconsistency receive lower
+compatibility scores, thereby reducing
+their contribution to the joint conditional
+distribution.
+
+\paragraph{Tumor Reasoning.}
+
+The tumor reasoning potential integrates
+the cancer-type-prompted 2D and 3D tumor
+segmentation priors with the inferred
+host anatomical structures.
+We formulate tumor reasoning through
+set-theoretic operations and logical
+constraints:
+\begin{equation}
+\label{eq:tumor_reasoning}
+\begin{aligned}
+\phi_{\mathrm{tumor}}
+&(Z,H;B_C,V_C) =
+\phi_{\mathrm{BP}}(Z;B_C)
+\phi_{\mathrm{VT}}^{\mathrm{tumor}}(Z;V_C)
+\phi_{\mathrm{logic}}(Z,H).
+\end{aligned}
+\end{equation}
+The 2D segmentation potential
+$\phi_{\mathrm{BP}}$ evaluates the
+consistency between the candidate tumor
+segmentation and slice-wise tumor evidence.
+The 3D segmentation potential
+$\phi_{\mathrm{VT}}^{\mathrm{tumor}}$
+evaluates consistency with volumetric
+tumor evidence.
+The logical potential
+$\phi_{\mathrm{logic}}$ encodes
+anatomical relationships between tumors
+and their host structures.
+In particular, set-theoretic relations
+such as containment, intersection,
+and exclusion are used to evaluate
+the anatomical plausibility of candidate
+tumor configurations.
+This enables complementary 2D and 3D
+segmentation evidence to be integrated
+under explicit anatomical constraints.
+
+\paragraph{Host Reasoning.}
+
+The host reasoning potential integrates
+two complementary sources of image-dependent
+anatomical evidence: the KB-prompted VT
+segmentation prior and the non-prompted
+TotalSegmentator segmentation prior.
+We formulate the host reasoning potential as
+\begin{equation}
+\label{eq:host_reasoning}
+\begin{aligned}
+\phi_{\mathrm{host}}(H;V_K,T)
+={}\phi_{\mathrm{VT}}^{\mathrm{anat}}(H;V_K) \cdot
+\phi_{\mathrm{TS}}(H;T).
+\end{aligned}
+\end{equation}
+The KB-prompted VT potential incorporates
+patient-specific anatomical evidence
+obtained through knowledge-guided
+segmentation, whereas the TotalSegmentator
+potential provides complementary anatomical
+evidence without explicit prompting.
+A cancer sits in its primary site with high prior but may have invaded neighbours or spread, so the host is a set with weights, not one organ.
+
+\paragraph{Joint Tumor--Host Inference.}
+
+The complete conditional reasoning model
+can be expanded as
+\begin{equation}
+\label{eq:expanded_reasoning}
+\boxed{
+\begin{aligned}
+p_\theta(Z,H\mid X,C,K)
+\propto\;&\phi_{\mathrm{obs}}(Z,H;X) \\
+&\cdot\phi_{\mathrm{BP}}(Z;B_C) \cdot\phi_{\mathrm{VT}}^{\mathrm{tumor}}
+(Z;V_C) \cdot\phi_{\mathrm{logic}}(Z,H) \\
+&\cdot\phi_{\mathrm{VT}}^{\mathrm{anat}}
+(H;V_K) \cdot\phi_{\mathrm{TS}}(H;T).
+\end{aligned}
+}
+\end{equation}
+The final tumor and host segmentations
+are estimated through maximum a posteriori
+inference:
+\begin{equation}
+\label{eq:map_inference}
+(\hat Z,\hat H)
+=
+\arg\max_{Z,H}
+p_\theta(Z,H\mid X,C,K).
+\end{equation}
+Equivalently, the inference objective
+can be expressed in the log domain:
+\begin{equation}
+\label{eq:log_inference}
+\begin{aligned}
+(\hat Z,\hat H)
+=
+\arg\max_{Z,H}\;
+\log\phi_{\mathrm{obs}} +\log\phi_{\mathrm{tumor}} +\log\phi_{\mathrm{host}}.
+\end{aligned}
+\end{equation}
+By integrating complementary tumor
+segmentation priors, knowledge-guided
+and non-prompted anatomical priors,
+and explicit anatomical constraints,
+the proposed framework enables
+conditional probabilistic reasoning
+over tumor--host configurations
+under uncertainty.
+
+\subsection{Reasoning details}
+\paragraph{Host reasoning.}
+
+\paragraph{Tumor reasoning.}
+
+\paragraph{Statistical recall and rejection.}
+
+\section*{Acknowledgments}
+
+Additional information can be given in the template, such as to not include funder information in the acknowledgments section.
+
+\bibliography{sample}
+
+\end{document}

@@ -1,0 +1,613 @@
+\documentclass[fleqn,10pt]{olplainarticle}
+% Use option lineno for line numbers 
+
+\title{Conditional Probabilistic Anatomical Reasoning for Tumor Segmentation with Multimodal Priors}
+
+\author[1]{First Author}
+\author[2]{Second Author}
+\affil[1]{Address of first author}
+\affil[2]{Address of second author}
+
+\keywords{Keyword1, Keyword2, Keyword3}
+
+\begin{abstract}
+Please provide an abstract of no more than 300 words. Your abstract should explain the main contributions of your article, and should not contain any material that is not included in the main text. 
+\end{abstract}
+
+\begin{document}
+
+\flushbottom
+\maketitle
+\thispagestyle{empty}
+
+\section{Introduction}
+
+\section{Methodology}
+\subsection{Conditional Probabilistic Anatomical Reasoning}
+\label{sec:conditional_reasoning}
+\begin{figure}
+    \centering
+    \includegraphics[width=1\linewidth]{figs/PGM.png}
+    \caption{ Anatomical Reasoning Graph.}
+    \label{fig:pgm}
+\end{figure}
+
+We formulate tumor segmentation as a conditional
+probabilistic anatomical reasoning problem that
+jointly infers tumors and their host anatomical
+structures by integrating image-dependent
+segmentation priors with anatomical and
+logical constraints.
+Let $X$ denote the observed medical image,
+$Z$ denote the tumor segmentation, and $H$
+denote the host anatomical segmentation.
+We further denote the cancer type by $C$
+and the data-agnostic anatomical knowledge
+base by $K$.
+Our framework consists of three complementary
+components: (1) observation consistency,
+(2) tumor reasoning, and (3) host reasoning.
+
+\paragraph{Image-Dependent Segmentation Priors.}
+
+We construct four complementary segmentation
+priors to provide image-dependent evidence
+for tumor and host anatomical reasoning.
+
+For tumor reasoning, we employ cancer-type
+prompting to obtain 2D and 3D tumor
+segmentation priors from BP and VT,
+respectively:
+\begin{equation}
+\label{eq:tumor_priors}
+\begin{aligned}
+B_C &= f_{\mathrm{BP}}(X,C),\\
+V_C &= f_{\mathrm{VT}}(X,C),
+\end{aligned}
+\end{equation}
+where $B_C$ provides slice-wise tumor
+segmentation evidence and $V_C$ provides
+volumetric tumor segmentation evidence.
+
+For host reasoning, we obtain two complementary
+anatomical segmentation priors.
+First, we leverage a data-agnostic anatomical
+knowledge base $K_C$ to construct anatomical
+prompts for VT, yielding a cancer-specific
+anatomical segmentation prior:
+\begin{equation}
+\label{eq:kb_prior}
+V_K = f_{\mathrm{VT}}(X,K_C).
+\end{equation}
+Second, we employ TotalSegmentator to
+generate a cancer-agnostic anatomical segmentation
+prior without explicit prompting:
+\begin{equation}
+\label{eq:ts_prior}
+T = f_{\mathrm{TS}}(X).
+\end{equation}
+Although the anatomical knowledge base itself
+is independent of the observed image, the
+corresponding VT segmentation output $V_K$
+is image-dependent.
+Consequently, the framework incorporates
+two tumor segmentation priors,
+$\{B_C,V_C\}$, and two host anatomical
+segmentation priors, $\{V_K,T\}$.
+
+\paragraph{Conditional Probabilistic Formulation.}
+
+Given the observed image, cancer type,
+and anatomical knowledge base, we model
+the joint conditional distribution of
+tumor and host segmentations as
+\begin{equation}
+\label{eq:conditional_joint}
+\boxed{
+p_\theta(Z,H\mid X,C,K)
+=
+\frac{1}{\mathcal{Z}_\theta(X,C,K)}
+\phi_{\mathrm{obs}}
+\phi_{\mathrm{tumor}}
+\phi_{\mathrm{host}}
+}
+\end{equation}
+where $\mathcal{Z}_\theta(X,C,K)$ is the
+normalizing partition function.
+The three nonnegative potentials are defined as
+\begin{equation}
+\label{eq:reasoning_potentials}
+\begin{aligned}
+\phi_{\mathrm{obs}}
+&=
+\phi_{\mathrm{obs}}(Z,H;X),\\
+\phi_{\mathrm{tumor}}
+&=
+\phi_{\mathrm{tumor}}(Z,H;B_C,V_C),\\
+\phi_{\mathrm{host}}
+&=
+\phi_{\mathrm{host}}(H;V_K,T).
+\end{aligned}
+\end{equation}
+This conditional formulation directly
+incorporates the image-dependent segmentation
+priors without assuming that they are
+independent of the observed image or
+constitute data-independent Bayesian priors.
+
+\paragraph{Observation Consistency.}
+
+The observation consistency potential
+evaluates whether a hypothesized tumor--host
+configuration is compatible with the
+observed imaging evidence. We employ statistical rejection to suppress
+candidate configurations that are inconsistent
+with the observed image, \textbf{while develop statistical recall to discover more candidates that are consistent with the accepted tumor characteristics}.
+Specifically, we define
+\begin{equation}
+\label{eq:observation_potential}
+\phi_{\mathrm{obs}}(Z,H;X)
+=
+\exp\left[
+-\lambda_{\mathrm{obs}}
+E_{\mathrm{obs}}(Z,H;X)
+\right],
+\end{equation}
+where $E_{\mathrm{obs}}$ is a
+statistical inconsistency score (Section~\ref{sec:reasoning_details}) and
+$\lambda_{\mathrm{obs}}$ controls the
+strength of observation consistency.
+Candidate configurations with greater
+statistical inconsistency receive lower
+compatibility scores, thereby reducing
+their contribution to the joint conditional
+distribution.
+
+\paragraph{Tumor Reasoning.}
+
+The tumor reasoning potential integrates
+the cancer-type-prompted 2D and 3D tumor
+segmentation priors with the inferred
+host anatomical structures.
+We formulate tumor reasoning through
+set-theoretic operations and logical
+constraints:
+\begin{equation}
+\label{eq:tumor_reasoning}
+\begin{aligned}
+\phi_{\mathrm{tumor}}
+&(Z,H;B_C,V_C) =
+\phi_{\mathrm{BP}}(Z;B_C)
+\phi_{\mathrm{VT}}^{\mathrm{tumor}}(Z;V_C)
+\phi_{\mathrm{logic}}(Z,H).
+\end{aligned}
+\end{equation}
+The 2D segmentation potential
+$\phi_{\mathrm{BP}}$ evaluates the
+consistency between the candidate tumor
+segmentation and slice-wise tumor evidence.
+The 3D segmentation potential
+$\phi_{\mathrm{VT}}^{\mathrm{tumor}}$
+evaluates consistency with volumetric
+tumor evidence.
+The logical potential
+$\phi_{\mathrm{logic}}$ encodes
+anatomical relationships between tumors
+and their host structures.
+In particular, set-theoretic relations
+such as containment, intersection,
+and exclusion are used to evaluate
+the anatomical plausibility of candidate
+tumor configurations.
+This enables complementary 2D and 3D
+segmentation evidence to be integrated
+under explicit anatomical constraints.
+
+\paragraph{Host Reasoning.}
+
+The host reasoning potential integrates
+two complementary sources of image-dependent
+anatomical evidence: the KB-prompted VT
+segmentation prior and the non-prompted
+TotalSegmentator segmentation prior.
+We formulate the host reasoning potential as
+\begin{equation}
+\label{eq:host_reasoning}
+\begin{aligned}
+\phi_{\mathrm{host}}(H;V_K,T)
+={}\phi_{\mathrm{VT}}^{\mathrm{anat}}(H;V_K) \cdot
+\phi_{\mathrm{TS}}(H;T).
+\end{aligned}
+\end{equation}
+The KB-prompted VT potential incorporates
+patient-specific anatomical evidence
+obtained through knowledge-guided
+segmentation, whereas the TotalSegmentator
+potential provides complementary anatomical
+evidence without explicit prompting.
+A cancer sits in its primary site with high prior but may have invaded neighbours or spread, so the host is a set with weights, not one organ.
+
+\paragraph{Joint Tumor--Host Inference.}
+
+The complete conditional reasoning model
+can be expanded as
+\begin{equation}
+\label{eq:expanded_reasoning}
+\boxed{
+\begin{aligned}
+p_\theta(Z,H\mid X,C,K)
+\propto\;&\phi_{\mathrm{obs}}(Z,H;X) \\
+&\cdot\phi_{\mathrm{BP}}(Z;B_C) \cdot\phi_{\mathrm{VT}}^{\mathrm{tumor}}
+(Z;V_C) \cdot\phi_{\mathrm{logic}}(Z,H) \\
+&\cdot\phi_{\mathrm{VT}}^{\mathrm{anat}}
+(H;V_K) \cdot\phi_{\mathrm{TS}}(H;T).
+\end{aligned}
+}
+\end{equation}
+The final tumor and host segmentations
+are estimated through maximum a posteriori
+inference:
+\begin{equation}
+\label{eq:map_inference}
+(\hat Z,\hat H)
+=
+\arg\max_{Z,H}
+p_\theta(Z,H\mid X,C,K).
+\end{equation}
+Equivalently, the inference objective
+can be expressed in the log domain:
+\begin{equation}
+\label{eq:log_inference}
+\begin{aligned}
+(\hat Z,\hat H)
+=
+\arg\max_{Z,H}\;
+\log\phi_{\mathrm{obs}} +\log\phi_{\mathrm{tumor}} +\log\phi_{\mathrm{host}}.
+\end{aligned}
+\end{equation}
+By integrating complementary tumor
+segmentation priors, knowledge-guided
+and non-prompted anatomical priors,
+and explicit anatomical constraints,
+the proposed framework enables
+conditional probabilistic reasoning
+over tumor--host configurations
+under uncertainty.
+
+\subsection{Pan-cancer knowledge base and prompt planning}
+\label{sec:kb_planning}
+% Drafted 4 Oct 2026 from knowledge base v0.5.6 (knowledge_base/*.yaml) and the planner (pancia_kb/planner.py,
+% adapter.py). No equation of Section~\ref{sec:conditional_reasoning} is changed; this section defines how $K$ is
+% built and how the prompt plan $K_C$ of Eq.~\eqref{eq:kb_prior} is produced for each scan.
+
+This section describes how the anatomical knowledge base $K$ is built once for all cancer types, and how, for each scan,
+it is turned into the final VT prompt plan $K_C$ of Eq.~\eqref{eq:kb_prior}. $K$ is a curated, image-independent graph;
+$K_C$ is a finite list of prompt jobs, and $V_K=f_{\mathrm{VT}}(X,K_C)$ is the stack of masks VT returns for these jobs.
+No component of $K$ or of the planner uses patient sex, and no rule or constant is specific to an organ, a cancer type
+or a dataset.
+
+\paragraph{Anatomical entities.}
+$K$ contains 191 anatomical entities. Each entity has a category (solid organ, hollow organ, gland, bone, vessel,
+lymph-node station, muscle, fascia, fat, duct, space, nerve, landmark or region) and a laterality (left, right, midline
+or bilateral). It also records how it can be observed: the TotalSegmentator classes that represent it for CT and for
+MR, if any; a VT main phrase with up to two aliases, each graded as in-vocabulary, near-vocabulary or
+out-of-vocabulary against the published VT training vocabulary; its craniocaudal span between vertebral anchors;
+whether it is always present, variably present or absent after common surgery; a typical volume range; and, for CT, a
+typical Hounsfield-unit range. Finally, each entity that can host a tumor carries a tumor phrase (for example
+\emph{liver tumor}). Thirty-four entities are \emph{anchors}: structures that TotalSegmentator segments reliably and
+that therefore fix the coordinate frame of a scan (vertebrae, major vessels and large organs). Landmarks are tied to
+vertebral levels, so that every spatial prior in $K$ is expressed relative to the patient's own skeleton rather than in
+millimetres.
+
+\paragraph{Anatomical relations.}
+Entities are connected by 401 typed, directed relations. Ten relation kinds are defined, of which nine are used:
+\emph{adjacent\_to} (156), \emph{has\_part} (94), \emph{drains\_lymph\_to} (57), \emph{lies\_in} (23),
+\emph{supplied\_by} (17), \emph{invested\_by} (16), \emph{drained\_by} (16), \emph{landmark\_for} (13) and
+\emph{has\_duct} (9); the tenth, \emph{wall\_of}, is reserved. Each relation kind has a fixed spatial gate and a default
+priority. The gate states where the target may lie relative to the source: inside it (\emph{has\_part}), in a shell
+around it (\emph{invested\_by}), in a neighbouring box or directional shell (\emph{adjacent\_to}), in a corridor along
+a vessel or duct (\emph{supplied\_by}, \emph{drained\_by}, \emph{has\_duct}) or in a body region
+(\emph{drains\_lymph\_to}); \emph{lies\_in} and \emph{landmark\_for} carry no gate. Gates are later used to check VT
+outputs against structures that are already segmented, and priorities order prompts when the budget is exceeded. The relations encode the anatomy that staging systems refer to: direct extension
+into a neighbouring organ, invasion of an investing fascia or fat, and lymphatic drainage to a regional station.
+
+\paragraph{Cancer-type spread sets.}
+For each cancer type $C$, $K$ stores a weighted host set $\mathcal{H}_C$, which is the host set used in
+Section~\ref{sec:reasoning_details}. Only two items are curated per cancer type: the primary organ (prior $1.0$) and the
+usual distant metastatic sites (prior $0.15$). Organs at risk of local invasion (prior $0.3$) are not curated; they are
+derived automatically as the entities reached from the primary organ by an \emph{adjacent\_to} or \emph{invested\_by}
+relation. Each cancer type also has a short ensemble of tumor phrases (for example \emph{lung cancer}, \emph{lung
+tumor}, \emph{lung mass}), and generic templates produce phrases for any host without a curated one. The current base
+covers 18 cancer types. Adding a new cancer type therefore requires only its primary organ, its metastatic sites and,
+optionally, its phrase ensemble; all other knowledge is shared.
+
+\paragraph{Planning $K_C$ for a scan.}
+For a given scan, the planner builds $K_C$ deterministically in a single pass, without calling any segmentation model.
+Its inputs are the modality, the cancer type $C$, a summary of the TotalSegmentator output $T$ (which classes are
+present, their volumes and their extents), and the initial tumor priors $B_C$ and $V_C$ of Eq.~\eqref{eq:tumor_priors}.
+It proceeds in five steps.
+
+\emph{(i) Frame.} The vertebrae found in $T$ define a craniocaudal ruler. The landmarks of $K$ are placed on this ruler,
+and every entity span is converted to a slice range of the scan. This step also determines which entities lie inside the
+field of view.
+
+\emph{(ii) Anchors.} Each anchor is labelled \emph{found} (present in $T$ with a plausible volume and position),
+\emph{expected} (inside the field of view but missing from $T$) or \emph{missing} (outside the field of view). Found
+anchors give the reference structures against which the gates of later prompts are evaluated.
+
+\emph{(iii) Tumor evidence.} A component of $B_C$ or $V_C$ is \emph{validated} when the two priors agree on it. For each
+host $h\in\mathcal{H}_C$ the planner records an evidence level $e_h\in\{0,1,2\}$: $2$ if a validated component lies in
+or within a reach of $10$\,mm of $h$, $1$ if a component from one prior does, and $0$ otherwise. It also records the
+side of the primary tumor for paired organs. The planning weight of the host is $w_h(1+e_h)$, where $w_h$ is its
+spread-set prior. The initial tumor priors therefore influence only the order and the extent of the anatomical
+prompts; they never remove a host from $\mathcal{H}_C$.
+
+\emph{(iv) Prompt tiers.} Prompts are generated in four tiers. Tier~0 adds ruler prompts (spine, sacrum, hip bone) only
+when $T$ provides neither vertebrae nor fallback landmarks, so that a frame can always be placed. Tier~1 completes the anchors that are expected but missing from $T$, each gated by its
+spatial prior. Tier~2 adds \emph{anatomical profiles} by walking the relation graph: two hops from the primary organ,
+one hop from each secondary host, and the structures that can be reached from any host with tumor evidence
+$e_h>0$. Tier~T contains the tumor prompts: one prompt with the tumor phrase of each host of $\mathcal{H}_C$ inside the
+field of view. Tier~T is issued for every such host regardless of the evidence $e_h$, so that a lesion missed by both
+initial priors can still be proposed. For the same reason, when the initial VT tumor mask is empty or smaller than
+$0.5$\,ml, the cancer-type phrase ensemble is added for the primary organ. This is a wording ensemble for the same
+model, not a second rater: the initial and prompted VT outputs are counted as one model in tumor reasoning.
+
+\emph{(v) Budget.} The plan is limited to $80$ prompts. Tiers~0, 1 and T are protected; only tier~2 is trimmed, lowest relation
+priority first, with items derived from a host given a one-step priority boost.
+
+The output $K_C$ is the list of prompt jobs that survive the budget. Each job records the entity, its side, the phrases to
+issue (the main phrase and its first two aliases), its tier, its gate, and, for tumor prompts, the host and the host
+prior $w_h$. VT is run once per scan on the full volume with all jobs of $K_C$; there is no re-planning after inference.
+For each job, the masks of its three phrases are fused by voxel-wise majority (at least two of three). The gate is then
+applied as an output filter: each connected component of the fused mask is kept only when at least $80\%$ of its
+voxels lie inside the region allowed by the gate. A completion structure that is empty after filtering is recorded as
+absent when $K$ marks it as variable or removable by surgery, and as not found otherwise. The kept organ masks form $V_K$, which enters host reasoning
+through $\phi^{\mathrm{anat}}_{\mathrm{VT}}$. The masks of the tier-T jobs are tumor proposals; they are added to the VT
+tumor prior $V_C$ as candidate parts, each tagged with its prompted host, and are subject to the same host, logic and
+observation reasoning as every other part.
+
+Two properties of this construction matter for the reasoning that follows. First, although $K$ is independent of the
+image, $K_C$ is not: it depends on $T$ through the frame and the anchors, and on the initial tumor priors through the
+evidence levels. This dependence is restricted to which structures are prompted and in what order, so it changes the
+coverage of $V_K$ but not the meaning of any mask. Second, because tier~T prompts every plausible host whether or not it
+contains a tumor, VT is regularly asked to segment a tumor that is absent. Its output for such a prompt can be a false
+positive inside the prompted host or elsewhere in the scan. These proposals are therefore treated as priors only, and
+whether they are accepted is decided by the image evidence $\phi_{\mathrm{obs}}$ of
+Section~\ref{sec:reasoning_details}.
+
+\subsection{Reasoning details}
+\label{sec:reasoning_details}
+% Drafted 4 Oct 2026 from the implemented ledger (pancia_kb/ledger.py) and the agreed design of statistical recall and
+% rejection (to be implemented as ledger v4). All constants are fixed a priori and identical for every cancer type.
+
+This section specifies each potential of Eq.~\eqref{eq:expanded_reasoning}. All operations are performed per scan on the
+native voxel grid of $X$, on which $B_C$, $V_C$, $V_K$ and $T$ are defined. Distances $d(\cdot,\cdot)$ are Euclidean in
+millimetres. The \emph{acquisition plane} is orthogonal to the axis with the largest voxel spacing when the ratio of
+largest to smallest spacing is at least $1.5$, and is the axial plane otherwise; all slice-wise operations use this plane.
+Every constant is fixed before inference, shared by all cancer types, and not tuned on clinical endpoints.
+
+\textit{Variables.} Tumor reasoning (below) produces a finite set of candidate parts $\mathcal{A}=\{a_1,\dots,a_n\}$, which
+are disjoint voxel sets. Each part has a binary label $z_a\in\{0,1\}$ and a host assignment $h(a)$, and the tumor
+segmentation is $Z=\bigcup_{a:\,z_a=1}a$. The host segmentation $H=\{H_h\}_{h\in\mathcal{H}_C}$ assigns one region to each
+host of the cancer type. Given $H$, the potentials of Eq.~\eqref{eq:expanded_reasoning} factorise over the parts, so that
+\begin{equation}
+\label{eq:part_posterior}
+\log p_\theta(Z\mid H,X,C,K) = \sum_{a\in\mathcal{A}} z_a\Bigl[\underbrace{\log\phi_{\mathrm{logic}}(a,H)}_{0\ \text{or}\ -\infty}
++\underbrace{\operatorname{logit}\pi_a}_{\phi_{\mathrm{BP}}\,\phi^{\mathrm{tumor}}_{\mathrm{VT}}}
++\underbrace{\log\phi_{\mathrm{obs}}(a,H;X)}_{\text{image evidence}}\Bigr] + \mathrm{const},
+\end{equation}
+and the MAP solution of Eq.~\eqref{eq:map_inference} sets $z_a=1$ exactly when the bracket is non-negative. The three
+paragraphs below define $\phi_{\mathrm{host}}$, the three tumor terms and $\phi_{\mathrm{obs}}$.
+
+%--------------------------------------------------------------------------------------------------------------------
+\paragraph{Host reasoning: $\phi_{\mathrm{TS}}(H;T)$ and $\phi^{\mathrm{anat}}_{\mathrm{VT}}(H;V_K)$.}
+The knowledge base defines for cancer type $C$ a weighted host set $\mathcal{H}_C=\{(h,\kappa_h,w_h)\}$: the primary organ
+($\kappa_h=$ primary, $w_h=1.0$), organs reached by local invasion ($\kappa_h=$ local, $w_h=0.3$) and metastatic sites
+($\kappa_h=$ distant, $w_h=0.15$), with laterality where applicable. For each host, $T_h$ denotes the TotalSegmentator
+labels mapped to $h$ by $K$, and $V_{K,h}$ the VT segmentation of the knowledge-base organ prompt for $h$ (voxel-wise
+majority over the main phrase and its aliases). The two host potentials are containment constraints with a parsimony
+term,
+\begin{equation}
+\label{eq:host_potentials}
+\phi_{\mathrm{TS}}(H;T)=\prod_{h}\mathbf{1}\bigl[T_h\subseteq H_h\bigr]\,e^{-\epsilon|H_h|},\qquad
+\phi^{\mathrm{anat}}_{\mathrm{VT}}(H;V_K)=\prod_{h}\mathbf{1}\bigl[V_{K,h}\subseteq H_h\bigr],
+\end{equation}
+with $\epsilon>0$ arbitrarily small. Their product is maximised by
+\begin{equation}
+\label{eq:host_map}
+\hat H_h = T_h\cup V_{K,h},
+\end{equation}
+so each organ is supported by either prior, and $r_h=\mathrm{Dice}(T_h,V_{K,h})$ records the agreement of the two priors.
+
+Special cases:
+\begin{itemize}
+\item When neither prior delineates the primary organ, a coarse knowledge-base region anchored on vertebral levels replaces
+$\hat H_h$ and is flagged; a secondary host without any organ mask has no region.
+\item When the planner finds the primary organ outside the field of view, no part can be assigned to it.
+\end{itemize}
+
+Derived regions:
+\begin{itemize}
+\item The host envelope is $E_h=\{v: d(v,\hat H_h)\le r_h\}$, with $r_h=10$\,mm for the primary and $3$\,mm for secondary hosts.
+\item The contact zone is $E^{c}_h=\{v: d(v,\hat H_h)\le3\,\mathrm{mm}\}$.
+\item The other-organ region $\bar O$ is the union of all TotalSegmentator structures except the primary organ, its parts and
+its satellites, each filled slice-wise for enclosed holes. TotalSegmentator excludes tumor tissue from organ masks, so
+without filling, a lesion enclosed by an organ would not count as inside it.
+\end{itemize}
+
+The host weights $w_h$ rank admitted lesions (the index lesion is a primary lesion) and do not enter acceptance.
+
+%--------------------------------------------------------------------------------------------------------------------
+\paragraph{Tumor reasoning: $\phi_{\mathrm{BP}}(Z;B_C)$, $\phi^{\mathrm{tumor}}_{\mathrm{VT}}(Z;V_C)$ and
+$\phi_{\mathrm{logic}}(Z,H)$.}
+Tumor reasoning (i)~builds the candidate parts $\mathcal{A}$ from the two tumor priors, (ii)~assigns each part a prior
+probability from the support of $B_C$ and $V_C$, and (iii)~removes anatomically or logically infeasible parts.
+
+\textit{(i) Candidate parts.}
+\begin{itemize}
+\item \emph{Claims.} Connected components (26-connectivity) of $B_C$, of $V_C$ and of every VT tumor prompt for a host
+$h\in\mathcal{H}_C$ are claims if they are at least $0.5$\,ml. Inside the primary envelope, VT fragments closer than
+$5$\,mm are grouped first and the floor is $0.2$\,ml.
+\item \emph{Lesions.} Let $\mathcal{B}$ and $\mathcal{V}$ be the unions of the BP and VT claims. Lesions are anchored on the
+volumetric prior. On every acquisition slice that contains $\mathcal{V}$, a 2D component of $\mathcal{B}\setminus\bar O$
+that touches $\mathcal{V}$ (within one pixel) joins it with its full in-plane extent, and BP voxels within $5$\,mm of
+$\mathcal{V}$ in 3D also join. The union is grouped at $5$\,mm. The remaining BP voxels form BP-only lesions.
+\item \emph{Parts.} Each lesion $L$ is split into parts:
+  \begin{itemize}
+  \item the agreed part $L\cap\mathcal{B}\cap\mathcal{V}$;
+  \item VT-only parts $L\cap\mathcal{V}\setminus\mathcal{B}$, separated by whether BP proposes anything on that acquisition
+  slice within the host envelope;
+  \item BP-only parts $L\cap\mathcal{B}\setminus\mathcal{V}$, split once by the sign of the voxel log-likelihood ratio
+  (Eq.~\eqref{eq:llr}) and separated by whether VT proposes anything within $10$\,mm.
+  \end{itemize}
+  Connected parts below $0.5$\,ml are not scored and follow their lesion.
+\item \emph{Recall parts.} Unproposed voxels ($\notin\mathcal{B}\cup\mathcal{V}$) within $10$\,mm of an accepted lesion,
+inside its host envelope and outside $\bar O$, that have a positive voxel log-likelihood ratio and form connected parts of
+at least $0.5$\,ml touching the lesion.
+\end{itemize}
+
+\textit{(ii) Tumor-prior potentials.} For each part $a$, let $\beta_a$ and $\nu_a$ be the states of BP and VT on $a$:
+\emph{proposes} (the part lies in the model's claims), \emph{silent} (the model proposes nothing there: for BP, no claim on
+the part's acquisition slices within the host envelope; for VT, no claim within $10$\,mm), or \emph{active} (the model
+proposes tissue there but not this part). The two tumor potentials act jointly as a Bernoulli prior on the part labels,
+\begin{equation}
+\label{eq:tumor_prior}
+\phi_{\mathrm{BP}}(Z;B_C)\,\phi^{\mathrm{tumor}}_{\mathrm{VT}}(Z;V_C)=\prod_{a\in\mathcal{A}}\pi_a^{z_a}(1-\pi_a)^{1-z_a},
+\qquad
+\pi_a=\begin{cases}
+0.9 & \beta_a=\nu_a=\text{proposes},\\
+0.75 & \text{one proposes, the other silent},\\
+0.5 & \text{one proposes, the other active},\\
+0.25 & \text{neither proposes (recall part)}.
+\end{cases}
+\end{equation}
+Silence of one model is missing evidence, not evidence against. The value $0.75$ lies halfway, in log-odds, between
+agreement and contradiction.
+
+\textit{(iii) Logical potential.} $\phi_{\mathrm{logic}}$ is a product of hard constraints,
+\begin{equation}
+\label{eq:logic}
+\phi_{\mathrm{logic}}(Z,H)=\prod_{a\in\mathcal{A}}\Bigl(\prod_{k}\Gamma_k(a,H)\Bigr)^{z_a},\qquad\Gamma_k\in\{0,1\},
+\end{equation}
+so a part violating any constraint has $\log\phi_{\mathrm{logic}}=-\infty$ and cannot be accepted. The constraints are:
+\begin{itemize}
+\item[$\Gamma_1$] \emph{Prompt gate.} A part from a VT prompt for host $h$ lies at least $50\%$ inside $E_h$.
+\item[$\Gamma_2$] \emph{Shape.} The claim is neither a slab nor organ-shaped. A slab has median in-plane coverage of the
+host $\ge0.4$ and a through-plane to in-plane extent ratio $\le0.25$; it is exempt when the other model claims the same
+voxels. An organ-shaped claim has $\ge60\%$ of the host volume, median slice-wise Dice $\ge0.6$ and $\ge80\%$ inside
+$\hat H_h$; it is excluded when the host priors agree ($r_h\ge0.7$), and otherwise kept on the primary host with weight
+$0.3$.
+\item[$\Gamma_3$] \emph{Assignment and containment.} The part's lesion is assigned to $h(a)\in\mathcal{H}_C$ and
+satisfies $|L\cap\bar O|<0.5\,|L|$. Assignment is to the primary if $\ge50\%$ of $L$ lies in the primary envelope or $L$
+touches $E^{c}_{\text{primary}}$; otherwise to the secondary host whose envelope holds $\ge50\%$ of $L$.
+\item[$\Gamma_4$] \emph{Feasibility.} A primary lesion touches $E^{c}_h$, and the primary organ is in the field of view.
+\item[$\Gamma_5$] \emph{Multifocality.} A second or further single-support primary lesion is a nodule: $\ge80\%$ inside
+$\hat H_h$ (or attached), longest in-plane diameter $\ge10$\,mm, and extent $\ge3$ slices and $\ge10$\,mm.
+\item[$\Gamma_6$] \emph{Invasion and spread.} A local-invasion lesion is contiguous with an accepted primary lesion
+(within $3$\,mm). A non-contiguous lesion in an organ that is also a metastatic site is treated as distant, and otherwise
+excluded. A distant lesion's prompt is coherent: $\ge80\%$ of the prompted mask lies inside $E_h$.
+\end{itemize}
+Rules that depend only on whether the second model agrees are not constraints: they are expressed by $\pi_a$ in
+Eq.~\eqref{eq:tumor_prior} and decided by the image. These rules are "unconfirmed", "single model without VT in the
+host", and "distant lesion without BP".
+
+%--------------------------------------------------------------------------------------------------------------------
+\paragraph{Statistical recall and rejection: $\phi_{\mathrm{obs}}(Z,H;X)$.}
+The observation potential grounds every part in the observed image, including parts on which both tumor priors agree. It
+is written as
+\begin{equation}
+\label{eq:obs_def}
+\phi_{\mathrm{obs}}(Z,H;X)=\prod_{a\in\mathcal{A}}\Bigl(\mathbf{1}\bigl[\mathrm{BF}^{(1)}_a\ge\tau\bigr]\;
+\mathbf{1}\bigl[\mathrm{BF}^{(2)}_a\ge\tau\bigr]\;\mathrm{BF}^{(2)}_a\Bigr)^{z_a},\qquad \tau=3,\ \lambda_{\mathrm{obs}}=1,
+\end{equation}
+i.e. $E_{\mathrm{obs}}=-\sum_a z_a\log\mathrm{BF}^{(2)}_a$ on parts that pass both evidence thresholds, and
+$E_{\mathrm{obs}}=+\infty$ otherwise. $\tau=3$ is the conventional threshold for positive evidence~\cite{kass1995bayes}.
+$\mathrm{BF}^{(1)}_a$ is the one-sided Bayes factor (is $a$ different from its local anatomy?), and $\mathrm{BF}^{(2)}_a$
+the two-sided Bayes factor (does $a$ look like the accepted tumor rather than the local anatomy?).
+
+\textit{Image features.}
+\begin{itemize}
+\item For voxel $v$, $\mathbf{f}(v)=(x_v,\mu_v,\sigma_v)$: the intensity, and the mean and standard deviation in its
+$3\times3$ neighbourhood in the acquisition plane.
+\item Within each scan, every feature is mapped to its empirical cumulative distribution over the pooled reference voxels.
+Comparisons are made within the scan and are invariant to monotone intensity transformations, so the same procedure
+applies to CT and MR across scanners and protocols.
+\end{itemize}
+
+\textit{References.}
+\begin{itemize}
+\item The local anatomy $A(a)$ is the set of voxels within $20$\,mm of $a$ that belong to $\hat H_{h(a)}$ or to any
+TotalSegmentator structure, after removing all candidate parts dilated by $2$\,mm and eroding by one voxel. It contains the
+host parenchyma and every surrounding structure: vessels, mediastinum, neighbouring solid organs, and the wall and content
+of hollow organs.
+\item The tumor reference $R_T$ is formed from the agreed parts that passed the one-sided gate, in the same host (the whole
+scan if the host has fewer than $200$ such voxels), eroded by one voxel. If the scan has none, the single-support parts
+that passed the gate are used instead. $R_T$ is therefore always validated by the image, and $a$ itself is always left out
+($R_T\setminus a$).
+\item $\hat p_T$ and $\hat p_A$ are Gaussian kernel density estimates (Scott bandwidth, at most $5000$ voxels) of
+$\mathbf{f}$ on $R_T\setminus a$ and on $A(a)$.
+\end{itemize}
+
+\textit{Statistics.}
+\begin{equation}
+\label{eq:llr}
+D(a)=\mathcal{E}\bigl(\mathbf{f}(a),\,\mathbf{f}(A(a))\bigr),\qquad
+s(a)=\frac{1}{|a|}\sum_{v\in a}\ell(v),\quad
+\ell(v)=\log\frac{\hat p_T(\mathbf{f}(v))}{\hat p_A(\mathbf{f}(v))},
+\end{equation}
+where $\mathcal{E}$ is the energy distance between the two feature distributions and $\ell(v)$ is the voxel log-likelihood
+ratio.
+
+\textit{Calibration.}
+\begin{itemize}
+\item Both statistics are calibrated within the scan against $M=200$ pseudo-parts: copies of $a$'s mask, or spatially
+contiguous blocks of the same volume, placed at random inside a reference region.
+\item Pseudo-parts reproduce the size, shape and spatial correlation of $a$, so no independence between voxels is assumed.
+\item \emph{One-sided.} Pseudo-parts placed in $A(a)$ give the null distribution of $D$ and
+$p_a=\bigl(1+\#\{m: D_m\ge D(a)\}\bigr)/(M+1)$. This is converted into the Bayes-factor bound of~\cite{sellke2001calibration},
+\begin{equation}
+\label{eq:bf1}
+\mathrm{BF}^{(1)}_a=\frac{1}{-e\,p_a\ln p_a}\quad(p_a<e^{-1}),\qquad \mathrm{BF}^{(1)}_a=1\ \text{otherwise}.
+\end{equation}
+\item \emph{Two-sided.} Pseudo-parts drawn from $R_T\setminus a$ and from $A(a)$ give the sampling densities $g_T$ and $g_A$
+of $s$, and
+\begin{equation}
+\label{eq:bf2}
+\mathrm{BF}^{(2)}_a=\frac{g_T\bigl(s(a)\bigr)}{g_A\bigl(s(a)\bigr)}.
+\end{equation}
+\end{itemize}
+
+\textit{Decision.} Substituting Eqs.~\eqref{eq:tumor_prior}, \eqref{eq:logic} and~\eqref{eq:obs_def} into
+Eq.~\eqref{eq:part_posterior}, the MAP label of a feasible part ($\prod_k\Gamma_k=1$) is
+\begin{equation}
+\label{eq:decision}
+\hat z_a=1\iff \mathrm{BF}^{(1)}_a\ge3,\quad \mathrm{BF}^{(2)}_a\ge3,\quad
+\operatorname{logit}\pi_a+\log\mathrm{BF}^{(2)}_a\ge0.
+\end{equation}
+Because $\pi_a\ge0.25$ (prior odds $\ge1/3$), the last condition holds whenever $\mathrm{BF}^{(2)}_a\ge3$. Positive image
+evidence is therefore the single acceptance threshold for every part. A part without image evidence is rejected even if
+both models propose it, and a part with evidence is accepted even if one model proposes it or neither does. The priors set
+the order of inference and decide which parts may form $R_T$; they are ablated in Section~X.
+
+\textit{Inference order.} $R_T$ depends on which parts are accepted, so the MAP solution is computed in a fixed order.
+\begin{enumerate}
+\item \emph{Gate.} Every feasible lesion part is tested one-sided ($\mathrm{BF}^{(1)}\ge3$). Parts without evidence are
+rejected.
+\item \emph{Tumor reference.} $R_T$ is built from the gated parts as defined above.
+\item \emph{Two-sided decision.} Every gated part is accepted or rejected by Eq.~\eqref{eq:decision} (statistical
+rejection). A lesion that the logical admission would have dropped only for lack of a second model is admitted if its core
+is accepted (statistical recovery). Single-support parts of accepted lesions that fail are removed (trimming).
+\item \emph{Recall.} Recall parts of accepted lesions are tested by Eq.~\eqref{eq:decision} with $\pi=0.25$, and accepted
+parts are added to their lesion (statistical recall).
+\end{enumerate}
+Accepted parts are re-assembled into lesions and re-ranked by $\phi_{\mathrm{logic}}$ and $w_h$ (primary first). The index
+lesion is then measured in the acquisition plane.
+
+
+\section*{Acknowledgments}
+
+Additional information can be given in the template, such as to not include funder information in the acknowledgments section.
+
+\bibliography{sample}
+
+\end{document}

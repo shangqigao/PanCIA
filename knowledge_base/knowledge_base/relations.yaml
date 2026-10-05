@@ -1,4 +1,4 @@
-version: 0.5.5
+version: 0.5.6
 relations:
 - src: kidney
   type: has_part
@@ -7,6 +7,7 @@ relations:
   staging:
   - confined
   - location
+  spatial: inside
 - src: kidney
   type: has_part
   dst: renal_medulla
@@ -14,6 +15,7 @@ relations:
   staging:
   - confined
   - location
+  spatial: inside
 - src: kidney
   type: has_part
   dst: renal_pelvis
@@ -21,6 +23,7 @@ relations:
   staging:
   - confined
   - location
+  spatial: inside
 - src: kidney
   type: has_part
   dst: renal_sinus_fat
@@ -28,6 +31,7 @@ relations:
   staging:
   - confined
   - location
+  spatial: inside
 - src: kidney
   type: invested_by
   dst: perinephric_fat
@@ -178,60 +182,70 @@ relations:
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: liver
   type: has_part
   dst: liver_segment_II
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: liver
   type: has_part
   dst: liver_segment_III
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: liver
   type: has_part
   dst: liver_segment_IV
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: liver
   type: has_part
   dst: liver_segment_V
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: liver
   type: has_part
   dst: liver_segment_VI
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: liver
   type: has_part
   dst: liver_segment_VII
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: liver
   type: has_part
   dst: liver_segment_VIII
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: liver
   type: has_part
   dst: liver_lobe
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: liver
   type: has_part
   dst: intrahepatic_bile_ducts
   side_link: any
   staging:
   - obstruction
+  spatial: inside
 - src: liver
   type: invested_by
   dst: peritoneum
@@ -394,6 +408,7 @@ relations:
   staging:
   - confined
   - location
+  spatial: inside
 - src: uterus
   type: has_part
   dst: myometrium
@@ -402,6 +417,7 @@ relations:
   - confined
   - location
   note: UCEC T1a/T1b = depth of myometrial invasion
+  spatial: inside
 - src: uterus
   type: has_part
   dst: junctional_zone
@@ -409,6 +425,7 @@ relations:
   staging:
   - confined
   - location
+  spatial: inside
 - src: uterus
   type: has_part
   dst: cervix
@@ -418,6 +435,7 @@ relations:
   - location
   - adjacent_invasion
   note: 'UCEC T2: cervical stromal invasion (has_part anchor with an invasion tag = invasion route)'
+  spatial: inside
 - src: uterus
   type: adjacent_to
   dst: vagina
@@ -536,6 +554,7 @@ relations:
   staging:
   - confined
   note: FIGO IB by stromal invasion depth / size
+  spatial: inside
 - src: cervix
   type: invested_by
   dst: parametrium
@@ -635,6 +654,7 @@ relations:
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: vagina
   type: adjacent_to
   dst: urethra
@@ -665,6 +685,7 @@ relations:
   side_link: same
   staging:
   - location
+  spatial: encloses
 - src: ovary
   type: adjacent_to
   dst: uterus
@@ -774,6 +795,7 @@ relations:
   staging:
   - confined
   - location
+  spatial: inside
 - src: prostate
   type: has_part
   dst: prostate_transition_zone
@@ -781,6 +803,7 @@ relations:
   staging:
   - confined
   - location
+  spatial: inside
 - src: prostate
   type: invested_by
   dst: neurovascular_bundle
@@ -892,6 +915,7 @@ relations:
   staging:
   - confined
   note: T2 muscularis propria
+  spatial: inside
 - src: urinary_bladder
   type: invested_by
   dst: perivesical_fat
@@ -1138,30 +1162,35 @@ relations:
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: colon
   type: has_part
   dst: colon_ascending
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: colon
   type: has_part
   dst: colon_transverse
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: colon
   type: has_part
   dst: colon_descending
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: colon
   type: has_part
   dst: colon_sigmoid
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: colon
   type: has_part
   dst: rectum
@@ -1170,6 +1199,7 @@ relations:
   staging:
   - location
   note: TS colon class includes rectum; rectal relations (READ) are not walked from the colon
+  spatial: contiguous
 - src: colon
   type: invested_by
   dst: peritoneum
@@ -1314,12 +1344,14 @@ relations:
   staging:
   - confined
   note: T1–T3 wall layers
+  spatial: inside
 - src: stomach
   type: has_part
   dst: gastroesophageal_junction
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: stomach
   type: invested_by
   dst: peritoneum
@@ -1594,24 +1626,28 @@ relations:
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: pancreas
   type: has_part
   dst: pancreas_body
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: pancreas
   type: has_part
   dst: pancreas_tail
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: pancreas
   type: has_part
   dst: pancreas_uncinate
   side_link: any
   staging:
   - location
+  spatial: inside
 - src: pancreas
   type: has_duct
   dst: pancreatic_duct
@@ -1765,30 +1801,35 @@ relations:
   side_link: left
   staging:
   - location
+  spatial: inside
 - src: lung
   type: has_part
   dst: lung_left_lower_lobe
   side_link: left
   staging:
   - location
+  spatial: inside
 - src: lung
   type: has_part
   dst: lung_right_upper_lobe
   side_link: right
   staging:
   - location
+  spatial: inside
 - src: lung
   type: has_part
   dst: lung_right_middle_lobe
   side_link: right
   staging:
   - location
+  spatial: inside
 - src: lung
   type: has_part
   dst: lung_right_lower_lobe
   side_link: right
   staging:
   - location
+  spatial: inside
 - src: lung
   type: has_part
   dst: main_bronchus
@@ -1796,6 +1837,7 @@ relations:
   staging:
   - location
   note: T2 main bronchus without carina
+  spatial: contiguous
 - src: lung
   type: has_part
   dst: bronchial_tree
@@ -1803,6 +1845,7 @@ relations:
   staging:
   - obstruction
   note: atelectasis / obstructive pneumonitis T2
+  spatial: inside
 - src: lung
   type: invested_by
   dst: pleura
@@ -1953,12 +1996,14 @@ relations:
   side_link: same
   staging:
   - location
+  spatial: inside
 - src: breast
   type: has_part
   dst: nipple
   side_link: same
   staging:
   - location
+  spatial: inside
 - src: breast
   type: adjacent_to
   dst: pectoralis_major
@@ -2224,40 +2269,49 @@ relations:
   side_link: any
   staging:
   - location
+  spatial: contiguous
 - src: aorta
   type: has_part
   dst: superior_mesenteric_artery
   side_link: any
+  spatial: contiguous
 - src: aorta
   type: has_part
   dst: renal_artery
   side_link: any
+  spatial: contiguous
 - src: aorta
   type: has_part
   dst: iliac_artery
   side_link: any
+  spatial: contiguous
 - src: iliac_artery
   type: has_part
   dst: internal_iliac_artery
   side_link: same
   staging:
   - location
+  spatial: contiguous
 - src: iliac_vein
   type: has_part
   dst: internal_iliac_vein
   side_link: same
+  spatial: contiguous
 - src: inferior_vena_cava
   type: has_part
   dst: iliac_vein
   side_link: any
+  spatial: contiguous
 - src: inferior_vena_cava
   type: has_part
   dst: renal_vein
   side_link: any
+  spatial: contiguous
 - src: inferior_vena_cava
   type: has_part
   dst: hepatic_veins
   side_link: any
+  spatial: contiguous
 - src: heart
   type: invested_by
   dst: pericardium
@@ -2290,6 +2344,7 @@ relations:
   side_link: any
   staging:
   - location
+  spatial: contiguous
 - src: trachea
   type: adjacent_to
   dst: esophagus
@@ -2328,10 +2383,12 @@ relations:
   type: has_part
   dst: spinal_cord
   side_link: any
+  spatial: contiguous
 - src: spine
   type: has_part
   dst: sacrum
   side_link: any
+  spatial: group
 - src: sacrum
   type: adjacent_to
   dst: rectum
@@ -2388,6 +2445,7 @@ relations:
   side_link: same
   staging:
   - location
+  spatial: group
 - src: pelvic_sidewall
   type: adjacent_to
   dst: iliac_artery
@@ -2406,30 +2464,37 @@ relations:
   side_link: same
   note: 'TS total/total_mr segment the iliopsoas; psoas major presence is implied by it (planner: implied_by_whole), its own extent needs the
     abdominal_muscles task or VoxTell'
+  spatial: inside
 - src: skeletal_muscle
   type: has_part
   dst: psoas
   side_link: any
+  spatial: group
 - src: skeletal_muscle
   type: has_part
   dst: autochthon
   side_link: any
+  spatial: group
 - src: skeletal_muscle
   type: has_part
   dst: rectus_abdominis
   side_link: any
+  spatial: group
 - src: skeletal_muscle
   type: has_part
   dst: iliopsoas
   side_link: any
+  spatial: group
 - src: skeletal_muscle
   type: has_part
   dst: gluteus
   side_link: any
+  spatial: group
 - src: skeletal_muscle
   type: has_part
   dst: pectoralis_major
   side_link: any
+  spatial: group
 - src: lung
   type: landmark_for
   dst: spine
@@ -2500,143 +2565,172 @@ relations:
   dst: vertebra_C1
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_C2
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_C3
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_C4
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_C5
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_C6
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_C7
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T1
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T2
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T3
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T4
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T5
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T6
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T7
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T8
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T9
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T10
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T11
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_T12
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_L1
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_L2
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_L3
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_L4
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_L5
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_S1
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_S2
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_S3
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_S4
   side_link: any
   no_expand: true
+  spatial: group
 - src: spine
   type: has_part
   dst: vertebra_S5
   side_link: any
   no_expand: true
+  spatial: group
