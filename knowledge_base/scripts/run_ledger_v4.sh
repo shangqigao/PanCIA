@@ -1,8 +1,7 @@
 #!/bin/bash
-# Ledger v4 (stage 3 + R2 calibrated EM) on the baseline-study series, CSD3 CPU, as a SLURM array.
+# Ledger v4 (stage 3 + R2 calibrated EM) on the baseline-study series, CSD3 ampere (CPU-only code; GPU account), as a SLURM array.
 #
-#   sbatch scripts/run_ledger_v4.sh                      # 16 shards over scripts/rel_list_baseline.txt (3,291 series)
-#   NSHARD=32 sbatch --array=0-31 scripts/run_ledger_v4_csd3.sh
+#   sbatch scripts/run_ledger_v4.sh                      # 1 task, 1 GPU allocation, all 3,291 series in scripts/rel_list_baseline.txt
 #
 # Resumable: a shard skips series whose <out>/<rel>_lesions.json already exists (rerun the same command after a timeout).
 # Outputs: $SEG_ROOT/Ledger_v4/Radiology/<rel>_lesions.{json,npz} and ledger_summary_<i>of<n>.csv per shard.
@@ -15,9 +14,9 @@
 #SBATCH -A ECI-SL2-GPU
 #SBATCH -J radiopath
 #SBATCH -o log.%x.%A_%a
-#SBATCH --array=0-15
+#SBATCH --array=0                      # one task = one GPU allocation
 #SBATCH --nodes=1
-##SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=32            # the CPU share of one A100 on CSD3; the code itself is CPU-only
 #SBATCH --time=0-36:00:00
 ##SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
@@ -26,23 +25,31 @@
 #SBATCH --gres=gpu:1
 ##SBATCH --qos=intr
 
-set -eo pipefail
-source ~/.bashrc
-conda activate PanCIA
-set -u                                  # after conda: its activate scripts reference unset variables
+echo "[$(date)] start on $(hostname), task ${SLURM_ARRAY_TASK_ID:-none}, $(nproc) cores"
+# Environment setup runs WITHOUT strict mode: ~/.bashrc and conda's activate scripts often return non-zero
+# or reference unset variables, which under set -e/-u would kill the job silently before anything is logged.
+source ~/.bashrc || echo "warning: ~/.bashrc returned $?"
+conda activate PanCIA || { echo "ERROR: conda activate PanCIA failed"; exit 1; }
+echo "python: $(which python)"
+python -c "import numpy, scipy, nibabel, yaml, pandas" || { echo "ERROR: missing python packages"; exit 1; }
+set -euo pipefail
 
 KB_DIR="${KB_DIR:-/home/sg2162/rds/hpc-work/PanCIA/knowledge_base}"
 SEG_ROOT="${SEG_ROOT:-/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg}"
 IMG_ROOT="${IMG_ROOT:-/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_NIFTI}"
 REL_LIST="${REL_LIST:-$KB_DIR/scripts/rel_list_baseline.txt}"
-NSHARD="${NSHARD:-16}"
-WORKERS="${WORKERS:-8}"
+NSHARD="${NSHARD:-1}"                    # must equal the number of array tasks
+WORKERS="${WORKERS:-32}"                 # one worker per core; peak ~5 GB each on the largest boxes
 # large volumes are processed in full on HPC (the local pilot skipped boxes > 45 M voxels)
 DEFAULT_PARAMS='{"em_max_box_vox": 2.5e8}'
 PARAMS="${PARAMS:-$DEFAULT_PARAMS}"
 
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1   # one thread per worker process
 
+for f in "$KB_DIR/scripts/run_lesion_ledger.py" "$KB_DIR/pancia_kb/r2_em.py" "$REL_LIST"; do
+  [ -f "$f" ] || { echo "ERROR: not found: $f"; exit 1; }
+done
+[ -d "$SEG_ROOT" ] && [ -d "$IMG_ROOT" ] || { echo "ERROR: SEG_ROOT or IMG_ROOT not found"; exit 1; }
 echo "shard ${SLURM_ARRAY_TASK_ID}/${NSHARD}  KB=$KB_DIR  SEG=$SEG_ROOT  IMG=$IMG_ROOT  list=$REL_LIST"
 python "$KB_DIR/scripts/run_lesion_ledger.py" \
   --seg_root "$SEG_ROOT" --img_root "$IMG_ROOT" \
