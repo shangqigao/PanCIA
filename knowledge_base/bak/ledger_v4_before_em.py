@@ -65,13 +65,12 @@ import numpy as np
 from scipy import ndimage
 from .adapter import _spacing, _envelope, _labels_by_side, host_prior_region
 from .observation import R2P, apply_r2, fill_other
-from .r2_em import EMP, apply_r2_em
 
 P = dict(min_ml=0.5, env_primary_mm=10.0, env_secondary_mm=3.0, contact_mm=3.0, feasible_inside=0.5, host_inside=0.5,
          slab_cover=0.4, slab_aspect=0.25, organ_vol_ratio=0.6, organ_dice2d=0.6, organ_inside=0.8, prompt_gate_inside=0.5, organ_agree_dice=0.7, organ_like_weight=0.3,
          extra_single_inside=0.8, extra_single_ld_mm=10.0, extra_single_min_slices=3, extra_single_z_mm=10.0, coherent_inside=0.8, size_saturation_ml=5.0,
          primary_min_ml=0.2, vt_group_mm=5.0, bp_attach_mm=5.0, attach_other_max=0.5, vt_trace_ml=0.05, trace_mm=3.0,
-         r1=True, r3=True, slice_touch_px=1, acq_ratio=1.5, logic_other=True, **R2P, **EMP)
+         r1=True, r3=True, slice_touch_px=1, acq_ratio=1.5, logic_other=True, **R2P)
 VERSION = 'v4'
 SUPPORT = {'BP+VT': 1.0, 'VT': 0.5, 'BP+VTtrace': 0.5, 'BP_vtsilent': 0.5, 'BP': 0.25}
 PRIOR = dict(primary=1.0, local_invasion=0.3, distant=0.15)
@@ -529,9 +528,8 @@ def build_ledger(rel, seg_root, kb, params=None):
         img_root = p.get('img_root') or os.path.join(os.path.dirname(os.path.normpath(seg_root)), 'TCGA_NIFTI')
         img_path = os.path.join(img_root, manifest['img_name'] + '.nii.gz')
         if os.path.exists(img_path):
-            ctx_ = dict(shape=shape, sp=sp, vox_ml=vox_ml, img=_load(img_path), ax=ax, k=k, bp_u=bp_u, vt_u=vt_u, other=other,
-                        ts_map=md, claims=claims)
-            r2_report = apply_r2_em(out, hosts, ctx_, p) if p['r2_mode'] == 'em' else apply_r2(out, hosts, ctx_, p)
+            r2_report = apply_r2(out, hosts, dict(shape=shape, sp=sp, vox_ml=vox_ml, img=_load(img_path), ax=ax, k=k,
+                                                  bp_u=bp_u, vt_u=vt_u, other=other, ts_map=md), p)
             admitted_primary = [les for les in out if les['status'] == 'admitted' and les['cls'] == 'primary']
         else:
             r2_report = dict(error='image_not_found', path=img_path)
