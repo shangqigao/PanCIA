@@ -1,6 +1,6 @@
 name: PanCIA anchor-centric anatomical knowledge base
-version: 0.5.6
-date: '2026-09-29'
+version: 0.5.7
+date: '2026-10-06'
 author: Shangqi Gao (Crispin Lab) with Claude
 status: draft v0.1 — not yet pilot-verified
 vertebral_order:
@@ -35,9 +35,9 @@ vertebral_order:
 - S5
 - coccyx
 counts:
-  entities: 191
-  anchors: 34
-  relations: 401
+  entities: 204
+  anchors: 39
+  relations: 433
   regions: 14
   landmarks: 13
 sources:

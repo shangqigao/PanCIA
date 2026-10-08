@@ -53,7 +53,8 @@ v4 (3 Oct 2026, R2 = observation consistency phi_obs of the conditional anatomic
   accepted-tumour vs host-parenchyma image densities > 0 (statistical rejection and recall, one MAP rule) - observation.py.
   logic (v4): a lesion inside the primary envelope is assigned to the primary only if < 50 % of it lies inside another organ
   (the same exclusion the 'attached' rule already used; LUSC: a liver-dome lesion within 10 mm of the lung base was a lung
-  primary). v3 = params r2=False, logic_other=False.
+  primary). v3 = params r2=False. logic_other stays False in v4 (7 Oct): the ledger logic is v3's, unchanged; R2 decides from
+  the image under the ledger's priors only.
   v4 R2 (agreed design, 4 Oct 2026): one-sided energy-distance gate against the local anatomy (pseudo-part null, Sellke BF),
   then a cross-fitted two-sided Bayes factor against the tumour reference built from gated parts; BF >= 3; priors
   0.9 / 0.75 / 0.5 / 0.25 (main.tex Eqs. tumor_prior, obs_def - decision). The other-organ region is hole-filled slice-wise.
@@ -71,7 +72,7 @@ P = dict(min_ml=0.5, env_primary_mm=10.0, env_secondary_mm=3.0, contact_mm=3.0, 
          slab_cover=0.4, slab_aspect=0.25, organ_vol_ratio=0.6, organ_dice2d=0.6, organ_inside=0.8, prompt_gate_inside=0.5, organ_agree_dice=0.7, organ_like_weight=0.3,
          extra_single_inside=0.8, extra_single_ld_mm=10.0, extra_single_min_slices=3, extra_single_z_mm=10.0, coherent_inside=0.8, size_saturation_ml=5.0,
          primary_min_ml=0.2, vt_group_mm=5.0, bp_attach_mm=5.0, attach_other_max=0.5, vt_trace_ml=0.05, trace_mm=3.0,
-         r1=True, r3=True, slice_touch_px=1, acq_ratio=1.5, logic_other=True, **R2P, **EMP)
+         r1=True, r3=True, slice_touch_px=1, acq_ratio=1.5, logic_other=False, **R2P, **EMP)
 VERSION = 'v4'
 SUPPORT = {'BP+VT': 1.0, 'VT': 0.5, 'BP+VTtrace': 0.5, 'BP_vtsilent': 0.5, 'BP': 0.25}
 PRIOR = dict(primary=1.0, local_invasion=0.3, distant=0.15)
@@ -358,8 +359,9 @@ def build_ledger(rel, seg_root, kb, params=None):
     ts_map = kb.ts_to_entity.get(task, {})
     prim_labels = [lab_ for lab_, nm in names.items() if ts_map.get(nm, (None,))[0] in prim_ents
                    and (None in prim_sides or (ts_map.get(nm, (None, None)) + (None,))[1] in prim_sides | {None})]
-    # v4: each structure filled slice-wise for enclosed holes (TS excludes tumour from organ masks: an enclosed lesion is a hole)
-    other = fill_other(md, prim_labels, ax) if p['fill_other'] else (md > 0) & ~np.isin(md, prim_labels)
+    # ledger logic (unchanged from v3): the other-organ region is the plain TS label map minus the primary organ(s). The
+    # hole-filled version (fill_other) is R2's image model only and is built in the R2 block below.
+    other = (md > 0) & ~np.isin(md, prim_labels)
 
     # ---- lesions (v2): VoxTell-anchored. core = VT claims U BP voxels within bp_attach_mm of them, grouped by vt_group_mm;
     # the remaining BP voxels form separate BP-only candidates
@@ -529,8 +531,9 @@ def build_ledger(rel, seg_root, kb, params=None):
         img_root = p.get('img_root') or os.path.join(os.path.dirname(os.path.normpath(seg_root)), 'TCGA_NIFTI')
         img_path = os.path.join(img_root, manifest['img_name'] + '.nii.gz')
         if os.path.exists(img_path):
-            ctx_ = dict(shape=shape, sp=sp, vox_ml=vox_ml, img=_load(img_path), ax=ax, k=k, bp_u=bp_u, vt_u=vt_u, other=other,
-                        ts_map=md, claims=claims)
+            other_r2 = fill_other(md, prim_labels, ax) if p['fill_other'] else other   # R2 normal-tissue labels / recall region
+            ctx_ = dict(shape=shape, sp=sp, vox_ml=vox_ml, img=_load(img_path), ax=ax, k=k, bp_u=bp_u, vt_u=vt_u, other=other_r2,
+                        ts_map=md, claims=claims, ts_names=names, kb=kb, ts_task=task)
             r2_report = apply_r2_em(out, hosts, ctx_, p) if p['r2_mode'] == 'em' else apply_r2(out, hosts, ctx_, p)
             admitted_primary = [les for les in out if les['status'] == 'admitted' and les['cls'] == 'primary']
         else:
@@ -571,6 +574,8 @@ def build_ledger(rel, seg_root, kb, params=None):
                   vt_in_primary=vt_in_primary if prim else None, vt_in_host={_hk(q): v for q, v in vt_in_host.items()}, n_claims=len(claims), dropped_claims=dropped, lesions=rows,
                   n_admitted=sum(r['status'] == 'admitted' for r in rows), r2=r2_report)
     crops = {f'lesion_{i}': les['L'] for i, les in enumerate(out) if les['status'] == 'admitted'}
+    if r2_report and r2_report.get('_maps'):
+        crops['_r2maps'] = r2_report.pop('_maps')
     return ledger, crops, ts_img.affine, shape
 
 
@@ -624,6 +629,9 @@ def _coherence(key, hosts, keep, shape):
 
 def save_ledger(ledger, crops, affine, shape, out_prefix):
     os.makedirs(os.path.dirname(out_prefix), exist_ok=True)
+    maps = crops.pop('_r2maps', None)
+    if maps:   # R2 voxel maps for review (r2_em.py): origin = voxel index of the map's corner in the full volume
+        np.savez_compressed(out_prefix + '_r2maps.npz', affine=np.asarray(affine), shape=np.asarray(shape), **maps)
     with open(out_prefix + '_lesions.json', 'w') as f:
         json.dump(ledger, f, indent=1, default=str)
     boxes = {r['id']: r['bbox'] for r in ledger['lesions'] if r['status'] == 'admitted'}

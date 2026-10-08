@@ -1,0 +1,57 @@
+version: 0.5.6
+templates:
+  lateral: '{side} {term}'
+  in_region: '{term} in the {region}'
+  tumour_in_host: '{tumour_phrase}'
+alias_ensemble:
+  n_aliases: 3
+  fusion: majority_vote
+  min_agreement: 2
+  note: main term + first 2 aliases; fuse binary masks by voxel majority
+inference:
+  input: ALWAYS the full volume — VoxTell is trained on whole scans and its text conditioning needs global context; never crop
+  call: one predictor call per scan with every prompt of the plan (image encoder once, text embedded once)
+gate_as_output_filter:
+  rule: after inference, label connected components of each mask; keep components with ≥ min_inside fraction of voxels inside the gate region;
+    drop the rest
+  min_inside: 0.8
+  inside: anchor mask dilated by dilate_mm
+  shell: anchor surface shell inner_mm..outer_mm
+  neighbour_bbox_or_directional_shell: TS bbox of neighbour (dilated) if present, else directional half-shell of the anchor
+  corridor: cylinder of radius_mm between the two endpoints
+  region: region box from landmarks / vertebral levels
+  directional_shell: half-shell on the stated side of the anchor
+  none: no filtering
+  empty_after_filter: if the structure was expected (completion) → record ABSENT (sex-dependent/surgical/variable) or NOT_FOUND (obligatory);
+    otherwise → rejected. No statistical existence test at this stage
+single_pass:
+  rule: ONE VoxTell call per scan with the complete plan; no re-planning after inference. TS + KB are sufficient to compile every prompt (host
+    from cancer type / tumour overlap; profiles of TS-unnameable missing anchors are planned up front and simply come back empty if the anchor
+    is absent)
+  why: a second pass doubles orchestration and failure modes for little gain; VoxTell embeds text once and runs the image encoder once, so extra
+    prompts are cheap
+tiers:
+  tier0: 'ruler prompts if TS vertebrae and fallback landmarks are missing: spine, sacrum, hip bone (used by the reasoning layer for frame/laterality)'
+  tier1: missing anchors from completion under spatial-prior gates — never dropped by the budget
+  tier2: profile items (1–2 hop) of host / TS-unnameable missing / tumour-near anchors — trimmed by the budget
+  note: tiers order and budget prompts; they are NOT separate inference passes
+budget:
+  max_prompts_per_scan: 80
+  order: tumour/ruler prompts, then tier, then priority; host-derived items get a one-step priority boost
+  drop_order: tier-2 items, lowest priority first; tier 0/1 and tumour (tier T) prompts are protected
+  note: raised 60 → 80 in v0.5 so the 4–7 spread-set tumour prompts are not paid for by the host profile
+tumour_prompts:
+  version: '0.5'
+  rule: 'one tier-T prompt "<host term> tumor" per spread-set host (primary, local-invasion neighbours, cancer-specific distant sites) that is
+    in the FOV — unconditioned: never gated on what BP or the initial VoxTell mask found'
+  phrase: entity.tumour_phrase.main (+2 aliases); tier in_vocab / near / ood recorded per prompt for the reliability weight
+  alias_ensemble_primary: the cancer-specific phrases (tumour_prompts.cancer_types[...].phrases) are added for the PRIMARY only when the initial
+    VoxTell tumour mask is empty or below 0.5 ml — a wording ensemble, never a second rater
+  raters: BiomedParse is frozen (never re-run); VT-initial and VT-prompted are the same model asked different questions and count as ONE model
+    for lesion support
+  gate: 'tumour-host region (host mask, dilate 10 mm primary / 3 mm secondary) — NOT applied as the 80 % output filter: tumour claims are admitted
+    by the stage-3 lesion gate (qc_rules.lesion_admission)'
+modality:
+  CT: prefer TS mask when TS reliability ≥ 0.8; VoxTell refine host + vessels
+  MR: TS reliability from pilot; completion always on for pelvic anchors
+encoder_reuse: VoxTell embeds text once; image encoder per volume; pass all prompts of a scan in one predict call (voxtell-predict -p ...)

@@ -1,4 +1,4 @@
-version: 0.5.6
+version: 0.5.7
 landmarks:
 - id: lung_apex
   entity: lung

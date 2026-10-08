@@ -1,0 +1,1 @@
+entity_id,side,modality,n_scans,ts_found_rate,ts_vt_dice_median,vt_plausibility_pass_rate,vt_empty_when_expected_absent_rate,vt_seconds_per_prompt,decision,reviewer,date

@@ -38,8 +38,9 @@ Please provide an abstract of no more than 300 words. Your abstract should expla
     priors $B_C,V_C$ and anatomy $T$. A planner turns the pan-cancer knowledge base $K$ into a scan-specific plan $K_C$,
     which a promptable agent executes to give organ masks $V_K$ and prompted tumor masks. Host reasoning fixes the host
     $\hat H$; tumor reasoning evaluates the prior factors of every candidate (logical feasibility and agreement), without
-    deciding the tumor; image-grounded reasoning then infers the tumor posterior by EM against label-conditional normal
-    tissue models and a scan-specific tumor model, which rejects, recovers and recalls tumor tissue. The accepted tumor is
+    deciding the tumor; image-grounded reasoning then tests every candidate against normal tissue of the same kind in its
+    own neighbourhood, with a cross-fitted, null-calibrated statistic, admits it only on non-negative image evidence, and
+    delineates it by trimming and growing voxels on $3{:}1$ evidence. The accepted tumor is
     organized into a tumor--anatomical graph and a structured report.}
     \label{fig:pipeline}
 \end{figure*}
@@ -251,7 +252,7 @@ likelihood (which candidates
 exist, which are anatomically infeasible, and how probable each
 is a priori) and does not select a tumor configuration while
 ignoring the observation likelihood.
-Its output initializes the tumor posterior; the tumor itself is
+Its output is the tumor prior; the tumor itself is
 inferred only when these factors are combined with the
 observation potential (Eq.~\eqref{eq:log_inference}).
 
@@ -260,9 +261,9 @@ observation potential (Eq.~\eqref{eq:log_inference}).
 The observation consistency potential
 evaluates whether a hypothesized tumor
 configuration is compatible with the
-observed image. We employ statistical rejection to suppress
-candidates that are inconsistent
-with the observed image, \textbf{while statistical recall discovers additional tumor tissue that is consistent with the accepted tumor characteristics}.
+observed image. Each candidate is compared with the normal tissue around it: the candidate's own appearance is
+estimated from its own voxels, the normal appearance from tissue of the same kind in its neighbourhood, and the
+difference is calibrated by normal patches of the candidate's size that pass through the identical procedure.
 Specifically, we define
 \begin{equation}
 \label{eq:observation_potential}
@@ -274,14 +275,15 @@ E_{\mathrm{obs}}(Z,H;X,\psi)
 \right],
 \end{equation}
 where $E_{\mathrm{obs}}$ is a
-statistical inconsistency score comparing a normal-tissue
-model of each anatomical structure with a tumor appearance
-model $\psi$ (Section~\ref{sec:reasoning_details}), and
+statistical inconsistency score, the negative log Bayes factor of each accepted candidate
+(Section~\ref{sec:reasoning_details}), and
 $\lambda_{\mathrm{obs}}$ controls the
 strength of observation consistency.
-The tumor appearance $\psi$ is specific to each scan and
-unknown, so it is estimated jointly with the tumor
-segmentation.
+The tumor appearance $\psi=\{\psi_c\}$ is specific to each candidate, because tumors differ between organs and between
+lesions of the same organ; it is estimated from the candidate itself and is never pooled across candidates or scans,
+so every scan is tested on its own. Statistical rejection removes candidates that look like their normal tissue, and a
+voxel-level delineation then trims clearly normal tissue from accepted candidates and recalls adjacent tissue that
+clearly resembles them.
 
 \paragraph{Joint Tumor--Host Inference.}
 
@@ -317,28 +319,22 @@ configuration with $H\neq\hat H$ has zero probability,
 and the joint maximum is attained at $H=\hat H$.
 The MAP problem therefore reduces exactly to host
 reasoning followed by tumor inference given the host.
-The tumor appearance $\psi$ is a parameter of the observation
-model, not a segmentation, so it is estimated by maximizing the
-marginal likelihood over the candidate labels, and the labels
-are then the MAP configuration given that estimate,
+Given $\hat H$, the tumor log-posterior is a sum of per-candidate terms (Eq.~\eqref{eq:part_posterior}), so the MAP
+problem decouples over candidates: each candidate is decided by its own prior and its own image evidence. The
+candidate-specific appearance $\psi_c$ enters the evidence only through a held-out density ratio
+(Section~\ref{sec:reasoning_details}), which needs no iteration across candidates. The decision adds two requirements to
+the MAP bracket,
 \begin{equation}
 \label{eq:log_inference}
-\begin{aligned}
-\hat\psi&=\arg\max_{\psi}\;\log\sum_{Z}
-\phi_{\mathrm{obs}}(Z,\hat H;X,\psi)\,\phi_{\mathrm{tumor}}(Z,\hat H;B_C,V_C),\\
-\hat Z&=\arg\max_{Z}\;
-\log\phi_{\mathrm{obs}}(Z,\hat H;X,\hat\psi)
-+\log\phi_{\mathrm{tumor}}(Z,\hat H;B_C,V_C).
-\end{aligned}
+\hat z_c=\mathbf{1}\bigl[c\ \text{is tested}\bigr]\;
+\mathbf{1}\bigl[\log\mathrm{BF}_c\ge0\bigr]\;
+\mathbf{1}\bigl[\log\phi_{\mathrm{logic}}(c,\hat H)+\operatorname{logit}\pi_c+\log\mathrm{BF}_c>0\bigr],
 \end{equation}
-The first problem is solved by expectation--maximization over the
-candidate labels and $\psi$ (Section~\ref{sec:reasoning_details}),
-whose E-step yields the posteriors from which $\hat Z$ follows.
-Because the observation evidence is calibrated and the update is
-damped, the procedure is a generalized EM without a monotonicity
-guarantee; its convergence is verified empirically.
-Statistical rejection, recovery and recall are outcomes of
-this single inference.
+so the image evidence is a lower bound: the prior may break a tie in favour of the image but never overrides evidence
+against a candidate, and a candidate on which the image has no power is not admitted on its prior alone but reported
+for expert review. Within an accepted candidate, a two-component EM over tumor and normal voxels describes its
+composition and drives a voxel-level delineation (trimming and growing) with the claim boundary as the voxel prior.
+Statistical rejection, recovery, trimming and recall are therefore outcomes of one model, not separate rules.
 Relaxing the cut, so that tumor evidence also refines the
 host, would turn the procedure into block-coordinate
 ascent over $(Z,H)$; we do not pursue this.
@@ -353,9 +349,16 @@ under uncertainty.
 
 \subsection{Pan-cancer knowledge base and prompt planning}
 \label{sec:kb_planning}
-% Drafted 4 Oct 2026 from knowledge base v0.5.6 (knowledge_base/*.yaml) and the planner (pancia_kb/planner.py,
+% Drafted 4 Oct 2026 from knowledge base v0.5.7 (knowledge_base/*.yaml) and the planner (pancia_kb/planner.py,
 % adapter.py). No equation of Section~\ref{sec:conditional_reasoning} is changed; this section defines how $K$ is
 % built and how the prompt plan $K_C$ of Eq.~\eqref{eq:kb_prior} is produced for each scan.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.9\linewidth]{figs/kb_graph.pdf}
+    \caption{Pan-cancer anatomical knowledge graph}
+    \label{fig:kb_graph}
+\end{figure}
 
 This section describes how the anatomical knowledge base $K$ is built once for all cancer types, and how, for each scan,
 it is turned into the final VT prompt plan $K_C$ of Eq.~\eqref{eq:kb_prior}. $K$ is a curated, image-independent graph;
@@ -364,22 +367,22 @@ No component of $K$ or of the planner uses patient sex, and no rule or constant 
 or a dataset.
 
 \paragraph{Anatomical entities.}
-$K$ contains 191 anatomical entities. Each entity has a category (solid organ, hollow organ, gland, bone, vessel,
+$K$ contains 204 anatomical entities. Each entity has a category (solid organ, hollow organ, gland, bone, vessel,
 lymph-node station, muscle, fascia, fat, duct, space, nerve, landmark or region) and a laterality (left, right, midline
 or bilateral). It also records how it can be observed: the TotalSegmentator classes that represent it for CT and for
 MR, if any; a VT main phrase with up to two aliases, each graded as in-vocabulary, near-vocabulary or
 out-of-vocabulary against the published VT training vocabulary; its craniocaudal span between vertebral anchors;
 whether it is always present, variably present or absent after common surgery; a typical volume range; and, for CT, a
 typical Hounsfield-unit range. Finally, each entity that can host a tumor carries a tumor phrase (for example
-\emph{liver tumor}). Thirty-four entities are \emph{anchors}: structures that TotalSegmentator segments reliably and
+\emph{liver tumor}). Thirty-nine entities are \emph{anchors}: structures that TotalSegmentator segments reliably and
 that therefore fix the coordinate frame of a scan (vertebrae, major vessels and large organs). Landmarks are tied to
 vertebral levels, so that every spatial prior in $K$ is expressed relative to the patient's own skeleton rather than in
 millimetres.
 
 \paragraph{Anatomical relations.}
-Entities are connected by 401 typed, directed relations. Ten relation kinds are defined, of which nine are used:
-\emph{adjacent\_to} (156), \emph{has\_part} (94), \emph{drains\_lymph\_to} (57), \emph{lies\_in} (23),
-\emph{supplied\_by} (17), \emph{invested\_by} (16), \emph{drained\_by} (16), \emph{landmark\_for} (13) and
+Entities are connected by 433 typed, directed relations. Ten relation kinds are defined, of which nine are used:
+\emph{adjacent\_to} (176), \emph{has\_part} (97), \emph{drains\_lymph\_to} (62), \emph{lies\_in} (23),
+\emph{supplied\_by} (21), \emph{invested\_by} (16), \emph{drained\_by} (16), \emph{landmark\_for} (13) and
 \emph{has\_duct} (9); the tenth, \emph{wall\_of}, is reserved. Each relation kind has a fixed spatial gate and a default
 priority. The gate states where the target may lie relative to the source: inside it (\emph{has\_part}), in a shell
 around it (\emph{invested\_by}), in a neighbouring box or directional shell (\emph{adjacent\_to}), in a corridor along
@@ -396,9 +399,10 @@ derived automatically as the entities reached from the primary organ by an \emph
 relation. Each cancer type also has a short ensemble of tumor phrases (for example \emph{lung cancer}, \emph{lung
 tumor}, \emph{lung mass}), and generic templates produce phrases for any host without a curated one. The distant-site lists are user-defined inputs rather than an exhaustive account of metastatic spread. Here we
 restrict each list to the most common metastatic sites reported for that cancer type that are also anchors of $K$, and
-cancer types without a curated list default to liver, lung, adrenal gland and spine. Sites that are not yet anchors of
-$K$, such as the brain, the pleura and distant lymph nodes, are not prompted; a user can extend a list, or add an anchor,
-without changing any other part of the framework, and only the affected cancer types need to be re-planned. The current
+cancer types without a curated list default to liver, lung, adrenal gland and spine. Head-and-neck anchors (brain, oral cavity,
+pharynx, larynx and parotid gland) are part of $K$ but are in no default list, because the body scans considered here
+rarely include the head and neck. Sites that are not anchors, such
+as the pleura and distant lymph nodes, are not prompted. A user can extend a list, or add an anchor, without changing any other part of the framework, and only the affected cancer types need to be re-planned. The current
 base covers 17 TCGA cancer types, plus a CPTAC entry whose cancer type is resolved per case. Adding a new cancer type
 therefore requires only its primary organ, its metastatic sites and, optionally, its phrase ensemble; all other
 knowledge is shared.
@@ -459,10 +463,9 @@ Section~\ref{sec:reasoning_details}.
 
 \subsection{Reasoning details}
 \label{sec:reasoning_details}
-% Revised 5 Oct 2026: two-stage inference. Host and logic reasoning (the implemented lesion ledger, pancia_kb/ledger.py)
-% fixes the candidates and their priors; the tumor posterior is then inferred from the image by a calibrated EM
-% (statistical rejection, recovery and recall in one E-step). All constants are fixed a priori and identical for every
-% cancer type.
+% Revised 9 Oct 2026 (implementation: pancia_kb/ledger.py for host and tumor reasoning, unchanged; pancia_kb/r2_em.py,
+% em_model='candidate', for observation consistency, admission and delineation). All constants are fixed a priori and
+% identical for every cancer type.
 
 This section specifies each potential of Eq.~\eqref{eq:expanded_reasoning}. All operations are performed per scan on the
 native voxel grid of $X$, on which $B_C$, $V_C$, $V_K$ and $T$ are defined. Distances $d(\cdot,\cdot)$ are Euclidean in
@@ -473,37 +476,33 @@ Every constant is fixed before inference, shared by all cancer types, and not tu
 \textit{Inference order.} Under the modular model of Eq.~\eqref{eq:conditional_joint} the MAP problem of
 Eq.~\eqref{eq:map_inference} is solved exactly in two steps. First, host reasoning gives $\hat H$, and tumor reasoning
 given $\hat H$ ($\phi_{\mathrm{BP}}$, $\phi^{\mathrm{tumor}}_{\mathrm{VT}}$, $\phi_{\mathrm{logic}}$) gives the tumor
-candidates and their prior probabilities, which are then fixed. Second, the tumor posterior and the tumor appearance $\psi$
-are inferred from the observed image through $\phi_{\mathrm{obs}}$ (Eq.~\eqref{eq:log_inference}).
+candidates and their prior probabilities, which are then fixed. Second, every candidate is tested against the observed image
+through $\phi_{\mathrm{obs}}$ and decided by Eq.~\eqref{eq:log_inference}; accepted candidates are then delineated.
 The first step is not an optimization over $Z$ that ignores the image, followed by a correction. Given $\hat H$, the
 log-posterior of Eq.~\eqref{eq:part_posterior} is a sum of per-candidate terms
-$z_c\,[\log\phi_{\mathrm{logic}}+\operatorname{logit}\pi_c+\log\mathrm{BF}_c(\psi)]$. Tumor reasoning only evaluates the first
-two terms, which do not depend on $X$ beyond the segmentation priors, for every candidate, including candidates that a
-decision on the priors alone would reject. The maximization over $Z$ (and $\psi$) acts on the full sum and is carried out
-once, by EM, with the priors as initialization ($q_c^{(0)}=\pi_c$). Because the terms are evaluated separately but maximized
-jointly, the order in which they are computed does not change the maximizer. The only exception is the logical constraints
-that couple candidates through their lesion (assignment and containment, multifocality and invasion; $\Gamma_3$--$\Gamma_6$
-below): these are evaluated with the other candidates fixed at the configuration of tumor reasoning, one step of iterated
-conditional modes~\cite{besag1986statistical}, which is exact whenever the final tumor agrees with that configuration on the
-candidates the constraint depends on. Priors are not posteriors: a candidate with a high prior may be wrong and one with a low prior
-may be right, so the image may overturn either.
+$z_c\,[\log\phi_{\mathrm{logic}}+\operatorname{logit}\pi_c+\log\mathrm{BF}_c]$. Tumor reasoning only evaluates the first
+two terms, for every candidate, including candidates that a decision on the priors alone would reject; the decision acts
+on the full sum. The only exception is the logical constraints that couple candidates through their lesion (assignment and
+containment, multifocality and invasion; $\Gamma_3$--$\Gamma_6$ below): these are evaluated with the other candidates
+fixed at the configuration of tumor reasoning, one step of iterated conditional modes~\cite{besag1986statistical}.
+Priors are not posteriors: a candidate with a high prior may be wrong and one with a low prior may be right, so the
+image may overturn either.
 
 \textit{Variables.} The candidates are the source components $\mathcal{C}=\{c_1,\dots,c_n\}$: the connected components
 (26-connectivity) of $B_C$, of $V_C$ and of every VT tumor prompt for a host $h\in\mathcal{H}_C$. Components of different
-sources may overlap; they are never merged or split for inference. Each component has a binary label $z_c\in\{0,1\}$ and
-the tumor segmentation is $Z=\bigcup_{c:\,z_c=1}c\,\cup\,\bigcup_{r:\,z_r=1}r$, where $r$ ranges over recall regions of
-tissue that no model proposed (defined below). Given $\hat H$, the potentials of Eq.~\eqref{eq:expanded_reasoning}
-factorise over the candidates,
+sources may overlap; they are never merged or split for inference. Each component has a binary label $z_c\in\{0,1\}$.
+Given $\hat H$, the potentials of Eq.~\eqref{eq:expanded_reasoning} factorise over the candidates,
 \begin{equation}
 \label{eq:part_posterior}
 \log p(Z\mid \hat H,X,C,K,\psi) = \sum_{c} z_c\Bigl[\underbrace{\log\phi_{\mathrm{logic}}(c,\hat H)}_{0\ \text{or}\ -\infty}
 +\underbrace{\operatorname{logit}\pi_c}_{\phi_{\mathrm{BP}}\,\phi^{\mathrm{tumor}}_{\mathrm{VT}}}
 +\underbrace{\log \mathrm{BF}_c}_{\log\phi_{\mathrm{obs}}}\Bigr] + \mathrm{const},
 \end{equation}
-where $\mathrm{BF}_c=p(s_c\mid z_c=1)/p(s_c\mid z_c=0)$ is the Bayes factor of the image evidence on $c$, carried by a
-scalar image statistic $s_c$ of the candidate (defined with $\phi_{\mathrm{obs}}$ below). The MAP solution sets
-$z_c=1$ exactly when the bracket is non-negative. The paragraphs below define $\phi_{\mathrm{host}}$, the tumor terms and
-$\phi_{\mathrm{obs}}$.
+where $\mathrm{BF}_c$ is the Bayes factor of the image evidence on $c$, carried by a scalar statistic of the candidate
+(defined with $\phi_{\mathrm{obs}}$ below). The tumor segmentation is the union of the delineated accepted candidates,
+$Z=\bigcup_{c:\,\hat z_c=1}\mathcal{D}(c)$, where $\mathcal{D}(c)$ is the candidate after trimming and growing (below).
+The paragraphs below define $\phi_{\mathrm{host}}$, the tumor terms, $\phi_{\mathrm{obs}}$, the decision and the
+delineation.
 
 %--------------------------------------------------------------------------------------------------------------------
 \paragraph{Host reasoning: $\phi_{\mathrm{TS}}(H;T)$ and $\phi^{\mathrm{anat}}_{\mathrm{VT}}(H;V_K)$.}
@@ -597,18 +596,21 @@ candidate on the acquisition slices of $c$ within the host envelope; for VT, no 
 \emph{active} (it proposes tissue nearby but not $c$). The two tumor potentials act jointly as a Bernoulli prior,
 \begin{equation}
 \label{eq:tumor_prior}
-\phi_{\mathrm{BP}}(Z;B_C)\,\phi^{\mathrm{tumor}}_{\mathrm{VT}}(Z;V_C)=\prod_{c}\pi_c^{z_c}(1-\pi_c)^{1-z_c},
-\qquad
-\pi_c=\begin{cases}
-0.9 & \text{the other model proposes},\\
-0.75 & \text{the other model is silent},\\
-0.5 & \text{the other model is active},\\
-0.25 & \text{recall region (no model proposes)}.
+\begin{split}
+\phi_{\mathrm{BP}}(Z;B_C)\,\phi^{\mathrm{tumor}}_{\mathrm{VT}}(Z;V_C)&=\prod_{c}\pi_c^{z_c}(1-\pi_c)^{1-z_c},\\
+\pi_c&=\begin{cases}
+0.9 & \text{other model proposes},\\
+0.75 & \text{other model silent},\\
+0.5 & \text{other model active elsewhere}.
 \end{cases}
+\end{split}
 \end{equation}
 Silence of one model is missing evidence, not evidence against; $0.75$ lies halfway, in log-odds, between agreement and
-contradiction. The priors are fixed before the observation step and are ablated in Section~X.
+contradiction. When tumor reasoning rejected a candidate's lesion only for lack of support from the second model, its prior
+is capped at $0.5$, so that the lesion is recovered only by image evidence. A candidate that violates
+$\phi_{\mathrm{logic}}$ has $\pi_c=0$. The priors are fixed before the observation step and are ablated in Section~X.
 
+%--------------------------------------------------------------------------------------------------------------------
 %--------------------------------------------------------------------------------------------------------------------
 \paragraph{Observation consistency: $\phi_{\mathrm{obs}}(Z,H;X)$.}
 The observation potential grounds every feasible candidate in the observed image, including candidates both models
@@ -618,113 +620,141 @@ propose. With $\lambda_{\mathrm{obs}}=1$ it contributes the log Bayes factor of 
 \phi_{\mathrm{obs}}(Z,H;X)=\prod_{c}\mathrm{BF}_c^{\,z_c},\qquad
 E_{\mathrm{obs}}(Z,H;X)=-\sum_{c} z_c\log\mathrm{BF}_c .
 \end{equation}
-The Bayes factor compares two image models: a \emph{normal} model of the tissue at the candidate's location and a
-\emph{tumor} model of this scan's tumor, which is unknown and is estimated by EM. Three modelling choices make
-Eq.~\eqref{eq:obs_def} a usable likelihood. (i)~The image enters through one statistic per candidate, $s_c$, whose
-sampling distributions are calibrated within the scan, so $\mathrm{BF}_c$ is the exact Bayes factor for the image reduced to
-$s_c$ rather than an approximation to a voxel-level likelihood. (ii)~Candidates of different agents may overlap, so the
-product over candidates is a composite likelihood, one factor per candidate, rather than the likelihood of disjoint regions.
-(iii)~Given $z_c$, the statistic $s_c$, built from intensity and local texture, is assumed conditionally independent of the
-agents' outputs that set $\pi_c$; the prior and the evidence are therefore added in log-odds with weight
-$\lambda_{\mathrm{obs}}=1$, and the sensitivity to this weight is part of the ablation in Section~X.
+The Bayes factor asks one question of each candidate: does it differ from normal tissue of the same kind in its own
+neighbourhood, by more than normal tissue differs from itself? Four choices make Eq.~\eqref{eq:obs_def} a usable
+likelihood. (i)~The image enters through one statistic per candidate, whose null distribution is calibrated on the same
+scan, at the candidate's own size and composition. (ii)~Every candidate has its own tumor model and its own reference;
+nothing is shared between candidates or learned across scans, so any scan is tested on its own. (iii)~Candidates of
+different agents may overlap, so the product over candidates is a composite likelihood, one factor per candidate.
+(iv)~Given $z_c$, the image statistic is assumed conditionally independent of the agents' outputs that set $\pi_c$; prior
+and evidence are added in log-odds with weight $\lambda_{\mathrm{obs}}=1$, and the sensitivity to this weight is part of the
+ablation in Section~X.
+
+\textit{Diagnostic gate.} A scan whose in-plane spacing exceeds $3$\,mm (a scout or localiser) cannot support any lesion:
+no candidate of such a scan is accepted.
 
 \textit{Image features.} For voxel $v$, $\mathbf{f}(v)=(x_v,\mu_v,\sigma_v)$: the intensity, and the mean and standard
-deviation in its $3\times3$ neighbourhood in the acquisition plane. Within each scan every feature is mapped to its
-empirical cumulative distribution over the working region (all voxels within $30$\,mm of the feasible candidates), so
-comparisons are invariant to monotone intensity transformations and the procedure applies unchanged to CT and MR across
-scanners and protocols. All densities below are Gaussian kernel density estimates on these rank features, computed on a
-$24^3$ grid of the rank cube (binned kernel estimates with Scott's bandwidth) and mixed with a $0.1\%$ uniform floor.
+deviation in its $3\times3$ neighbourhood in the acquisition plane. Every feature is mapped to its empirical cumulative
+distribution over the working box (the feasible candidates padded by $70$\,mm), so comparisons are invariant to monotone
+intensity transformations and the procedure applies unchanged to CT and MR across scanners and protocols. All densities
+are Gaussian kernel density estimates on these rank features, computed on a $24^3$ grid of the rank cube (binned
+estimates with Scott's bandwidth) and mixed with a $0.1\%$ uniform floor.
 
-\textit{Normal model (label-conditional).} Every voxel carries an anatomical label $\ell(v)$ from the anatomical priors: the
-hole-filled TotalSegmentator structure or host region $\hat H_h$ that contains it, or \emph{unlabelled tissue}. Because
-organ masks are hole-filled, a candidate enclosed by an organ carries that organ's label. The normal density
-$p_0(\mathbf{f}\mid\ell)$ of each label is estimated from the \emph{normal} voxels of that label: voxels within $20$\,mm of
-any feasible candidate, after removing all candidates (including infeasible ones) dilated by $2$\,mm and eroding by one voxel
-in the acquisition plane; labels with fewer than $200$ such voxels have no normal model. Each voxel of a candidate is thus
-compared with normal tissue of its own kind, and no host assignment is involved.
+\textit{Anatomical labels and normal tissue.} Every voxel carries an anatomical label $\ell(v)$: the hole-filled
+TotalSegmentator structure that contains it, else the host region $\hat H_h$ that contains it (organs only VT delineates),
+else \emph{unlabelled tissue}. Because organ masks are hole-filled, a candidate enclosed by an organ carries that organ's
+label. \emph{Normal} voxels are those outside every candidate (including infeasible ones) dilated by $2$\,mm, within
+$60$\,mm of a feasible candidate, eroded by one voxel in the acquisition plane. A label is \emph{depleted} when at least
+$10\%$ of its voxels in the working box lie inside candidates. Two labels are \emph{siblings} when they have the same
+top-level part-of ancestor in $K$, irrespective of side: all vertebrae, all lobes of both lungs, both kidneys, the
+skeletal muscles.
 
-\textit{Tumor model.} A candidate may contain normal tissue (over-segmentation), and a false-positive candidate may consist
-entirely of normal tissue. The tumor model $p_1(\mathbf{f};\psi)$ is therefore estimated from candidate voxels weighted by
-\begin{equation}
-\label{eq:tumor_weights}
-w_v=\Bigl(\max_{c\ni v}q_c\Bigr)\,r_v,\qquad
-r_v=\frac{\rho\,p_1(\mathbf{f}(v);\psi)}{\rho\,p_1(\mathbf{f}(v);\psi)+(1-\rho)\,p_0(\mathbf{f}(v)\mid\ell(v))},
-\end{equation}
-where $q_c$ is the current posterior of candidate $c$ (a voxel covered by several candidates counts once) and $r_v$ is the
-responsibility of the tumor class in the two-class mixture $\rho\,p_1+(1-\rho)\,p_0(\cdot\mid\ell)$ over candidate voxels,
-obtained by five inner EM iterations that alternate $r_v$, $\rho=\sum_v w_v/\sum_v\max_{c\ni v}q_c$ and $p_1$. Voxels that
-the normal model of their own label explains receive low responsibility and do not contaminate the tumor model.
-
-\textit{Component statistic and calibration.} Neighbouring voxels are correlated, so the evidence is evaluated per
-candidate, not per voxel. With the voxel log-ratio $\lambda(v)=\log p_1(\mathbf{f}(v);\psi)-\log
-p_0(\mathbf{f}(v)\mid\ell(v))$, clipped to $[-5,5]$, the statistic of a candidate is $s_c=\frac{1}{|c|}\sum_{v\in c}\lambda(v)$.
-Its sampling distributions are obtained within the scan from $M=200$ pseudo-candidates of the same volume, built as compact
-blocks (the voxels nearest to a random seed):
+\textit{Reference of a candidate.} For each label $\ell$ that covers at least $5\%$ (or $50$ voxels) of candidate $c$ --
+labels that are siblings share one reference -- the reference $R_c(\ell)$ is
 \begin{itemize}
-\item $g_0$: pseudo-candidates drawn from normal tissue near $c$ with the same label composition as $c$;
-\item $g_1$: pseudo-candidates drawn from candidate voxels, with seeds sampled in proportion to the weights $w_v$.
+\item \emph{tier 0}: the normal voxels of $\ell$ itself within radius $r$ of $c$ (unless $\ell$ is depleted), together with
+\emph{whole} sibling instances that are not depleted and come within $60$\,mm of $c$. Whole instances keep an organ's
+sub-structures in their natural proportions (vertebral body and posterior elements), which the nearest voxels of a
+partly claimed neighbour do not;
+\item \emph{tier 1}, used only when tier 0 is too small: the normal voxels of $\ell$ and all its siblings within radius $r$,
+depleted or not.
 \end{itemize}
-The working region is split into two spatial halves along its longest axis. In fold $k$, $p_0$ and $p_1$ are fitted on half
-$k$, and the candidate's statistic and all pseudo-candidates are computed on the other half (two-fold cross-fitting), so no
-voxel is scored by a density fitted on itself; $\log\mathrm{BF}_c$ is the mean over the folds in which $c$ has at least $20$
-voxels. The candidate is not left out of the tumor model: with a single dominant tumor, leaving it out would leave only its
-over-segmentation and small false positives to represent the tumor. Self-support is limited by the cross-fitting and by the
-responsibilities of Eq.~\eqref{eq:tumor_weights}: a candidate of normal tissue yields $\lambda\approx0$ for itself and for
-normal pseudo-candidates alike, hence $\mathrm{BF}_c\approx1$. Pseudo-candidates use a fixed random stream per candidate and
-fold, so that the iteration is a deterministic map. Then
+The radius grows from $20$ to $60$\,mm in steps of $10$\,mm until each cross-fitting fold of the reference holds at least
+$200$ voxels. The null hypothesis for $c$ is that its voxels are drawn from the reference mixture
+$p_0^{c}=\sum_\ell w_\ell\,p_0(\cdot\mid R_c(\ell))$, with $w_\ell$ the label composition of $c$. A candidate is
+\emph{tested} only if at least half of its voxels have a reference.
+
+\textit{Cross-fitting.} A density never scores the voxels it was fitted on. The normal voxels are split into two folds by a
+three-dimensional checkerboard of $15$\,mm cubes (fold $=$ parity of the sum of the cube indices), so each fold covers the
+whole neighbourhood of every candidate, unlike a split into two halves of the box. The candidate's own voxels are split by
+its own checkerboard: the cube is halved from $15$\,mm until each fold holds at least $50$ voxels, but is never smaller
+than three voxels in-plane and one slice through-plane, because the features use a $3\times3$ in-plane neighbourhood. A
+candidate too small for this has no power. Candidates above $4000$ voxels are thinned at random by a factor
+$\varrho\in\{4,16,64,\dots\}$, each point standing for $\varrho$ voxels; their references are thinned identically.
+
+\textit{Candidate statistic.} In fold $k$ the candidate's own density is the kernel estimate of its fold-$k$ voxels, shrunk
+to the reference, $f_c^{(k)}=(n\,\hat f_c^{(k)}+\kappa\,p_0^{c,(k)})/(n+\kappa)$ with $n$ the voxels represented and
+$\kappa=500$; the voxels of the other fold $o$ are scored,
+\begin{equation}
+\label{eq:heldout}
+s_c=\frac12\sum_{k=1}^{2}\frac{1}{|c^{(o)}|}\sum_{v\in c^{(o)}}
+\operatorname{clip}_{[-5,5]}\Bigl[\log f_c^{(k)}(\mathbf{f}(v))-\log p_0^{c,(k)}(\mathbf{f}(v))\Bigr].
+\end{equation}
+$s_c$ is a held-out log-likelihood ratio in nats per voxel. Because $f_c$ models the candidate's whole content, $s_c$
+measures (tumor fraction)$\times$(contrast) without separating tumor and normal voxels, and it does not grow with the
+candidate's size. A candidate that is normal tissue of its reference gives $s_c$ at the null level whatever its size.
+
+\textit{Calibration.} The null distribution of $s_c$ is obtained from $M=400$ normal patches of the candidate's size and
+label composition, each the nearest points of $R_c(\ell)$ to a random seed, which pass through the identical procedure:
+the candidate's checkerboard, its own held-out density, and the reference with the patch's own voxels removed (exactly, on
+the thinned reference). With $\Delta_c=s_c-\operatorname{median}(s^{0})$ the candidate's contrast and
+$\sigma_c=\operatorname{sd}(s^{0})$ its noise, both in nats per voxel and both specific to the candidate,
 \begin{equation}
 \label{eq:bf}
-\mathrm{BF}_c=\frac{g_1(s_c)}{g_0(s_c)},
+\begin{split}
+\mathrm{BF}_c&=\frac{\int\mathcal{N}(\Delta_c;\delta,\sigma_c^2)\,2\mathcal{N}(\delta;0,\tau^2)\,\mathbf{1}[\delta\ge0]\,d\delta}
+{\mathcal{N}(\Delta_c;0,\sigma_c^2)}\\
+&=\frac{2\sigma_c}{\sqrt{\sigma_c^2+\tau^2}}\exp\Bigl(\frac{\Delta_c^2\tau^2}{2\sigma_c^2(\sigma_c^2+\tau^2)}\Bigr)
+\Phi\Bigl(\frac{\Delta_c\tau}{\sigma_c\sqrt{\sigma_c^2+\tau^2}}\Bigr),
+\end{split}
 \end{equation}
-with $g_0,g_1$ one-dimensional kernel density estimates and $\log\mathrm{BF}_c$ clipped to $[-10,10]$. When the image
-cannot separate tumor from normal tissue (overlapping $g_0$ and $g_1$, or fewer than $200$ reference voxels),
-$\mathrm{BF}_c\approx1$ and the prior decides: absence of evidence is not evidence of absence. A significant difference
-from normal tissue in the direction of the tumor model accepts a candidate whatever its prior, and a candidate that looks
-like normal tissue rather than tumor is rejected whatever its prior.
+with $\log\mathrm{BF}_c$ clipped to $[-10,10]$: the normal hypothesis has true contrast $0$ and the tumor hypothesis a
+half-normal contrast of scale $\tau$. The scale $\tau=0.67$ nats per voxel is fixed before inference by simulation on
+synthetic data only (Gaussian texture, a spherical lesion one normal-tissue standard deviation brighter than its tissue,
+$1$--$80$\,ml, processed by the exact estimator), so it encodes the definition of a visible tumor rather than any patient
+data. All separability comes from the candidate's own $\Delta_c$ and $\sigma_c$: a large claim that matches its
+neighbourhood ($\Delta_c\approx0$, small $\sigma_c$) receives strong evidence against, a small or noisy candidate
+$\mathrm{BF}_c\approx1$, and a clear tumor strong evidence for. A candidate without a reference, too small for its
+folds, or with fewer than $20$ valid null patches is \emph{untested}.
 
-\textit{Recall regions.} Tissue that no model proposed enters the same inference. At iteration $t$, the recall regions
-$\mathcal{R}^{(t)}$ are the connected regions of at least $0.5$\,ml of voxels that (a)~belong to no candidate, (b)~are
-anatomically feasible (inside the envelope $E_h$ of a host with an admitted lesion and outside $\bar O$), (c)~lie within
-$10$\,mm of the union of the original candidates, (d)~touch the current tumor $Z^{(t)}$, and (e)~have $\lambda(v)>0$.
-Condition (c) anchors recall on the candidates, not on the growing tumor, so the tumor cannot expand without bound.
-Condition (e) uses $\lambda$ computed with densities fitted on the whole working region. Each region has prior
-$\pi_r=0.25$. Because recall regions are selected by the statistic they are tested with, the statistic of a region and of
-every pseudo-candidate in $g_0$ and $g_1$ is computed only over voxels that pass the same selection ($\lambda(v)>0$), so the
-null undergoes the same selection as the region. Lesions far from every candidate are not recalled: proposing them is the task of the segmentation models, not of
-the reasoning.
+\textit{Decision.} The posterior is $q_c=\sigma(\operatorname{logit}\pi_c+\log\mathrm{BF}_c)$, and a candidate is
+accepted by Eq.~\eqref{eq:log_inference}: it must be tested, have non-negative evidence and $q_c>0.5$. Statistical rejection
+(a feasible candidate with a high prior that the image explains as normal tissue) and statistical recovery (a candidate
+with a low prior that the image identifies as tumor) are outcomes of this rule. An untested candidate is not admitted on its
+prior, even when both models propose it; it is reported as having no power and referred for expert review.
 
-\textit{Inference (calibrated EM).} Writing $\sigma$ for the logistic function:
-\begin{enumerate}
-\item \emph{Initialisation.} Candidates violating $\phi_{\mathrm{logic}}$ are removed ($\pi_c=0$). For the others,
-$q_c^{(0)}=\pi_c$.
-\item \emph{M-step.} Re-estimate the tumor model $p_1(\cdot;\psi^{(t)})$ from the weights $w_v$. The normal model is fixed
-and anchors the iteration.
-\item \emph{E-step.} For every candidate compute $\mathrm{BF}$ by Eq.~\eqref{eq:bf} and update its posterior log-odds
-$\eta_c=\operatorname{logit}q_c$ towards the target $\operatorname{logit}\pi_c+\log\mathrm{BF}_c^{(t)}$,
+\textit{Candidate composition.} After the decision, each candidate's voxels are described by a two-component mixture,
+$\rho_c\,p_1^{c}+(1-\rho_c)\,p_0(\cdot\mid\ell(v))$, fitted by EM on the candidate's own voxels with the full reference of
+each voxel's label as $p_0$: the tumor component $p_1^{c}$ (the candidate-specific appearance $\psi_c$) is the kernel
+estimate of the voxels weighted by their responsibilities $r_v$, and $\rho_c$ has a $\mathrm{Beta}(2,2)$ prior (ten
+iterations, $\rho_c\in[0.02,0.98]$). This fit decides nothing: it yields the tumor fraction $\rho_c$, the voxel log-ratio
+$\lambda(v)=\operatorname{clip}_{[-5,5]}[\log p_1^{c}(\mathbf{f}(v))-\log p_0(\mathbf{f}(v)\mid\ell(v))]$ used for
+delineation, and the maps shown to the reader.
+
+\textit{Delineation: trimming and recall.} The extent of an accepted candidate is decided given that it is a tumor
+(admission has already used $q_c$), with the claim boundary as the voxel prior: a voxel inside the claim is tumor with
+prior $0.75$, a voxel outside with prior $0.25$. A voxel crosses the boundary only on $3{:}1$ image evidence. With
+$\bar\lambda(v)$ the mean of $\lambda$ over the $3\times3$ in-plane neighbourhood within the same voxel set,
 \begin{equation}
-\label{eq:decision}
-\eta_c^{(t+1)}=(1-d_t)\,\eta_c^{(t)}+d_t\bigl(\operatorname{logit}\pi_c+\log\mathrm{BF}_c^{(t)}\bigr),\qquad
-q_c^{(t+1)}=\sigma\bigl(\eta_c^{(t+1)}\bigr),
+\label{eq:delineation}
+\begin{aligned}
+\text{trim } v\in c &\iff \sigma\bigl(\operatorname{logit}0.75+\bar\lambda(v)\bigr)<\tfrac12 \iff \bar\lambda(v)<-\log3,\\
+\text{grow } v\notin c &\iff \sigma\bigl(\operatorname{logit}0.25+\bar\lambda(v)\bigr)\ge\tfrac12 \iff \bar\lambda(v)\ge\log3,
+\end{aligned}
 \end{equation}
-with $d_0=1$, $d_t=0.5$ for $t<5$ and $d_t=1/(t-3)$ afterwards. Then regenerate $\mathcal{R}^{(t+1)}$ from the current
-tumor $Z^{(t+1)}$ and score each recall region in the same way ($q_r=\sigma(\operatorname{logit}\pi_r+\log\mathrm{BF}_r)$).
-\item \emph{Stop} when the accepted set is unchanged and $\max_c|q_c^{(t+1)}-q_c^{(t)}|<0.01$, or after $30$ iterations.
-\end{enumerate}
-The damping is needed because the calibrated E-step is not an exact EM step: when a large candidate changes label, the tumor
-model changes with it, and an undamped update can oscillate between two tumor models. The decreasing step size makes
-$\eta_c$ a running average of its targets, so such a cycle is averaged out and the iteration converges.
-The MAP label is $\hat z_c=1$ when $q_c>0.5$, i.e. $\operatorname{logit}\pi_c+\log\mathrm{BF}_c>0$, which is the
-bracket of Eq.~\eqref{eq:part_posterior}. An exact tie ($\pi_c=0.5$ and $\mathrm{BF}_c=1$, a contradicted candidate on which
-the image has no power) keeps the decision of tumor reasoning for its lesion. Statistical rejection (a feasible candidate with a high prior that the image
-explains as normal tissue), statistical recovery (a candidate with a low prior that the image identifies as tumor) and
-statistical recall (unproposed tissue adjacent to the tumor that the image identifies as tumor) are therefore outcomes of
-one inference, not separate rules. The prior only initialises the tumor model; the posterior balances it against the data
-likelihood.
+so normal tissue must be at least three times more likely than the candidate's tumor appearance to be trimmed, and the
+reverse to be recalled; ambiguous voxels stay on the side the segmentation agents put them. Geometric conditions apply:
+\begin{itemize}
+\item \emph{Trimming} removes a connected region of failing voxels only if it reaches the candidate's border and holds at
+least $\max(0.5\,\mathrm{ml},\,10\%)$ of the candidate. Holes enclosed by what remains, in 3D or in the acquisition plane
+(necrosis, a cavity), are kept, and remaining pieces below $0.5$\,ml are dropped. Voxels whose reference is a tier-1
+remnant (their organ is mostly claimed, so the remnant may be the same tumor) are not trimmed. A candidate with
+$\log\mathrm{BF}_c\ge\log3$ is never trimmed away entirely; when no voxel passes on its own, the candidate is kept as
+claimed and flagged as a diffuse change without voxel-level support.
+\item \emph{Recall} (growing) admits voxels within $10$\,mm of the kept part of the candidate, inside the envelope $E_h$ of
+its lesion's host and outside $\bar O$ unless in $\hat H_h$, not claimed by any candidate, and connected to the kept part.
+Lesions far from every candidate are not recalled: proposing them is the task of the segmentation models.
+\end{itemize}
+For display, the voxel posterior is $q_c\,\sigma(\operatorname{logit}0.75+\lambda(v))$ inside a candidate and
+$q_c\,\sigma(\operatorname{logit}0.25+\lambda(v))$ around it, so that it is continuous, never exactly zero, and dark exactly
+where trimming applies.
 
-\textit{Output.} The lesions of tumor reasoning keep their identity. The mask of each lesion becomes the union of its
-accepted candidates and of the accepted recall regions touching it. A lesion with no accepted candidate is rejected, and a
-lesion rejected only for lack of a second model is admitted if any of its candidates is accepted. Lesions are then ranked by
-$w_h$ (primary first), and the index lesion is measured in the acquisition plane.
+\textit{Output.} The lesions of tumor reasoning keep their identity. The mask of each lesion is the union of the delineated
+accepted candidates assigned to it; it never inherits voxels accepted for another, overlapping lesion. A lesion none of
+whose candidates was assigned to it (each candidate is assigned to the lesion it overlaps most) is judged by the candidates
+that claim its voxels, restricted to its own voxels. A lesion is admitted if at least one of its candidates is accepted and
+keeps voxels after delineation; a lesion none of whose candidates was tested is not admitted and is flagged for expert
+review. Lesions are then ranked by $w_h$ (primary first), and the index lesion is measured in the acquisition plane.
 
 
 \section*{Acknowledgments}

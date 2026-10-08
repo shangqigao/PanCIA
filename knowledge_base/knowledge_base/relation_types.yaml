@@ -1,4 +1,4 @@
-version: 0.5.6
+version: 0.5.7
 relation_types:
 - id: has_part
   meaning: sub-structure of the anchor; supports confined-to-organ and intra-organ location

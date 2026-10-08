@@ -1,4 +1,4 @@
-version: 0.5.6
+version: 0.5.7
 relations:
 - src: kidney
   type: has_part
@@ -1191,6 +1191,15 @@ relations:
   staging:
   - location
   spatial: inside
+- src: colon
+  type: has_part
+  dst: appendix
+  side_link: any
+  no_expand: true
+  staging:
+  - location
+  note: v0.5.7; arises from the caecum
+  spatial: contiguous
 - src: colon
   type: has_part
   dst: rectum
@@ -2389,6 +2398,228 @@ relations:
   dst: sacrum
   side_link: any
   spatial: group
+- src: brain
+  type: has_part
+  dst: brainstem
+  side_link: any
+  staging:
+  - location
+  spatial: inside
+- src: brain
+  type: has_part
+  dst: cerebellum
+  side_link: any
+  staging:
+  - location
+  spatial: inside
+- src: brain
+  type: adjacent_to
+  dst: skull
+  side_link: any
+  direction: any
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: calvarial / skull-base extension
+- src: brainstem
+  type: adjacent_to
+  dst: spinal_cord
+  side_link: any
+  direction: inferior
+  contact: continuous
+- src: skull
+  type: adjacent_to
+  dst: vertebra_C1
+  side_link: any
+  direction: inferior
+  contact: articulates
+- src: brain
+  type: supplied_by
+  dst: common_carotid_artery
+  side_link: any
+  note: via the internal carotid arteries (not separate KB entities)
+- src: nasal_cavity
+  type: adjacent_to
+  dst: brain
+  side_link: any
+  direction: superior
+  contact: separated_by_skull_base
+  staging:
+  - adjacent_invasion
+- src: nasal_cavity
+  type: adjacent_to
+  dst: eye
+  side_link: any
+  direction: lateral
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: pharynx
+  type: adjacent_to
+  dst: nasal_cavity
+  side_link: any
+  direction: superior
+  contact: continuous
+  staging:
+  - adjacent_invasion
+- src: pharynx
+  type: adjacent_to
+  dst: oral_cavity
+  side_link: any
+  direction: anterior
+  contact: continuous
+  staging:
+  - adjacent_invasion
+- src: pharynx
+  type: adjacent_to
+  dst: larynx
+  side_link: any
+  direction: anterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: pharynx
+  type: adjacent_to
+  dst: spine
+  side_link: any
+  direction: posterior
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: prevertebral space
+- src: pharynx
+  type: adjacent_to
+  dst: parotid_gland
+  side_link: any
+  direction: lateral
+  contact: near
+  staging:
+  - adjacent_invasion
+  note: parapharyngeal space
+- src: pharynx
+  type: adjacent_to
+  dst: esophagus
+  side_link: any
+  direction: inferior
+  contact: continuous
+- src: larynx
+  type: adjacent_to
+  dst: trachea
+  side_link: any
+  direction: inferior
+  contact: continuous
+  staging:
+  - adjacent_invasion
+- src: larynx
+  type: adjacent_to
+  dst: thyroid
+  side_link: any
+  direction: anterior_lateral
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: oral_cavity
+  type: adjacent_to
+  dst: submandibular_gland
+  side_link: any
+  direction: inferior_lateral
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: oral_cavity
+  type: adjacent_to
+  dst: skull
+  side_link: any
+  direction: superior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+  note: mandible / maxilla
+- src: parotid_gland
+  type: adjacent_to
+  dst: skull
+  side_link: same
+  direction: medial
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: larynx
+  type: adjacent_to
+  dst: pharynx
+  side_link: any
+  direction: posterior
+  contact: abuts
+  staging:
+  - adjacent_invasion
+- src: larynx
+  type: adjacent_to
+  dst: esophagus
+  side_link: any
+  direction: posterior_inferior
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: oral_cavity
+  type: adjacent_to
+  dst: pharynx
+  side_link: any
+  direction: posterior
+  contact: continuous
+  staging:
+  - adjacent_invasion
+- src: parotid_gland
+  type: adjacent_to
+  dst: pharynx
+  side_link: any
+  direction: medial
+  contact: near
+  staging:
+  - adjacent_invasion
+- src: larynx
+  type: supplied_by
+  dst: common_carotid_artery
+  side_link: any
+  note: via the external carotid branches
+- src: larynx
+  type: drains_lymph_to
+  dst: ln_cervical
+  side_link: any
+  staging:
+  - nodal
+- src: pharynx
+  type: supplied_by
+  dst: common_carotid_artery
+  side_link: any
+  note: via the external carotid branches
+- src: pharynx
+  type: drains_lymph_to
+  dst: ln_cervical
+  side_link: any
+  staging:
+  - nodal
+- src: oral_cavity
+  type: supplied_by
+  dst: common_carotid_artery
+  side_link: any
+  note: via the external carotid branches
+- src: oral_cavity
+  type: drains_lymph_to
+  dst: ln_cervical
+  side_link: any
+  staging:
+  - nodal
+- src: parotid_gland
+  type: drains_lymph_to
+  dst: ln_cervical
+  side_link: same
+  staging:
+  - nodal
+- src: submandibular_gland
+  type: drains_lymph_to
+  dst: ln_cervical
+  side_link: same
+  staging:
+  - nodal
 - src: sacrum
   type: adjacent_to
   dst: rectum

@@ -1,4 +1,4 @@
-version: 0.5.6
+version: 0.5.7
 entities:
 - id: vertebra_C1
   name: C1 vertebra
@@ -1055,6 +1055,394 @@ entities:
     vocab_match: spinal cord
     unsided_label: false
     train_volumes: 5433
+    source: table10_train+table7_test+hf_v1.1
+- id: brain
+  name: Brain
+  category: organ
+  laterality: none
+  voxtell:
+    main: brain
+    aliases: []
+  ts:
+    total: brain
+    total_mr: brain
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  volume_ml:
+    min: 1000
+    max: 1700
+  is_anchor: true
+  anchor:
+    span:
+    - C1
+    - C1
+    span_var: 1
+    position:
+      lr: midline
+      ap: mid
+    presence: obligatory
+    spatial_prior:
+    - landmark: spinal_cord
+      relation: superior_to
+      dist_mm:
+      - 0
+      - 60
+  notes: intracranial; span C1–C1 means at or above C1 (the vertebral order starts at C1)
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: brain
+    unsided_label: false
+    train_volumes: 4330
+    source: table10_train+hf_v1.1
+  tumour_phrase:
+    main: brain tumor
+    aliases:
+    - brain lesion
+    - brain mass
+    tier: in_vocab
+    vocab_match: brain tumor
+    unsided_label: false
+  tumour_host: true
+- id: brainstem
+  name: Brainstem
+  category: organ
+  laterality: none
+  voxtell:
+    main: brainstem
+    aliases:
+    - brain stem
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: brainstem
+    unsided_label: false
+    train_volumes: 7360
+    source: table10_train+table7_test+hf_v1.1
+- id: cerebellum
+  name: Cerebellum
+  category: organ
+  laterality: none
+  voxtell:
+    main: cerebellum
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: cerebellum
+    unsided_label: false
+    train_volumes: 70
+    source: table10_train+hf_v1.1
+- id: skull
+  name: Skull
+  category: bone
+  laterality: none
+  voxtell:
+    main: skull
+    aliases:
+    - cranium
+  ts:
+    total: skull
+  modality:
+  - CT
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: skull
+    unsided_label: false
+    train_volumes: 3358
+    source: table10_train+hf_v1.1
+- id: eye
+  name: Eye
+  category: organ
+  laterality: bilateral
+  voxtell:
+    main: '{side} eye'
+    aliases:
+    - '{side} eyeball'
+  ts:
+    head_glands_cavities:
+      left: eye_left
+      right: eye_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left eye
+    unsided_label: false
+    train_volumes: 3505
+    source: table10_train+table7_test+hf_v1.1
+- id: nasal_cavity
+  name: Nasal cavity
+  category: space
+  laterality: none
+  voxtell:
+    main: nasal cavity
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: nasal cavity
+    unsided_label: false
+    train_volumes: 533
+    source: table10_train+hf_v1.1
+- id: oral_cavity
+  name: Oral cavity
+  category: space
+  laterality: none
+  voxtell:
+    main: oral cavity
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - C1
+    - C3
+    span_var: 1
+    position:
+      lr: midline
+      ap: anterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: spine
+      relation: anterior_to
+      dist_mm:
+      - 20
+      - 90
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: oral cavity
+    unsided_label: false
+    train_volumes: 204
+    source: table10_train+hf_v1.1
+  tumour_phrase:
+    main: oral cavity tumor
+    aliases:
+    - oral cavity mass
+    - oral cavity lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
+- id: pharynx
+  name: Pharynx
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: pharynx
+    aliases:
+    - throat
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - C1
+    - C6
+    span_var: 1
+    position:
+      lr: midline
+      ap: posterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: spine
+      relation: anterior_to
+      dist_mm:
+      - 0
+      - 20
+  notes: naso-, oro- and hypopharynx; TS head_glands_cavities has the three parts
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: pharynx
+    unsided_label: false
+    train_volumes: 532
+    source: table10_train+hf_v1.1
+  tumour_phrase:
+    main: pharynx tumor
+    aliases:
+    - pharynx mass
+    - pharynx lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
+- id: larynx
+  name: Larynx
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: larynx
+    aliases: []
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - C3
+    - C6
+    span_var: 1
+    position:
+      lr: midline
+      ap: anterior
+    presence: obligatory
+    spatial_prior:
+    - landmark: trachea
+      relation: superior_to
+      dist_mm:
+      - 0
+      - 20
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: larynx
+    unsided_label: false
+    train_volumes: 3455
+    source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: larynx tumor
+    aliases:
+    - larynx mass
+    - larynx lesion
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
+- id: parotid_gland
+  name: Parotid gland
+  category: gland
+  laterality: bilateral
+  voxtell:
+    main: '{side} parotid gland'
+    aliases: []
+  ts:
+    head_glands_cavities:
+      left: parotid_gland_left
+      right: parotid_gland_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: true
+  anchor:
+    span:
+    - C1
+    - C2
+    span_var: 1
+    position:
+      lr: bilateral
+      ap: posterior
+    presence: obligatory
+    spatial_prior: []
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left parotid gland
+    unsided_label: false
+    train_volumes: 3636
+    source: table10_train+table7_test+hf_v1.1
+  tumour_phrase:
+    main: '{side} parotid gland tumor'
+    aliases:
+    - '{side} parotid gland mass'
+    - '{side} parotid gland lesion'
+    tier: near
+    vocab_match: null
+    unsided_label: false
+  tumour_host: true
+- id: submandibular_gland
+  name: Submandibular gland
+  category: gland
+  laterality: bilateral
+  voxtell:
+    main: '{side} submandibular gland'
+    aliases: []
+  ts:
+    head_glands_cavities:
+      left: submandibular_gland_left
+      right: submandibular_gland_right
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left submandibular gland
+    unsided_label: false
+    train_volumes: 3586
     source: table10_train+table7_test+hf_v1.1
 - id: aorta
   name: Aorta
@@ -3786,6 +4174,30 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+- id: appendix
+  name: Appendix
+  category: hollow_organ
+  laterality: none
+  voxtell:
+    main: appendix
+    aliases:
+    - vermiform appendix
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 3
+  is_anchor: false
+  sources:
+  - TS
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: appendix
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
 - id: rectum
   name: Rectum
   category: hollow_organ
@@ -5224,6 +5636,31 @@ entities:
   voxtell_evidence:
     grade: near
     vocab_match: uterine body
+    unsided_label: false
+    train_volumes: null
+    source: hf_v1.1_labels
+- id: ln_cervical
+  name: Cervical lymph nodes
+  category: lymph_station
+  laterality: bilateral
+  voxtell:
+    main: '{side} cervical lymph node'
+    aliases:
+    - '{side} neck lymph nodes'
+  ts: {}
+  modality:
+  - CT
+  - MR
+  coverage_tier: in_vocab
+  priority: 2
+  is_anchor: false
+  notes: 'gate region: levels I–V of the neck; span C1–C7'
+  sources:
+  - AJCC8
+  - FMA
+  voxtell_evidence:
+    grade: exact
+    vocab_match: left cervical lymph node
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels

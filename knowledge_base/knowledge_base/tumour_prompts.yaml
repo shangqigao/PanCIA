@@ -1,4 +1,4 @@
-version: 0.5.6
+version: 0.5.7
 generic_templates:
 - tumor in the {host}
 - '{host} tumor'

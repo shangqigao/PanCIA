@@ -13,7 +13,8 @@ OUT = os.path.join(os.path.dirname(__file__), 'knowledge_base')
 os.makedirs(OUT, exist_ok=True)
 TS = json.load(open(os.path.join(os.path.dirname(__file__), 'seed', 'ts_class_maps.json')))
 TS_ALL = {task: set(v.values()) for task, v in TS.items()}
-VERSION = '0.5.6'
+VERSION = '0.5.7'   # 0.5.7: head & neck (brain, larynx, pharynx, oral cavity, parotid anchors; skull, brainstem, cerebellum,
+#                     submandibular gland, nasal cavity, eye, cervical nodes) and the appendix. No cancer type lists any of them as a site
 TODAY = str(datetime.date.today())
 
 # ------------------------------------------------------------------ helpers
@@ -144,6 +145,29 @@ ent('scapula', 'Scapula', 'bone', lat='bilateral', vt='{side} scapula', ts={'tot
 ent('clavicle', 'Clavicle', 'bone', lat='bilateral', vt='{side} clavicle', ts={'total': {'left': 'clavicula_left', 'right': 'clavicula_right'}, 'total_mr': {'left': 'clavicula_left', 'right': 'clavicula_right'}}, tier='in_vocab', prio=3)
 ent('humerus', 'Humerus', 'bone', lat='bilateral', vt='{side} humerus', ts={'total': {'left': 'humerus_left', 'right': 'humerus_right'}, 'total_mr': {'left': 'humerus_left', 'right': 'humerus_right'}}, tier='in_vocab', prio=3)
 ent('spinal_cord', 'Spinal cord', 'nerve', vt='spinal cord', ts={'total': 'spinal_cord', 'total_mr': 'spinal_cord'}, tier='in_vocab', prio=3)
+# ---- head (v0.5.7). Intracranial structures lie cranial to C1, the first level of the vertebral order; the brain anchor's span
+# is therefore recorded as C1–C1 ("at or above C1"), so it is expected only in a frame that reaches C1. No cancer type lists the
+# brain as a host: a user who adds it to spread.distant_by_cancer gets it as a distant site without other changes.
+ent('brain', 'Brain', 'organ', vt='brain', ts={'total': 'brain', 'total_mr': 'brain'}, tier='in_vocab', prio=2, vol={'min': 1000, 'max': 1700},
+    anchor=A(['C1', 'C1'], 'midline', 'mid', 'obligatory', prior=[('spinal_cord', 'superior_to', (0, 60))]),
+    notes='intracranial; span C1–C1 means at or above C1 (the vertebral order starts at C1)')
+ent('brainstem', 'Brainstem', 'organ', vt='brainstem', aliases=('brain stem',), tier='in_vocab', prio=3)
+ent('cerebellum', 'Cerebellum', 'organ', vt='cerebellum', tier='in_vocab', prio=3)
+ent('skull', 'Skull', 'bone', vt='skull', aliases=('cranium',), ts={'total': 'skull'}, tier='in_vocab', prio=3, modality=('CT',))
+ent('eye', 'Eye', 'organ', lat='bilateral', vt='{side} eye', aliases=('{side} eyeball',), ts={'head_glands_cavities': {'left': 'eye_left', 'right': 'eye_right'}}, tier='in_vocab', prio=3)
+ent('nasal_cavity', 'Nasal cavity', 'space', vt='nasal cavity', tier='in_vocab', prio=3)
+# ---- neck (v0.5.7): head-and-neck primary sites. Anchors so that a user-defined head-and-neck cancer type needs no new anatomy;
+# none is a TotalSegmentator `total` class (parotid has a class in the head_glands_cavities task, which this pipeline does not run).
+ent('oral_cavity', 'Oral cavity', 'space', vt='oral cavity', tier='in_vocab', prio=2,
+    anchor=A(['C1', 'C3'], 'midline', 'anterior', 'obligatory', prior=[('spine', 'anterior_to', (20, 90))]))
+ent('pharynx', 'Pharynx', 'hollow_organ', vt='pharynx', aliases=('throat',), tier='in_vocab', prio=2,
+    anchor=A(['C1', 'C6'], 'midline', 'posterior', 'obligatory', prior=[('spine', 'anterior_to', (0, 20))]), notes='naso-, oro- and hypopharynx; TS head_glands_cavities has the three parts')
+ent('larynx', 'Larynx', 'hollow_organ', vt='larynx', tier='in_vocab', prio=2,
+    anchor=A(['C3', 'C6'], 'midline', 'anterior', 'obligatory', prior=[('trachea', 'superior_to', (0, 20))]))
+ent('parotid_gland', 'Parotid gland', 'gland', lat='bilateral', vt='{side} parotid gland', ts={'head_glands_cavities': {'left': 'parotid_gland_left', 'right': 'parotid_gland_right'}},
+    tier='in_vocab', prio=2, anchor=A(['C1', 'C2'], 'bilateral', 'posterior', 'obligatory'))
+ent('submandibular_gland', 'Submandibular gland', 'gland', lat='bilateral', vt='{side} submandibular gland',
+    ts={'head_glands_cavities': {'left': 'submandibular_gland_left', 'right': 'submandibular_gland_right'}}, tier='in_vocab', prio=3)
 
 # ---- great vessels (systemic anchors)
 ent('aorta', 'Aorta', 'vessel_artery', vt='aorta', aliases=('thoracic aorta', 'abdominal aorta'), ts={'total': 'aorta', 'total_mr': 'aorta'}, tier='in_vocab', prio=1, hu=(150, 500), vol={'min': 80, 'max': 450},
@@ -250,6 +274,7 @@ ent('colon', 'Colon', 'hollow_organ', vt='colon', aliases=('large bowel', 'large
     anchor=A(['T12', 'S3'], 'bilateral', 'anterior', 'obligatory'), notes='TS merges all colon incl. rectum in MR')
 for seg, lat in [('ascending', 'right'), ('transverse', 'midline'), ('descending', 'left'), ('sigmoid', 'left'), ('cecum', 'right')]:
     ent(f'colon_{seg}', f'{seg.title()} colon' if seg != 'cecum' else 'Caecum', 'hollow_organ', lat=lat, vt=f'{seg} colon' if seg != 'cecum' else 'cecum', tier='near', prio=3)
+ent('appendix', 'Appendix', 'hollow_organ', vt='appendix', aliases=('vermiform appendix',), tier='in_vocab', prio=3)
 ent('rectum', 'Rectum', 'hollow_organ', vt='rectum', ts=None, tier='in_vocab', prio=1,
     anchor=A(['S3', 'coccyx'], 'midline', 'posterior', 'obligatory', prior=[('sacrum', 'anterior_to', (0, 25)), ('urinary_bladder', 'posterior_to', (0, 40))]),
     notes='TS: part of colon class; completion target on pelvic MR')
@@ -317,6 +342,7 @@ ent('body_trunk', 'Body (trunk)', 'region', vt='body', ts={'body': 'body_trunc'}
 
 # ---- lymph node stations (AJCC regional nodes by primary site)
 LN = [
+ ('ln_cervical', 'Cervical lymph nodes', '{side} cervical lymph node', ('{side} neck lymph nodes',), 'in_vocab', 'levels I–V of the neck', ['C1', 'C7']),
  ('ln_mediastinal', 'Mediastinal lymph nodes', 'mediastinal lymph nodes', ('mediastinal nodes', 'thoracic lymph nodes'), 'in_vocab', 'between lungs, T3–T8, around trachea/carina/oesophagus', ['T3', 'T8']),
  ('ln_hilar', 'Hilar lymph nodes', '{side} hilar lymph nodes', ('{side} pulmonary hilar nodes',), 'near', 'around main bronchus and pulmonary vessels', ['T5', 'T7']),
  ('ln_supraclavicular', 'Supraclavicular lymph nodes', '{side} supraclavicular lymph nodes', (), 'near', 'above clavicle lateral to carotid', ['C7', 'T1']),
@@ -467,6 +493,7 @@ rel('rectum', 'lies_in', 'pelvis_true', side='any'); rel('rectum', 'lies_in', 'p
 
 # -- colon
 for seg in ['cecum', 'ascending', 'transverse', 'descending', 'sigmoid']: rel('colon', 'has_part', f'colon_{seg}', side='any', staging=[L])
+rel('colon', 'has_part', 'appendix', side='any', staging=[L], expand=False, note='v0.5.7; arises from the caecum')
 rel('colon', 'has_part', 'rectum', side='any', staging=[L], expand=False, note='TS colon class includes rectum; rectal relations (READ) are not walked from the colon')
 rel('colon', 'invested_by', 'peritoneum', side='any', staging=[C], note='T4a visceral peritoneum'); rel('colon', 'invested_by', 'mesentery', side='any', staging=[C], note='T3 pericolic fat')
 rel('colon', 'adjacent_to', 'liver', side='any', direction='superior', contact='near', staging=[ADJ], note='T4b'); rel('colon', 'adjacent_to', 'stomach', side='any', direction='superior', contact='near', staging=[ADJ])
@@ -557,6 +584,21 @@ rel('iliac_artery', 'has_part', 'internal_iliac_artery', staging=[L]); rel('ilia
 rel('heart', 'invested_by', 'pericardium', side='any', staging=[]); rel('heart', 'adjacent_to', 'lung', side='any', direction='lateral', contact='separated_by_pericardium'); rel('heart', 'adjacent_to', 'esophagus', side='any', direction='posterior', contact='near'); rel('heart', 'adjacent_to', 'diaphragm', side='any', direction='inferior', contact='abuts')
 rel('heart', 'lies_in', 'mediastinum', side='any'); rel('trachea', 'has_part', 'main_bronchus', side='any', staging=[L]); rel('trachea', 'adjacent_to', 'esophagus', side='any', direction='posterior', contact='abuts'); rel('trachea', 'adjacent_to', 'thyroid', side='any', direction='anterior', contact='abuts'); rel('trachea', 'lies_in', 'mediastinum', side='any')
 rel('spine', 'adjacent_to', 'psoas', side='any', direction='lateral', contact='abuts'); rel('spine', 'adjacent_to', 'aorta', side='any', direction='anterior', contact='abuts'); rel('spine', 'adjacent_to', 'esophagus', side='any', direction='anterior', contact='near'); rel('spine', 'has_part', 'spinal_cord', side='any'); rel('spine', 'has_part', 'sacrum', side='any')
+rel('brain', 'has_part', 'brainstem', side='any', staging=[L]); rel('brain', 'has_part', 'cerebellum', side='any', staging=[L])
+rel('brain', 'adjacent_to', 'skull', side='any', direction='any', contact='abuts', staging=[ADJ], note='calvarial / skull-base extension')
+rel('brainstem', 'adjacent_to', 'spinal_cord', side='any', direction='inferior', contact='continuous'); rel('skull', 'adjacent_to', 'vertebra_C1', side='any', direction='inferior', contact='articulates')
+rel('brain', 'supplied_by', 'common_carotid_artery', side='any', note='via the internal carotid arteries (not separate KB entities)')
+rel('nasal_cavity', 'adjacent_to', 'brain', side='any', direction='superior', contact='separated_by_skull_base', staging=[ADJ]); rel('nasal_cavity', 'adjacent_to', 'eye', side='any', direction='lateral', contact='near', staging=[ADJ])
+rel('pharynx', 'adjacent_to', 'nasal_cavity', side='any', direction='superior', contact='continuous', staging=[ADJ]); rel('pharynx', 'adjacent_to', 'oral_cavity', side='any', direction='anterior', contact='continuous', staging=[ADJ])
+rel('pharynx', 'adjacent_to', 'larynx', side='any', direction='anterior', contact='abuts', staging=[ADJ]); rel('pharynx', 'adjacent_to', 'spine', side='any', direction='posterior', contact='near', staging=[ADJ], note='prevertebral space')
+rel('pharynx', 'adjacent_to', 'parotid_gland', side='any', direction='lateral', contact='near', staging=[ADJ], note='parapharyngeal space'); rel('pharynx', 'adjacent_to', 'esophagus', side='any', direction='inferior', contact='continuous', staging=[])
+rel('larynx', 'adjacent_to', 'trachea', side='any', direction='inferior', contact='continuous', staging=[ADJ]); rel('larynx', 'adjacent_to', 'thyroid', side='any', direction='anterior_lateral', contact='abuts', staging=[ADJ])
+rel('oral_cavity', 'adjacent_to', 'submandibular_gland', side='any', direction='inferior_lateral', contact='near', staging=[ADJ]); rel('oral_cavity', 'adjacent_to', 'skull', side='any', direction='superior', contact='abuts', staging=[ADJ], note='mandible / maxilla')
+rel('parotid_gland', 'adjacent_to', 'skull', side='same', direction='medial', contact='abuts', staging=[ADJ])
+rel('larynx', 'adjacent_to', 'pharynx', side='any', direction='posterior', contact='abuts', staging=[ADJ]); rel('larynx', 'adjacent_to', 'esophagus', side='any', direction='posterior_inferior', contact='near', staging=[ADJ])
+rel('oral_cavity', 'adjacent_to', 'pharynx', side='any', direction='posterior', contact='continuous', staging=[ADJ]); rel('parotid_gland', 'adjacent_to', 'pharynx', side='any', direction='medial', contact='near', staging=[ADJ])
+for _h in ('larynx', 'pharynx', 'oral_cavity'): rel(_h, 'supplied_by', 'common_carotid_artery', side='any', note='via the external carotid branches'); rel(_h, 'drains_lymph_to', 'ln_cervical', side='any', staging=[N])
+for _h in ('parotid_gland', 'submandibular_gland'): rel(_h, 'drains_lymph_to', 'ln_cervical', side='same', staging=[N])
 rel('sacrum', 'adjacent_to', 'rectum', side='any', direction='anterior', contact='separated_by_presacral_fat'); rel('sacrum', 'adjacent_to', 'hip', side='any', direction='lateral', contact='abuts', note='sacroiliac joint'); rel('sacrum', 'adjacent_to', 'iliac_artery', side='any', direction='anterior_lateral', contact='near')
 rel('hip', 'adjacent_to', 'urinary_bladder', direction='medial', contact='near'); rel('hip', 'adjacent_to', 'obturator_internus', direction='medial', contact='abuts'); rel('hip', 'adjacent_to', 'iliopsoas', direction='medial', contact='abuts'); rel('hip', 'adjacent_to', 'gluteus', direction='posterior_lateral', contact='abuts'); rel('hip', 'adjacent_to', 'femur', direction='inferior_lateral', contact='abuts', note='hip joint')
 rel('pelvic_sidewall', 'has_part', 'obturator_internus', staging=[L]); rel('pelvic_sidewall', 'adjacent_to', 'iliac_artery', direction='superior', contact='near'); rel('pelvic_sidewall', 'adjacent_to', 'ln_obturator', direction='medial', contact='near')
@@ -574,7 +616,7 @@ HAS_PART_SPATIAL = {
  ('inferior_vena_cava', 'iliac_vein'): 'contiguous', ('inferior_vena_cava', 'renal_vein'): 'contiguous', ('inferior_vena_cava', 'hepatic_veins'): 'contiguous',
  ('trachea', 'main_bronchus'): 'contiguous', ('lung', 'main_bronchus'): 'contiguous', ('colon', 'rectum'): 'contiguous', ('spine', 'spinal_cord'): 'contiguous',
  ('spine', 'sacrum'): 'group', ('pelvic_sidewall', 'obturator_internus'): 'group',
- ('ovary', 'adnexa'): 'encloses',
+ ('ovary', 'adnexa'): 'encloses', ('colon', 'appendix'): 'contiguous',
 }
 HAS_PART_SPATIAL.update({('spine', f'vertebra_{lvl}'): 'group' for lvl in VERTEBRAL_ORDER[:-1]})
 HAS_PART_SPATIAL.update({('skeletal_muscle', m): 'group' for m in ['psoas', 'autochthon', 'rectus_abdominis', 'iliopsoas', 'gluteus', 'pectoralis_major']})

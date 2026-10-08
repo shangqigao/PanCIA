@@ -100,7 +100,7 @@ if __name__ == '__main__':
             prm['img_root'] = a.img_root
         for i, r in enumerate(ex.map(one, [(rel, a.seg_root, a.overwrite, a.out_name, prm) for rel in rels], chunksize=4)):
             rows.append(r)
-            if (i + 1) % 200 == 0:
+            if (i + 1) % 50 == 0:
                 print(f'{i + 1}/{len(rels)}', flush=True)
     out = os.path.join(a.seg_root, a.out_name, 'Radiology',
                        'ledger_summary.csv' if a.nshard == 1 else f'ledger_summary_{a.shard}of{a.nshard}.csv')

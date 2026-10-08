@@ -1,10 +1,12 @@
 #!/bin/bash
-# Ledger v4 (stage 3 + R2 calibrated EM) on the baseline-study series, CSD3 ampere (CPU-only code; GPU account), as a SLURM array.
+# Ledger v4/v5 (stage 3 + R2; v5 = candidate-specific R2) on the baseline-study series, CSD3 ampere (CPU-only code; GPU account), as a SLURM array.
 #
 #   sbatch scripts/run_ledger_v4.sh                      # 1 task, 1 GPU allocation, all 3,291 series in scripts/rel_list_baseline.txt
 #
 # Resumable: a shard skips series whose <out>/<rel>_lesions.json already exists (rerun the same command after a timeout).
-# Outputs: $SEG_ROOT/Ledger_v4/Radiology/<rel>_lesions.{json,npz} and ledger_summary_<i>of<n>.csv per shard.
+# Outputs: $SEG_ROOT/$OUT_NAME/Radiology/<rel>_lesions.{json,npz,_r2maps.npz} and ledger_summary_<i>of<n>.csv per shard.
+# 9 Oct 2026: OUT_NAME defaults to Ledger_v5 = candidate-specific R2 (em_model='candidate', the main.tex version;
+# r2_em.py md5 must match the local copy). The v4 run in $SEG_ROOT/Ledger_v4 is kept for comparison.
 # The v3 ledger ($SEG_ROOT/Ledger) is not touched.
 #
 # Set before submitting (or edit the defaults below): SEG_ROOT, IMG_ROOT, CONDA_ENV, and the account in the #SBATCH -A line.
@@ -25,7 +27,7 @@
 #SBATCH --gres=gpu:1
 ##SBATCH --qos=intr
 
-echo "[$(date)] start on $(hostname), task ${SLURM_ARRAY_TASK_ID:-none}, $(nproc) cores"
+echo "[$(date)] start on $(hostname), task ${SLURM_ARRAY_TASK_ID:-none}, SLURM_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK:-unset}, OMP_NUM_THREADS=${OMP_NUM_THREADS:-unset}, usable cores=$(nproc --all 2>/dev/null; true) / affinity $(taskset -cp $$ 2>/dev/null | cut -d: -f2)"
 # Environment setup runs WITHOUT strict mode: ~/.bashrc and conda's activate scripts often return non-zero
 # or reference unset variables, which under set -e/-u would kill the job silently before anything is logged.
 source ~/.bashrc || echo "warning: ~/.bashrc returned $?"
@@ -39,9 +41,10 @@ SEG_ROOT="${SEG_ROOT:-/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer
 IMG_ROOT="${IMG_ROOT:-/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_NIFTI}"
 REL_LIST="${REL_LIST:-$KB_DIR/scripts/rel_list_baseline.txt}"
 NSHARD="${NSHARD:-1}"                    # must equal the number of array tasks
-WORKERS="${WORKERS:-32}"                 # one worker per core; peak ~5 GB each on the largest boxes
+WORKERS="${WORKERS:-32}"
+OUT_NAME="${OUT_NAME:-Ledger_v5}"          # new output tree; Ledger_v4 is left untouched. Finished series are skipped (resumable)
 # large volumes are processed in full on HPC (the local pilot skipped boxes > 45 M voxels)
-DEFAULT_PARAMS='{"em_max_box_vox": 2.5e8}'
+DEFAULT_PARAMS='{"em_max_box_vox": 2.5e8, "em_model": "candidate"}'   # em_model is also the code default; stated explicitly
 PARAMS="${PARAMS:-$DEFAULT_PARAMS}"
 
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1   # one thread per worker process
@@ -50,13 +53,15 @@ for f in "$KB_DIR/scripts/run_lesion_ledger.py" "$KB_DIR/pancia_kb/r2_em.py" "$R
   [ -f "$f" ] || { echo "ERROR: not found: $f"; exit 1; }
 done
 [ -d "$SEG_ROOT" ] && [ -d "$IMG_ROOT" ] || { echo "ERROR: SEG_ROOT or IMG_ROOT not found"; exit 1; }
+[ -e "$SEG_ROOT/$OUT_NAME/Radiology/ledger_summary.csv" ] && { echo "ERROR: $SEG_ROOT/$OUT_NAME already holds a finished run; move it aside or set OUT_NAME"; exit 1; }
 echo "shard ${SLURM_ARRAY_TASK_ID}/${NSHARD}  KB=$KB_DIR  SEG=$SEG_ROOT  IMG=$IMG_ROOT  list=$REL_LIST"
 python "$KB_DIR/scripts/run_lesion_ledger.py" \
   --seg_root "$SEG_ROOT" --img_root "$IMG_ROOT" \
-  --rel_list "$REL_LIST" --out_name Ledger_v4 \
+  --rel_list "$REL_LIST" --out_name "$OUT_NAME" \
   --workers "$WORKERS" --params "$PARAMS" \
   --shard "${SLURM_ARRAY_TASK_ID}" --nshard "$NSHARD"
+echo "[$(date)] finished"
 
 # After all shards finish, merge the summaries:
-#   python -c "import glob,pandas as pd;fs=sorted(glob.glob('$SEG_ROOT/Ledger_v4/Radiology/ledger_summary_*of*.csv'));\
-#   pd.concat(map(pd.read_csv,fs)).to_csv('$SEG_ROOT/Ledger_v4/Radiology/ledger_summary.csv',index=False)"
+#   python -c "import glob,pandas as pd;fs=sorted(glob.glob('$SEG_ROOT/Ledger_v5/Radiology/ledger_summary_*of*.csv'));\
+#   pd.concat(map(pd.read_csv,fs)).to_csv('$SEG_ROOT/Ledger_v5/Radiology/ledger_summary.csv',index=False)"
