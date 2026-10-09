@@ -51,7 +51,7 @@ Figure~\ref{fig:pipeline} summarizes the pipeline; the components are detailed b
 \label{sec:conditional_reasoning}
 \begin{figure}
     \centering
-    \IfFileExists{figs/PGM.png}{\includegraphics[width=1\linewidth]{figs/PGM.png}}{\fbox{\parbox{0.9\linewidth}{\centering figs/PGM.png not found}}}
+    \includegraphics[width=1\linewidth]{figs/PGM.png}
     \caption{ Anatomical Reasoning Graph.}
     \label{fig:pgm}
 \end{figure}
@@ -608,7 +608,7 @@ candidate on the acquisition slices of $c$ within the host envelope; for VT, no 
 Silence of one model is missing evidence, not evidence against; $0.75$ lies halfway, in log-odds, between agreement and
 contradiction. When tumor reasoning rejected a candidate's lesion only for lack of support from the second model, its prior
 is capped at $0.5$, so that the lesion is recovered only by image evidence. A candidate that violates
-$\phi_{\mathrm{logic}}$ has $\pi_c=0$. The priors are fixed before the observation step and are ablated in Section~\ref{sec:ablation}.
+$\phi_{\mathrm{logic}}$ has $\pi_c=0$. The priors are fixed before the observation step and are ablated in Section~X.
 
 %--------------------------------------------------------------------------------------------------------------------
 %--------------------------------------------------------------------------------------------------------------------
@@ -628,7 +628,7 @@ nothing is shared between candidates or learned across scans, so any scan is tes
 different agents may overlap, so the product over candidates is a composite likelihood, one factor per candidate.
 (iv)~Given $z_c$, the image statistic is assumed conditionally independent of the agents' outputs that set $\pi_c$; prior
 and evidence are added in log-odds with weight $\lambda_{\mathrm{obs}}=1$, and the sensitivity to this weight is part of the
-ablation in Section~\ref{sec:ablation}.
+ablation in Section~X.
 
 \textit{Diagnostic gate.} A scan whose in-plane spacing exceeds $3$\,mm (a scout or localiser) cannot support any lesion:
 no candidate of such a scan is accepted.
@@ -757,136 +757,10 @@ keeps voxels after delineation; a lesion none of whose candidates was tested is 
 review. Lesions are then ranked by $w_h$ (primary first), and the index lesion is measured in the acquisition plane.
 
 
-%====================================================================================================================
-\section{Experiments and Results}
-\label{sec:results}
-% Skeleton added 9 Oct 2026. Numbers marked [TBD] are filled from the Ledger_v5 evaluation:
-%   clinical/PanCIA_outputs/ledger/r2_compare_Ledger_v5_vs_Ledger/{by_project,candidates,transitions}.csv  (R2 effect)
-%   clinical/PanCIA_outputs/ledger/ledger_eval_baseline_Ledger_v5.json                                       (yardsticks)
-% produced by clinical/PanCIA_outputs/scripts/run_v5_eval.sh. Stage is reported only; nothing is tuned on stage.
-
-\subsection{Data}
-We use the public TCGA radiology collections of The Cancer Imaging Archive (TCIA). The cohort contains 3{,}291
-baseline-study series (1{,}407 CT, 1{,}884 MR) from 15 cancer types: BLCA, BRCA, CESC, COAD, ESCA, KICH, KIRC, KIRP,
-LIHC, LUAD, LUSC, OV, PRAD, STAD and UCEC. TCIA states that only the baseline study precedes surgery, and post-surgical
-studies cannot be identified, so all evaluations use the baseline study only. The stage-evaluation scope is restricted
-to baseline series with the primary organ in the field of view: 3{,}116 series from 942 patients. Clinical stage comes
-from the TCGA clinical records. No voxel-level tumour annotation exists for this cohort.
-
-\subsection{Implementation}
-The tumour agents are BiomedParse (2D) and VoxTell (3D promptable); the anatomy agent is TotalSegmentator. The
-knowledge base has 204 entities and 433 relations (v0.5.7). The planner prompts VoxTell for organ and tumour masks of
-every host in $K_C$. Host and tumour reasoning are deterministic. All constants of the image-grounded step are fixed a
-priori; $\tau=0.67$ comes from a synthetic simulation (Section~\ref{sec:reasoning_details}). The whole cohort was
-processed on a CPU cluster in [TBD] hours.
-
-\subsection{Evaluation without voxel ground truth}
-\label{sec:eval_protocol}
-Without voxel annotations, we use stage-free yardsticks that a correct segmentation must satisfy. All are computed on
-the baseline study only:
-\begin{itemize}
-  \item \emph{spread}: the median $|\log(v/\tilde v)|$ of the index-lesion volume $v$ across the series of one study,
-  where $\tilde v$ is the study median;
-  \item \emph{cross}: the share of same-study series pairs whose sizes differ by at least one RECIST progression step;
-  \item \emph{disagree}: the share of series whose index lesion is not the study's majority lesion;
-  \item \emph{miss}: the share of baseline series with no measurable lesion (the primary tumour is present before
-  surgery).
-\end{itemize}
-The patient-median Spearman correlation with T and overall stage is reported for reference only. No parameter, rule
-or threshold is selected on stage.
-
-\subsection{Effect of image-grounded reasoning}
-\label{sec:results_r2}
-Host and tumour reasoning are identical with and without the observation potential: the pre-grounding lesion
-statuses of the full model equal those of the reasoning-only model for every lesion.
-% verify on the full cohort: summary.json checks.pre_r2_status_mismatch == 0 (0 of 125 on the 23-series pilot) The comparison therefore isolates
-$\phi_{\mathrm{obs}}$. Table~\ref{tab:r2_by_type} reports, per cancer type:
-\begin{itemize}
-  \item the lesions admitted by reasoning only, and after grounding;
-  \item the lesions rejected on image evidence, and those recovered by it;
-  \item the lesions flagged for expert review because no candidate could be tested;
-  \item the volume trimmed and grown on $3{:}1$ evidence.
-\end{itemize}
-[TBD: two sentences on the main pattern, e.g.\ which cancer types lose or gain most, and why.]
-Among admitted lesions, the best accepted candidate has strong evidence ($\mathrm{BF}\ge10$) in [TBD]\,\%, moderate
-evidence ($3\le\mathrm{BF}<10$) in [TBD]\,\% and weak evidence ($1\le\mathrm{BF}<3$) in [TBD]\,\%. [TBD]\,\% of
-candidates were untested; the commonest reason was [TBD].
-
-\begin{table}[t]
-\centering\small
-\caption{Image-grounded reasoning per cancer type (baseline series). \emph{Reasoning only}: host and tumour
-reasoning without $\phi_{\mathrm{obs}}$. \emph{Rejected}/\emph{recovered}: lesions whose status the image evidence
-changed. \emph{No power}: no testable candidate; flagged for expert review, not admitted.}
-\label{tab:r2_by_type}
-\setlength{\tabcolsep}{4pt}\footnotesize
-\begin{tabular}{lrrrrrrr}
-\hline
-Cancer & Series & \shortstack{Reasoning\\only} & Grounded & Rejected & Recovered & \shortstack{No\\power} & \shortstack{Trim / grow\\(ml)}\\
-\hline
-\multicolumn{8}{c}{[TBD from \texttt{by\_project.csv}]}\\
-\hline
-All & 3{,}291 & & & & & & \\
-\hline
-\end{tabular}
-\end{table}
-
-\subsection{Baseline yardsticks}
-\label{sec:results_yardsticks}
-Table~\ref{tab:yardsticks} compares BiomedParse alone, VoxTell alone, reasoning only, and the full model on the
-yardsticks of Section~\ref{sec:eval_protocol}. [TBD: main finding, stated without reference to stage.]
-
-\begin{table}[t]
-\centering\small
-\caption{Stage-free yardsticks on 3{,}116 baseline series (942 patients). The Spearman $\rho$ with T stage is reported
-only and was not used for any choice.}
-\label{tab:yardsticks}
-\begin{tabular}{lrrrrr}
-\hline
-Method & Spread & Cross (\%) & Disagree (\%) & Miss (\%) & $\rho_T$ (reported)\\
-\hline
-BiomedParse & & & -- & & \\
-VoxTell & & & -- & & \\
-Reasoning only & & & & & \\
-Full model & & & & & \\
-\hline
-\end{tabular}
-\end{table}
-
-\subsection{Qualitative results}
-Fig.~\ref{fig:grounding} shows ledger lesions with their candidates and priors, the per-candidate voxel posterior after grounding,
-and the final lesions, on a public TCGA-KIRC CT. In one lesion, three agreeing candidates are accepted and a
-mis-attributed duodenal prompt is rejected. A second lesion with one unsupported candidate stays rejected. A third
-lesion, rejected by the reasoning for lack of a second model, is recovered by image evidence.
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=\linewidth]{figs/r2_grounding.pdf}
-    \caption{Image-grounded reasoning on a public TCGA-KIRC contrast CT (axial). Left: ledger lesions (dashed) and
-    their candidates with prior $\pi_c$. Middle: the voxel posterior of each candidate,
-    $q_c\,\sigma(\operatorname{logit}\pi_v+\lambda_c)$ with $\pi_v=0.75$ inside and $0.25$ around the candidate, and its
-    log Bayes factor. Right: final lesions with their accepted candidates; cyan marks voxels grown on $3{:}1$ evidence.}
-    \label{fig:grounding}
-\end{figure*}
-
-\subsection{Ablation of the priors}
-\label{sec:ablation}
-[TBD: rerun of the grounding step with flat priors ($\pi_c=0.5$ for every feasible candidate), and without the
-recovery cap, on the same series. Report the same columns as Table~\ref{tab:r2_by_type}.]
-
-\subsection{Limitations}
-\begin{itemize}
-  \item There is no voxel-level ground truth, so accuracy is assessed through stage-free consistency yardsticks.
-  \item Candidates too small for cross-fitting, or without a usable reference of normal tissue, cannot be tested.
-  They are flagged for expert review rather than decided by the prior.
-  \item In thick-slice MR, partial volume at organ boundaries widens the null distribution. A true lesion can then lack
-  evidence. An example is a liver lesion at the dome on gadolinium-enhanced T1 MR.
-  \item The default distant-site lists do not include brain, and pleura and distant lymph nodes have no anchor in
-  the knowledge base, so metastases there are not reported.
-\end{itemize}
-
 \section*{Acknowledgments}
 
 Additional information can be given in the template, such as to not include funder information in the acknowledgments section.
 
-\bibliography{modular_refs}
+\bibliography{refs}
 
 \end{document}

@@ -21,8 +21,8 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🧪 prototype exists
 |---|---|---|---|
 | W1 | Multi-agent segmentation (BP, VT, TS agents) | ✅ outputs for the TCGA/TCIA cohort | `██████████` 100% |
 | W2 | Anatomical knowledge base + planner | ✅ KB v0.5.7, planner run on the whole cohort | `█████████░` 90% |
-| W3 | Reasoning: ledger (host + logic) + R2 image grounding | 🟡 final run (Ledger_v5) on HPC | `████████░░` 80% |
-| W4 | Paper 1: segmentation and reasoning | 🟡 methods and pipeline figure updated; results pending v5 | `██████░░░░` 60% |
+| W3 | Reasoning: ledger (host + logic) + R2 image grounding | 🟡 final run (Ledger_v5) on HPC; evaluation ready | `████████▌░` 85% |
+| W4 | Paper 1: segmentation and reasoning | 🟡 methods, figures and results skeleton done; numbers pending v5 | `███████░░░` 70% |
 | W5 | Anatomical graph (stage 4): the carrier of all features | 🟡 plan agreed (29 Sep), code not started | `██░░░░░░░░` 20% |
 | W6 | Agent interface, registry and runner (core of the software) | ⬜ design in this document | `█░░░░░░░░░` 10% |
 | W7 | Feature extractors (radiology, pathology, others) as agents | 🧪 `analysis/a03` scripts | `███░░░░░░░` 30% |
@@ -307,9 +307,14 @@ Timing is relative (Q1 = the first quarter after this plan is agreed) so it can 
 - [x] R2 candidate-specific grounding: admission rule, 3:1 trim/grow, recovery cap.
 - [x] `em_model='candidate'` made the default; `run_ledger_v4.sh` writes to `Ledger_v5`.
 - [x] main.tex methods and pipeline figure updated.
-- [ ] Ledger_v5 finished on HPC; compared with v4 by cancer type (admitted / rejected / no-power / trimmed / grown).
-- [ ] Decision on the LIHC L2 variant (reference factor / erosion); open cases reviewed (LUSC spine, OV L17, ESCA primary, LIHC L0 liver).
+- [x] Code committed and pushed (9 Oct).
+- [x] Evaluation prepared (9 Oct): `ledger_r2_compare.py` and `run_v5_eval.sh`, tested on the pilot. The R2 baseline is **v3**: v5's pre-R2 ledger equals v3, while the local `Ledger_v4` is run 1, whose logic differs.
+- [ ] Ledger_v5 finished on HPC and synced; `run_v5_eval.sh` run; compared with v3 by cancer type (admitted / rejected / no-power / trimmed / grown).
+- [x] LIHC L2 variant: **not adopted** (9 Oct). The current R2 is kept, and LIHC MR L2 is reported as a known limitation (thick-slice MR, partial volume at the liver dome).
+- [ ] Open cases reviewed on v5 (LUSC spine, OV L17, ESCA primary, LIHC L0 liver).
 - [ ] Stage analysis rebuilt on v5, as a check only (no tuning on stage).
+- [x] Paper: Experiments and Results skeleton with placeholders, the grounding figure, and fixes to the bibliography and the missing figure (9 Oct).
+- [ ] Prior ablation (flat π, no recovery cap) on the same series.
 
 **DoD:** paper 1 results section written from v5; code tagged `v0.5-research`.
 
@@ -518,4 +523,5 @@ PanCIA/
 - **9 Oct 2026:** decisions 1, 4 and 5 made; 2 and 3 recommended. §4.5 (graph as feature carrier) added; M4, M5 and M7 updated.
 - **9 Oct 2026 (v0.3):** LLM assistant added (§4.6, M7b), with lessons from RADAR-web added to M7.
 - **9 Oct 2026 (v0.4):** deployment designed (§4.4): front doors, compute targets, per-target environments. Decisions 1 and 2 settled by design; the user delegated system design with "easy to use" as the only principle.
+- **9 Oct 2026:** M1 work while v5 runs: LIHC decision recorded, evaluation scripts ready and tested, results skeleton in main.tex, code pushed.
 - **Next update:** after Ledger_v5 finishes (closes most of M1).

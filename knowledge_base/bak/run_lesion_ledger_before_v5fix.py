@@ -56,7 +56,7 @@ def one(args):
                    n_primary_unconfirmed=sum(l['cls'] == 'primary' and not l.get('confirmed', True) for l in adm),
                    n_primary_vtsilent=sum(l['cls'] == 'primary' and l.get('support') == 'BP_vtsilent' for l in adm),
                    n_attached=sum(l.get('assign') == 'attached' for l in adm),
-                   secondary_hosts=';'.join(sorted({f"{l['host']}:{(l['cls'] or '-')[:3]}" for l in adm if l['cls'] != 'primary'})),
+                   secondary_hosts=';'.join(sorted({f"{l['host']}:{l['cls'][:3]}" for l in adm if l['cls'] != 'primary'})),
                    extends_into=';'.join(sorted({k for l in adm for k in (l.get('extends_into') or {})})),
                    n_organ_like=sum(l['organ_like'] for l in adm),
                    drop_reasons=';'.join(f"{k}={v}" for k, v in sorted(_count(d['reason'] for d in led['dropped_claims']).items())),

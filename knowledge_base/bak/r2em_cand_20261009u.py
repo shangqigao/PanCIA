@@ -868,12 +868,6 @@ def _finish(out, feas, cands, recall, report, B, shB, hosts, ctx, sp, vox_ml):
             # CESC L1 had kept their ledger admission without any test)
             if not any(c.get('strict') for c in feas):
                 continue
-            # 9 Oct (v5 HPC run): only a lesion the ledger left feasible may be judged by shared claims -- admitted, or
-            # rejected for lack of support only (RECOVERABLE). A logical rejection (outside the spread set, satellite,
-            # infeasible, not contiguous, ...) has prior 0 and is never admitted through a neighbour's claim; 677 such
-            # lesions in 450 series had been recovered this way (213 without host or class).
-            if les['host'] is None or les['cls'] is None or not (les['status'] == 'admitted' or les['reason'] in RECOVERABLE):
-                continue
             Lf = Lb.ravel()
             mine = [c for c in feas if Lf[c['idx']].any()]
             if not mine:
@@ -881,8 +875,7 @@ def _finish(out, feas, cands, recall, report, B, shB, hosts, ctx, sp, vox_ml):
             shared = True
             m_ = np.zeros(int(np.prod(shB)), bool)
             for c in mine:
-                # recovery cap: a support-rejected lesion is recovered only by evidence that clears pi = 0.5, i.e. log BF > 0
-                if _accepted(c, out) and (les['status'] == 'admitted' or c['logbf'] > 0):
+                if _accepted(c, out):
                     m_[c.get('keep_idx', c['idx'])] = True
             own_acc[i] = m_.reshape(shB)
         keep = Lb & own_acc[i]
