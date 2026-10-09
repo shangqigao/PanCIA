@@ -54,14 +54,6 @@ for f in "$KB_DIR/scripts/run_lesion_ledger.py" "$KB_DIR/pancia_kb/r2_em.py" "$R
 done
 [ -d "$SEG_ROOT" ] && [ -d "$IMG_ROOT" ] || { echo "ERROR: SEG_ROOT or IMG_ROOT not found"; exit 1; }
 [ -e "$SEG_ROOT/$OUT_NAME/Radiology/ledger_summary.csv" ] && { echo "ERROR: $SEG_ROOT/$OUT_NAME already holds a finished run; move it aside or set OUT_NAME"; exit 1; }
-# 9 Oct 2026: refuse to run with the wrong code (the v5 fixes), and refuse to mix runs: a fresh run needs an empty output
-# folder; to continue an interrupted run of the SAME code (e.g. after a time-out) set RESUME=1.
-EXPECT_R2="${EXPECT_R2:-e005efbd}"; EXPECT_RUN="${EXPECT_RUN:-e309e21a}"
-[ "$(md5sum "$KB_DIR/pancia_kb/r2_em.py" | cut -c1-8)" = "$EXPECT_R2" ] || { echo "ERROR: pancia_kb/r2_em.py md5 is not $EXPECT_R2"; exit 1; }
-[ "$(md5sum "$KB_DIR/scripts/run_lesion_ledger.py" | cut -c1-8)" = "$EXPECT_RUN" ] || { echo "ERROR: scripts/run_lesion_ledger.py md5 is not $EXPECT_RUN"; exit 1; }
-if [ "${RESUME:-0}" != "1" ] && [ -n "$(find "$SEG_ROOT/$OUT_NAME/Radiology" -name '*_lesions.json' -print -quit 2>/dev/null)" ]; then
-  echo "ERROR: $SEG_ROOT/$OUT_NAME already holds outputs; move it aside for a fresh run, or set RESUME=1 to continue the same run"; exit 1
-fi
 echo "shard ${SLURM_ARRAY_TASK_ID}/${NSHARD}  KB=$KB_DIR  SEG=$SEG_ROOT  IMG=$IMG_ROOT  list=$REL_LIST"
 python "$KB_DIR/scripts/run_lesion_ledger.py" \
   --seg_root "$SEG_ROOT" --img_root "$IMG_ROOT" \
