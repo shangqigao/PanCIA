@@ -2,7 +2,7 @@
 
 Ring  : all KB entities, grouped sector -> anchor group -> entity (has_part defines anchor membership).
 Inside: non-hierarchical relations bundled along the hierarchy (Holten 2006), coloured by family.
-    python plot_kb_graph.py --kb ../knowledge_base --out "../../Claude outputs/figs/kb_graph"
+    python plot_kb_graph.py --kb ../knowledge_base --out "../../documents/figs/kb_graph"
 """
 import argparse, collections as C, math, yaml, numpy as np
 import matplotlib; matplotlib.use('Agg')

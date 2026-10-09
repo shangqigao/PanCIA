@@ -15,7 +15,7 @@ set -euo pipefail
 
 KB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SEG_ROOT="${SEG_ROOT:-/Users/sg2162/Datasets/CancerDatasets/PanCIA/TCGA-TCIA/TCGA_Seg}"
-META_CSV="${META_CSV:-/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/clinical/PanCIA_outputs/cohort/scan_meta.csv}"
+META_CSV="${META_CSV:-/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/clinical/scan_meta.csv}"
 OUT_DIR="${OUT_DIR:-$SEG_ROOT/Planner/Radiology}"
 TS_OBJ="${TS_OBJ:-organ}"
 TUMOUR_OBJ="${TUMOUR_OBJ:-tumor}"
