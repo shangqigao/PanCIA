@@ -1,0 +1,1398 @@
+version: '1.0'
+date: '2026-10-10'
+author: Shangqi Gao (Crispin Lab) with Claude
+principle:
+- Priors come only from expert annotations, never from any segmentation model output (agents are pluggable).
+- Geometry only (intensity-agnostic); appearance is modelled within each scan at inference.
+- Agent errors (any agent, any cohort) are handled at inference by treating agent masks as noisy observations.
+- Tumour priors are pooled by host architecture (pan-cancer), datasets weighted equally.
+- 'Sex is never used. Only public data: R2Seg OV04 (ovary) excluded as confidential.'
+descriptors: pancia_kb/geometry.py v1 (iso grid 1.5 mm; irregularity smoothing 0.25 r_eq)
+sources:
+  anatomy:
+  - TotalSegmentator CT dataset v3.0.0 (Zenodo)
+  - TotalSegmentator MRI dataset v2.0.0 (Zenodo)
+  anatomy_filter: 'CT: pathology none, or outside the organ region and not unclear; MR: no pathology field (kept); organs
+    truncated by the field of view skipped'
+  tumour: R2Seg public datasets (FedBCa, MAMA-MIA, CC-Tumor-Heterogeneity, MSD Colon/Lung/Liver/Pancreas (FLARE23 files),
+    KiTS23, NSCLC-Radiomics, Prostate158, UMD)
+caveats:
+- Hollow-organ wall thickness from a within-scan two-class split was implausible (median colon 14 mm, stomach 20 mm); not
+  stored.
+- Organ-outline deformation measured by generic size-relative irregularity is NOT larger near tumours than elsewhere (bulge
+  ratio median < 1 for solid hosts); deformation evidence needs organ-specific shape models with correspondence.
+- Tumour shape differs significantly between datasets within an architecture (leave-one-dataset-out KS); the architecture
+  prior is broad. Elongation transfers best.
+- Hollow-organ tumour-host relations come only from uterus/cervix datasets (no bladder/colon organ labels).
+anatomy:
+  colon:
+    n_cases: 84
+    n_ct: 64
+    n_mr: 20
+    hollow: true
+    vol_ml:
+      q5: 33.3059
+      q25: 264.743
+      q50: 689.9125
+      q75: 956.247
+      q95: 1334.1982
+      n: 84
+    shape:
+      sphericity:
+        q5: 0.3068
+        q25: 0.3339
+        q50: 0.3573
+        q75: 0.4556
+        q95: 0.6663
+        n: 84
+      solidity:
+        q5: 0.0879
+        q25: 0.15
+        q50: 0.1844
+        q75: 0.3204
+        q95: 0.8535
+        n: 84
+      elong:
+        q5: 0.1623
+        q25: 0.249
+        q50: 0.3279
+        q75: 0.3785
+        q95: 0.4515
+        n: 84
+      flat:
+        q5: 0.3092
+        q25: 0.4969
+        q50: 0.7011
+        q75: 0.8153
+        q95: 0.9189
+        n: 84
+      irr_rms:
+        q5: 0.1144
+        q25: 0.2623
+        q50: 0.7811
+        q75: 1.3843
+        q95: 2.7752
+        n: 84
+      irr_p95:
+        q5: 0.1792
+        q25: 0.5908
+        q50: 1.7873
+        q75: 2.7866
+        q95: 4.592
+        n: 84
+      irr_max:
+        q5: 0.3628
+        q25: 0.9428
+        q50: 2.268
+        q75: 3.1932
+        q95: 4.8741
+        n: 84
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 1.5
+      q95: 6.15
+      n: 84
+  duodenum:
+    n_cases: 132
+    n_ct: 85
+    n_mr: 47
+    hollow: true
+    vol_ml:
+      q5: 5.4857
+      q25: 26.487
+      q50: 48.814
+      q75: 64.665
+      q95: 93.6468
+      n: 132
+    shape:
+      sphericity:
+        q5: 0.4655
+        q25: 0.5181
+        q50: 0.5416
+        q75: 0.5815
+        q95: 0.7216
+        n: 132
+      solidity:
+        q5: 0.3042
+        q25: 0.3659
+        q50: 0.4153
+        q75: 0.497
+        q95: 1.0
+        n: 132
+      elong:
+        q5: 0.1604
+        q25: 0.2107
+        q50: 0.255
+        q75: 0.3077
+        q95: 0.4344
+        n: 132
+      flat:
+        q5: 0.3267
+        q25: 0.4824
+        q50: 0.5764
+        q75: 0.6645
+        q95: 0.8028
+        n: 132
+      irr_rms:
+        q5: 0.1143
+        q25: 0.1252
+        q50: 0.1415
+        q75: 0.1753
+        q95: 0.3321
+        n: 131
+      irr_p95:
+        q5: 0.1762
+        q25: 0.2093
+        q50: 0.2448
+        q75: 0.3207
+        q95: 0.9203
+        n: 131
+      irr_max:
+        q5: 0.2738
+        q25: 0.376
+        q50: 0.4538
+        q75: 0.6845
+        q95: 1.4586
+        n: 131
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 2.5
+      q95: 7.95
+      n: 132
+  esophagus:
+    n_cases: 126
+    n_ct: 75
+    n_mr: 51
+    hollow: true
+    vol_ml:
+      q5: 0.0
+      q25: 6.213
+      q50: 18.883
+      q75: 31.205
+      q95: 49.2026
+      n: 126
+    shape:
+      sphericity:
+        q5: 0.3872
+        q25: 0.406
+        q50: 0.4399
+        q75: 0.5934
+        q95: 0.8009
+        n: 126
+      solidity:
+        q5: 0.1762
+        q25: 0.2307
+        q50: 0.3417
+        q75: 0.7396
+        q95: 1.0
+        n: 126
+      elong:
+        q5: 0.0534
+        q25: 0.0738
+        q50: 0.0922
+        q75: 0.1567
+        q95: 0.4213
+        n: 126
+      flat:
+        q5: 0.1067
+        q25: 0.1487
+        q50: 0.1809
+        q75: 0.2519
+        q95: 0.6637
+        n: 126
+      irr_rms:
+        q5: 0.1498
+        q25: 0.1924
+        q50: 0.3219
+        q75: 0.5928
+        q95: 1.4661
+        n: 126
+      irr_p95:
+        q5: 0.1991
+        q25: 0.2896
+        q50: 0.6929
+        q75: 1.4196
+        q95: 3.7401
+        n: 126
+      irr_max:
+        q5: 0.2915
+        q25: 0.6091
+        q50: 1.0659
+        q75: 1.9641
+        q95: 4.6144
+        n: 126
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 3.0
+      q95: 8.16
+      n: 126
+  gallbladder:
+    n_cases: 121
+    n_ct: 86
+    n_mr: 35
+    hollow: true
+    vol_ml:
+      q5: 2.3824
+      q25: 8.0195
+      q50: 18.886
+      q75: 35.625
+      q95: 96.875
+      n: 121
+    shape:
+      sphericity:
+        q5: 0.61
+        q25: 0.6815
+        q50: 0.7341
+        q75: 0.7724
+        q95: 0.8446
+        n: 121
+      solidity:
+        q5: 0.7298
+        q25: 0.8402
+        q50: 0.9422
+        q75: 0.9959
+        q95: 1.0
+        n: 121
+      elong:
+        q5: 0.233
+        q25: 0.3135
+        q50: 0.38
+        q75: 0.4501
+        q95: 0.578
+        n: 121
+      flat:
+        q5: 0.3022
+        q25: 0.3866
+        q50: 0.4961
+        q75: 0.6073
+        q95: 0.7164
+        n: 121
+      irr_rms:
+        q5: 0.0874
+        q25: 0.105
+        q50: 0.1203
+        q75: 0.1433
+        q95: 0.2476
+        n: 121
+      irr_p95:
+        q5: 0.1354
+        q25: 0.1618
+        q50: 0.1856
+        q75: 0.223
+        q95: 0.4939
+        n: 121
+      irr_max:
+        q5: 0.2357
+        q25: 0.2995
+        q50: 0.3559
+        q75: 0.4669
+        q95: 0.951
+        n: 121
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 2.0
+      q95: 6.0
+      n: 121
+  kidney:
+    n_cases: 263
+    n_ct: 176
+    n_mr: 87
+    hollow: false
+    vol_ml:
+      q5: 33.0548
+      q25: 96.1415
+      q50: 133.555
+      q75: 169.9808
+      q95: 221.0185
+      n: 263
+    shape:
+      sphericity:
+        q5: 0.4606
+        q25: 0.5355
+        q50: 0.5885
+        q75: 0.6463
+        q95: 0.7339
+        n: 263
+      solidity:
+        q5: 0.6046
+        q25: 0.7558
+        q50: 0.8141
+        q75: 0.8694
+        q95: 0.9668
+        n: 263
+      elong:
+        q5: 0.3437
+        q25: 0.3819
+        q50: 0.4193
+        q75: 0.4591
+        q95: 0.5386
+        n: 263
+      flat:
+        q5: 0.4484
+        q25: 0.491
+        q50: 0.5367
+        q75: 0.5833
+        q95: 0.7296
+        n: 263
+      irr_rms:
+        q5: 0.1006
+        q25: 0.1316
+        q50: 0.1415
+        q75: 0.1544
+        q95: 0.2328
+        n: 262
+      irr_p95:
+        q5: 0.1754
+        q25: 0.2552
+        q50: 0.302
+        q75: 0.3458
+        q95: 0.4975
+        n: 262
+      irr_max:
+        q5: 0.3299
+        q25: 0.4471
+        q50: 0.5085
+        q75: 0.5666
+        q95: 0.8591
+        n: 262
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 2.5
+      q95: 8.0
+      n: 263
+  liver:
+    n_cases: 130
+    n_ct: 93
+    n_mr: 37
+    hollow: false
+    vol_ml:
+      q5: 212.983
+      q25: 1061.272
+      q50: 1345.9495
+      q75: 1706.859
+      q95: 2303.964
+      n: 130
+    shape:
+      sphericity:
+        q5: 0.5324
+        q25: 0.5831
+        q50: 0.6239
+        q75: 0.6467
+        q95: 0.6867
+        n: 130
+      solidity:
+        q5: 0.6421
+        q25: 0.7244
+        q50: 0.7574
+        q75: 0.7917
+        q95: 0.8821
+        n: 130
+      elong:
+        q5: 0.3239
+        q25: 0.4252
+        q50: 0.4829
+        q75: 0.5363
+        q95: 0.5925
+        n: 130
+      flat:
+        q5: 0.5055
+        q25: 0.6162
+        q50: 0.6749
+        q75: 0.746
+        q95: 0.8507
+        n: 130
+      irr_rms:
+        q5: 0.1141
+        q25: 0.1312
+        q50: 0.1409
+        q75: 0.1571
+        q95: 0.2256
+        n: 129
+      irr_p95:
+        q5: 0.2367
+        q25: 0.2782
+        q50: 0.3038
+        q75: 0.3417
+        q95: 0.5212
+        n: 129
+      irr_max:
+        q5: 0.4144
+        q25: 0.4825
+        q50: 0.5497
+        q75: 0.6328
+        q95: 0.8749
+        n: 129
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 2.0
+      q95: 6.5
+      n: 130
+  lung:
+    n_cases: 207
+    n_ct: 175
+    n_mr: 32
+    hollow: false
+    vol_ml:
+      q5: 59.6275
+      q25: 483.8082
+      q50: 1383.669
+      q75: 2108.9945
+      q95: 3156.8868
+      n: 207
+    shape:
+      sphericity:
+        q5: 0.4724
+        q25: 0.5511
+        q50: 0.5835
+        q75: 0.6063
+        q95: 0.6404
+        n: 207
+      solidity:
+        q5: 0.5306
+        q25: 0.6274
+        q50: 0.675
+        q75: 0.7171
+        q95: 0.7839
+        n: 207
+      elong:
+        q5: 0.2492
+        q25: 0.4073
+        q50: 0.4603
+        q75: 0.5212
+        q95: 0.6105
+        n: 207
+      flat:
+        q5: 0.5225
+        q25: 0.6613
+        q50: 0.755
+        q75: 0.8496
+        q95: 0.9469
+        n: 207
+      irr_rms:
+        q5: 0.1257
+        q25: 0.1414
+        q50: 0.1586
+        q75: 0.1814
+        q95: 0.2409
+        n: 207
+      irr_p95:
+        q5: 0.2657
+        q25: 0.3088
+        q50: 0.3508
+        q75: 0.3929
+        q95: 0.5052
+        n: 207
+      irr_max:
+        q5: 0.4445
+        q25: 0.5099
+        q50: 0.6041
+        q75: 0.7332
+        q95: 1.1216
+        n: 207
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 1.5
+      q95: 3.0
+      n: 207
+  pancreas:
+    n_cases: 137
+    n_ct: 90
+    n_mr: 47
+    hollow: false
+    vol_ml:
+      q5: 4.5943
+      q25: 30.4803
+      q50: 57.304
+      q75: 79.487
+      q95: 110.9888
+      n: 137
+    shape:
+      sphericity:
+        q5: 0.4292
+        q25: 0.479
+        q50: 0.5138
+        q75: 0.557
+        q95: 0.711
+        n: 137
+      solidity:
+        q5: 0.2849
+        q25: 0.3763
+        q50: 0.4449
+        q75: 0.5424
+        q95: 0.9294
+        n: 137
+      elong:
+        q5: 0.1533
+        q25: 0.1846
+        q50: 0.2143
+        q75: 0.2569
+        q95: 0.3949
+        n: 137
+      flat:
+        q5: 0.2592
+        q25: 0.3075
+        q50: 0.3672
+        q75: 0.4274
+        q95: 0.5859
+        n: 137
+      irr_rms:
+        q5: 0.1166
+        q25: 0.1362
+        q50: 0.1578
+        q75: 0.1987
+        q95: 0.379
+        n: 136
+      irr_p95:
+        q5: 0.2023
+        q25: 0.2442
+        q50: 0.2901
+        q75: 0.3691
+        q95: 0.9323
+        n: 136
+      irr_max:
+        q5: 0.3409
+        q25: 0.4425
+        q50: 0.6038
+        q75: 0.8009
+        q95: 1.5078
+        n: 136
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 2.9994
+      q95: 6.9752
+      n: 137
+  prostate:
+    n_cases: 81
+    n_ct: 66
+    n_mr: 15
+    hollow: false
+    vol_ml:
+      q5: 0.0
+      q25: 12.4205
+      q50: 25.61
+      q75: 32.4712
+      q95: 49.4333
+      n: 81
+    shape:
+      sphericity:
+        q5: 0.7215
+        q25: 0.7845
+        q50: 0.8326
+        q75: 0.8515
+        q95: 0.8719
+        n: 81
+      solidity:
+        q5: 0.882
+        q25: 0.9671
+        q50: 1.0
+        q75: 1.0
+        q95: 1.0
+        n: 81
+      elong:
+        q5: 0.4728
+        q25: 0.5984
+        q50: 0.6602
+        q75: 0.7351
+        q95: 0.8128
+        n: 81
+      flat:
+        q5: 0.6525
+        q25: 0.7672
+        q50: 0.8185
+        q75: 0.8719
+        q95: 0.9374
+        n: 81
+      irr_rms:
+        q5: 0.0865
+        q25: 0.0931
+        q50: 0.0995
+        q75: 0.1275
+        q95: 0.2965
+        n: 81
+      irr_p95:
+        q5: 0.1139
+        q25: 0.1338
+        q50: 0.1524
+        q75: 0.1888
+        q95: 0.4355
+        n: 81
+      irr_max:
+        q5: 0.1834
+        q25: 0.2124
+        q50: 0.2485
+        q75: 0.3321
+        q95: 0.6484
+        n: 81
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 1.5
+      q95: 3.9755
+      n: 81
+  small_bowel:
+    n_cases: 93
+    n_ct: 71
+    n_mr: 22
+    hollow: true
+    vol_ml:
+      q5: 18.3647
+      q25: 356.5538
+      q50: 786.267
+      q75: 1016.1325
+      q95: 1682.1091
+      n: 93
+    shape:
+      sphericity:
+        q5: 0.249
+        q25: 0.287
+        q50: 0.3111
+        q75: 0.3931
+        q95: 0.5745
+        n: 93
+      solidity:
+        q5: 0.2414
+        q25: 0.3119
+        q50: 0.3566
+        q75: 0.4252
+        q95: 0.7272
+        n: 93
+      elong:
+        q5: 0.2138
+        q25: 0.2856
+        q50: 0.3381
+        q75: 0.3948
+        q95: 0.5226
+        n: 93
+      flat:
+        q5: 0.3823
+        q25: 0.4708
+        q50: 0.5884
+        q75: 0.6839
+        q95: 0.8434
+        n: 93
+      irr_rms:
+        q5: 0.1547
+        q25: 0.2706
+        q50: 0.4614
+        q75: 0.7528
+        q95: 1.4597
+        n: 92
+      irr_p95:
+        q5: 0.2858
+        q25: 0.5505
+        q50: 1.0124
+        q75: 1.5506
+        q95: 2.7198
+        n: 92
+      irr_max:
+        q5: 0.5215
+        q25: 1.0335
+        q50: 1.4825
+        q75: 2.0575
+        q95: 3.2469
+        n: 92
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 1.5
+      q95: 6.425
+      n: 93
+  spleen:
+    n_cases: 145
+    n_ct: 97
+    n_mr: 48
+    hollow: false
+    vol_ml:
+      q5: 42.7168
+      q25: 110.83
+      q50: 164.66
+      q75: 250.4115
+      q95: 455.4932
+      n: 145
+    shape:
+      sphericity:
+        q5: 0.555
+        q25: 0.6234
+        q50: 0.6621
+        q75: 0.6965
+        q95: 0.7335
+        n: 145
+      solidity:
+        q5: 0.6401
+        q25: 0.7293
+        q50: 0.7788
+        q75: 0.827
+        q95: 0.8866
+        n: 145
+      elong:
+        q5: 0.3326
+        q25: 0.3743
+        q50: 0.4093
+        q75: 0.4649
+        q95: 0.5255
+        n: 145
+      flat:
+        q5: 0.5068
+        q25: 0.5951
+        q50: 0.6615
+        q75: 0.7107
+        q95: 0.7896
+        n: 145
+      irr_rms:
+        q5: 0.0917
+        q25: 0.1041
+        q50: 0.1111
+        q75: 0.1194
+        q95: 0.1737
+        n: 145
+      irr_p95:
+        q5: 0.1647
+        q25: 0.1983
+        q50: 0.2171
+        q75: 0.2395
+        q95: 0.3488
+        n: 145
+      irr_max:
+        q5: 0.2796
+        q25: 0.317
+        q50: 0.3641
+        q75: 0.4289
+        q95: 0.6523
+        n: 145
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 3.0
+      q95: 8.0
+      n: 145
+  stomach:
+    n_cases: 141
+    n_ct: 97
+    n_mr: 44
+    hollow: true
+    vol_ml:
+      q5: 42.4607
+      q25: 131.0323
+      q50: 226.776
+      q75: 382.6902
+      q95: 698.1281
+      n: 141
+    shape:
+      sphericity:
+        q5: 0.5168
+        q25: 0.5744
+        q50: 0.6132
+        q75: 0.6491
+        q95: 0.7238
+        n: 141
+      solidity:
+        q5: 0.4664
+        q25: 0.556
+        q50: 0.6112
+        q75: 0.693
+        q95: 0.879
+        n: 141
+      elong:
+        q5: 0.1887
+        q25: 0.23
+        q50: 0.2728
+        q75: 0.3268
+        q95: 0.4708
+        n: 141
+      flat:
+        q5: 0.3804
+        q25: 0.4531
+        q50: 0.5043
+        q75: 0.5874
+        q95: 0.7292
+        n: 141
+      irr_rms:
+        q5: 0.089
+        q25: 0.1032
+        q50: 0.1121
+        q75: 0.1404
+        q95: 0.2376
+        n: 140
+      irr_p95:
+        q5: 0.1565
+        q25: 0.186
+        q50: 0.2157
+        q75: 0.2649
+        q95: 0.6146
+        n: 140
+      irr_max:
+        q5: 0.2908
+        q25: 0.3952
+        q50: 0.4707
+        q75: 0.6253
+        q95: 1.1243
+        n: 140
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 2.5
+      q95: 6.6751
+      n: 141
+  thyroid:
+    n_cases: 88
+    n_ct: 88
+    n_mr: 0
+    hollow: false
+    vol_ml:
+      q5: 0.0
+      q25: 3.2095
+      q50: 11.502
+      q75: 15.8435
+      q95: 22.6794
+      n: 88
+    shape:
+      sphericity:
+        q5: 0.5126
+        q25: 0.5398
+        q50: 0.591
+        q75: 0.7632
+        q95: 0.8828
+        n: 88
+      solidity:
+        q5: 0.4023
+        q25: 0.4742
+        q50: 0.5582
+        q75: 1.0
+        q95: 1.0
+        n: 88
+      elong:
+        q5: 0.2579
+        q25: 0.3246
+        q50: 0.3646
+        q75: 0.4312
+        q95: 0.5624
+        n: 88
+      flat:
+        q5: 0.394
+        q25: 0.4927
+        q50: 0.5635
+        q75: 0.6633
+        q95: 0.8475
+        n: 88
+      irr_rms:
+        q5: 0.1388
+        q25: 0.157
+        q50: 0.1768
+        q75: 0.2171
+        q95: 0.3957
+        n: 84
+      irr_p95:
+        q5: 0.2038
+        q25: 0.2569
+        q50: 0.289
+        q75: 0.362
+        q95: 0.5557
+        n: 84
+      irr_max:
+        q5: 0.3088
+        q25: 0.4193
+        q50: 0.5243
+        q75: 0.6124
+        q95: 0.9138
+        n: 84
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 1.5
+      q95: 1.5
+      n: 88
+  urinary_bladder:
+    n_cases: 120
+    n_ct: 96
+    n_mr: 24
+    hollow: true
+    vol_ml:
+      q5: 23.392
+      q25: 62.537
+      q50: 116.7635
+      q75: 221.658
+      q95: 385.128
+      n: 120
+    shape:
+      sphericity:
+        q5: 0.6041
+        q25: 0.7187
+        q50: 0.7771
+        q75: 0.8261
+        q95: 0.8744
+        n: 120
+      solidity:
+        q5: 0.7245
+        q25: 0.8905
+        q50: 0.9565
+        q75: 0.9885
+        q95: 1.0
+        n: 120
+      elong:
+        q5: 0.2974
+        q25: 0.3974
+        q50: 0.5021
+        q75: 0.6363
+        q95: 0.7114
+        n: 120
+      flat:
+        q5: 0.5112
+        q25: 0.6763
+        q50: 0.7956
+        q75: 0.8741
+        q95: 0.9549
+        n: 120
+      irr_rms:
+        q5: 0.067
+        q25: 0.0753
+        q50: 0.0873
+        q75: 0.1052
+        q95: 0.1568
+        n: 120
+      irr_p95:
+        q5: 0.1081
+        q25: 0.128
+        q50: 0.1512
+        q75: 0.1956
+        q95: 0.3083
+        n: 120
+      irr_max:
+        q5: 0.1738
+        q25: 0.2124
+        q50: 0.2788
+        q75: 0.366
+        q95: 0.6304
+        n: 120
+    max_spacing_mm:
+      q5: 1.5
+      q25: 1.5
+      q50: 1.5
+      q75: 1.5
+      q95: 6.25
+      n: 120
+tumour:
+  hollow:
+    datasets:
+    - Bladder_Tumor_00
+    - Cervix_Tumor_00
+    - Colon_Tumor_00
+    - Uterus_Tumor_00
+    n_cases: 427
+    weighting: equal per dataset
+    main_ml:
+      q5: 0.402
+      q25: 4.2124
+      q50: 16.3885
+      q75: 49.2142
+      q95: 178.6847
+      n: 427
+    shape:
+      sphericity:
+        q5: 0.399
+        q25: 0.5161
+        q50: 0.6252
+        q75: 0.7134
+        q95: 0.8325
+        n: 427
+      solidity:
+        q5: 0.5204
+        q25: 0.6567
+        q50: 0.7767
+        q75: 0.9141
+        q95: 1.0
+        n: 426
+      elong:
+        q5: 0.2508
+        q25: 0.4335
+        q50: 0.5611
+        q75: 0.666
+        q95: 0.7717
+        n: 427
+      flat:
+        q5: 0.4396
+        q25: 0.643
+        q50: 0.7414
+        q75: 0.8318
+        q95: 0.9257
+        n: 427
+      irr_rms:
+        q5: 0.1033
+        q25: 0.1413
+        q50: 0.1811
+        q75: 0.2343
+        q95: 0.4174
+        n: 425
+      irr_p95:
+        q5: 0.1765
+        q25: 0.2294
+        q50: 0.3039
+        q75: 0.4036
+        q95: 0.7228
+        n: 425
+      irr_max:
+        q5: 0.2796
+        q25: 0.3868
+        q50: 0.5178
+        q75: 0.7055
+        q95: 1.2004
+        n: 425
+    multiplicity:
+      n_comp:
+        '0.0': 0.0021
+        '1.0': 0.7771
+        '2.0': 0.0833
+        '3.0': 0.0333
+        '4.0': 0.0396
+        '5.0': 0.0167
+      n_satellite:
+        '0.0': 0.7958
+        '1.0': 0.0979
+        '2.0': 0.0354
+        '3.0': 0.025
+        '4.0': 0.0146
+        '5.0': 0.0104
+      n_distant:
+        '0.0': 0.9021
+        '1.0': 0.0646
+        '2.0': 0.0146
+        '3.0': 0.0083
+        '4.0': 0.0063
+        '5.0': 0.0021
+    relation:
+      datasets:
+      - Cervix_Tumor_00
+      - Uterus_Tumor_00
+      vol_ratio:
+        q5: 0.007
+        q25: 0.0511
+        q50: 0.1581
+        q75: 0.3929
+        q95: 0.6316
+        n: 187
+      contact_frac:
+        q5: 0.2829
+        q25: 0.5047
+        q50: 0.6673
+        q75: 0.8619
+        q95: 0.9963
+        n: 187
+      lumen_contact_frac:
+        q5: 0.0
+        q25: 0.0
+        q50: 0.0003
+        q75: 0.0147
+        q95: 0.0988
+        n: 120
+      outside_hull_frac:
+        q5: 0.0
+        q25: 0.0
+        q50: 0.0101
+        q75: 0.0641
+        q95: 0.6208
+        n: 187
+      depth_rel:
+        q5: 0.193
+        q25: 0.3922
+        q50: 0.5348
+        q75: 0.6219
+        q95: 0.763
+        n: 187
+  solid:
+    datasets:
+    - Breast_Tumor_00
+    - Kidney_Tumor_00
+    - Liver_Tumor_00
+    - Lung_Tumor_00
+    - Lung_Tumor_01
+    - Pancreas_Tumor_00
+    - Prostate_Tumor_00
+    n_cases: 640
+    weighting: equal per dataset
+    main_ml:
+      q5: 0.5939
+      q25: 2.9408
+      q50: 8.5097
+      q75: 35.7645
+      q95: 266.2169
+      n: 640
+    shape:
+      sphericity:
+        q5: 0.4395
+        q25: 0.6077
+        q50: 0.7025
+        q75: 0.7669
+        q95: 0.8386
+        n: 640
+      solidity:
+        q5: 0.5074
+        q25: 0.7513
+        q50: 0.8995
+        q75: 0.9933
+        q95: 1.0
+        n: 640
+      elong:
+        q5: 0.3182
+        q25: 0.4616
+        q50: 0.592
+        q75: 0.6923
+        q95: 0.81
+        n: 640
+      flat:
+        q5: 0.4949
+        q25: 0.6618
+        q50: 0.7709
+        q75: 0.8601
+        q95: 0.9466
+        n: 640
+      irr_rms:
+        q5: 0.089
+        q25: 0.1275
+        q50: 0.1683
+        q75: 0.221
+        q95: 0.3639
+        n: 639
+      irr_p95:
+        q5: 0.149
+        q25: 0.1919
+        q50: 0.253
+        q75: 0.3382
+        q95: 0.6124
+        n: 639
+      irr_max:
+        q5: 0.2399
+        q25: 0.3222
+        q50: 0.4351
+        q75: 0.6226
+        q95: 1.2012
+        n: 639
+    multiplicity:
+      n_comp:
+        '1.0': 0.7699
+        '2.0': 0.0972
+        '3.0': 0.024
+        '4.0': 0.0257
+        '5.0': 0.006
+      n_satellite:
+        '0.0': 0.8557
+        '1.0': 0.0747
+        '2.0': 0.0232
+        '3.0': 0.0213
+        '4.0': 0.0067
+        '5.0': 0.0094
+      n_distant:
+        '0.0': 0.8313
+        '1.0': 0.0725
+        '2.0': 0.0232
+        '3.0': 0.013
+        '4.0': 0.0094
+        '5.0': 0.009
+    relation:
+      datasets:
+      - Kidney_Tumor_00
+      - Liver_Tumor_00
+      - Lung_Tumor_01
+      - Pancreas_Tumor_00
+      vol_ratio:
+        q5: 0.0009
+        q25: 0.0116
+        q50: 0.0424
+        q75: 0.1084
+        q95: 0.551
+        n: 375
+      contact_frac:
+        q5: 0.1691
+        q25: 0.4697
+        q50: 0.7455
+        q75: 0.9258
+        q95: 1.0
+        n: 375
+      outside_hull_frac:
+        q5: 0.0
+        q25: 0.0
+        q50: 0.0008
+        q75: 0.0614
+        q95: 0.6238
+        n: 375
+      depth_rel:
+        q5: 0.1292
+        q25: 0.255
+        q50: 0.3785
+        q75: 0.5008
+        q95: 0.6506
+        n: 375
+tumour_sources:
+  Bladder_Tumor_00:
+    architecture: hollow
+    host: urinary_bladder
+    modality: MR
+    n: 120
+    main_ml_median: 4.95
+    shape_median:
+      sphericity: 0.6736
+      solidity: 0.8503
+      elong: 0.5215
+      flat: 0.7681
+      irr_rms: 0.1896
+      irr_p95: 0.2931
+      irr_max: 0.4974
+  Breast_Tumor_00:
+    architecture: solid
+    host: breast
+    modality: MR
+    n: 120
+    main_ml_median: 10.05
+    shape_median:
+      sphericity: 0.6082
+      solidity: 0.7546
+      elong: 0.5629
+      flat: 0.745
+      irr_rms: 0.1858
+      irr_p95: 0.3323
+      irr_max: 0.6229
+  Cervix_Tumor_00:
+    architecture: hollow
+    host: uterus_cervix
+    modality: MR
+    n: 67
+    main_ml_median: 17.64
+    shape_median:
+      sphericity: 0.6293
+      solidity: 0.7596
+      elong: 0.6118
+      flat: 0.7399
+      irr_rms: 0.1666
+      irr_p95: 0.2693
+      irr_max: 0.4874
+  Colon_Tumor_00:
+    architecture: hollow
+    host: colon
+    modality: CT
+    n: 120
+    main_ml_median: 22.2
+    shape_median:
+      sphericity: 0.472
+      solidity: 0.62
+      elong: 0.5193
+      flat: 0.7087
+      irr_rms: 0.1927
+      irr_p95: 0.3761
+      irr_max: 0.6403
+  Kidney_Tumor_00:
+    architecture: solid
+    host: kidney
+    modality: CT
+    n: 120
+    main_ml_median: 29.56
+    shape_median:
+      sphericity: 0.7695
+      solidity: 0.9418
+      elong: 0.7154
+      flat: 0.8419
+      irr_rms: 0.1063
+      irr_p95: 0.1671
+      irr_max: 0.2949
+  Liver_Tumor_00:
+    architecture: solid
+    host: liver
+    modality: CT
+    n: 73
+    main_ml_median: 12.12
+    shape_median:
+      sphericity: 0.7281
+      solidity: 0.933
+      elong: 0.5602
+      flat: 0.7699
+      irr_rms: 0.146
+      irr_p95: 0.2341
+      irr_max: 0.3922
+  Lung_Tumor_00:
+    architecture: solid
+    host: lung
+    modality: CT
+    n: 63
+    main_ml_median: 5.26
+    shape_median:
+      sphericity: 0.642
+      solidity: 0.8122
+      elong: 0.6061
+      flat: 0.7915
+      irr_rms: 0.1949
+      irr_p95: 0.2934
+      irr_max: 0.5361
+  Lung_Tumor_01:
+    architecture: solid
+    host: lung
+    modality: CT
+    n: 120
+    main_ml_median: 53.41
+    shape_median:
+      sphericity: 0.5939
+      solidity: 0.7366
+      elong: 0.5615
+      flat: 0.752
+      irr_rms: 0.1432
+      irr_p95: 0.2619
+      irr_max: 0.5097
+  Pancreas_Tumor_00:
+    architecture: solid
+    host: pancreas
+    modality: CT
+    n: 65
+    main_ml_median: 6.37
+    shape_median:
+      sphericity: 0.7916
+      solidity: 0.9952
+      elong: 0.6209
+      flat: 0.7813
+      irr_rms: 0.144
+      irr_p95: 0.1963
+      irr_max: 0.2957
+  Prostate_Tumor_00:
+    architecture: solid
+    host: prostate
+    modality: MR
+    n: 79
+    main_ml_median: 1.28
+    shape_median:
+      sphericity: 0.6917
+      solidity: 0.9869
+      elong: 0.4596
+      flat: 0.7154
+      irr_rms: 0.2527
+      irr_p95: 0.3749
+      irr_max: 0.5424
+  Uterus_Tumor_00:
+    architecture: hollow
+    host: uterus
+    modality: MR
+    n: 120
+    main_ml_median: 27.14
+    shape_median:
+      sphericity: 0.7362
+      solidity: 0.9121
+      elong: 0.5858
+      flat: 0.7553
+      irr_rms: 0.1613
+      irr_p95: 0.2479
+      irr_max: 0.392

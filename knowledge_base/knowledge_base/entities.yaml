@@ -1,4 +1,4 @@
-version: 0.5.7
+version: 0.5.8
 entities:
 - id: vertebra_C1
   name: C1 vertebra
@@ -2652,6 +2652,7 @@ entities:
       ap: anterior
     presence: surgical
     spatial_prior: []
+  expected_components: 2
   sources:
   - TS
   - FMA
@@ -3755,6 +3756,7 @@ entities:
       dist_mm:
       - 0
       - 40
+      side_link: right
   sources:
   - TS
   - FMA

@@ -1,0 +1,11 @@
+{
+ "CT": {
+  "sigma_p99": 76.58618,
+  "n": 104
+ },
+ "MR": {
+  "snr_p01": 1.642,
+  "n": 73
+ },
+ "source": "scripts/aqc_expert.py (TotalSegmentator CT no_pathology / MR usb, adults); paraspinal muscle on the ~5 mm grid"
+}

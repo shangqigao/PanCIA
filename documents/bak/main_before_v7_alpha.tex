@@ -1,0 +1,840 @@
+\documentclass[fleqn,10pt]{olplainarticle}
+% Use option lineno for line numbers 
+
+\title{Pan-Cancer Multi-Agent Tumor Segmentation and Analysis with Conditional Probabilistic Anatomical Reasoning}
+
+\author[1]{First Author}
+\author[2]{Second Author}
+\affil[1]{Address of first author}
+\affil[2]{Address of second author}
+
+\keywords{Keyword1, Keyword2, Keyword3}
+
+\begin{abstract}
+Please provide an abstract of no more than 300 words. Your abstract should explain the main contributions of your article, and should not contain any material that is not included in the main text. 
+\end{abstract}
+
+\begin{document}
+
+\flushbottom
+\maketitle
+\thispagestyle{empty}
+
+\section{Introduction}
+
+\begin{itemize}
+    \item Build a pan-cancer multi-agent tumor segmentation system
+    \item 2D, 3D tumor segmentation models, anatomical segmentation models could be any, even allow users to define or use their private models
+    \item Beyond segmentation, provide anatomical graph and explanation
+\end{itemize}
+
+\section{Methodology}
+% Rewritten 16 Oct 2026 (Claude, with the user): ledger v6 (set-based host and tumor reasoning,
+% documents/plan/Ledger_v6_rules_final_draft.md) and image grounding G0 v2 (documents/plan/Image_grounding_rules_draft.md).
+% Previous version: documents/bak/main_before_g0_20261016.tex.
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figs/pipeline.pdf}
+    \caption{Pan-cancer multi-agent tumor segmentation and reasoning. Given a scan $X$ and a user-given cancer type $C$,
+    pluggable segmentation agents (defaults: BiomedParse for 2D tumor, VoxTell for 3D promptable tumor and anatomy,
+    TotalSegmentator for anatomy; any model can fill a slot) produce tumor and anatomy masks. A planner turns the
+    pan-cancer knowledge base $K$ into a scan-specific prompt plan $K_C$. Set-based reasoning turns the agents' masks into
+    claims, anchors, outlines and lesions, with graded priors over each anchor's host, existence and extent. Image grounding
+    supplies evidence the agents do not use, with likelihoods learned only from expert annotations, and one-pass
+    conditional inference (normal model, then tumor model given it) weighs, for every anchor, whether it is tumor, which
+    host it belongs to and which of the agents' outlines is its extent; an explicit policy then takes the decisions.
+    [figure to be updated for v7/G1]}
+    \label{fig:pipeline}
+\end{figure*}
+
+Figure~\ref{fig:pipeline} summarizes the pipeline; the components are detailed below.
+
+\subsection{Conditional Probabilistic Anatomical Reasoning}
+\label{sec:conditional_reasoning}
+% Revised 18 Oct 2026 (Claude, with the user) after the combined methods review
+% (documents/plan/Methods_review_combined_2026-10-18.md, main_tex_revision_advice_2026-10-18.md):
+% graded anatomy, candidates kept open, one-pass conditional inference (N, then T given N) on common observations.
+% Previous version: documents/bak/main_before_v7_revision.tex.
+\begin{figure}
+    \centering
+    \IfFileExists{figs/PGM.png}{\includegraphics[width=1\linewidth]{figs/PGM.png}}{\fbox{\parbox{0.9\linewidth}{\centering figs/PGM.png not found}}}
+    \caption{Conditional probabilistic anatomical reasoning. Each tumor candidate needs two kinds of reasoning, both grounded
+    in the image: \emph{host} (which organ it belongs to, and that organ's normal tissue) and \emph{tumor} (whether it is a
+    tumor and what its extent is). Host reasoning and tumor reasoning supply the priors from the agents' masks and the
+    knowledge base; image grounding supplies likelihoods learned from expert annotations; joint inference combines them
+    conditionally, the normal model first and the tumor model given it.}
+    \label{fig:pgm}
+\end{figure}
+
+We formulate tumor segmentation as conditional probabilistic anatomical reasoning that jointly infers each tumor, its
+host organ and its extent, by combining the outputs of several segmentation agents with anatomical knowledge, set-based
+logic and image evidence. Let $X$ be the image, $C$ the cancer type and $K$ the data-agnostic anatomical knowledge base.
+The reasoning is organised so that early steps \emph{generate} candidates and graded evidence and decide only what is
+impossible; competing explanations stay open until the image has been consulted, and decisions are taken last, by an
+explicit policy.
+
+\paragraph{Segmentation agents.}
+Agents are pluggable and treated equally. A \emph{tumor agent} $k\in\mathcal{K}$ returns tumor masks for text prompts:
+one cancer-specific prompt (for example \emph{kidney tumor} for KIRC) and, if the agent is promptable, one prompt per host
+of the cancer type in the field of view. An \emph{organ agent} returns organ masks. With the default agents,
+\begin{equation}
+\label{eq:agents}
+\begin{aligned}
+B_C&=f_{\mathrm{BP}}(X,C), & V_C&=f_{\mathrm{VT}}(X,C,K_C),\\
+V_K&=f_{\mathrm{VT}}(X,K_C), & T&=f_{\mathrm{TS}}(X),
+\end{aligned}
+\end{equation}
+where $B_C$ and $V_C$ are tumor masks (VT's cancer prompt and its host prompts from the plan $K_C$,
+Section~\ref{sec:kb_planning}), and $V_K$ and $T$ are organ masks. We write $A_{k,o}$ for organ agent $k$'s mask of
+organ $o$ ($A_{\mathrm{TS},o}=T_o$, $A_{\mathrm{VT},o}=V_{K,o}$). Agreement counts agents, not prompts: different
+prompts of one agent are one rater. Every piece of support is stored with its provenance (which agent, which prompt), so
+that an agent confirming its own proposal, for example a VT tumor mask supported only by VT's organ mask, is not counted
+as independent confirmation.
+
+\paragraph{Anatomy.}
+Organ masks are not taken at face value. Each mask receives a confidence $\mu(A_{k,o})\in\{0,\tfrac12,1\}$ from the
+organ--organ relations of the knowledge base (\emph{host reasoning}, Section~\ref{sec:host_details}): $0$ only for a corrupt or geometrically
+impossible mask, $\tfrac12$ for a mask that violates a normal-anatomy expectation (which disease can cause), $1$
+otherwise. Disagreement between agents is kept rather than hidden: each organ is represented by three zones,
+\begin{equation}
+\label{eq:organ_reference}
+\hat H_o=\textstyle\bigcap_{k:\,\mu(A_{k,o})=\mu^{\max}_o}A_{k,o}\setminus\bigcup_{o'}C_{o,o'},\qquad
+B_o=\Bigl(\textstyle\bigcup_{k:\,\mu(A_{k,o})>0}A_{k,o}\Bigr)\setminus\bigl(\hat H_o\cup\textstyle\bigcup_{o'}C_{o,o'}\bigr),
+\end{equation}
+the \emph{core} $\hat H_o$, where the most reliable masks agree; the \emph{uncertain boundary} $B_o$, claimed by some
+masks only; and the \emph{contested} regions $C_{o,o'}$, where masks of two organs that the knowledge base does not relate
+by containment overlap. The territory of $o$ is $\Theta_o=\hat H_o\cup B_o\cup\bigcup_{o'}C_{o,o'}$. Each organ the
+planner expects is in one of three states: \emph{present} (some mask with $\mu>0$), \emph{unsegmented} (inside the field
+of view but without such a mask, because of agent failure, distortion or replacement by tumor) or \emph{out of view}. An
+unsegmented organ is represented by a knowledge-base region (its own vertebral span, on its own side) with confidence
+$\tfrac12$; an organ with less than half of its span in the field of view is out of view and is not a host. The anatomy $A=\{\hat H_o,B_o,\sigma_o\}\cup\{C_{o,o'}\}$, with $\sigma_o$ the
+state, is a deterministic function of the organ agents' outputs and $K$, and is \emph{cut} from the tumor model
+\cite{liu2009modularization,plummer2015cuts,jacob2017better}: tumor inference never reshapes an organ mask, and the normal
+tissue of each host is computed once from the anatomy and the agents' claims and is not updated. The knowledge base
+gives the cancer type's weighted host set $\mathcal{H}_C=\{(h,\kappa_h,w_h)\}$: the primary organ ($w_h=1$), organs at
+risk of local invasion ($0.3$) and distant sites ($0.15$). These weights are preferences of the knowledge base, not
+calibrated probabilities.
+
+\paragraph{Set-based units.}
+Reasoning acts on sets produced by the agents, never on redrawn voxels.
+\begin{itemize}
+\item A \emph{claim} is a connected component of one agent's tumor mask from one prompt. It is the smallest unit and is
+never cut.
+\item An \emph{anchor} $a$ is a located core: a connected component of the voxels claimed by at least two different
+agents (\emph{two-agent anchor}), or a component of one agent's claims that overlaps no two-agent anchor
+(\emph{single-agent anchor}).
+\item The \emph{outlines} $\Omega_a$ of an anchor are the claims that overlap it. Relative to $a$, an outline consists of
+the shared core, \emph{extensions} (its remainder connected to $a$) and \emph{lobes} (parts of its remainder joined to
+$a$ only through a neck, Section~\ref{sec:tumor_details}). A lobe is an anchor of its own, so the support of a core is not
+transferred to everything connected to it.
+\item The \emph{host candidates} $\mathcal{H}_a$ of an anchor are the organs whose envelope (territory dilated by
+$10$\,mm) it touches: hosts of $\mathcal{H}_C$, present or unsegmented, and any other organ, confidently segmented and in view,
+that contains most of the anchor (for attribution, below); $\varnothing$ if it touches none. Touch generates candidates; it never selects one.
+\item A \emph{lesion} $L$ is a group of anchors within $\tau=10$\,mm of each other. Grouping is geometric and independent
+of the host; anchors of a lesion share one host.
+\end{itemize}
+Each anchor defines a \emph{grounding case} $c_a=(a,\Omega_a,\mathcal{H}_a)$: the anchor, its tumor candidates and its
+host candidates.
+
+\paragraph{Latent variables.}
+For each anchor $a$ we infer its host $h_a\in\mathcal{H}_a$, its existence $z_a\in\{0,1\}$ (tumor or normal structure)
+and, if it is a tumor, its extent $\xi_a\in\mathcal{X}_a$, chosen from candidate extents built from its outlines by set
+operations,
+\begin{equation}
+\label{eq:extents}
+\mathcal{X}_a=\Bigl\{\,a,\;\;\omega\ (\omega\in\Omega_a),\;\;U_a=\textstyle\bigcup_{\omega\in\Omega_a}\omega,\;\;
+U_a\setminus\bigcup_{o\notin\mathcal{H}_a}\hat H_{o}\Bigr\}.
+\end{equation}
+Outlines flagged by the anatomical tests (a leak, an organ overlap) remain candidates with a lower prior, because an
+apparent leak may be invasion and an organ overlap may be replacement by tumor; only corrupt outputs are removed. The
+extents run from the agreed core $a$ (maximal trimming), through each agent's reading, to the union of the readings and
+the union without its leaks into organs that are not hosts of $a$. Delineation is a choice among the agents' proposals,
+not a voxel-wise redrawing (Section~\ref{sec:grounding_details}). Existence and attribution are kept apart: a tumor whose
+host is not in $\mathcal{H}_C$ is reported as an \emph{other or indeterminate lesion} (for example a renal cyst or an
+adrenal nodule on an ovarian-cancer scan); it is abnormal but outside the task, and is not part of the cancer
+segmentation.
+
+\paragraph{Conditional probabilistic formulation.}
+Given the anatomy, the anchors are the units of inference. Writing $N$ for the normal model (the host and its normal
+tissue) and $T$ for the tumor model (existence and extent), the target for each grounding case is
+\begin{equation}
+\label{eq:conditional_joint}
+\boxed{
+p(T,N\mid c_a,X)=p(T\mid N,c_a,X)\;p(N\mid c_a,X)
+}
+\end{equation}
+that is, the normal model is inferred first and the tumor model given it. The normal model of host $h$ is the pair
+$(h,\mathcal{N}_h)$: the host and its normal tissue, the core $\hat H_h$ without any agent's claims
+(Section~\ref{sec:grounding_details}). Its posterior is the host posterior from anatomy,
+\begin{equation}
+\label{eq:normal_model}
+p(N=h\mid c_a,X)=P(h\mid a)\;\propto\;w_h\,g_h(a),
+\end{equation}
+where $g_h(a)$ is the anatomical compatibility of the anchor with host $h$ (overlap with the territory, boundary contact,
+relative position and mask confidence; Eq.~\eqref{eq:compat}). It depends on the image through the agents'
+masks only. Given the normal model, the tumor model is decided by the image on observations that are the same under every
+tumor hypothesis: the \emph{existence evidence} $E^{\mathrm{ex}}_a(h)$, computed on the anchor $a$, and the
+\emph{extent evidence} $Y_a(h)$, computed on the common region $R_a$ ($U_a$ with a $5$\,mm margin) against
+$\mathcal{N}_h$. With the existence prior $\pi(a,h)$ and the extent prior $w^0_a(\xi)$ from tumor reasoning
+(Eqs.~\eqref{eq:existence_prior} and \eqref{eq:extent_prior}),
+\begin{equation}
+\label{eq:case_posterior}
+\begin{aligned}
+p(z_a=1,\xi_a=\xi\mid h,c_a,X)&\;\propto\;\pi(a,h)\,w^{0}_a(\xi)\,\Lambda^{\mathrm{ex}}_a(h)\,\Lambda^{\mathrm{ext}}_a(\xi,h),\\
+p(z_a=0\mid h,c_a,X)&\;\propto\;1-\pi(a,h),
+\end{aligned}
+\end{equation}
+with the likelihood ratios
+\begin{equation}
+\label{eq:likelihood_ratios}
+\Lambda^{\mathrm{ex}}_a(h)=\frac{p\bigl(E^{\mathrm{ex}}_a(h)\mid T,h\bigr)}{p\bigl(E^{\mathrm{ex}}_a(h)\mid N,h\bigr)},\qquad
+\Lambda^{\mathrm{ext}}_a(\xi,h)=\frac{p\bigl(Y_a(h)\mid \xi,h\bigr)}{p\bigl(Y_a(h)\mid N,h\bigr)}.
+\end{equation}
+Because, under a given host, every hypothesis is evaluated on the same observations, dividing by their normal likelihood
+is exact and Eq.~\eqref{eq:case_posterior} is a posterior, not a score. The image does not re-rank the hosts directly:
+host-frame evidence is computed against each host's own normal tissue, so evidence under different hosts is evidence about
+different data. It acts on the host through the tumor model instead (below).
+
+\paragraph{Host and tumor reasoning.}
+Both are set-based relational checks against the knowledge base. $K$ stores organ--organ relations $\mathcal{R}_{AA}$
+(containment: \emph{has part}, \emph{lies in}, \emph{invested by}; \emph{adjacent to} with contact and direction; spatial
+priors with direction and distance; and, by default, disjointness of organs it does not relate by containment) with unary
+organ attributes (volume range, number of components, side, vertebral span), and tumor--organ relations $\mathcal{R}_{TA}$
+(inside, straddling or touching an organ, extending into an adjacent organ, lying at a cancer-specific distant site, being
+or containing an organ, lying in an organ that is not a host of the cancer type). \emph{Host reasoning} evaluates
+$R(A_{k,o},A_{k',o'})\in\mathcal{R}_{AA}$ between anatomy masks, together with the unary checks; it gives the anatomy:
+mask confidences, organ states, cores, uncertain boundaries and contested regions. \emph{Tumor reasoning} evaluates
+$R(u,\Theta_o)\in\mathcal{R}_{TA}$ between tumor units $u$ (claims, anchors, outlines) and the anatomy; it gives the host
+candidates, the anatomical compatibility $g_h(a)$, the anatomical flags, the existence prior $\pi(a,h)$ and the extent
+prior $w^0_a(\xi)$. Host reasoning reads anatomy masks only, so the anatomy stays cut.
+
+\paragraph{Priors, not decisions.}
+Host and tumor reasoning use the agents' masks and the knowledge base, never image intensities, and they do not decide the
+tumor. Only what is impossible is decided early: a corrupt agent output is removed and an organ out of view is not a host.
+Everything else that is anatomically \emph{unsupported} (a single agent, a flat claim, a host-prompt claim outside its
+host, a leaking or organ-sized outline, a distant lesion without site agreement) lowers a prior or flags a unit, and the
+image can overturn it. Silence of another agent is not evidence against a candidate, and not evidence for it. The cancer is
+confirmed and the scans precede surgery, so a primary tumor exists in the scan; this is represented at scan level
+(Section~\ref{sec:grounding_details}) and does not make any particular candidate near the primary organ the primary
+tumor.
+
+\paragraph{Image grounding: evidence the agents do not use.}
+A segmentation agent outlines what looks locally abnormal, so local contrast is what selected a candidate; it cannot
+distinguish a tumor from the normal structures an agent mistakes for one. Existence evidence therefore comes only from
+properties the agents do not model and that were found to transfer from expert data to unseen agent candidates:
+\emph{context} (whether the candidate's own deviation from its host stays closed or continues into the host),
+\emph{internal structure} (spatially structured heterogeneity in the candidate's own frame) and \emph{geometry}
+(elongation). Contrast only routes: it decides whether the context test applies. Extent evidence asks a different
+question, whether the tissue an outline adds to the core looks like the core or like the host's normal tissue. The
+likelihoods of existence evidence are frequencies on expert annotations only,
+\begin{equation}
+\label{eq:likelihoods}
+\begin{aligned}
+p(E^{\mathrm{ex}}\mid T,h)&:\ \text{frequency over expert tumor masks and their partial cores},\\
+p(E^{\mathrm{ex}}\mid N,h)&:\ \text{frequency over expert normal anatomy of host }h,
+\end{aligned}
+\end{equation}
+and the extent prior's size term is learned from expert tumors and their simulated agent outlines. No likelihood or prior
+is fitted on agent outputs or on the evaluated cohort. Likelihood ratios are bounded, and evidence that cannot be
+computed is marginalised (it is not evidence).
+
+\paragraph{Joint inference.}
+Inference follows Eq.~\eqref{eq:conditional_joint} literally and is computed once, in closed form, by enumerating the
+discrete latent variables; there is no iteration and no posterior is fed back as a prior.
+\begin{enumerate}
+\item \emph{Normal model.} For every lesion $L$, the host posterior $P(h\mid L)\propto w_h\,g_h(L)$ is computed on the
+lesion as a whole and shared by its anchors; for every candidate host, the normal tissue $\mathcal{N}_h$ is fixed.
+\item \emph{Tumor model given the normal model.} For every anchor and host, Eq.~\eqref{eq:case_posterior} gives
+$p(z_a,\xi_a\mid h,c_a,X)$.
+\item \emph{Combination.} The existence posterior, the host of a tumor and its extent are
+\begin{equation}
+\label{eq:combination}
+\begin{aligned}
+p_a&=\textstyle\sum_h P(h\mid L_a)\;p(z_a=1\mid h,c_a,X),\\
+P(h\mid z_a=1,c_a,X)&\propto P(h\mid L_a)\;p(z_a=1\mid h,c_a,X),\\
+(\hat h_a,\hat\xi_a)&=\textstyle\arg\max_{h,\xi}\;P(h\mid L_a)\;p(z_a=1,\xi_a=\xi\mid h,c_a,X).
+\end{aligned}
+\end{equation}
+\end{enumerate}
+Host and extent are chosen jointly, so an extent supported under one host is never paired with another host. The image
+reaches the host through the second line: a candidate that looks like a tumor under one host and like normal tissue under
+another is attributed to the first. The outputs are, for every anchor, $p_a$, the host posterior given tumor, the extent
+posterior given tumor and host, and $(\hat h_a,\hat\xi_a)$. Decisions are taken afterwards by an explicit policy
+(Section~\ref{sec:grounding_details}): the tumor segmentation is $\hat Z=\bigcup_a\hat\xi_a$ over the accepted anchors
+whose host is in $\mathcal{H}_C$; accepted anchors with a host outside $\mathcal{H}_C$ are reported as other or
+indeterminate lesions.
+
+\subsection{Pan-cancer knowledge base and prompt planning}
+\label{sec:kb_planning}
+% Drafted 4 Oct 2026 from knowledge base v0.5.7 (knowledge_base/*.yaml) and the planner (pancia_kb/planner.py,
+% adapter.py). No equation of Section~\ref{sec:conditional_reasoning} is changed; this section defines how $K$ is
+% built and how the prompt plan $K_C$ of Eq.~\eqref{eq:agents} is produced for each scan.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.9\linewidth]{figs/kb_graph.pdf}
+    \caption{Pan-cancer anatomical knowledge graph}
+    \label{fig:kb_graph}
+\end{figure}
+
+This section describes how the anatomical knowledge base $K$ is built once for all cancer types, and how, for each scan,
+it is turned into the final VT prompt plan $K_C$ of Eq.~\eqref{eq:agents}. $K$ is a curated, image-independent graph;
+$K_C$ is a finite list of prompt jobs, and $V_K=f_{\mathrm{VT}}(X,K_C)$ is the stack of masks VT returns for these jobs.
+No component of $K$ or of the planner uses patient sex, and no rule or constant is specific to an organ, a cancer type
+or a dataset.
+
+\paragraph{Anatomical entities.}
+$K$ contains 204 anatomical entities. Each entity has a category (solid organ, hollow organ, gland, bone, vessel,
+lymph-node station, muscle, fascia, fat, duct, space, nerve, landmark or region) and a laterality (left, right, midline
+or bilateral). It also records how it can be observed: the TotalSegmentator classes that represent it for CT and for
+MR, if any; a VT main phrase with up to two aliases, each graded as in-vocabulary, near-vocabulary or
+out-of-vocabulary against the published VT training vocabulary; its craniocaudal span between vertebral anchors;
+whether it is always present, variably present or absent after common surgery; a typical volume range; and, for CT, a
+typical Hounsfield-unit range. Finally, each entity that can host a tumor carries a tumor phrase (for example
+\emph{liver tumor}). Thirty-nine entities are \emph{anchors}: structures that TotalSegmentator segments reliably and
+that therefore fix the coordinate frame of a scan (vertebrae, major vessels and large organs). Landmarks are tied to
+vertebral levels, so that every spatial prior in $K$ is expressed relative to the patient's own skeleton rather than in
+millimetres.
+
+\paragraph{Anatomical relations.}
+Entities are connected by 433 typed, directed relations. Ten relation kinds are defined, of which nine are used:
+\emph{adjacent\_to} (176), \emph{has\_part} (97), \emph{drains\_lymph\_to} (62), \emph{lies\_in} (23),
+\emph{supplied\_by} (21), \emph{invested\_by} (16), \emph{drained\_by} (16), \emph{landmark\_for} (13) and
+\emph{has\_duct} (9); the tenth, \emph{wall\_of}, is reserved. Each relation kind has a fixed spatial gate and a default
+priority. The gate states where the target may lie relative to the source: inside it (\emph{has\_part}), in a shell
+around it (\emph{invested\_by}), in a neighbouring box or directional shell (\emph{adjacent\_to}), in a corridor along
+a vessel or duct (\emph{supplied\_by}, \emph{drained\_by}, \emph{has\_duct}) or in a body region
+(\emph{drains\_lymph\_to}); \emph{lies\_in} and \emph{landmark\_for} carry no gate. Gates are later used to check VT
+outputs against structures that are already segmented, and priorities order prompts when the budget is exceeded. The relations encode the anatomy that staging systems refer to: direct extension
+into a neighbouring organ, invasion of an investing fascia or fat, and lymphatic drainage to a regional station.
+
+\paragraph{Cancer-type spread sets.}
+For each cancer type $C$, $K$ stores a weighted host set $\mathcal{H}_C$, which is the host set used in
+Section~\ref{sec:reasoning_details}. Only two items are specified per cancer type: the primary organ (prior $1.0$) and a list of
+distant metastatic sites (prior $0.15$). Organs at risk of local invasion (prior $0.3$) are not curated; they are
+derived automatically as the entities reached from the primary organ by an \emph{adjacent\_to} or \emph{invested\_by}
+relation. Each cancer type also has a short ensemble of tumor phrases (for example \emph{lung cancer}, \emph{lung
+tumor}, \emph{lung mass}), and generic templates produce phrases for any host without a curated one. The distant-site lists are user-defined inputs rather than an exhaustive account of metastatic spread. Here we
+restrict each list to the most common metastatic sites reported for that cancer type that are also anchors of $K$, and
+cancer types without a curated list default to liver, lung, adrenal gland and spine. Head-and-neck anchors (brain, oral cavity,
+pharynx, larynx and parotid gland) are part of $K$ but are in no default list, because the body scans considered here
+rarely include the head and neck. Sites that are not anchors, such
+as the pleura and distant lymph nodes, are not prompted. A user can extend a list, or add an anchor, without changing any other part of the framework, and only the affected cancer types need to be re-planned. The current
+base covers 17 TCGA cancer types, plus a CPTAC entry whose cancer type is resolved per case. Adding a new cancer type
+therefore requires only its primary organ, its metastatic sites and, optionally, its phrase ensemble; all other
+knowledge is shared.
+
+\paragraph{Planning $K_C$ for a scan.}
+For a given scan, the planner builds $K_C$ deterministically in a single pass, without calling any segmentation model.
+Its inputs are the modality, the cancer type $C$, a summary of the TotalSegmentator output $T$ (which classes are
+present, their volumes and their extents), and the initial tumor priors $B_C$ and $V_C$ of Eq.~\eqref{eq:agents}.
+It proceeds in five steps.
+
+\emph{(i) Frame.} The vertebrae found in $T$ define a craniocaudal ruler. The landmarks of $K$ are placed on this ruler,
+and every entity span is converted to a slice range of the scan. This step also determines which entities lie inside the
+field of view.
+
+\emph{(ii) Anchors.} Each anchor is labelled \emph{found} (present in $T$ with a plausible volume and position),
+\emph{expected} (inside the field of view but missing from $T$) or \emph{missing} (outside the field of view). Found
+anchors give the reference structures against which the gates of later prompts are evaluated.
+
+\emph{(iii) Tumor evidence.} A component of $B_C$ or $V_C$ is \emph{validated} when the two priors agree on it. For each
+host $h\in\mathcal{H}_C$ the planner records an evidence level $e_h\in\{0,1,2\}$: $2$ if a validated component lies in
+or within a reach of $10$\,mm of $h$, $1$ if a component from one prior does, and $0$ otherwise. It also records the
+side of the primary tumor for paired organs. The planning weight of the host is $w_h(1+e_h)$, where $w_h$ is its
+spread-set prior. The initial tumor priors therefore influence only the order and the extent of the anatomical
+prompts; they never remove a host from $\mathcal{H}_C$.
+
+\emph{(iv) Prompt tiers.} Prompts are generated in four tiers. Tier~0 adds ruler prompts (spine, sacrum, hip bone) only
+when $T$ provides neither vertebrae nor fallback landmarks, so that a frame can always be placed. Tier~1 completes the anchors that are expected but missing from $T$, each gated by its
+spatial prior. Tier~2 adds \emph{anatomical profiles} by walking the relation graph: two hops from the primary organ,
+one hop from each secondary host, and the structures that can be reached from any host with tumor evidence
+$e_h>0$. Tier~T contains the tumor prompts: one prompt with the tumor phrase of each host of $\mathcal{H}_C$ inside the
+field of view. Tier~T is issued for every such host regardless of the evidence $e_h$, so that a lesion missed by both
+initial priors can still be proposed. For the same reason, when the initial VT tumor mask is empty or smaller than
+$0.5$\,ml, the cancer-type phrase ensemble is added for the primary organ. This is a wording ensemble for the same
+model, not a second rater: the initial and prompted VT outputs are counted as one model in tumor reasoning.
+
+\emph{(v) Budget.} The plan is limited to $80$ prompts. Tiers~0, 1 and T are protected; only tier~2 is trimmed, lowest relation
+priority first, with items derived from a host given a one-step priority boost.
+
+The output $K_C$ is the list of prompt jobs that survive the budget. Each job records the entity, its side, the phrases to
+issue (the main phrase and its first two aliases), its tier, its gate, and, for tumor prompts, the host and the host
+prior $w_h$. VT is run once per scan on the full volume with all jobs of $K_C$; there is no re-planning after inference.
+For each job, the masks of its three phrases are fused by voxel-wise majority (at least two of three). The gate is then
+applied as an output filter: each connected component of the fused mask is kept only when at least $80\%$ of its
+voxels lie inside the region allowed by the gate. A completion structure that is empty after filtering is recorded as
+absent when $K$ marks it as variable or removable by surgery, and as not found otherwise. The kept organ masks form $V_K$, which enters the organ references
+$\hat H_o$. The masks of the tier-T jobs are tumor proposals; they are added to VT's tumor masks $V_C$ as host-prompt
+claims, each tagged with its prompted host, and are subject to the same host, tumor and image reasoning as every other claim.
+
+Two properties of this construction matter for the reasoning that follows. First, although $K$ is independent of the
+image, $K_C$ is not: it depends on $T$ through the frame and the anchors, and on the initial tumor priors through the
+evidence levels. This dependence is restricted to which structures are prompted and in what order, so it changes the
+coverage of $V_K$ but not the meaning of any mask. Second, because tier~T prompts every plausible host whether or not it
+contains a tumor, VT is regularly asked to segment a tumor that is absent. Its output for such a prompt can be a false
+positive inside the prompted host or elsewhere in the scan. These proposals are therefore treated as priors only, and
+whether they are accepted is decided by image grounding
+(Section~\ref{sec:grounding_details}).
+
+\subsection{Reasoning details}
+\label{sec:reasoning_details}
+% Revised 18 Oct 2026 (ledger v7 / grounding G1, to be implemented after this text is confirmed).
+% Constants: Table S1 gives the source of every constant (expert data, knowledge base, or design choice with its reason).
+
+All operations are per scan on the native voxel grid. Distances are Euclidean in millimetres. The \emph{acquisition axis}
+is the axis with the largest voxel spacing when the ratio of largest to smallest spacing is at least $1.5$, and the
+superior--inferior axis otherwise; slice-wise operations use the plane orthogonal to it. No rule names a cancer type or an
+agent, no constant is tuned on clinical endpoints, and patient sex is never used. The source of every constant (expert
+data, knowledge base, or design choice) is listed in Supplementary Table~S1; design constants are few and their
+sensitivity is reported.
+
+\paragraph{Order of computation.} (0) image quality control; (1) host reasoning: mask confidence, organ states, cores,
+boundaries and contested regions; (2) claims, anchors, lobes and outlines; (3) host candidates, anatomical compatibility
+and lesions; (4) anatomical flags, existence and extent priors; (5) normal tissue and image evidence; (6) one-pass
+conditional inference; (7) decision policy.
+
+%--------------------------------------------------------------------------------------------------------------------
+\paragraph{Image quality control.}
+\label{sec:qc_details}
+Image grounding needs an image in which the anatomy agents can delineate normal organs. Each scan receives a state
+$Q\in\{\text{good},\text{degraded},\text{exclude}\}$ before reasoning. Let $\mathcal{E}$ be the organs the planner expects in
+view (obligatory presence, at least half of its vertebral span in the frame). An expected organ \emph{fails} if it is
+unsegmented; conflicts between organ agents shape the anatomy but do not grade the scan, because they mostly
+reflect one agent's error rather than the image. Failures are split by the tumor agents' agreement (voxels claimed by at
+least two agents' cancer prompts): an organ whose envelope it touches may have been replaced or swallowed by the tumor,
+which is a tumor sign, not a quality sign. With $f$ the share of failed organs among the
+expected organs untouched by tumor claims (computed when there are at least $4$), $f\ge0.25$ gives \emph{degraded}. Missing
+anatomy alone never excludes a scan, because dedicated protocols (for example breast MR) show little anatomy besides the
+host; a scan is \emph{excluded} only when $f\ge0.5$ and an image measure fails as well. A scan is also \emph{degraded} if its slice spacing exceeds $8$\,mm or the noise in a
+homogeneous reference tissue (paraspinal muscle on the common $5$\,mm grid, in-plane $1.5$\,mm; standard deviation in HU on
+CT, signal-to-noise ratio on MR) is beyond the $99$th (CT) or $1$st (MR) percentile of the expert datasets
+($76.6$\,HU and $1.64$). Excluded scans leave the cohort and are reported with their reason; degraded scans
+are processed by host and tumor reasoning with image grounding switched off ($\Lambda=1$).
+
+%--------------------------------------------------------------------------------------------------------------------
+\paragraph{Host reasoning.}
+\label{sec:host_details}
+\emph{Organ masks.} $A_{\mathrm{TS},o}=T_o$; $A_{\mathrm{VT},o}=V_{K,o}$ is VT's organ mask (main phrase, or the voxel
+majority of the main phrase and its aliases). Each mask is checked separately, so one agent's error does not condemn the
+organ, and no check removes an organ: checks set the confidence $\mu$ of a mask.
+
+\emph{Unary relations.} A mask has $\mu=0$ only if it is corrupt (empty, or more than half of the field of view) or
+geometrically impossible: a paired organ more than $10$\,mm on the wrong side of the mid-sagittal plane, or a centroid
+outside the organ's vertebral span by more than the span's variability plus one level, both checked only when the
+midline, the header handedness and the vertebral levels are reliable. A mask has $\mu=\tfrac12$ if it violates a
+normal-anatomy expectation that disease can cause, for every organ alike: volume above $2\,v_{\max}$ or below
+$0.5\,v_{\min}$ of the knowledge-base range (when the organ is fully in the frame), more components than the organ has, or
+cut by the field of view.
+
+\emph{Pairwise relations.} For organs with a boundary of their own (organs, glands, bones, muscles, vessels; not lymph
+stations, fat, fascia or spaces) that $K$ does not relate by containment, the overlap of their masks (any agents) is the
+contested region $C_{o,o'}$; above $5\%$ of the smaller mask both masks are recorded as conflicting. A part that lies less
+than $90\%$ inside its whole, organs that $K$ says abut but lie more than $10$\,mm apart, and spatial priors violated by more
+than their stated distance plus $10$\,mm are recorded as flags and lower the confidence of the masks involved to
+$\tfrac12$; no mask is clipped or removed, because tumors displace and deform organs and either mask may be the wrong one.
+
+\emph{Organ zones and states.} The core, boundary and contested regions follow Eq.~\eqref{eq:organ_reference}, where
+$\mu^{\max}_o$ is the highest confidence among $o$'s masks. An organ is \emph{present} if some mask has $\mu>0$,
+\emph{unsegmented} if it is expected in view (planner state \emph{expected}) without such a mask, and \emph{out of view}
+otherwise. An unsegmented organ is represented by its knowledge-base region: the slab between the vertebral levels of the
+organ's own span in $K$, widened by the span's variability plus half a level, placed on the patient's segmented vertebrae
+(on the planner's frame when fewer than two are segmented), restricted to the body and, for a lateral organ, to its side
+of the midline. If less than half of that span lies within the scan, the organ is out of view. The region says only where
+the organ could be: its core is empty, its territory is the region, and its organ confidence is $\tfrac12$. The confidence of an organ, $\mu_o$, is $\mu^{\max}_o$, or
+$\tfrac12$ when unsegmented.
+
+%--------------------------------------------------------------------------------------------------------------------
+\paragraph{Tumor reasoning.}
+\label{sec:tumor_details}
+\emph{Claims.} A claim is a $26$-connected component of one agent's tumor mask from one prompt, of at least $0.5$\,ml;
+smaller components touching the envelope of a host of $\mathcal{H}_C$ are grouped per agent and prompt ($\le5$\,mm apart)
+and kept if the group holds at least $0.2$\,ml. Claims are never dropped by shape or prompt. Two warning signals are
+recorded instead: \emph{prompt mismatch} (a host-prompt claim with less than $50\%$ inside the envelope of its prompted
+host) and \emph{flatness} (through-plane extent at most $0.25$ of the in-plane diagonal, with a median per-slice coverage of
+the host organ it overlaps most of at least $40\%$). Both lower the prior (below), because thin, surface-spreading,
+partially covered, exophytic or invasive tumors can produce them.
+
+\emph{Anchors, lobes and outlines.} With $M_k$ the union of agent $k$'s claims, the agreement set is the voxels in at least
+two different $M_k$. Its components of at least $0.5$\,ml are two-agent anchors; components of $M_k$ that overlap no
+two-agent anchor are single-agent anchors. Every claim is an outline of each anchor it overlaps. For an outline $\omega$ of
+$a$, its remainder $\omega\setminus a$ is opened with a $3$\,mm ball; a component of the opened remainder that is
+connected to $a$ in the remainder only through voxels removed by the opening, and holds at least $0.5$\,ml, is a
+\emph{lobe}: it becomes a single-agent anchor of its own and is removed from $\omega$ as an outline of $a$. The rest of the
+remainder is an \emph{extension} of $a$. A bridge of erroneous tissue can therefore neither lend a core's support to a
+distant region nor hide a separate lesion.
+
+\emph{Host candidates and compatibility.} The territory and envelope of an organ are $\Theta_o$ and
+$\mathcal{E}_o=\{v:d(v,\Theta_o)\le10\,\mathrm{mm}\}$. The host candidates of $a$ are the hosts of $\mathcal{H}_C$, present
+or unsegmented, whose envelope $a$ touches, and any organ outside $\mathcal{H}_C$ whose territory holds at least half of
+$a$, provided it is present with $\mu_o=1$ and at least half of its vertebral span is in view (weight $w=0.15$, as a
+distant site; an organ outside $\mathcal{H}_C$ is never represented by a knowledge-base region); $\mathcal{H}_a=\{\varnothing\}$ if there is none. The compatibility of $a$ with a
+candidate $h$ is graded, not binary:
+\begin{equation}
+\label{eq:compat}
+g_h(a)=\sigma\bigl(\beta^\top\phi_h(a)\bigr),\qquad
+\phi_h(a)=\bigl(o^{\mathrm{core}}_h,\,o^{\Theta}_h,\,s_h,\,\mathbb{1}_{\mathrm{inside}},\,\mathbb{1}_{\mathrm{straddle}},\,
+\mathbb{1}_{\mathrm{exophytic}},\,\mu_h,\,\mathbb{1}_{\mathrm{KB}}\bigr),
+\end{equation}
+where $o^{\mathrm{core}}_h$ and $o^{\Theta}_h$ are the fractions of $a$ inside $\hat H_h$ and $\Theta_h$; $s_h$ is the share
+of $a$'s two-sided $3$\,mm boundary band (the $3$\,mm outside $a$, other anchors excluded, and its $3$\,mm inner rim) in
+$\Theta_h$; the position is \emph{inside} if $o^{\Theta}_h\ge0.9$, \emph{straddling} if $0.1\le o^{\Theta}_h<0.9$, and
+\emph{exophytic} otherwise; $\mu_h$ is the organ confidence; and $\mathbb{1}_{\mathrm{KB}}$ marks a host represented by its
+knowledge-base region. The weights $\beta$ are fitted on expert data, where the
+organ of origin of each tumor is known, using expert tumors with their true organ and its neighbours as candidates,
+perturbed organ masks (leaks, merges, missing parts, the tumor included in the organ) and exophytic, invasive and
+intraparenchymal tumors in their natural proportions. For a lesion, $g_h(L)$ is computed on the union of its anchors. The
+no-host candidate has $g_\varnothing=g_{\min}$, the compatibility of the least compatible expert tumor with its true host. An
+unsegmented organ is scored on its knowledge-base region with $\mu=\tfrac12$ and $\mathbb{1}_{\mathrm{KB}}=1$. The fit includes
+testbed cases in which the true host is unsegmented and represented by its knowledge-base region, with the regions of
+neighbouring organs as negatives, so that a region which only says where an organ could be earns a low compatibility
+($\beta_{\mathrm{KB}}<0$) and is chosen only when the anchor's geometry favours it.
+
+\emph{Lesions.} Two-agent anchors within $\tau=10$\,mm of each other are grouped into a lesion (with chaining); a single-agent
+or lobe anchor joins the nearest group within $\tau$, if any, and never connects two groups, so a single-agent bridge cannot join
+two tumors. Grouping is fixed in millimetres and does not depend on slice
+spacing. Lesion roles are descriptive and assigned after inference: a \emph{primary-host tumor} has $\hat h$ the primary
+organ; a \emph{possible contiguous extension} has $\hat h$ an organ at risk of invasion and lies within $10$\,mm of an
+accepted primary-host tumor; a \emph{secondary-site candidate} has $\hat h$ a distant site. The index lesion is chosen by the
+decision policy, after every lesion has been scored.
+
+\emph{Anatomical flags.} An outline \emph{is} an organ (volume ratio to the organ $\ge0.6$, median per-slice Dice $\ge0.6$,
+$\ge80\%$ inside it) or \emph{contains} it ($\ge80\%$ of the organ inside, organ $\ge50\%$ of its volume); an outline
+\emph{leaks} if at least half of its volume beyond the anchor lies in organs that are not the anchor's host candidates;
+an anchor is \emph{contested} if it touches a contested region $C_{h,o'}$ with $o'\in\mathcal{H}_C$ (both are then host
+candidates). Flags are soft: a flagged unit keeps its candidacy and its prior is lowered.
+
+\emph{Existence prior.} The prior of an anchor under host $h$ starts from its support level, counted over agents with
+provenance:
+\begin{equation}
+\label{eq:existence_prior}
+\pi(a,h)=\operatorname{odds}^{-1}\Bigl(\operatorname{odds}(\pi_{s(a)})\;\rho^{\,n(a,h)}\Bigr),\qquad
+\pi_{\text{two}}=0.75,\ \pi_{\text{single}}=0.5,
+\end{equation}
+where $s(a)$ is two-agent or single-agent and $n(a,h)$ counts the warning signals that apply: prompt mismatch and flatness
+(when less than half of the anchor is covered by its agents' claims without that signal),
+no confirmation (a single-agent anchor with another agent's raw output in $h$'s envelope but not within $3$\,mm of $a$), and,
+for a distant host, no site agreement (less than $0.5$\,ml of the lesion claimed both by a prompt for $h$ and by a different
+agent). Each signal multiplies the prior odds by $\rho=1/3$. Silence (no output of another agent anywhere in $h$'s envelope)
+is not a signal: it removes the penalty for missing confirmation and adds no support. Agreement levels and $\rho$ are
+design constants ($\pi_{\text{two}}$ sits at the acceptance threshold, so agreement of two agents alone does not accept
+an anchor once any warning signal or host uncertainty applies): agents are not run on expert data, so they cannot be calibrated there, and their sensitivity is
+reported. The no-host case has $\pi(a,\varnothing)=\pi_{s(a)}\rho$.
+
+\emph{Extent prior.} Over $\mathcal{X}_a$, after merging extents with Dice $\ge0.95$,
+\begin{equation}
+\label{eq:extent_prior}
+w^0_a(\xi)\;\propto\;\bar\pi(\xi)\;\rho^{\,f(\xi)}\;\psi\bigl(\log\tfrac{|\xi|}{|a|}\bigr),
+\end{equation}
+where $\bar\pi(\xi)$ is the volume-weighted mean voxel support over $\xi$ ($0.9$ in two-agent anchors, $0.5$ elsewhere),
+$f(\xi)$ counts the flags of $\xi$ (leak and organ overlap, tested on $\xi$ itself, and the prompt mismatch and flatness of the
+outlines that form it), and $\psi$ is a parsimony term: a piecewise-constant density ratio of the log volume ratio
+$\log(|\xi|/|a|)$, $p(\cdot\mid\xi\text{ is the extent closest to the expert mask})/p(\cdot\mid\xi\in\mathcal{X}_a)$, estimated on
+simulated agent cores and outlines of expert tumors (Section~\ref{sec:results_expert}; Supplementary Table~S1). A large extent must therefore be supported by evidence to be
+chosen.
+
+%--------------------------------------------------------------------------------------------------------------------
+\paragraph{Image grounding.}
+\label{sec:grounding_details}
+\emph{Why choose, not redraw.} On expert tumor masks, even the best voxel classifier on the host-normalised intensity, told
+the true tumor $\pm5$\,mm, agrees with the experts only at Dice $0.67$--$0.85$: half of kidney and pancreas tumors are
+iso-intense to their organ, the intensity edge is a $6$--$7$\,mm ramp, and experts draw about $2$\,mm outside its midpoint.
+A level-set or voxel-mixture redrawing therefore moves correct boundaries. Choosing among the agents' outlines does not.
+
+\emph{Normal tissue of a host.} $\mathcal{N}_h=\hat H_h\setminus\bigl(\bigcup_k M_k\oplus2\,\mathrm{mm}\bigr)$: the core of
+$h$ without any agent's tumor claim, with a $2$\,mm margin; claims flagged as \emph{being} an organ are not excluded, because an
+organ-sized outline is the organ rather than a tumor proposal, and excluding it would delete the reference. It is computed once and not updated, so no candidate, true or
+false, is absorbed into the reference that judges it. Depth is the distance below the surface of $\hat H_h\cup\xi$. In
+depth bins ($0,1.5,3,5,8,12,18,25,35,50$\,mm and beyond), the median and robust standard deviation of the image smoothed by
+a $1$\,mm Gaussian (in-plane when slices are thick) over $\mathcal{N}_h$ define the depth-standardised deviation $Z(v)$ of
+every voxel from host $h$. The reference is valid if it holds at least $200$ voxels within $50$\,mm of the anchor; otherwise
+the core without the anchors only is used (flagged), and if that also fails every host-frame sign is unknown. An
+unsegmented host has no normal tissue and uses the evidence without context.
+
+\emph{Existence evidence.} For anchor $a$ under host $h$, each sign is yes, no or unknown:
+\begin{itemize}
+\item \emph{Router} $S_0$: $\zeta=\operatorname{median}_{v\in a}Z(v)$; the anchor deviates if $|\zeta|\ge1.5$.
+\item \emph{Context} $S_1$ (closedness): the ratio of the volume of $a$'s same-sign deviation ($\operatorname{sign}(\zeta)Z>1.5$)
+that stays connected to $a$ within $30$\,mm, inside $\Theta_h$ dilated by $2$\,mm, to the volume of $a$. Closed if
+$\le1.42$, open if $>5.27$. Applies when $a$ deviates and at least half of $a$ lies inside $\Theta_h$ dilated by $2$\,mm.
+\item \emph{Internal structure} $S_2$: the median local standard deviation ($2$\,mm) of the image standardised by $a$'s own
+median and MAD, over $a$'s core. Patchy if $\le1.047$. Applies to anchors of at least $3$\,ml.
+\item \emph{Elongation} $S_3$: $\sqrt{\lambda_{\min}/\lambda_{\max}}$ of the voxel coordinates. Elongated if $<0.363$.
+\end{itemize}
+The thresholds are percentiles of expert data, fixed before any evaluation: closed and patchy at the $10$th percentile of
+salient normal structures, open and elongated at the $90$th and $10$th percentiles of expert tumors. Local contrast is not
+evidence. Signs that did not transfer from expert data to agent candidates are not used (curvature-based vessel signs,
+rim--core profiles, appearance-density tests of existence and novelty scores). Organ overlap is not a sign: it enters once,
+as a flag of the extent prior. The signs are combined hierarchically into one outcome, contrast routing ($S_0$), then context
+($S_1$), internal structure ($S_2$) and geometry ($S_3$):
+\begin{equation}
+\label{eq:tree}
+\begin{aligned}
+\text{tumor-like}&\iff(\text{closed}\vee\text{patchy})\wedge\neg\text{open}\wedge\neg\text{elongated},\\
+\text{organ-like}&\iff(\text{open}\vee\text{elongated})\wedge\neg\text{closed}\wedge\neg\text{patchy},
+\end{aligned}
+\end{equation}
+and uncertain otherwise, including when the context test was skipped and elongation is the only organ-like sign (an
+iso-intense elongated tumor). The existence evidence $E^{\mathrm{ex}}_a(h)$ is this outcome.
+
+\emph{Existence likelihoods.} $p(E^{\mathrm{ex}}\mid T,h)$ is the frequency of the outcome over expert tumor masks of the
+public R2Seg collections and their partial cores (random sub-regions covering $30$--$70\%$, and three-slice cuts), because
+anchors are cores; dilated and leaking variants are not used here, as they concern the extent. $p(E^{\mathrm{ex}}\mid N,h)$ is
+the frequency over expert normal structures of $h$'s organ class (solid or hollow) in the public TotalSegmentator data that
+an agent can mistake for a tumor: salient intra-organ structures, vessel and bowel tube segments, organ edges, organ parts,
+adjacent organs, fluid and whole organs. The no-host case uses the outcome without the context level. Signs are computed on a
+common through-plane grid of about $5$\,mm (slices along the superior--inferior axis averaged in blocks of
+$k=\lfloor5/s+0.5\rfloor$, $s$ the slice spacing; labels by majority vote), because thicker slices change closedness and
+internal structure of tumors and normal structures alike. Native resolution was considered for anchors smaller than $3$\,ml
+on thin-slice scans, where block averaging could blur small lesions, but on held-out expert data it separated small tumors
+from small normal structures no better than the common grid (Section~\ref{sec:results_expert}), so the common grid is used
+throughout. Tables are built per organ class, size band ($<3$, $3$--$20$, $>20$\,ml) and
+modality (CT or MR). A stratum with fewer than $30$ tumor or normal regions falls back, for both tables together, to the band
+within the modality, then to coarser strata, so the two tables always compare the same stratum. Normal scans of patients
+younger than $18$ are excluded. Each class's frequencies are mixed with $10\%$ of the pooled frequencies of the stratum, so a
+cell empty in both classes is neutral, and the log ratio of a cell supported by $n$ regions is shrunk by $n/(n+10)$. Unknown
+signs are marginalised over both tables. $\Lambda^{\mathrm{ex}}$ is clipped to $[1/100,100]$; below $3$\,ml evidence against
+is capped at $1/3$, because expert small tumors rarely look open while small agent candidates next to vessels often do; and
+evidence for a tumor counts only for an anchor that lies inside its host (at least half within $\Theta_h$ dilated by $2$\,mm),
+otherwise $\Lambda^{\mathrm{ex}}$ is capped at $1$, because internal structure alone lent support to normal structures
+outside the organ in held-out expert data.
+
+\emph{Extent evidence.} For extent $\xi$ the observation is the image on the common region $R_a\setminus a$, the same for
+every $\xi$; the anchor itself is excluded because its evidence is already in $E^{\mathrm{ex}}$. Under $\xi$, the voxels of
+the extension $\xi\setminus a$ follow the appearance of the anchor and the rest follows the normal tissue of $h$; under the
+normal model all of $R_a\setminus a$ follows the normal tissue. With $f_a$ and $f_h$ the robust densities of the smoothed
+image over $a$ and over $\mathcal{N}_h$ within $50$\,mm,
+\begin{equation}
+\label{eq:extent_evidence}
+\log\Lambda^{\mathrm{ext}}_a(\xi,h)=\frac{1}{\nu}\sum_{v\in\xi\setminus a}\log\frac{f_a(v)}{f_h(v)},
+\end{equation}
+with $\Lambda^{\mathrm{ext}}_a(a,h)=1$, clipped to $[1/100,100]$. The factor $\nu$ is the number of voxels in one
+correlation volume of the smoothed image, so that dependent voxels are not counted as independent observations; it is
+fixed on expert data so that $\Lambda^{\mathrm{ext}}$ is calibrated for the choice between an expert tumor and its
+simulated outlines. An extension that looks like the host's normal tissue costs evidence; an iso-intense extension, where
+$f_a\approx f_h$, is neutral and the extent prior decides. Both densities are fixed before inference; nothing is refitted.
+On an unsegmented host or without a valid normal reference, $\Lambda^{\mathrm{ext}}=1$. On held-out expert data this term did
+not improve the choice of extent over the extent prior alone, and the fitted $\nu$ diverged in four of five held-out
+collections (Section~\ref{sec:results_expert}); in the frozen configuration $\nu=\infty$, that is $\Lambda^{\mathrm{ext}}\equiv1$, and the
+extent is chosen by the extent prior. The term is kept in the formulation for agents or modalities where it may help.
+
+\emph{Inference.} Eqs.~\eqref{eq:case_posterior}--\eqref{eq:combination} are evaluated once per anchor by enumeration.
+Each lesion's
+host posterior is shared by its anchors. The scan-level probability that a primary tumor has been found among the
+candidates is $p_{\mathrm{prim}}=1-\prod_a\bigl(1-P(h_{\mathrm{prim}}\mid z_a=1,c_a,X)\,p_a\bigr)$; it is reported, not
+imposed.
+
+\emph{Decision policy.} Decisions are separate from the posteriors and every override is recorded. An anchor is
+\emph{accepted} if $p_a\ge0.75$, \emph{rejected} if $p_a\le0.25$ (posterior odds of $3{:}1$ either way) and
+\emph{uncertain} otherwise; uncertain anchors are reported and not segmented. An accepted anchor whose host
+$\hat h_a\notin\mathcal{H}_C$ is reported as an other or indeterminate lesion and is not segmented. If no primary-host
+tumor is accepted ($p_{\mathrm{prim}}$ low), the scan is flagged \emph{primary not detected}, and the primary-host lesion
+with the largest $p$ is added to the output as a flagged override, reported separately. The index lesion is the largest
+accepted primary-host tumor, measured in the acquisition plane.
+
+\emph{Output.} Lesions keep their identity: a lesion's tumor is the union of the chosen extents of its accepted anchors, and a
+tumor is counted once. For every anchor the outputs are $p_a$, the host posterior given tumor, the extent posterior, the
+chosen $(\hat h_a,\hat\xi_a)$, the decision and any override, and the flags (missing normal reference, skipped context test,
+iso-intense extent, unsegmented host).
+
+
+%====================================================================================================================
+\section{Experiments and Results}
+\label{sec:results}
+% Updated 18 Oct 2026 for ledger v7 + grounding G1. Numbers marked [TBD] are filled after the expert-data checks and the
+% frozen TCGA run. Stage is reported only; nothing is tuned on stage. TCGA has no tumour annotation: it serves visual checks,
+% blind ratings and reporting only; expert data is the only quantitative validation.
+
+\subsection{Data}
+We use the public TCGA radiology collections of The Cancer Imaging Archive (TCIA). The cohort contains 3{,}291
+baseline-study series (1{,}407 CT, 1{,}884 MR) from 15 cancer types: BLCA, BRCA, CESC, COAD, ESCA, KICH, KIRC, KIRP,
+LIHC, LUAD, LUSC, OV, PRAD, STAD and UCEC. TCIA states that only the baseline study precedes surgery, and post-surgical
+studies cannot be identified, so all evaluations use the baseline study only. The stage-evaluation scope is restricted
+to baseline series with the primary organ in the field of view: 3{,}116 series from 942 patients. Scans graded \emph{exclude} by image quality control (Section~\ref{sec:qc_details}) are removed and reported with their reason ([TBD] series); \emph{degraded} scans ([TBD]) are kept without image grounding. Clinical stage comes
+from the TCGA clinical records. No voxel-level tumour annotation exists for this cohort, so TCGA is used only for visual
+inspection, blind ratings of candidates and the stage-free yardsticks below; no likelihood, prior or threshold is estimated
+on it. During development, outputs of a pilot of [TBD] TCGA series were inspected visually, and several anatomy checks were
+softened as a result (small or multi-component organ masks, the laterality check, and the grading of dedicated protocols
+with little anatomy in view); no other rule or constant was changed on TCGA.
+
+The likelihoods of image grounding are built only from public expert annotations: tumour masks of the R2Seg collections
+(bladder, breast, cervix, colon, kidney, liver, lung, pancreas, prostate and uterus, including benign uterine fibroids;
+[TBD] masks) and normal anatomy of
+TotalSegmentator CT (v3.0, scans without pathology) and MR (v3.0, scans from the original release source; scans indexed from the
+Imaging Data Commons, which hosts TCIA collections, are excluded to avoid overlap with the evaluation cohort), adults only ([TBD] scans). Neither enters the evaluation cohort.
+
+\subsection{Implementation}
+The tumour agents are BiomedParse (2D) and VoxTell (3D promptable); the anatomy agents are TotalSegmentator and VoxTell. The
+knowledge base has 204 entities and 433 relations (v0.5.8). Host and tumour reasoning are deterministic set operations.
+The constants of image grounding, the compatibility weights $\beta$, the parsimony term $\psi$ and the extent factor $\nu$
+are estimated on expert data and frozen before any TCGA result (Section~\ref{sec:grounding_details}); the remaining design
+constants (support levels, the odds factor $\rho$, host weights) and their sources are listed in Supplementary Table~S1. Three choices were revised after a visual check of a 152-series TCGA pilot (no stage, no tumour annotation used): the two-agent support level ($0.9\to0.75$), the knowledge-base region of an unsegmented organ (from a coarse vertebral region to the organ's own sided span, with the out-of-view rule) and the restriction of organs outside $\mathcal{H}_C$ to confidently segmented organs in view; $\beta$ was then refitted on expert data only. The pilot series are reported separately from the frozen run. The whole cohort was processed on a CPU cluster in [TBD] hours.
+
+\subsection{Evaluation without voxel ground truth}
+\label{sec:eval_protocol}
+Without voxel annotations, we use stage-free yardsticks that a correct segmentation must satisfy. All are computed on
+the baseline study only:
+\begin{itemize}
+  \item \emph{spread}: the median $|\log(v/\tilde v)|$ of the index-lesion volume $v$ across the series of one study,
+  where $\tilde v$ is the study median;
+  \item \emph{cross}: the share of same-study series pairs whose sizes differ by at least one RECIST progression step;
+  \item \emph{disagree}: the share of series whose index lesion is not the study's majority lesion;
+  \item \emph{miss}: the share of baseline series with no measurable lesion (the primary tumour is present before
+  surgery).
+\end{itemize}
+In addition, [TBD] agent candidates were rated blind by a reader (tumour, not tumour, unsure); these ratings measure the
+precision of image evidence against a candidate and the share of rated tumours it rejects. The patient-median Spearman
+correlation with T and overall stage is reported for reference only. No parameter, rule or threshold is selected on stage
+or on the ratings.
+
+\subsection{Validation of image grounding on expert data}
+\label{sec:results_expert}
+Because TCGA has no tumour annotation, the reasoning is validated where truth is known, on a testbed built from expert
+data only (R2Seg collections with expert organ and tumour labels: kidney, liver, pancreas, lung, cervix and prostate; and
+TotalSegmentator normal anatomy). Agents are not run on these data; instead, agent-like candidates are simulated from the
+expert masks: cores (partial sub-regions and three-slice cuts), outlines (exact, dilated by $3$--$5$\,mm, grown into the
+host's own parenchyma, leaking into a neighbour, organ-sized, and with a false lobe joined by a thin bridge), normal
+candidates (vessel and bowel tube segments, organ parts and edges, salient intra-organ structures), and perturbed organ
+masks (leaks, merges, missing parts, the tumour included in the organ, and the true host unsegmented and represented by
+its knowledge-base region, with the regions of its neighbours as negatives). Every estimate is held out (leave one R2Seg
+collection out; two folds of TotalSegmentator). We report: (i)~existence: calibration and discrimination of $p_a$ for
+tumour cores against normal candidates, overall and for candidates below $3$\,ml at native and $5$\,mm resolution;
+(ii)~host: top-1 attribution of expert tumours among their true and neighbouring organs, separately for intraparenchymal,
+straddling and exophytic tumours and under perturbed organ masks; (iii)~extent: how often $\hat\xi$ is the extent closest to
+the expert mask, its Dice, its volume ratio, and how often it grows into host parenchyma; (iv)~the effect of the
+design constants (support levels, $\rho$, host weights) by sensitivity analysis. [TBD]
+
+\subsection{Effect of image-grounded reasoning}
+\label{sec:results_r2}
+Host and tumour reasoning are identical with and without image grounding ($\Lambda=1$), so the comparison isolates it.
+Table~\ref{tab:r2_by_type} reports, per cancer type, the anchors accepted, uncertain and rejected by the priors alone and
+after grounding; anchors whose maximum-posterior host or extent differs from the prior's; overrides of the decision policy;
+other or indeterminate lesions; and the volume between the anchor and the union of outlines that the chosen extents keep. [TBD: main pattern.] On the rated candidates, image evidence against a
+candidate is correct in [TBD]\,\% and rejects [TBD]\,\% of rated tumours.
+
+\begin{table}[t]
+\centering\small
+\caption{Image-grounded reasoning per cancer type (baseline series). \emph{Reasoning only}: accepted anchors with
+$\Lambda=1$. \emph{Rejected}/\emph{recovered}: anchors whose decision image evidence changed. \emph{Host}/\emph{extent}:
+anchors whose maximum-posterior host or extent differs from the prior's.}
+\label{tab:r2_by_type}
+\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{lrrrrrrr}
+\hline
+Cancer & Series & \shortstack{Reasoning\\only} & Grounded & Rejected & Recovered & \shortstack{Host\\changed} & \shortstack{Extent\\changed}\\
+\hline
+\multicolumn{8}{c}{[TBD]}\\
+\hline
+All & 3{,}291 & & & & & & \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Baseline yardsticks}
+\label{sec:results_yardsticks}
+Table~\ref{tab:yardsticks} compares BiomedParse alone, VoxTell alone, reasoning only, and the full model on the
+yardsticks of Section~\ref{sec:eval_protocol}. [TBD: main finding, stated without reference to stage.]
+
+\begin{table}[t]
+\centering\small
+\caption{Stage-free yardsticks on 3{,}116 baseline series (942 patients). The Spearman $\rho$ with T stage is reported
+only and was not used for any choice.}
+\label{tab:yardsticks}
+\begin{tabular}{lrrrrr}
+\hline
+Method & Spread & Cross (\%) & Disagree (\%) & Miss (\%) & $\rho_T$ (reported)\\
+\hline
+BiomedParse & & & -- & & \\
+VoxTell & & & -- & & \\
+Reasoning only & & & & & \\
+Full model & & & & & \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Qualitative results}
+[TBD: Fig.~\ref{fig:grounding} to be regenerated with the G0 outputs: an anchor with its outlines and priors, its evidence
+state and likelihood ratio per host, and the chosen extent.]
+\begin{figure*}[t]
+    \centering
+    \IfFileExists{figs/r2_grounding_g0.pdf}{\includegraphics[width=\linewidth]{figs/r2_grounding_g0.pdf}}{\fbox{\parbox{0.9\linewidth}{\centering figure to be regenerated}}}
+    \caption{Image-grounded reasoning on a public TCGA scan. Left: anchors (filled), outlines of each agent and the reasoning
+    priors. Middle: evidence state and likelihood ratio of each extent under each host. Right: accepted tumours with their
+    chosen extents. [TBD]}
+    \label{fig:grounding}
+\end{figure*}
+
+\subsection{Ablation}
+\label{sec:ablation}
+[TBD, on the expert testbed and with the columns of Table~\ref{tab:r2_by_type} on TCGA: (i)~flat priors ($\pi=0.5$,
+uniform host and extent weights); (ii)~each evidence component removed in turn (context, internal structure, geometry,
+extent evidence); (iii)~no parsimony term $\psi$; (iv)~flagged outlines removed from $\mathcal{X}_a$ instead of penalised;
+(v)~binary touch instead of the compatibility $g_h$; (vi)~one-pass inference against an iterated variant that updates the
+normal tissue from the tumour posterior; (vii)~support levels and $\rho\in\{1/2,1/3,1/5\}$.]
+
+\subsection{Limitations}
+\begin{itemize}
+  \item Image quality control relies on what the anatomy agents can segment; a scan whose organs fail for reasons other than quality (unusual anatomy, post-surgical change outside the primary, or a dedicated protocol with little anatomy in view) may be graded degraded.
+  \item There is no voxel-level ground truth, so accuracy is assessed through stage-free yardsticks, expert data and
+  blind ratings of candidates.
+  \item Image evidence decides existence and chooses among the agents' outlines; it does not redraw boundaries. A tumour
+  that no agent outlines, or outlines only in part, is not recovered beyond the agents' proposals.
+  \item Agent agreement cannot be calibrated on expert data, because the agents are not run there; its support levels are
+  design constants, reported with their sensitivity.
+  \item The image does not re-rank hosts directly; it reaches the host only through the tumour model, so host errors that
+  anatomy cannot resolve remain as reported uncertainty.
+  \item Extent evidence compares the extension with the anchor's own appearance; when the anchor is not representative of
+  the tumour (necrosis, a partial core), the extent prior dominates.
+  \item Other or indeterminate lesions are reported but not characterised.
+  \item Many agent false positives remain uncertain rather than organ-like: normal sub-structures that resemble tumour
+  (intra-organ vessels, renal sinus, bowel loops) are the main confounder, and iso-intense candidates have no context test.
+  \item Evidence is weaker on MR than on CT, and hosts without expert normal anatomy (for example ovary and breast) use pooled
+  normal tables.
+  \item The default distant-site lists do not include brain, and pleura and distant lymph nodes have no anchor in
+  the knowledge base, so metastases there are not reported.
+\end{itemize}
+
+
+\begin{table*}[t]
+\centering\footnotesize
+\caption{Supplementary Table S1. Constants of the v7 reasoning and their source: \emph{expert} (estimated on public expert
+annotations, R2Seg and TotalSegmentator; held out where evaluated), \emph{KB} (knowledge base), \emph{design} (chosen a priori,
+with the reason; sensitivity reported). No constant is estimated on TCGA or on stage.}
+\label{tab:constants}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{p{0.30\linewidth}p{0.20\linewidth}p{0.10\linewidth}p{0.36\linewidth}}
+\hline
+Constant & Value & Source & Note\\
+\hline
+Host weights $w_h$ & $1$ / $0.3$ / $0.15$ & KB & primary / local invasion / distant; organs outside $\mathcal{H}_C$ $0.15$\\
+Envelope, lesion distance $\tau$ & $10$\,mm, $10$\,mm & design & tumor displacement; fixed in mm (not slice spacing)\\
+Mask confidence $\mu$ & $1$, $\tfrac12$, $0$ & design & feasible / anatomy violated / corrupt or impossible\\
+Organ checks (volume, side, span, contact) & $2v_{\max}$, $0.5v_{\min}$, $10$\,mm, span$\pm$(var$+1$) & KB & lower $\mu$; never remove\\
+Compatibility weights $\beta$ & fitted (logistic) & expert & testbed host cases incl.\ knowledge-base regions; $\beta_{\mathrm{KB}}=-5.45$, $g_{\min}=0.207$\\
+Knowledge-base region (unsegmented) & own span$\pm$(var$+\tfrac12$) levels & KB & sided, in body; out of view if $<50\%$ of span in scan\\
+Organs outside $\mathcal{H}_C$ as candidates & $\mu_o=1$, span in view $\ge50\%$ & design & never a knowledge-base region\\
+Support levels $\pi_{\text{two}}$, $\pi_{\text{single}}$ & $0.75$, $0.5$ & design & agents not run on expert data; lowered from $0.9$ after the pilot visual check (disclosed); sensitivity\\
+Signal odds factor $\rho$ & $1/3$ & design & $3{:}1$ convention; sensitivity $\{1/2,1/3,1/5\}$\\
+Lobe opening, minimum & $3$\,mm ball, $0.5$\,ml & design & neck narrower than $\sim6$\,mm\\
+Claim minimum, crumbs & $0.5$\,ml; $0.2$\,ml within $5$\,mm & design & as v6\\
+Prompt mismatch, flatness & $<50\%$ in envelope; aspect $\le0.25$, coverage $\ge40\%$ & design & warning signals only\\
+Organ-overlap tests & $0.6$ / $0.6$ / $0.8$; $0.8$ / $0.5$ & design & as v6 (D10)\\
+Parsimony $\psi$ & piecewise on $\log(|\xi|/|a|)$ & expert & bins $<0.05,0.4,0.8,1.2,1.8,2.5,\infty$: $1, 20.8, 39.2, 19.8, 4.9, 2.3, 0.21$\\
+Extent factor $\nu$ & $\infty$ & expert & extent evidence did not help on held-out expert data\\
+Normal reference & $2$\,mm margin, $200$ voxels in $50$\,mm & design & as G0\\
+Sign thresholds (closed, open, patchy, elongated, deviation) & $1.42$, $5.27$, $1.047$, $0.363$, $1.5$ & expert & percentiles of expert data (frozen 12 Oct)\\
+Tables (strata, smoothing, clip, small cap) & $\ge30$; $\kappa=0.1$, $n/(n+10)$; $[1/100,100]$; $1/3$ & design & as G0\\
+Common grid & $\sim5$\,mm through-plane & expert & thickening changes signs; small-lesion check\\
+Decision thresholds & $p\ge0.75$, $p\le0.25$ & design & posterior odds $3{:}1$\\
+Quality control & $f\ge0.25$, $0.5$; $8$\,mm; $76.6$\,HU, SNR $1.64$ & expert/design & noise percentiles of expert data\\
+\hline
+\end{tabular}
+\end{table*}
+
+\section*{Acknowledgments}
+
+Additional information can be given in the template, such as to not include funder information in the acknowledgments section.
+
+\bibliography{modular_refs}
+
+\end{document}

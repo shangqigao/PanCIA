@@ -1,0 +1,72 @@
+version: host_likelihood v2 (13 Oct 2026, two-sided band)
+feature: share of the two-sided 3 mm boundary band (outside shell without other tumour
+  voxels U inner rim) inside the organ
+shell_mm: 3.0
+bins:
+- 0.0
+- 0.05
+- 0.1
+- 0.2
+- 0.3
+- 0.5
+- 0.7
+- 1.0
+L:
+- 0.036
+- 0.26
+- 1.837
+- 5.27
+- 12.048
+- 12.048
+- 12.048
+eps: 0.036
+cap: 100.0
+p_host:
+- 0.0254
+- 0.0328
+- 0.1036
+- 0.1445
+- 0.3304
+- 0.3132
+- 0.05
+p_nonhost:
+- 0.7077
+- 0.1261
+- 0.0564
+- 0.0274
+- 0.0274
+- 0.0274
+- 0.0274
+data:
+  source: R2Seg expert labels (public; Ovary excluded)
+  datasets:
+  - Kidney_Tumor_00
+  - Liver_Tumor_00
+  - Lung_Tumor_01
+  - Pancreas_Tumor_00
+  host_rows: 636
+  nonhost_rows: 62
+  md5_rows: 4a70392c35f1dbc2221f3dfb21e8c109
+lodo:
+  Kidney_Tumor_00:
+    n: 141
+    top1: 1.0
+    p_host_median: 0.989
+    p_host_q10: 0.975
+  Liver_Tumor_00:
+    n: 301
+    top1: 1.0
+    p_host_median: 0.997
+    p_host_q10: 0.997
+  Lung_Tumor_01:
+    n: 119
+    top1: 1.0
+    p_host_median: 0.995
+    p_host_q10: 0.809
+  Pancreas_Tumor_00:
+    n: 75
+    top1: 1.0
+    p_host_median: 0.997
+    p_host_q10: 0.995
+usage: P(h|c) proportional to w_h * L(s_h) over possible hosts plus none (w = recall
+  prior 0.25, L = eps); hosts without an organ mask get L = eps

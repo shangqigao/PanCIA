@@ -13,7 +13,8 @@ OUT = os.path.join(os.path.dirname(__file__), 'knowledge_base')
 os.makedirs(OUT, exist_ok=True)
 TS = json.load(open(os.path.join(os.path.dirname(__file__), 'seed', 'ts_class_maps.json')))
 TS_ALL = {task: set(v.values()) for task, v in TS.items()}
-VERSION = '0.5.7'   # 0.5.7: head & neck (brain, larynx, pharynx, oral cavity, parotid anchors; skull, brainstem, cerebellum,
+VERSION = '0.5.8'   # 0.5.8 (17 Oct 2026): kidney -> liver spatial prior applies to the right kidney only (side_link right), found by the
+#                     anatomy-feasibility audit; thyroid expected_components 2 (two lobes; anatomy QC on expert labels). 0.5.7: 0.5.7: head & neck (brain, larynx, pharynx, oral cavity, parotid anchors; skull, brainstem, cerebellum,
 #                     submandibular gland, nasal cavity, eye, cervical nodes) and the appendix. No cancer type lists any of them as a site
 TODAY = str(datetime.date.today())
 
@@ -22,7 +23,7 @@ E = []   # entities
 R = []   # relations
 
 def ent(id, name, category, *, lat='none', vt=None, aliases=(), ts=None, modality=('CT', 'MR'),
-        tier='assumed_in_vocab', vol=None, hu=None, mr=None, prio=2, anchor=None, notes=None, sources=('TS', 'FMA'), found_from_parts=False, implied_by_whole=False):
+        tier='assumed_in_vocab', vol=None, hu=None, mr=None, prio=2, anchor=None, notes=None, sources=('TS', 'FMA'), found_from_parts=False, implied_by_whole=False, ncomp=None):
     """Register an entity. ts = {task: name_or_{side:name}}. vt = VoxTell main term (may contain {side})."""
     if ts:
         for task, names in ts.items():
@@ -38,6 +39,7 @@ def ent(id, name, category, *, lat='none', vt=None, aliases=(), ts=None, modalit
     if anchor: e['is_anchor'] = True; e['anchor'] = anchor
     else: e['is_anchor'] = False
     if notes: e['notes'] = notes
+    if ncomp: e['expected_components'] = ncomp            # anatomy QC (0.5.8): connected components of a normal organ mask (thyroid: two lobes)
     if found_from_parts: e['found_from_parts'] = True     # planner: presence of any has_part child counts as presence of this anchor (lung ← lobes on the TS CT task)
     if implied_by_whole: e['implied_by_whole'] = True     # planner: when this anchor has no TS class on the task, a found has_part parent implies its presence (psoas ⊂ iliopsoas)
     e['sources'] = list(sources)
@@ -46,7 +48,7 @@ def ent(id, name, category, *, lat='none', vt=None, aliases=(), ts=None, modalit
 def A(span, lr, ap, presence, prior=(), span_var=1):
     """Anchor block: canonical vertebral span, transverse position, presence class, spatial prior."""
     return dict(span=list(span), span_var=span_var, position=dict(lr=lr, ap=ap), presence=presence,
-                spatial_prior=[dict(landmark=l, relation=r, dist_mm=list(d)) for l, r, d in prior])
+                spatial_prior=[dict(landmark=x[0], relation=x[1], dist_mm=list(x[2]), **({'side_link': x[3]} if len(x) > 3 else {})) for x in prior])
 
 def rel(src, type, dst, *, side='same', direction=None, contact=None, staging=(), tier=None, prio=None, note=None, expand=True):
     d = dict(src=src, type=type, dst=dst, side_link=side)
@@ -221,7 +223,7 @@ ent('heart', 'Heart', 'organ', vt='heart', ts={'total': 'heart', 'total_mr': 'he
 ent('pericardium', 'Pericardium', 'fascia', vt='pericardium', tier='near', prio=2)
 ent('esophagus', 'Oesophagus', 'hollow_organ', vt='esophagus', aliases=('oesophagus', 'gullet'), ts={'total': 'esophagus', 'total_mr': 'esophagus'}, tier='in_vocab', prio=1,
     anchor=A(['C6', 'T11'], 'midline', 'posterior', 'obligatory', prior=[('trachea', 'posterior_to', (0, 15)), ('aorta', 'anterior_right_of', (0, 20))]))
-ent('thyroid', 'Thyroid gland', 'gland', vt='thyroid gland', ts={'total': 'thyroid_gland'}, tier='in_vocab', prio=3, anchor=A(['C5', 'T1'], 'midline', 'anterior', 'surgical'))
+ent('thyroid', 'Thyroid gland', 'gland', vt='thyroid gland', ts={'total': 'thyroid_gland'}, tier='in_vocab', prio=3, anchor=A(['C5', 'T1'], 'midline', 'anterior', 'surgical'), ncomp=2)
 ent('thymus', 'Thymus / anterior mediastinal fat', 'gland', vt='thymus', tier='near', prio=3)
 ent('chest_wall', 'Chest wall', 'muscle', lat='bilateral', vt='{side} chest wall', aliases=('{side} thoracic wall',), tier='near', prio=2)
 ent('diaphragm', 'Diaphragm', 'muscle', vt='diaphragm', tier='near', prio=2)
@@ -259,7 +261,7 @@ ent('adrenal', 'Adrenal gland', 'gland', lat='bilateral', vt='{side} adrenal gla
     tier='in_vocab', prio=1, vol={'min': 2, 'max': 15}, anchor=A(['T11', 'L1'], 'bilateral', 'posterior', 'surgical', prior=[('kidney', 'superior_medial_to', (0, 20))]))
 ent('kidney', 'Kidney', 'organ', lat='bilateral', vt='{side} kidney', aliases=('{side} renal organ',), ts={'total': {'left': 'kidney_left', 'right': 'kidney_right'}, 'total_mr': {'left': 'kidney_left', 'right': 'kidney_right'}},
     tier='in_vocab', prio=1, vol={'min': 90, 'max': 300}, hu=(30, 60),
-    anchor=A(['T12', 'L3'], 'bilateral', 'posterior', 'surgical', prior=[('psoas', 'lateral_to', (0, 20)), ('quadratus_lumborum', 'anterior_to', (0, 15)), ('liver', 'inferior_to', (0, 40))]))
+    anchor=A(['T12', 'L3'], 'bilateral', 'posterior', 'surgical', prior=[('psoas', 'lateral_to', (0, 20)), ('quadratus_lumborum', 'anterior_to', (0, 15)), ('liver', 'inferior_to', (0, 40), 'right')]))
 ent('renal_cortex', 'Renal cortex', 'organ', lat='bilateral', vt='{side} renal cortex', tier='near', prio=3)
 ent('renal_medulla', 'Renal medulla', 'organ', lat='bilateral', vt='{side} renal medulla', tier='near', prio=3)
 ent('renal_pelvis', 'Renal pelvis / collecting system', 'duct', lat='bilateral', vt='{side} renal pelvis', aliases=('{side} renal collecting system',), tier='near', prio=2)
