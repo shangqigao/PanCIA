@@ -126,3 +126,14 @@ checkpoints
 .DS_Store
 **/.DS_Store
 _to_delete/
+
+# Outputs kept outside the repo (23 Oct 2026): the paper source only in documents/
+Claude outputs/
+documents/*.png
+documents/*.pdf
+documents/bak/
+documents/plan/
+*.aux
+*.bbl
+*.blg
+.pytest_cache/

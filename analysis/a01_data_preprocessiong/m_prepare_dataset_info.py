@@ -285,3 +285,69 @@ def prepare_OV04_endometriosis_radiology_info(img_json, lab_dir=None, lab_mode=N
         'img_format': ['nifti']*len(img_paths)
     }
     return dataset_info
+
+
+# R2Seg (collections of public tumour-segmentation datasets): collection -> (modality, site).
+# Used when R2Seg/datainfo.xlsx cannot be read; datainfo.xlsx is the primary source (columns dataset, modality, cancer_type).
+R2SEG_INFO = {
+    'Bladder_Tumor_00': ('MRI', 'bladder'), 'Breast_Tumor_00': ('MRI', 'breast'), 'Cervix_Tumor_00': ('MRI', 'cervix'),
+    'Colon_Tumor_00': ('CT', 'colon'), 'Kidney_Tumor_00': ('CT', 'kidney'), 'Liver_Tumor_00': ('CT', 'liver'),
+    'Lung_Tumor_00': ('CT', 'lung'), 'Lung_Tumor_01': ('CT', 'lung'), 'Pancreas_Tumor_00': ('CT', 'pancreas'),
+    'Prostate_Tumor_00': ('MRI', 'prostate'), 'Uterus_Tumor_00': ('MRI', 'uterus'),
+}
+
+
+def _r2seg_table(root):
+    """collection -> (modality 'MRI'/'CT', site) from <root>/datainfo.xlsx; {} if it cannot be read"""
+    try:
+        df = pd.read_excel(pathlib.Path(root) / 'datainfo.xlsx')
+    except Exception:
+        return {}
+    out = {}
+    for r in df.itertuples(index=False):
+        ds, mod, ct = getattr(r, 'dataset', None), getattr(r, 'modality', None), getattr(r, 'cancer_type', None)
+        if not isinstance(ds, str) or not isinstance(mod, str):
+            continue
+        site = str(ct).replace(' cancer', '').strip().lower() if isinstance(ct, str) else R2SEG_INFO.get(ds, (None, None))[1]
+        site = {'uterine': 'uterus', 'ovarian': 'ovary', 'cervical': 'cervix', 'colorectal': 'colon', 'pancreatic': 'pancreas'}.get(site, site)
+        out[ds] = ({'MR': 'MRI', 'MRI': 'MRI', 'CT': 'CT'}.get(mod.strip().upper(), mod.strip()), site)
+    return out
+
+
+def prepare_R2Seg_info(r2seg_dir, collections=None, seg_obj='organ', img_format='nifti', prostate_seq='t2'):
+    """R2Seg images: <r2seg_dir>/<collection>/images/*.nii.gz (labels in <collection>/labels/<stem>_seg.nii.gz).
+    collections: list of collection names (default: every folder with an images/ subfolder).
+    prostate_seq: Prostate_Tumor_00 has a T2 and an ADC image per case; 't2' (default), 'adc' or 'both'.
+    Output names are '<collection>/<stem>' (m_tumor_segmentation._image_name): stems repeat across collections."""
+    root = pathlib.Path(r2seg_dir)
+    table = _r2seg_table(root)
+    cols = list(collections) if collections else sorted(d.name for d in root.iterdir() if (d / 'images').is_dir())
+    images, labels, site, modality, prompts = [], [], [], [], []
+    for c in cols:
+        if not (root / c / 'images').is_dir():
+            raise FileNotFoundError(f'{root / c / "images"} not found')
+        mod, st = table.get(c) or R2SEG_INFO.get(c) or (None, None)
+        if mod is None:
+            raise ValueError(f'modality of {c} unknown: add it to R2Seg/datainfo.xlsx or R2SEG_INFO')
+        fs = sorted(p for p in (root / c / 'images').glob('*.nii.gz') if not p.name.startswith('.'))
+        if c == 'Prostate_Tumor_00' and prostate_seq != 'both':
+            fs = [p for p in fs if p.name.endswith(f'_{prostate_seq}.nii.gz')]
+        for p in fs:
+            images.append(str(p)); site.append(st); modality.append(mod)
+            labels.append(str(root / c / 'labels' / p.name.replace('.nii.gz', '_seg.nii.gz')))
+            if seg_obj == 'tumor':
+                prompts.append(f"{PANCIA_PROMPT_TEMPLETES.get(st, f'{st} tumor')} on {mod}")
+            else:
+                prompts.append(f"{st} on {mod}")
+        print(f'R2Seg {c}: {len(fs)} images ({mod}, {st})')
+    return {
+        'name': 'R2Seg',
+        'img_paths': images,
+        'lab_paths': labels,
+        'text_prompts': prompts,
+        'plan_paths': [None] * len(images),
+        'modality': modality,
+        'site': site,
+        'meta_list': None,
+        'img_format': [img_format] * len(images),
+    }

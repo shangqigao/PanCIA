@@ -17,10 +17,10 @@
 source ~/.bashrc
 # conda activate PanCIA
 # conda activate /home/sg2162/rds/hpc-work/miniconda3/Qwen
-conda activate /home/sg2162/rds/hpc-work/miniconda3/voxtell
+# conda activate /home/sg2162/rds/hpc-work/miniconda3/voxtell
 
-# conda activate /home/sg2162/rds/hpc-work/miniconda3/totalseg
-# export TOTALSEG_HOME_DIR=/home/sg2162/rds/hpc-work/PanCIA/checkpoints/TotalSegmentator
+conda activate /home/sg2162/rds/hpc-work/miniconda3/totalseg
+export TOTALSEG_HOME_DIR=/home/sg2162/rds/hpc-work/PanCIA/checkpoints/TotalSegmentator
 
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
@@ -91,22 +91,22 @@ save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg"
 #             --save_dir $save_dir
 
 # if no planner_dir, VoxTell would segment tumor as default
-python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-            --model VoxTell \
-            --radiology $radiology \
-            --planner_dir "${save_dir}/Planner" \
-            --dataset TCGA \
-            --save_dir $save_dir \
-            --start 3200 
-
 # python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-#             --seg_obj organ \
-#             --model TotalSegmentator \
-#             --ts_fast \
-#             --ts_threads 8 \
+#             --model VoxTell \
 #             --radiology $radiology \
+#             --planner_dir "${save_dir}/Planner" \
 #             --dataset TCGA \
-#             --save_dir $save_dir
+#             --save_dir $save_dir \
+#             --start 3200 
+
+python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+            --seg_obj organ \
+            --model TotalSegmentator \
+            --ts_fast \
+            --ts_threads 8 \
+            --radiology $radiology \
+            --dataset TCGA \
+            --save_dir $save_dir
 
 # Endometrioma segmentation
 # radiology="/home/sg2162/rds/hpc-work/EndoMRI_All"

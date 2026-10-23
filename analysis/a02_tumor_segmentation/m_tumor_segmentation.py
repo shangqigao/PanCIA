@@ -16,7 +16,22 @@ import numpy as np
 from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_MAMAMIA_info
 from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_TCGA_radiology_info
 from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_CPTAC_radiology_info
+from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_R2Seg_info
 logger = logging.getLogger(__name__)
+
+
+def _image_name(img_path, dataset):
+    """output stem of one image. R2Seg: '<collection>/<stem>' (stems such as FLARE23_xxxx repeat across collections);
+    MAMA-MIA: the case id; <dataset>_NIFTI layouts: the path below that folder; otherwise the file stem."""
+    p = str(img_path)
+    if dataset == 'R2Seg':
+        pp = pathlib.Path(p)
+        return f"{pp.parent.parent.name}/{pp.name.replace('.nii.gz', '')}"
+    if '/MAMA-MIA/' in p:
+        return pathlib.Path(p).name.replace("_0001.nii.gz", "")
+    if f'/{dataset}_NIFTI/' in p:
+        return p.split(f'/{dataset}_NIFTI/')[-1].replace(".nii.gz", "")
+    return pathlib.Path(p).name.replace(".nii.gz", "")
 
 def extract_radiology_segmentation(
         dataset,
@@ -196,12 +211,7 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
         if isinstance(img_path, list):
             img_name = pathlib.Path(img_path[0]).name.replace("_0000.nii.gz", "")
         else:
-            if '/MAMA-MIA/' in str(img_path):
-                img_name = pathlib.Path(img_path).name.replace("_0001.nii.gz", "")
-            elif f'/{dataset}_NIFTI/' in str(img_path):
-                img_name = str(img_path).split(f'/{dataset}_NIFTI/')[-1].replace(".nii.gz", "")
-            else:
-                img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+            img_name = _image_name(img_path, dataset)
         save_mask_path = pathlib.Path(f"{save_dir}/{img_name}_{seg_obj}.nii.gz")
         if save_mask_path.exists() and skip_exist:
             logger.info(f"{save_mask_path.name} has existed, skip!")
@@ -454,12 +464,7 @@ def extract_VoxTell_segmentation(
                 )
             img_path = img_path[0]
 
-        if '/MAMA-MIA/' in str(img_path):
-            img_name = pathlib.Path(img_path).name.replace("_0001.nii.gz", "")
-        elif f'/{dataset}_NIFTI/' in str(img_path):
-            img_name = str(img_path).split(f'/{dataset}_NIFTI/')[-1].replace(".nii.gz", "")
-        else:
-            img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        img_name = _image_name(img_path, dataset)
 
         if plan_mode and isinstance(text_prompts[idx], dict):
             _voxtell_plan_segment(predictor, reader_writer, img_path, img_name, text_prompts[idx], save_dir,
@@ -711,12 +716,7 @@ def extract_TotalSegmentator_segmentation(
                 raise ValueError("TotalSegmentator supports one NIfTI volume per case, not multi-phase input")
             img_path = img_path[0]
 
-        if '/MAMA-MIA/' in str(img_path):
-            img_name = pathlib.Path(img_path).name.replace("_0001.nii.gz", "")
-        elif f'/{dataset}_NIFTI/' in str(img_path):
-            img_name = str(img_path).split(f'/{dataset}_NIFTI/')[-1].replace(".nii.gz", "")
-        else:
-            img_name = pathlib.Path(img_path).name.replace(".nii.gz", "")
+        img_name = _image_name(img_path, dataset)
 
         save_mask_path = save_dir / f"{img_name}_{seg_obj}.nii.gz"
         labels_path = save_dir / f"{img_name}_{seg_obj}_labels.json"
@@ -872,6 +872,11 @@ if __name__ == "__main__":
     parser.add_argument('--plan_lists', default=None, nargs='*', help='Planner lists to run, e.g. T (tumour prompts only) or T A B; default all')
     parser.add_argument('--voxtell_prompt_batch', default=0, type=int,
                         help='Prompts per VoxTell call; 0 = all planned prompts in one call, halved automatically on CUDA out-of-memory')
+    parser.add_argument('--r2seg_collections', default=None, nargs='*',
+                        help='R2Seg collections to run (default: every collection folder with images/)')
+    parser.add_argument('--r2seg_prostate_seq', default='t2', choices=['t2', 'adc', 'both'],
+                        help='Prostate_Tumor_00 images to run (T2 and ADC per case)')
+    parser.add_argument('--skip_exist', action='store_true', help='Skip images whose outputs already exist (resume)')
     parser.add_argument('--start', default=0, type=int, help='First image index (for sharding)')
     parser.add_argument('--end', default=None, type=int, help='Stop before this image index (default: all)')
     args = parser.parse_args()
@@ -901,6 +906,14 @@ if __name__ == "__main__":
             planner_dir=args.planner_dir,
             plan_lists=args.plan_lists,
         )
+    elif args.dataset == 'R2Seg':
+        dataset_info = prepare_R2Seg_info(
+            r2seg_dir=args.radiology,
+            collections=args.r2seg_collections,
+            seg_obj=args.seg_obj,
+            img_format=args.format,
+            prostate_seq=args.r2seg_prostate_seq,
+        )
     else:
         raise ValueError(f'Dataset {args.dataset} is currently unsupported')
 
@@ -926,7 +939,7 @@ if __name__ == "__main__":
         zoom_in=False,
         voxtell_model_root=args.voxtell_model_root,
         device=args.device,
-        skip_exist=False,
+        skip_exist=args.skip_exist,
         ts_model_root=args.ts_model_root,
         ts_task=args.ts_task,
         ts_fast=args.ts_fast,
