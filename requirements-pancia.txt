@@ -17,7 +17,7 @@ matplotlib
 mpi4py
 nibabel
 nltk
-opencv-python
+opencv-python-headless
 openpyxl
 openslide-python
 pandas

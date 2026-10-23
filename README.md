@@ -4,19 +4,122 @@
 
 ## Dependencies
 
-For pan-cancer image analysis
-- conda create -n PanCIA python=3.9.19
-- conda activate PanCIA
-- conda install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 pytorch-cuda=12.1 -c pytorch -c nvidia
-- conda install -c conda-forge openslide
-- conda install -c conda-forge gcc_linux-64 gxx_linux-64 (optional)
-- pip install --no-build-isolation git+https://github.com/MaureenZOU/detectron2-xyz.git
-- pip install -r requirements-pancia.txt
-- pip install torch-scatter -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
-- pip install torch-sparse  -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
+### Dependencies for CUDA 12.1 (Original Setup)
 
-If GCC is too old (need GCC 9 or later):
-- conda install -c conda-forge gcc_linux-64 gxx_linux-64
+For NVIDIA GPUs compatible with CUDA 12.1, use Python 3.9.19 and PyTorch 2.5.1.
+
+```bash
+# Create environment
+conda create -n PanCIA python=3.9.19 -y
+conda activate PanCIA
+
+# Install PyTorch
+conda install pytorch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 \
+    pytorch-cuda=12.1 -c pytorch -c nvidia -y
+
+# Install OpenSlide
+conda install -c conda-forge openslide -y
+
+# Install Detectron2
+pip install --no-build-isolation \
+    git+https://github.com/MaureenZOU/detectron2-xyz.git
+
+# Install PanCIA requirements
+pip install -r requirements-pancia.txt
+
+# Install PyTorch Geometric CUDA extensions
+pip install torch-scatter torch-sparse \
+    -f https://data.pyg.org/whl/torch-2.5.1+cu121.html
+```
+
+**Optional: Install GCC/G++ if the system compiler is too old (GCC 9 or later recommended).**
+
+```bash
+conda install -c conda-forge gcc_linux-64 gxx_linux-64
+```
+
+**If the CUDA compiler version does not match PyTorch's CUDA version:**
+
+```bash
+conda install -c nvidia cuda-toolkit=12.1
+
+export CUDA_HOME="$CONDA_PREFIX"
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib:$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+```
+
+Verify the environment:
+
+```bash
+python -c "import torch; print(torch.__version__, torch.version.cuda)"
+nvcc --version
+```
+
+**Note:** This is the original PanCIA installation configuration. It is intended for older NVIDIA GPU architectures and is not suitable for native RTX 5090 (`sm_120`) CUDA compilation. Use the CUDA 12.8 section for RTX 5090 GPUs.
+
+### Dependencies for NVIDIA RTX 5090 (CUDA 12.8)
+
+For NVIDIA Blackwell GPUs (e.g., RTX 5090), use PyTorch 2.7.1 with CUDA 12.8 instead of the CUDA 12.1 setup above.
+
+```bash
+# Create environment
+conda create -n PanCIA python=3.10 pip -y
+conda activate PanCIA
+
+# Install PyTorch
+pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 \
+    --index-url https://download.pytorch.org/whl/cu128
+
+# Install OpenSlide
+conda install -c conda-forge openslide openslide-python -y
+
+# Install CUDA 12.8 toolkit
+conda install -c nvidia/label/cuda-12.8.0 -c conda-forge \
+    --override-channels cuda-toolkit=12.8.0 "cuda-version=12.8"
+
+# Configure CUDA
+export CUDA_HOME="$CONDA_PREFIX"
+export PATH="$CUDA_HOME/bin:$PATH"
+export TORCH_CUDA_ARCH_LIST="12.0"
+export MAX_JOBS=4
+
+# Install Detectron2
+pip install ninja cython pycocotools setuptools wheel
+git clone https://github.com/MaureenZOU/detectron2-xyz.git
+cd detectron2-xyz
+pip install --no-build-isolation --no-deps -e .
+
+# Install Detectron2 dependencies
+pip install "fvcore>=0.1.5,<0.1.6" "iopath>=0.1.7,<0.1.10" \
+    yacs termcolor cloudpickle omegaconf hydra-core \
+    future matplotlib pydot "scipy>1.5.1" tensorboard
+
+# Return to PanCIA directory
+cd /path/to/PanCIA
+
+# Install PyRadiomics separately
+pip install numpy==1.26.4 "setuptools<81" wheel Cython
+pip install --no-build-isolation pyradiomics==3.0.1
+
+# Install PanCIA requirements
+pip install -r requirements-pancia.txt \
+    -c <(printf 'torch==2.7.1\nnumpy==1.26.4\n')
+
+# Install PyTorch Geometric CUDA extensions
+pip install --no-index --only-binary=:all: \
+    -f https://data.pyg.org/whl/torch-2.7.0+cu128.html \
+    torch-scatter torch-sparse
+```
+
+**Optional:** If the GCC/G++ compiler is incompatible with CUDA, install Conda compilers:
+
+```bash
+conda install -c conda-forge gcc_linux-64 gxx_linux-64
+```
+
+**Verified on:** NVIDIA GeForce RTX 5090, Python 3.10, PyTorch 2.7.1+cu128, CUDA 12.8, Detectron2 0.6. Detectron2 CUDA NMS, torch-scatter, and torch-sparse GPU operations passed testing.
+
+**Note:** Keep the cloned `detectron2-xyz` directory because Detectron2 is installed in editable mode. Full PanCIA training/inference has not yet been validated.
 
 For MLLM 
 - conda create --prefix /path/to/Qwen python=3.9 -y
