@@ -82,8 +82,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # pan-cancer segmentation
-radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg"
+# radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+# save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg"
 # srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --model BiomedParse \
 #             --radiology $radiology \
@@ -99,13 +99,25 @@ save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg"
 #             --save_dir $save_dir \
 #             --start 3200 
 
+# python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+#             --seg_obj organ \
+#             --model TotalSegmentator \
+#             --ts_fast \
+#             --ts_threads 8 \
+#             --radiology $radiology \
+#             --dataset TCGA \
+#             --save_dir $save_dir
+
+# R2Seg anatomy segmentation
+radiology="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg"
+save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg_Seg"
 python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
             --seg_obj organ \
             --model TotalSegmentator \
             --ts_fast \
             --ts_threads 8 \
             --radiology $radiology \
-            --dataset TCGA \
+            --dataset R2Seg \
             --save_dir $save_dir
 
 # Endometrioma segmentation
