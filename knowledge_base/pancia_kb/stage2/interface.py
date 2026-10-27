@@ -11,6 +11,7 @@ import os, json
 import numpy as np
 import nibabel as nib
 from . import features as F, run as RN
+from .sequence import classify as classify_seq
 
 ALPHA = 0.05
 KEEP = ('accepted', 'accepted_override', 'uncertain')
@@ -32,6 +33,9 @@ class Stage1:
             return None
         man = json.load(open(os.path.join(self.seg_root, 'VoxTell', 'Radiology', f'{rel}_plan_manifest.json')))
         img = nib.load(os.path.join(self.nifti_root, f"{man['img_name']}.nii.gz"))
+        sc = os.path.join(self.nifti_root, f"{man['img_name']}.json")
+        meta = json.load(open(sc)) if os.path.exists(sc) else {}
+        seq, seq_reason = classify_seq(meta, rel[:2])
         sp = np.array(led['spacing'], float); si = cr['si']; mod = rel[:2]
         thick, ax = F.acq_axis(sp, si)
         anchors, lesions, allh = cr['anchors'], cr['lesions'], cr['hosts']
@@ -96,7 +100,8 @@ class Stage1:
         X = np.asarray(X[..., 0] if X.ndim == 4 else X, np.float32)
         cen, scl = F.norm_params(X, mod, F.body_mask(X, mod, ax) if mod == 'MR' else None)
         body = F.region_body(X, mod, ax)
-        return dict(rel=rel, kb=self.kb, led=led, cr=cr, aff=aff, shape=shp, sp=sp, si=si, mod=mod, thick=thick, ax=ax, X=X, cen=cen, scl=scl,
+        return dict(rel=rel, kb=self.kb, led=led, cr=cr, aff=aff, shape=shp, sp=sp, si=si, mod=mod, seq=seq, seq_reason=seq_reason,
+                    series_description=meta.get('SeriesDescription'), thick=thick, ax=ax, X=X, cen=cen, scl=scl,
                     body=RN.Patch.from_full(body), lesions=out, organs=organs, checks=checks,
                     insufficient=bool(cr.get('anatomy_insufficient')))
 

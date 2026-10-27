@@ -378,6 +378,17 @@ tissue compartments (subcutaneous fat, visceral fat, skeletal muscle) are no lon
 whole-body 'fat' / 'muscles' labels and TS `tissue_types` is not run. `scripts/extract_voxtell_vocab.py` re-grades
 the KB and can merge the Hugging Face embedding `.npz` keys as a second source.
 
+## v0.5.9 — tissue class (26 Oct 2026)
+
+Every entity has a `tissue_class`: the imaging-physical class of its tissue, set from anatomy alone (the entity's category, with
+a few overrides in `build_kb.py`). It keys the stage-2 tail-weight prior together with the modality, because heavy tails of
+image statistics come from interfaces: air (`aerated`: lung, airways), a lumen or cavity with its wall and contents (`hollow`:
+bowel, stomach, bladder, gallbladder, ducts, uterus and cervix, heart), or neither (`parenchymal`: solid organs and glands alike).
+The other classes (`neural`, `osseous`, `muscle`, `lymphoid`, `diffuse`, `vascular`, `space`, `none`) name tissues without
+expert tumours in the stage-2 training data; they take the pan-cancer prior. Counts: parenchymal 31, hollow 34, aerated 10,
+osseous 40, vascular 25, lymphoid 21, muscle 15, diffuse 14, neural 6, space 5, none 3. The build is otherwise unchanged
+(byte-identical apart from the new field and the version).
+
 ## Editing
 Edit `build_kb.py`, run it (it asserts referential integrity and TS class names), then `python tests/test_planner.py`.
 Bump `VERSION` for any content change; per-scan plans record the KB version so prompt sets stay reproducible.

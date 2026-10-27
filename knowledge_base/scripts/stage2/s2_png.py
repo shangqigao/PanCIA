@@ -1,6 +1,7 @@
 """Stage 2 panels (TCGA pilot; visual check). Agreed layout: 2 x 3 whole slices (axial / coronal / sagittal through the lesion's anchor
 centroid, LPS display, never cropped). Top: image only (dashed box = anchors). Bottom: cyan anchors, orange stage-1 chosen extent,
 red stage-2 refined tumour, magenta new candidates in the cluster, and the voxel tumour posterior p_v (heat, p >= 0.05).
+Panels are sampled with an equal share per cancer type (about --n in total).
 Usage: python3 s2_png.py [--tag tcga_v1] [--n 60] [--only substr]   -> stage2/<tag>/png/<cancer>_<k>_L<lesion>.png"""
 import os, sys, json, glob, argparse
 import numpy as np, pandas as pd, nibabel as nib
@@ -39,7 +40,12 @@ def main():
     L = pd.concat([pd.read_csv(f) for f in glob.glob(os.path.join(O, 'lesions*.csv'))], ignore_index=True)
     if a.only:
         L = L[L.rel.str.contains(a.only)]
-    sel = L.sample(min(a.n, len(L)), random_state=0) if a.n and len(L) > a.n else L
+    # stratified by cancer type (equal share per cancer, so frequent cancers do not dominate the visual check)
+    if a.n and len(L) > a.n:
+        k = int(np.ceil(a.n / L.cancer.nunique()))
+        sel = pd.concat([g.sample(min(k, len(g)), random_state=0) for _, g in L.groupby('cancer')])
+    else:
+        sel = L
     segr = paths.root('TCGA_Seg'); nif = paths.root('TCGA_NIFTI')
     for rel, g in sel.groupby('rel'):
         man = json.load(open(os.path.join(segr, 'VoxTell', 'Radiology', f'{rel}_plan_manifest.json')))
@@ -90,7 +96,7 @@ def main():
                     if M.any(): Ax[1, col].contour(disp(M).astype(float), [0.5], colors=colr, linewidths=lw, linestyles=st)
             fig.suptitle(f"{r.cancer} {r.mod} k{r.k} lesion {r.lesion} | stage-1 {r.decisions} | S {r.S} (h_map {r.h_map})\n"
                          f"extent {r.vol_xi} ml -> refined {r.vol_Z} ml (trimmed {r.trimmed_ml}, recalled {r.recalled_ml}; by territory {r.recalled_by_territory}) | "
-                         f"Dice(refined, extent) {r.dice_Z_xi} | mean p extent {r.pbar_xi}, refined {r.pbar_Z} | log BF {r.log_bf} -> reported {r.reported}\n"
+                         f"Dice(refined, extent) {r.dice_Z_xi} | mean p extent {r.pbar_xi}, refined {r.pbar_Z} | log BF {r.log_bf} ({r.log_bf_per_vox}/voxel, {r.n_vox_bf} voxels) -> reported {r.reported}\n"
                          f"components {r.comp_frac} | region growth {r.n_grow} | stage-1 test on refined tumour {r.evidence_on_Z}\n"
                          "Bottom: cyan anchors, orange stage-1 chosen extent, red stage-2 refined tumour, magenta dotted new candidates, heat = p_v",
                          fontsize=8.5)

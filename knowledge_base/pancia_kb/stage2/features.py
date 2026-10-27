@@ -1,18 +1,23 @@
 """Image features y_v and helpers (stage 2).
 
-y_v (D = 2): intensity smoothed in the acquisition plane (as grounding.smooth: sigma 1 voxel in-plane, none across thick slices) and
-the local standard deviation at 2 mm (Gaussian window, isotropic in mm; texture). Local means and a second, 6 mm scale were dropped
-(23 Oct): on the phantom (s2_selftest.py) they blur tumour boundaries, so normal tissue next to a tumour looked like tumour
-(Dice 0.92 with them, 0.99 without).
+y_v (D = 4; 26 Oct, from the tail study, main.tex Appendix C): statistics of order 0, 1 and 2 in the acquisition plane, exactly as
+the tail study that estimated the tail-weight prior (pancia_kb.stage2.tails):
+  I     normalised intensity (no smoothing)
+  D1a   forward first difference along the first in-plane axis
+  D1b   forward first difference along the second in-plane axis
+  LoG1  in-plane Laplacian of Gaussian, sigma = 1 mm
+In-plane: the two axes other than the acquisition axis (acq_axis). Derivatives describe spatial change and depend less on the
+imaging protocol than the intensity level; one Student-t scale u_v is shared by all four (vb), which fits expert data better than
+a scale per order. Before 26 Oct: D = 2 (intensity smoothed in-plane by 1 voxel and the local SD at 2 mm).
 CT stays in HU (clipped to [-1024, 3071]). MR has no absolute scale: it is normalised per scan by a robust z-score over the body,
 z = (x - median_body) / (IQR_body / 1.349). Both are fixed rules; nothing is tuned.
 The body is the largest connected component above a threshold (CT: -500 HU; MR: Otsu on the scan), with holes filled slice by slice."""
 import numpy as np
 from scipy import ndimage
 
-SD_MM = 2.0
-D = 2
-NAMES = ['xs', 's2']
+LOG_SIGMA_MM = 1.0
+D = 4
+NAMES = ['I', 'D1a', 'D1b', 'LoG1']
 
 
 def edt(m, sp):
@@ -24,11 +29,19 @@ def edt(m, sp):
 
 
 def inner_depth(m, sp):
-    """distance (mm) from a voxel inside m to the nearest voxel outside m (0 outside)"""
+    """distance (mm) from a voxel inside m to the nearest voxel outside m (0 outside). Computed on m's bounding box + 1 voxel
+    (identical values; fast with many small organ masks)."""
     m = np.asarray(m, bool)
-    if not m.any():
-        return np.zeros(m.shape, np.float32)
-    return ndimage.distance_transform_edt(m, sampling=np.asarray(sp, float)).astype(np.float32)
+    out = np.zeros(m.shape, np.float32)
+    b = bbox(m)
+    if b is None:
+        return out
+    W = tuple(slice(max(0, s.start - 1), min(n, s.stop + 1)) for s, n in zip(b, m.shape))
+    sub = m[W]
+    if sub.all():                                   # the mask fills its padded box (touches the volume edge): no outside voxel
+        return ndimage.distance_transform_edt(np.pad(m, 1), sampling=np.asarray(sp, float))[1:-1, 1:-1, 1:-1].astype(np.float32)
+    out[W] = ndimage.distance_transform_edt(sub, sampling=np.asarray(sp, float))
+    return out
 
 
 def signed_distance(m, sp):
@@ -104,14 +117,22 @@ def normalise(X, mod, centre, scale):
 
 
 def image_features(Xn, sp, thick, ax):
-    """Xn: normalised intensity on a window (pad the window by >= 6 mm to avoid edge effects). Returns (D, *shape) float32."""
+    """Xn: normalised intensity on a window (pad the window by >= 3 mm to avoid edge effects). Returns (D, *shape) float32:
+    I, D1a, D1b, LoG1 (see module doc). thick is unused (the plane is the one orthogonal to ax in every case, as the tail study)."""
     Xn = np.asarray(Xn, np.float32); sp = np.asarray(sp, float)
-    sg = [0.0 if (thick and a == ax) else 1.0 for a in range(3)]
+    ip = [a for a in range(3) if a != ax]
     out = np.empty((D,) + Xn.shape, np.float32)
-    out[0] = ndimage.gaussian_filter(Xn, sg)
-    sig = [SD_MM / q for q in sp]
-    m = ndimage.gaussian_filter(Xn, sig); m2 = ndimage.gaussian_filter(Xn * Xn, sig)
-    out[1] = np.sqrt(np.maximum(m2 - m * m, 0.0))
+    out[0] = Xn
+    for i, a in enumerate(ip):
+        d = np.zeros(Xn.shape, np.float32); lo = [slice(None)] * 3; hi = [slice(None)] * 3
+        lo[a] = slice(0, -1); hi[a] = slice(1, None)
+        d[tuple(lo)] = Xn[tuple(hi)] - Xn[tuple(lo)]
+        out[1 + i] = d
+    sig = [LOG_SIGMA_MM / sp[a] if a != ax else 0.0 for a in range(3)]
+    lg = np.zeros(Xn.shape, np.float32)
+    for a in ip:
+        o = [0, 0, 0]; o[a] = 2; lg += ndimage.gaussian_filter(Xn, sig, order=o)
+    out[3] = lg
     return out
 
 

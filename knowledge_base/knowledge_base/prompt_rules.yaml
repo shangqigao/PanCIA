@@ -1,4 +1,4 @@
-version: 0.5.8
+version: 0.5.9
 templates:
   lateral: '{side} {term}'
   in_region: '{term} in the {region}'

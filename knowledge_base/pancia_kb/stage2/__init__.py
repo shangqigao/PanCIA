@@ -2,12 +2,14 @@
 
 Modules
   paths     data roots (Mac defaults, ~/mnt in the Cowork VM, or PANCIA_<NAME> environment variables)
-  features  image features y_v (smoothed intensity, local mean / sd at two scales), body mask, MR normalisation
+  features  image features y_v (smoothed intensity, local SD at 2 mm), body mask, MR normalisation
   prior     spatial tumour prior pi_v = sum_h P(h|L) sigma(eta . psi_v(h)) (basis, fitted weights)
   vb        mean-field variational Bayes: Student-t tumour components (sparse Dirichlet) + background classes,
             latent-weight Potts coupling on the tumour indicator, ELBO and the approximate Bayes factor
-  expert    expert-data simulation on R2Seg (agent-like anchors and extents around real expert tumours)
-  fit       fitting of r, eta, coupling hyperparameters, appearance priors and nu on expert data only
+  expert    expert-data simulation on R2Seg (agent-like anchors and extents around real expert tumours, TS anatomy)
+  sequence  MR sequence family (reporting only)
+  fit       fitting of r, eta, coupling hyperparameters and nu on expert data only (sites count equally); appearance has no
+            cross-scan prior: it is inferred within each scan (vb.class_priors)
   interface stage-1 (ledger v8.4) -> per-lesion stage-2 inputs (q_v, chosen extent, credible hosts, regions, clusters)
   run       one cluster of lesions end to end (region growth, refined tumour, new candidates, Bayes factor)
 

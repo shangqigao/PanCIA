@@ -1,4 +1,4 @@
-version: 0.5.8
+version: 0.5.9
 entities:
 - id: vertebra_C1
   name: C1 vertebra
@@ -24,6 +24,7 @@ entities:
     unsided_label: false
     train_volumes: 4504
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_C2
   name: C2 vertebra
   category: bone
@@ -48,6 +49,7 @@ entities:
     unsided_label: false
     train_volumes: 4504
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_C3
   name: C3 vertebra
   category: bone
@@ -72,6 +74,7 @@ entities:
     unsided_label: false
     train_volumes: 4504
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_C4
   name: C4 vertebra
   category: bone
@@ -96,6 +99,7 @@ entities:
     unsided_label: false
     train_volumes: 4504
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_C5
   name: C5 vertebra
   category: bone
@@ -120,6 +124,7 @@ entities:
     unsided_label: false
     train_volumes: 4504
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_C6
   name: C6 vertebra
   category: bone
@@ -144,6 +149,7 @@ entities:
     unsided_label: false
     train_volumes: 4504
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_C7
   name: C7 vertebra
   category: bone
@@ -168,6 +174,7 @@ entities:
     unsided_label: false
     train_volumes: 4504
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T1
   name: T1 vertebra
   category: bone
@@ -192,6 +199,7 @@ entities:
     unsided_label: false
     train_volumes: 4559
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T2
   name: T2 vertebra
   category: bone
@@ -216,6 +224,7 @@ entities:
     unsided_label: false
     train_volumes: 4559
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T3
   name: T3 vertebra
   category: bone
@@ -240,6 +249,7 @@ entities:
     unsided_label: false
     train_volumes: 4559
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T4
   name: T4 vertebra
   category: bone
@@ -264,6 +274,7 @@ entities:
     unsided_label: false
     train_volumes: 4559
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T5
   name: T5 vertebra
   category: bone
@@ -288,6 +299,7 @@ entities:
     unsided_label: false
     train_volumes: 4559
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T6
   name: T6 vertebra
   category: bone
@@ -312,6 +324,7 @@ entities:
     unsided_label: false
     train_volumes: 4559
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T7
   name: T7 vertebra
   category: bone
@@ -336,6 +349,7 @@ entities:
     unsided_label: false
     train_volumes: 5099
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T8
   name: T8 vertebra
   category: bone
@@ -360,6 +374,7 @@ entities:
     unsided_label: false
     train_volumes: 5099
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T9
   name: T9 vertebra
   category: bone
@@ -384,6 +399,7 @@ entities:
     unsided_label: false
     train_volumes: 5546
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T10
   name: T10 vertebra
   category: bone
@@ -408,6 +424,7 @@ entities:
     unsided_label: false
     train_volumes: 5546
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T11
   name: T11 vertebra
   category: bone
@@ -432,6 +449,7 @@ entities:
     unsided_label: false
     train_volumes: 5546
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_T12
   name: T12 vertebra
   category: bone
@@ -456,6 +474,7 @@ entities:
     unsided_label: false
     train_volumes: 5546
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_L1
   name: L1 vertebra
   category: bone
@@ -480,6 +499,7 @@ entities:
     unsided_label: false
     train_volumes: 5546
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_L2
   name: L2 vertebra
   category: bone
@@ -504,6 +524,7 @@ entities:
     unsided_label: false
     train_volumes: 5546
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_L3
   name: L3 vertebra
   category: bone
@@ -528,6 +549,7 @@ entities:
     unsided_label: false
     train_volumes: 5546
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_L4
   name: L4 vertebra
   category: bone
@@ -552,6 +574,7 @@ entities:
     unsided_label: false
     train_volumes: 5546
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_L5
   name: L5 vertebra
   category: bone
@@ -576,6 +599,7 @@ entities:
     unsided_label: false
     train_volumes: 5546
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_S1
   name: S1 vertebra
   category: bone
@@ -600,6 +624,7 @@ entities:
     unsided_label: false
     train_volumes: 1228
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: vertebra_S2
   name: S2 vertebra
   category: bone
@@ -623,6 +648,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: osseous
 - id: vertebra_S3
   name: S3 vertebra
   category: bone
@@ -646,6 +672,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: osseous
 - id: vertebra_S4
   name: S4 vertebra
   category: bone
@@ -669,6 +696,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: osseous
 - id: vertebra_S5
   name: S5 vertebra
   category: bone
@@ -692,6 +720,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: osseous
 - id: spine
   name: Spine
   category: bone
@@ -740,6 +769,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: osseous
 - id: sacrum
   name: Sacrum
   category: bone
@@ -787,6 +817,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: osseous
 - id: coccyx
   name: Coccyx
   category: bone
@@ -810,6 +841,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: osseous
 - id: hip
   name: Hip bone (ilium, ischium, pubis)
   category: bone
@@ -863,6 +895,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: osseous
 - id: femur
   name: Femur (proximal)
   category: bone
@@ -892,6 +925,7 @@ entities:
     unsided_label: false
     train_volumes: 3974
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: sternum
   name: Sternum
   category: bone
@@ -916,6 +950,7 @@ entities:
     unsided_label: false
     train_volumes: 3454
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: rib_cage
   name: Rib cage
   category: bone
@@ -944,6 +979,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: osseous
 - id: scapula
   name: Scapula
   category: bone
@@ -973,6 +1009,7 @@ entities:
     unsided_label: false
     train_volumes: 3974
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: clavicle
   name: Clavicle
   category: bone
@@ -1002,6 +1039,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: osseous
 - id: humerus
   name: Humerus
   category: bone
@@ -1031,6 +1069,7 @@ entities:
     unsided_label: false
     train_volumes: 3974
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: spinal_cord
   name: Spinal cord
   category: nerve
@@ -1056,6 +1095,7 @@ entities:
     unsided_label: false
     train_volumes: 5433
     source: table10_train+table7_test+hf_v1.1
+  tissue_class: neural
 - id: brain
   name: Brain
   category: organ
@@ -1109,6 +1149,7 @@ entities:
     vocab_match: brain tumor
     unsided_label: false
   tumour_host: true
+  tissue_class: neural
 - id: brainstem
   name: Brainstem
   category: organ
@@ -1133,6 +1174,7 @@ entities:
     unsided_label: false
     train_volumes: 7360
     source: table10_train+table7_test+hf_v1.1
+  tissue_class: neural
 - id: cerebellum
   name: Cerebellum
   category: organ
@@ -1156,6 +1198,7 @@ entities:
     unsided_label: false
     train_volumes: 70
     source: table10_train+hf_v1.1
+  tissue_class: neural
 - id: skull
   name: Skull
   category: bone
@@ -1180,6 +1223,7 @@ entities:
     unsided_label: false
     train_volumes: 3358
     source: table10_train+hf_v1.1
+  tissue_class: osseous
 - id: eye
   name: Eye
   category: organ
@@ -1207,6 +1251,7 @@ entities:
     unsided_label: false
     train_volumes: 3505
     source: table10_train+table7_test+hf_v1.1
+  tissue_class: neural
 - id: nasal_cavity
   name: Nasal cavity
   category: space
@@ -1230,6 +1275,7 @@ entities:
     unsided_label: false
     train_volumes: 533
     source: table10_train+hf_v1.1
+  tissue_class: space
 - id: oral_cavity
   name: Oral cavity
   category: space
@@ -1277,6 +1323,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: space
 - id: pharynx
   name: Pharynx
   category: hollow_organ
@@ -1326,6 +1373,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: larynx
   name: Larynx
   category: hollow_organ
@@ -1373,6 +1421,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: aerated
 - id: parotid_gland
   name: Parotid gland
   category: gland
@@ -1418,6 +1467,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: parenchymal
 - id: submandibular_gland
   name: Submandibular gland
   category: gland
@@ -1444,6 +1494,7 @@ entities:
     unsided_label: false
     train_volumes: 3586
     source: table10_train+table7_test+hf_v1.1
+  tissue_class: parenchymal
 - id: aorta
   name: Aorta
   category: vessel_artery
@@ -1497,6 +1548,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: false
+  tissue_class: vascular
 - id: inferior_vena_cava
   name: Inferior vena cava
   category: vessel_vein
@@ -1547,6 +1599,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: false
+  tissue_class: vascular
 - id: superior_vena_cava
   name: Superior vena cava
   category: vessel_vein
@@ -1571,6 +1624,7 @@ entities:
     unsided_label: false
     train_volumes: 1289
     source: table10_train+table7_test+hf_v1.1
+  tissue_class: vascular
 - id: iliac_artery
   name: Common/external iliac artery
   category: vessel_artery
@@ -1626,6 +1680,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: false
+  tissue_class: vascular
 - id: iliac_vein
   name: Common/external iliac vein
   category: vessel_vein
@@ -1679,6 +1734,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: false
+  tissue_class: vascular
 - id: internal_iliac_artery
   name: Internal iliac artery
   category: vessel_artery
@@ -1703,6 +1759,7 @@ entities:
     unsided_label: false
     train_volumes: 51
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: internal_iliac_vein
   name: Internal iliac vein
   category: vessel_vein
@@ -1726,6 +1783,7 @@ entities:
     unsided_label: false
     train_volumes: 1
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: portal_vein
   name: Portal vein
   category: vessel_vein
@@ -1753,6 +1811,7 @@ entities:
     unsided_label: false
     train_volumes: 21
     source: table10_train
+  tissue_class: vascular
 - id: splenic_vein
   name: Splenic vein
   category: vessel_vein
@@ -1778,6 +1837,7 @@ entities:
     unsided_label: false
     train_volumes: 1
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: hepatic_veins
   name: Hepatic veins
   category: vessel_vein
@@ -1804,6 +1864,7 @@ entities:
     unsided_label: false
     train_volumes: 494
     source: table10_train+table7_test+hf_v1.1
+  tissue_class: vascular
 - id: hepatic_artery
   name: Hepatic artery
   category: vessel_artery
@@ -1829,6 +1890,7 @@ entities:
     unsided_label: false
     train_volumes: 120
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: celiac_trunk
   name: Coeliac trunk
   category: vessel_artery
@@ -1853,6 +1915,7 @@ entities:
     unsided_label: false
     train_volumes: 533
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: superior_mesenteric_artery
   name: Superior mesenteric artery
   category: vessel_artery
@@ -1877,6 +1940,7 @@ entities:
     unsided_label: false
     train_volumes: 171
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: superior_mesenteric_vein
   name: Superior mesenteric vein
   category: vessel_vein
@@ -1901,6 +1965,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: vascular
 - id: renal_artery
   name: Renal artery
   category: vessel_artery
@@ -1925,6 +1990,7 @@ entities:
     unsided_label: false
     train_volumes: 171
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: renal_vein
   name: Renal vein
   category: vessel_vein
@@ -1950,6 +2016,7 @@ entities:
     unsided_label: true
     train_volumes: 70
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: gonadal_vein
   name: Gonadal vein
   category: vessel_vein
@@ -1973,6 +2040,7 @@ entities:
     unsided_label: false
     train_volumes: 2
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: pulmonary_artery
   name: Pulmonary artery
   category: vessel_artery
@@ -1997,6 +2065,7 @@ entities:
     unsided_label: false
     train_volumes: 593
     source: table10_train+table7_test
+  tissue_class: vascular
 - id: pulmonary_vein
   name: Pulmonary veins
   category: vessel_vein
@@ -2021,6 +2090,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: vascular
 - id: brachiocephalic_trunk
   name: Brachiocephalic trunk
   category: vessel_artery
@@ -2045,6 +2115,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: vascular
 - id: subclavian_artery
   name: Subclavian artery
   category: vessel_artery
@@ -2071,6 +2142,7 @@ entities:
     unsided_label: false
     train_volumes: 1931
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: common_carotid_artery
   name: Common carotid artery
   category: vessel_artery
@@ -2097,6 +2169,7 @@ entities:
     unsided_label: false
     train_volumes: 1931
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: brachiocephalic_vein
   name: Brachiocephalic vein
   category: vessel_vein
@@ -2123,6 +2196,7 @@ entities:
     unsided_label: false
     train_volumes: 1761
     source: table10_train+hf_v1.1
+  tissue_class: vascular
 - id: uterine_artery
   name: Uterine artery
   category: vessel_artery
@@ -2146,6 +2220,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: vascular
 - id: axillary_vessels
   name: Axillary artery and vein
   category: vessel_artery
@@ -2171,6 +2246,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: vascular
 - id: lung
   name: Lung
   category: organ
@@ -2233,6 +2309,7 @@ entities:
     source: hand_checked
     unsided_label: true
   tumour_host: true
+  tissue_class: aerated
 - id: lung_left_upper_lobe
   name: Left upper lobe
   category: organ
@@ -2258,6 +2335,7 @@ entities:
     unsided_label: false
     train_volumes: 3454
     source: table10_train+hf_v1.1
+  tissue_class: aerated
 - id: lung_left_lower_lobe
   name: Left lower lobe
   category: organ
@@ -2283,6 +2361,7 @@ entities:
     unsided_label: false
     train_volumes: 3454
     source: table10_train+hf_v1.1
+  tissue_class: aerated
 - id: lung_right_upper_lobe
   name: Right upper lobe
   category: organ
@@ -2308,6 +2387,7 @@ entities:
     unsided_label: false
     train_volumes: 3454
     source: table10_train+hf_v1.1
+  tissue_class: aerated
 - id: lung_right_middle_lobe
   name: Right middle lobe
   category: organ
@@ -2333,6 +2413,7 @@ entities:
     unsided_label: false
     train_volumes: 3454
     source: table10_train+hf_v1.1
+  tissue_class: aerated
 - id: lung_right_lower_lobe
   name: Right lower lobe
   category: organ
@@ -2358,6 +2439,7 @@ entities:
     unsided_label: false
     train_volumes: 3454
     source: table10_train+hf_v1.1
+  tissue_class: aerated
 - id: trachea
   name: Trachea
   category: duct
@@ -2404,6 +2486,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: false
+  tissue_class: aerated
 - id: main_bronchus
   name: Main bronchus
   category: duct
@@ -2428,6 +2511,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: aerated
 - id: bronchial_tree
   name: Bronchial tree / airways
   category: duct
@@ -2453,6 +2537,7 @@ entities:
     unsided_label: false
     train_volumes: 583
     source: table10_train+hf_v1.1
+  tissue_class: aerated
 - id: pleura
   name: Pleura
   category: fascia
@@ -2477,6 +2562,7 @@ entities:
     unsided_label: false
     train_volumes: 245
     source: table10_train
+  tissue_class: diffuse
 - id: pleural_effusion
   name: Pleural effusion
   category: space
@@ -2501,6 +2587,7 @@ entities:
     unsided_label: true
     train_volumes: 78
     source: table10_train+hf_v1.1
+  tissue_class: space
 - id: heart
   name: Heart
   category: organ
@@ -2548,6 +2635,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: false
+  tissue_class: hollow
 - id: pericardium
   name: Pericardium
   category: fascia
@@ -2571,6 +2659,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: diffuse
 - id: esophagus
   name: Oesophagus
   category: hollow_organ
@@ -2627,6 +2716,7 @@ entities:
     source: hand_checked
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: thyroid
   name: Thyroid gland
   category: gland
@@ -2671,6 +2761,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: false
+  tissue_class: parenchymal
 - id: thymus
   name: Thymus / anterior mediastinal fat
   category: gland
@@ -2694,6 +2785,7 @@ entities:
     unsided_label: false
     train_volumes: 886
     source: table10_train+hf_v1.1
+  tissue_class: parenchymal
 - id: chest_wall
   name: Chest wall
   category: muscle
@@ -2718,6 +2810,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: muscle
 - id: diaphragm
   name: Diaphragm
   category: muscle
@@ -2741,6 +2834,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: muscle
 - id: breast
   name: Breast
   category: organ
@@ -2790,6 +2884,7 @@ entities:
     source: hand_checked
     unsided_label: true
   tumour_host: true
+  tissue_class: parenchymal
 - id: fibroglandular_tissue
   name: Fibroglandular tissue
   category: organ
@@ -2813,6 +2908,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: parenchymal
 - id: pectoralis_major
   name: Pectoralis major
   category: muscle
@@ -2839,6 +2935,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: muscle
 - id: skin
   name: Skin
   category: fascia
@@ -2862,6 +2959,7 @@ entities:
     unsided_label: false
     train_volumes: 886
     source: table10_train+table7_test+hf_v1.1
+  tissue_class: diffuse
 - id: nipple
   name: Nipple
   category: landmark
@@ -2885,6 +2983,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: none
 - id: liver
   name: Liver
   category: organ
@@ -2947,6 +3046,7 @@ entities:
     source: hand_checked
     unsided_label: false
   tumour_host: true
+  tissue_class: parenchymal
 - id: liver_segment_I
   name: Liver segment I
   category: organ
@@ -2971,6 +3071,7 @@ entities:
     unsided_label: false
     train_volumes: 243
     source: table10_train+hf_v1.1+hf_v1.1
+  tissue_class: parenchymal
 - id: liver_segment_II
   name: Liver segment II
   category: organ
@@ -2995,6 +3096,7 @@ entities:
     unsided_label: false
     train_volumes: 243
     source: table10_train+hf_v1.1+hf_v1.1
+  tissue_class: parenchymal
 - id: liver_segment_III
   name: Liver segment III
   category: organ
@@ -3019,6 +3121,7 @@ entities:
     unsided_label: false
     train_volumes: 243
     source: table10_train+hf_v1.1+hf_v1.1
+  tissue_class: parenchymal
 - id: liver_segment_IV
   name: Liver segment IV
   category: organ
@@ -3043,6 +3146,7 @@ entities:
     unsided_label: false
     train_volumes: 193
     source: table10_train+hf_v1.1+hf_v1.1
+  tissue_class: parenchymal
 - id: liver_segment_V
   name: Liver segment V
   category: organ
@@ -3067,6 +3171,7 @@ entities:
     unsided_label: false
     train_volumes: 243
     source: table10_train+hf_v1.1+hf_v1.1
+  tissue_class: parenchymal
 - id: liver_segment_VI
   name: Liver segment VI
   category: organ
@@ -3091,6 +3196,7 @@ entities:
     unsided_label: false
     train_volumes: 243
     source: table10_train+hf_v1.1+hf_v1.1
+  tissue_class: parenchymal
 - id: liver_segment_VII
   name: Liver segment VII
   category: organ
@@ -3115,6 +3221,7 @@ entities:
     unsided_label: false
     train_volumes: 243
     source: table10_train+hf_v1.1+hf_v1.1
+  tissue_class: parenchymal
 - id: liver_segment_VIII
   name: Liver segment VIII
   category: organ
@@ -3139,6 +3246,7 @@ entities:
     unsided_label: false
     train_volumes: 243
     source: table10_train+hf_v1.1+hf_v1.1
+  tissue_class: parenchymal
 - id: liver_lobe
   name: Liver lobe
   category: organ
@@ -3163,6 +3271,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: parenchymal
 - id: gallbladder
   name: Gallbladder
   category: hollow_organ
@@ -3215,6 +3324,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: bile_duct
   name: Common bile duct
   category: duct
@@ -3240,6 +3350,7 @@ entities:
     unsided_label: false
     train_volumes: 482
     source: table10_train+hf_v1.1
+  tissue_class: hollow
 - id: intrahepatic_bile_ducts
   name: Intrahepatic bile ducts
   category: duct
@@ -3264,6 +3375,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: spleen
   name: Spleen
   category: organ
@@ -3321,6 +3433,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: parenchymal
 - id: stomach
   name: Stomach
   category: hollow_organ
@@ -3376,6 +3489,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: gastric_wall
   name: Gastric wall
   category: hollow_organ
@@ -3400,6 +3514,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: gastroesophageal_junction
   name: Gastro-oesophageal junction
   category: landmark
@@ -3423,6 +3538,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: none
 - id: duodenum
   name: Duodenum
   category: hollow_organ
@@ -3472,6 +3588,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: pancreas
   name: Pancreas
   category: organ
@@ -3529,6 +3646,7 @@ entities:
     vocab_match: pancreas tumor
     unsided_label: false
   tumour_host: true
+  tissue_class: parenchymal
 - id: pancreas_head
   name: Pancreatic head
   category: organ
@@ -3553,6 +3671,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: parenchymal
 - id: pancreas_body
   name: Pancreatic body
   category: organ
@@ -3577,6 +3696,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: parenchymal
 - id: pancreas_tail
   name: Pancreatic tail
   category: organ
@@ -3601,6 +3721,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: parenchymal
 - id: pancreas_uncinate
   name: Pancreatic uncinate process
   category: organ
@@ -3625,6 +3746,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: parenchymal
 - id: pancreatic_duct
   name: Main pancreatic duct
   category: duct
@@ -3648,6 +3770,7 @@ entities:
     unsided_label: false
     train_volumes: 482
     source: table10_train+hf_v1.1
+  tissue_class: hollow
 - id: adrenal
   name: Adrenal gland
   category: gland
@@ -3704,6 +3827,7 @@ entities:
     source: hand_checked
     unsided_label: false
   tumour_host: true
+  tissue_class: parenchymal
 - id: kidney
   name: Kidney
   category: organ
@@ -3775,6 +3899,7 @@ entities:
     vocab_match: kidney tumor
     unsided_label: true
   tumour_host: true
+  tissue_class: parenchymal
 - id: renal_cortex
   name: Renal cortex
   category: organ
@@ -3798,6 +3923,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: parenchymal
 - id: renal_medulla
   name: Renal medulla
   category: organ
@@ -3821,6 +3947,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: parenchymal
 - id: renal_pelvis
   name: Renal pelvis / collecting system
   category: duct
@@ -3845,6 +3972,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: hollow
 - id: renal_sinus_fat
   name: Renal sinus fat
   category: fat
@@ -3868,6 +3996,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: diffuse
 - id: perinephric_fat
   name: Perinephric fat
   category: fat
@@ -3893,6 +4022,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: diffuse
 - id: gerota_fascia
   name: Gerota's fascia
   category: fascia
@@ -3918,6 +4048,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: diffuse
 - id: kidney_cyst
   name: Renal cyst
   category: space
@@ -3944,6 +4075,7 @@ entities:
     unsided_label: false
     train_volumes: 1228
     source: table10_train+hf_v1.1
+  tissue_class: space
 - id: ureter
   name: Ureter
   category: duct
@@ -3968,6 +4100,7 @@ entities:
     unsided_label: false
     train_volumes: 1
     source: table10_train+hf_v1.1
+  tissue_class: hollow
 - id: small_bowel
   name: Small bowel
   category: hollow_organ
@@ -4014,6 +4147,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: colon
   name: Colon
   category: hollow_organ
@@ -4061,6 +4195,7 @@ entities:
     source: hand_checked
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: colon_ascending
   name: Ascending colon
   category: hollow_organ
@@ -4084,6 +4219,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: colon_transverse
   name: Transverse colon
   category: hollow_organ
@@ -4107,6 +4243,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: colon_descending
   name: Descending colon
   category: hollow_organ
@@ -4130,6 +4267,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: colon_sigmoid
   name: Sigmoid colon
   category: hollow_organ
@@ -4153,6 +4291,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: colon_cecum
   name: Caecum
   category: hollow_organ
@@ -4176,6 +4315,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: appendix
   name: Appendix
   category: hollow_organ
@@ -4200,6 +4340,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: rectum
   name: Rectum
   category: hollow_organ
@@ -4253,6 +4394,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: mesorectum
   name: Mesorectum / mesorectal fascia
   category: fascia
@@ -4278,6 +4420,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: diffuse
 - id: anal_canal
   name: Anal canal
   category: hollow_organ
@@ -4302,6 +4445,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: mesentery
   name: Mesentery
   category: fat
@@ -4326,6 +4470,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: diffuse
 - id: omentum
   name: Greater omentum
   category: fat
@@ -4386,6 +4531,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: diffuse
 - id: peritoneum
   name: Peritoneum
   category: fascia
@@ -4410,6 +4556,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: diffuse
 - id: ascites
   name: Ascites
   category: space
@@ -4434,6 +4581,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: space
 - id: urinary_bladder
   name: Urinary bladder
   category: hollow_organ
@@ -4493,6 +4641,7 @@ entities:
     source: hand_checked
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: bladder_wall
   name: Bladder wall
   category: hollow_organ
@@ -4517,6 +4666,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: perivesical_fat
   name: Perivesical fat
   category: fat
@@ -4541,6 +4691,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: diffuse
 - id: urethra
   name: Urethra
   category: duct
@@ -4564,6 +4715,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: hollow
 - id: prostate
   name: Prostate
   category: gland
@@ -4627,6 +4779,7 @@ entities:
     vocab_match: prostate tumor
     unsided_label: false
   tumour_host: true
+  tissue_class: parenchymal
 - id: prostate_peripheral_zone
   name: Prostate peripheral zone
   category: gland
@@ -4650,6 +4803,7 @@ entities:
     unsided_label: false
     train_volumes: 269
     source: table10_train+hf_v1.1
+  tissue_class: parenchymal
 - id: prostate_transition_zone
   name: Prostate transition zone
   category: gland
@@ -4674,6 +4828,7 @@ entities:
     unsided_label: false
     train_volumes: 32
     source: table10_train+hf_v1.1
+  tissue_class: parenchymal
 - id: seminal_vesicle
   name: Seminal vesicle
   category: gland
@@ -4733,6 +4888,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: neurovascular_bundle
   name: Neurovascular bundle
   category: nerve
@@ -4757,6 +4913,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: neural
 - id: uterus
   name: Uterus
   category: organ
@@ -4825,6 +4982,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: endometrium
   name: Endometrium / uterine cavity
   category: organ
@@ -4848,6 +5006,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: myometrium
   name: Myometrium
   category: organ
@@ -4873,6 +5032,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: hollow
 - id: junctional_zone
   name: Junctional zone
   category: organ
@@ -4895,6 +5055,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: hollow
 - id: cervix
   name: Uterine cervix
   category: organ
@@ -4963,6 +5124,7 @@ entities:
     source: hand_checked
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: cervical_stroma
   name: Cervical stroma
   category: organ
@@ -4985,6 +5147,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: hollow
 - id: parametrium
   name: Parametrium
   category: fascia
@@ -5010,6 +5173,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: diffuse
 - id: vagina
   name: Vagina
   category: hollow_organ
@@ -5067,6 +5231,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: hollow
 - id: vagina_upper_two_thirds
   name: Upper two-thirds of vagina
   category: hollow_organ
@@ -5091,6 +5256,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: hollow
 - id: ovary
   name: Ovary
   category: gland
@@ -5144,6 +5310,7 @@ entities:
     unsided_label: false
   contralateral_class: primary
   tumour_host: true
+  tissue_class: parenchymal
 - id: adnexa
   name: Adnexa (ovary + tube)
   category: gland
@@ -5168,6 +5335,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: parenchymal
 - id: pelvic_sidewall
   name: Pelvic sidewall
   category: muscle
@@ -5192,6 +5360,7 @@ entities:
     unsided_label: false
     train_volumes: 78
     source: table10_train+hf_v1.1
+  tissue_class: muscle
 - id: obturator_internus
   name: Obturator internus
   category: muscle
@@ -5215,6 +5384,7 @@ entities:
     unsided_label: false
     train_volumes: 78
     source: table10_train+hf_v1.1
+  tissue_class: muscle
 - id: levator_ani
   name: Levator ani / pelvic floor
   category: muscle
@@ -5239,6 +5409,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: muscle
 - id: external_urethral_sphincter
   name: External urethral sphincter
   category: muscle
@@ -5262,6 +5433,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: muscle
 - id: iliopsoas
   name: Iliopsoas
   category: muscle
@@ -5310,6 +5482,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: false
+  tissue_class: muscle
 - id: psoas
   name: Psoas major
   category: muscle
@@ -5363,6 +5536,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: false
+  tissue_class: muscle
 - id: quadratus_lumborum
   name: Quadratus lumborum
   category: muscle
@@ -5389,6 +5563,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: muscle
 - id: gluteus
   name: Gluteal muscles
   category: muscle
@@ -5419,6 +5594,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: muscle
 - id: autochthon
   name: Autochthonous back muscles (erector spinae)
   category: muscle
@@ -5449,6 +5625,7 @@ entities:
     unsided_label: true
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: muscle
 - id: rectus_abdominis
   name: Rectus abdominis
   category: muscle
@@ -5475,6 +5652,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: muscle
 - id: abdominal_wall
   name: Anterior abdominal wall
   category: muscle
@@ -5499,6 +5677,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: muscle
 - id: subcutaneous_fat
   name: Subcutaneous adipose tissue
   category: fat
@@ -5539,6 +5718,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: diffuse
 - id: visceral_fat
   name: Visceral adipose tissue
   category: fat
@@ -5579,6 +5759,7 @@ entities:
     unsided_label: false
   tumour_host: true
   notes: ' | not an anchor since v0.4.0: VoxTell has only whole-body fat / muscles labels and TS tissue_types is not run'
+  tissue_class: diffuse
 - id: skeletal_muscle
   name: Skeletal muscle (whole)
   category: muscle
@@ -5617,6 +5798,7 @@ entities:
     vocab_match: null
     unsided_label: false
   tumour_host: true
+  tissue_class: muscle
 - id: body_trunk
   name: Body (trunk)
   category: region
@@ -5641,6 +5823,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: none
 - id: ln_cervical
   name: Cervical lymph nodes
   category: lymph_station
@@ -5666,6 +5849,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: lymphoid
 - id: ln_mediastinal
   name: Mediastinal lymph nodes
   category: lymph_station
@@ -5692,6 +5876,7 @@ entities:
     unsided_label: false
     train_volumes: 192
     source: table10_train+hf_v1.1
+  tissue_class: lymphoid
 - id: ln_hilar
   name: Hilar lymph nodes
   category: lymph_station
@@ -5718,6 +5903,7 @@ entities:
     unsided_label: true
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: lymphoid
 - id: ln_supraclavicular
   name: Supraclavicular lymph nodes
   category: lymph_station
@@ -5742,6 +5928,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_axillary
   name: Axillary lymph nodes
   category: lymph_station
@@ -5767,6 +5954,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_internal_mammary
   name: Internal mammary lymph nodes
   category: lymph_station
@@ -5791,6 +5979,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_celiac
   name: Coeliac lymph nodes
   category: lymph_station
@@ -5816,6 +6005,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_hepatic_hilar
   name: Hepatic hilar / hepatoduodenal nodes
   category: lymph_station
@@ -5842,6 +6032,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_perigastric
   name: Perigastric lymph nodes
   category: lymph_station
@@ -5867,6 +6058,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_renal_hilar
   name: Renal hilar lymph nodes
   category: lymph_station
@@ -5891,6 +6083,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_paraaortic
   name: Para-aortic / retroperitoneal lymph nodes
   category: lymph_station
@@ -5918,6 +6111,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: hf_v1.1_labels
+  tissue_class: lymphoid
 - id: ln_mesenteric
   name: Mesenteric lymph nodes
   category: lymph_station
@@ -5942,6 +6136,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_pericolic
   name: Pericolic lymph nodes
   category: lymph_station
@@ -5967,6 +6162,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_common_iliac
   name: Common iliac lymph nodes
   category: lymph_station
@@ -5991,6 +6187,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_external_iliac
   name: External iliac lymph nodes
   category: lymph_station
@@ -6015,6 +6212,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_internal_iliac
   name: Internal iliac lymph nodes
   category: lymph_station
@@ -6040,6 +6238,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_obturator
   name: Obturator lymph nodes
   category: lymph_station
@@ -6064,6 +6263,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_presacral
   name: Presacral lymph nodes
   category: lymph_station
@@ -6088,6 +6288,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_inguinal
   name: Inguinal lymph nodes
   category: lymph_station
@@ -6112,6 +6313,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_pelvic
   name: Pelvic lymph nodes (aggregate)
   category: lymph_station
@@ -6136,6 +6338,7 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid
 - id: ln_abdominal
   name: Abdominal lymph nodes (aggregate)
   category: lymph_station
@@ -6161,3 +6364,4 @@ entities:
     unsided_label: false
     train_volumes: null
     source: null
+  tissue_class: lymphoid

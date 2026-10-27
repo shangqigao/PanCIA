@@ -5,13 +5,14 @@ psi_v(h) is a fixed basis of four inputs:
   sd     signed distance (mm) to the chosen extent xi_L (negative inside)
   terr   territory of v relative to host h: in h / in another organ / in no segmented organ; kb = h is a knowledge-base region
   depth  depth (mm) of v below the surface of the organ it lies in
-Knots (design values, disclosed): sd hinges at -10, -5, 0, 5, 10, 20, 40 mm (sd clipped to [-30, 60]); depth hinges at 5, 15 mm
-(depth clipped to [0, 30]). eta is fitted on expert data only (fit.py); with eta = None the prior is undefined (no fallback)."""
+Knots (design values, disclosed): q hinges at 0.25, 0.5, 0.75 (25 Oct: q and q^2 alone under-predicted the mid-range in-sample);
+sd hinges at -10, -5, 0, 5, 10, 20, 40 mm (sd clipped to [-30, 60]); depth hinges at 5, 15 mm (depth clipped to [0, 30]). eta is fitted on expert data only (fit.py); with eta = None the prior is undefined (no fallback)."""
 import numpy as np
 
+Q_KNOTS = (0.25, 0.5, 0.75)
 SD_KNOTS = (-10.0, -5.0, 0.0, 5.0, 10.0, 20.0, 40.0)
 DEP_KNOTS = (5.0, 15.0)
-NAMES = (['1', 'q', 'q2', 'sd'] + [f'sd>{k:g}' for k in SD_KNOTS] + ['in_h', 'in_o', 'in_h_kb']
+NAMES = (['1', 'q', 'q2'] + [f'q>{k:g}' for k in Q_KNOTS] + ['sd'] + [f'sd>{k:g}' for k in SD_KNOTS] + ['in_h', 'in_o', 'in_h_kb']
          + ['dep_h'] + [f'dep_h>{k:g}' for k in DEP_KNOTS] + ['dep_o'] + [f'dep_o>{k:g}' for k in DEP_KNOTS]
          + ['in_h*sdpos', 'in_o*sdpos', 'in_h_kb*sdpos'])
 P = len(NAMES)
@@ -26,7 +27,7 @@ def basis(q, sd, in_h, in_o, kb_h, dep_h, dep_o):
     dh = np.clip(np.asarray(dep_h, np.float32), 0.0, 30.0) * in_h
     do = np.clip(np.asarray(dep_o, np.float32), 0.0, 30.0) * in_o
     sdp = np.clip(sd, 0.0, 60.0)
-    cols = [np.ones(n, np.float32), q, q * q, sd] + [np.maximum(sd - k, 0.0) for k in SD_KNOTS]
+    cols = [np.ones(n, np.float32), q, q * q] + [np.maximum(q - k, 0.0) for k in Q_KNOTS] + [sd] + [np.maximum(sd - k, 0.0) for k in SD_KNOTS]
     cols += [in_h, in_o, in_h * kb, dh] + [np.maximum(dh - k, 0.0) * in_h for k in DEP_KNOTS]
     cols += [do] + [np.maximum(do - k, 0.0) * in_o for k in DEP_KNOTS]
     cols += [in_h * sdp * (1.0 - kb), in_o * sdp, in_h * kb * sdp]

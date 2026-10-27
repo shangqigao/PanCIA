@@ -87,7 +87,7 @@ def run_series(rel, kidx, S1, fit, O, SUF, a, TAB1, TS):
         Ls = [s1['lesions'][i] for i in g]
         t0 = time.time()
         res = RN.solve_cluster(img, Ls, s1['organs'], fit, s1['sp'], mod, s1['thick'], s1['ax'], s1['body'], s1['shape'],
-                               bayes=not a.no_bf, max_iter=a.max_iter)
+                               bayes=not a.no_bf, max_iter=a.max_iter, seq=s1['seq'])
         W = res['W']
         np.savez_compressed(os.path.join(md, f'c{j}.npz'), rel=rel, W=np.array([[s.start, s.stop] for s in W]),
                             p=np.round(res['p'] * 255).astype(np.uint8), comp=res['comp'], ROI=np.packbits(res['ROI']),
@@ -103,7 +103,7 @@ def run_series(rel, kidx, S1, fit, O, SUF, a, TAB1, TS):
                 except Exception as ex:
                     ev = {'error': repr(ex)[:80]}
             flag = r_.get('flag_bf')
-            lrows.append(dict(rel=rel, cancer=rel.split('/')[1], mod=mod, k=kidx, cluster=j, lesion=L['lesion'], anchors=json.dumps(L['anchor_ids']),
+            lrows.append(dict(rel=rel, cancer=rel.split('/')[1], mod=mod, seq=s1['seq'], k=kidx, cluster=j, lesion=L['lesion'], anchors=json.dumps(L['anchor_ids']),
                               decisions=json.dumps(L['decisions']), kinds=json.dumps(L['kinds']), S=json.dumps(L['S_names']),
                               PhL_S=json.dumps({n_: round(L['PhL'][q], 4) for n_, q in zip(L['S_names'], L['S'])}), h_map=L['h_map'],
                               tum_cls=L['tum_cls'], extents=json.dumps(L['ext']),

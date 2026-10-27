@@ -1,6 +1,6 @@
 name: PanCIA anchor-centric anatomical knowledge base
-version: 0.5.8
-date: '2026-10-17'
+version: 0.5.9
+date: '2026-10-26'
 author: Shangqi Gao (Crispin Lab) with Claude
 status: draft v0.1 — not yet pilot-verified
 vertebral_order:
@@ -51,6 +51,19 @@ coverage_tier_legend:
   rare: 'exact label but < 20 training volumes (e.g. left renal vein: 1) — expect weak masks'
   near: no exact label; a vocabulary label shares all content tokens or the head noun — zero-shot wording
   ood: no vocabulary label with this head noun — truly unseen concept; experimental, strict gates
+tissue_class_legend:
+  parenchymal: solid organ or gland without a lumen or air (liver, kidney, pancreas, spleen, breast, prostate, thyroid, ovary)
+  hollow: organ with a lumen or cavity, its wall and contents (bowel, stomach, bladder, gallbladder, uterus, cervix, ducts, heart)
+  aerated: air-filled (lung parenchyma, airways)
+  neural: brain, brainstem, cerebellum, spinal cord, eye, nerves
+  osseous: bone
+  muscle: skeletal muscle
+  lymphoid: lymph-node stations
+  diffuse: fat and fascia (including peritoneum, pleura, skin)
+  vascular: arteries and veins
+  space: cavities and fluid spaces (effusion, ascites, cysts, oral and nasal cavity)
+  none: landmarks and regions
+  use: 'stage-2 tail-weight prior: modality x tissue class (parenchymal, hollow, aerated); other classes take the pan-cancer prior'
 voxtell_vocabulary:
   files:
   - seed/voxtell_v1.1_labels.json

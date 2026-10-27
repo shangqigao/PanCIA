@@ -13,7 +13,9 @@ OUT = os.path.join(os.path.dirname(__file__), 'knowledge_base')
 os.makedirs(OUT, exist_ok=True)
 TS = json.load(open(os.path.join(os.path.dirname(__file__), 'seed', 'ts_class_maps.json')))
 TS_ALL = {task: set(v.values()) for task, v in TS.items()}
-VERSION = '0.5.8'   # 0.5.8 (17 Oct 2026): kidney -> liver spatial prior applies to the right kidney only (side_link right), found by the
+VERSION = '0.5.9'   # 0.5.9 (26 Oct 2026): tissue_class per entity (imaging-physical class: parenchymal / hollow / aerated, and
+#                     neural, osseous, muscle, lymphoid, diffuse, vascular, space, none), keying the stage-2 tail-weight prior with the
+#                     modality; set from anatomy alone, never from data. 0.5.8 (17 Oct 2026): kidney -> liver spatial prior applies to the right kidney only (side_link right), found by the
 #                     anatomy-feasibility audit; thyroid expected_components 2 (two lobes; anatomy QC on expert labels). 0.5.7: 0.5.7: head & neck (brain, larynx, pharynx, oral cavity, parotid anchors; skull, brainstem, cerebellum,
 #                     submandibular gland, nasal cavity, eye, cervical nodes) and the appendix. No cancer type lists any of them as a site
 TODAY = str(datetime.date.today())
@@ -971,6 +973,30 @@ for _e in E:
         _e['is_anchor'] = False; _e.pop('anchor', None)
         _e['notes'] = (_e.get('notes') or '') + ' | not an anchor since v0.4.0: VoxTell has only whole-body fat / muscles labels and TS tissue_types is not run'
 
+# v0.5.9: TISSUE CLASS — the imaging-physical class of an entity's tissue, which shapes the tails of its image statistics (the
+# stage-2 Student-t tail-weight prior is keyed by modality x tissue class; tail study 26 Oct 2026). Interfaces make heavy tails:
+# air (aerated), a lumen or cavity with its wall and contents (hollow), or neither (parenchymal: solid organs and glands alike).
+# The remaining classes name tissues without expert tumours in the stage-2 training data (neural, osseous, muscle, lymphoid,
+# diffuse, vascular, space); they take the pan-cancer prior. Set from anatomy alone (category, then the overrides below).
+TISSUE_CLASSES = ('parenchymal', 'hollow', 'aerated', 'neural', 'osseous', 'muscle', 'lymphoid', 'diffuse', 'vascular', 'space', 'none')
+TISSUE_CLASS_OF_CATEGORY = dict(organ='parenchymal', gland='parenchymal', hollow_organ='hollow', duct='hollow', bone='osseous',
+                                muscle='muscle', lymph_station='lymphoid', fat='diffuse', fascia='diffuse', vessel_artery='vascular',
+                                vessel_vein='vascular', nerve='neural', space='space', landmark='none', region='none')
+TISSUE_CLASS_OVERRIDE = {
+    # air-filled: lung parenchyma and the airways
+    'lung': 'aerated', 'lung_left_upper_lobe': 'aerated', 'lung_left_lower_lobe': 'aerated', 'lung_right_upper_lobe': 'aerated',
+    'lung_right_middle_lobe': 'aerated', 'lung_right_lower_lobe': 'aerated', 'trachea': 'aerated', 'main_bronchus': 'aerated',
+    'bronchial_tree': 'aerated', 'larynx': 'aerated',
+    # organs with a cavity: uterus (endometrial cavity) and cervix (canal) with their layers; heart (blood-filled chambers);
+    # seminal vesicle (fluid-filled coiled sac)
+    'uterus': 'hollow', 'endometrium': 'hollow', 'myometrium': 'hollow', 'junctional_zone': 'hollow', 'cervix': 'hollow',
+    'cervical_stroma': 'hollow', 'heart': 'hollow', 'seminal_vesicle': 'hollow',
+    # central nervous system and the eye
+    'brain': 'neural', 'brainstem': 'neural', 'cerebellum': 'neural', 'eye': 'neural',
+}
+for _e in E:
+    _e['tissue_class'] = TISSUE_CLASS_OVERRIDE.get(_e['id'], TISSUE_CLASS_OF_CATEGORY[_e['category']])
+
 # ================================================================== VALIDATE + DUMP
 ids = {e['id'] for e in E}
 assert len(ids) == len(E), 'duplicate entity id'
@@ -984,12 +1010,19 @@ for e in E:
         for p in e['anchor']['spatial_prior']:
             assert p['landmark'] in ids or p['landmark'] in {l['id'] for l in LANDMARKS}, f"prior landmark missing: {p['landmark']} in {e['id']}"
 for lm in LANDMARKS: assert lm['entity'] in ids
+assert all(e['tissue_class'] in TISSUE_CLASSES for e in E) and set(TISSUE_CLASS_OVERRIDE) <= ids, 'tissue_class'
 meta = dict(name='PanCIA anchor-centric anatomical knowledge base', version=VERSION, date=TODAY, author='Shangqi Gao (Crispin Lab) with Claude',
             status='draft v0.1 — not yet pilot-verified', vertebral_order=VERTEBRAL_ORDER,
             counts=dict(entities=len(E), anchors=sum(e['is_anchor'] for e in E), relations=len(R), regions=len(REGIONS), landmarks=len(LANDMARKS)),
             sources=dict(TS='TotalSegmentator class maps (map_to_binary.py, fetched 2026-09-18)', VoxTell='arXiv 2511.11450; repo MIC-DKFZ/VoxTell (no shipped vocabulary; coverage tiers are assumptions until pilot)',
                          AJCC8='AJCC Cancer Staging Manual 8th ed. T/N definitions and regional node lists', FIGO='FIGO 2018 cervix / 2023 endometrium / 2014 ovary', FMA='Foundational Model of Anatomy relations (part_of, adjacent_to)'),
             coverage_tier_legend=dict(in_vocab='exact VoxTell training/test label (arXiv 2511.11450 Table 10/7), >= 20 training volumes', rare='exact label but < 20 training volumes (e.g. left renal vein: 1) — expect weak masks', near='no exact label; a vocabulary label shares all content tokens or the head noun — zero-shot wording', ood='no vocabulary label with this head noun — truly unseen concept; experimental, strict gates'),
+            tissue_class_legend=dict(parenchymal='solid organ or gland without a lumen or air (liver, kidney, pancreas, spleen, breast, prostate, thyroid, ovary)',
+                                     hollow='organ with a lumen or cavity, its wall and contents (bowel, stomach, bladder, gallbladder, uterus, cervix, ducts, heart)',
+                                     aerated='air-filled (lung parenchyma, airways)', neural='brain, brainstem, cerebellum, spinal cord, eye, nerves',
+                                     osseous='bone', muscle='skeletal muscle', lymphoid='lymph-node stations', diffuse='fat and fascia (including peritoneum, pleura, skin)',
+                                     vascular='arteries and veins', space='cavities and fluid spaces (effusion, ascites, cysts, oral and nasal cavity)', none='landmarks and regions',
+                                     use='stage-2 tail-weight prior: modality x tissue class (parenchymal, hollow, aerated); other classes take the pan-cancer prior'),
             voxtell_vocabulary=dict(files=['seed/voxtell_v1.1_labels.json', 'seed/voxtell_vocabulary.csv'], n_labels=len(VOCAB), n_hf_v1_1_labels=len(HF_LABELS), source='HF mrokuss/VoxTell embeddings/voxtell_v1.1/labels.json (14,194 prompt strings incl. rewrites; presence) + arXiv 2511.11450 Table 10/7 (training-volume counts)'))
 def dump(name, obj):
     with open(os.path.join(OUT, name), 'w') as f:

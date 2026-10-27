@@ -1,5 +1,5 @@
 """Data roots. Order: environment variable PANCIA_<NAME> (e.g. PANCIA_R2SEG), then ~/mnt/<name> (Cowork VM), then the Mac
-defaults below. Names: PanCIA, clinical, TCGA_Seg, TCGA_NIFTI, R2Seg, Totalsegmentator."""
+defaults below. Names: PanCIA, clinical, TCGA_Seg, TCGA_NIFTI, R2Seg, R2Seg_Seg, Totalsegmentator."""
 import os
 
 _MAC = {
@@ -8,6 +8,7 @@ _MAC = {
     'TCGA_Seg': '/Users/sg2162/Datasets/CancerDatasets/PanCIA/TCGA-TCIA/TCGA_Seg',
     'TCGA_NIFTI': '/Users/sg2162/Datasets/CancerDatasets/PanCIA/TCGA-TCIA/TCGA_NIFTI',
     'R2Seg': '/Users/sg2162/Datasets/CancerDatasets/R2Seg',
+    'R2Seg_Seg': '/Users/sg2162/Datasets/CancerDatasets/R2Seg_Seg',
     'Totalsegmentator': '/Users/sg2162/Datasets/Totalsegmentator',
 }
 

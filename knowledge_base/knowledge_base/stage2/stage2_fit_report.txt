@@ -1,0 +1,52 @@
+stage-2 fit 2026-10-26 (s2.0); excluded []; cases {'Bladder_Tumor_00': 100, 'Breast_Tumor_00': 100, 'Colon_Tumor_00': 100, 'Kidney_Tumor_00': 100, 'Liver_Tumor_00': 100, 'Lung_Tumor_01': 100, 'Pancreas_Tumor_00': 100, 'Prostate_Tumor_00': 83, 'Cervix_Tumor_00': 65, 'Lung_Tumor_00': 63}
+weighting: sites count equally; cases per site {'lung': 163, 'urinary_bladder': 100, 'breast': 100, 'colon': 100, 'kidney': 100, 'liver': 100, 'pancreas': 100, 'prostate': 83, 'cervix': 65} (each case weighs 1 / (9 x cases of its site))
+appearance: no prior across scans; inferred within each scan (vb.class_priors, strength beta0 = 1, nu0 = 6)
+r = 36.6 mm; nu = 8.61 (WHOLE TUMOUR (no s2_nu.py output); 907 components / cases); omega per case n=911 median 2.3233334440283278 -> Gamma(a_w=1.8112149224836522, b_w=0.6870072815576703)
+nu population: none
+features: ['I', 'D1a', 'D1b', 'LoG1'] (D = 4)
+nu prior (modality x tissue class; nu at the cell mean / sd of log 1/nu): tumour CT / aerated 16.68/0.9525; CT / hollow 29.61/0.9525; CT / parenchymal 50.01/0.9503; MR / hollow 14.13/0.9508; MR / parenchymal 21.98/0.9508; fallback 23.8/1.0978 | normal CT / aerated 33.32/1.1147; CT / hollow 9.68/1.1147; CT / parenchymal 30.22/1.0988; MR / hollow 23.72/1.1032; MR / parenchymal 21.95/1.1147; fallback 21.71/1.2463
+eta:
+               1 -5.5457
+               q +16.9477
+              q2 +0.0709
+          q>0.25 -9.4363
+           q>0.5 -3.0487
+          q>0.75 +4.4945
+              sd -0.0129
+          sd>-10 -0.0084
+           sd>-5 -0.0007
+            sd>0 +0.0005
+            sd>5 -0.0066
+           sd>10 -0.0200
+           sd>20 -0.0267
+           sd>40 -0.0183
+            in_h -0.0526
+            in_o -0.1466
+         in_h_kb +0.0496
+           dep_h +0.0178
+         dep_h>5 +0.0050
+        dep_h>15 -0.0139
+           dep_o +0.0169
+         dep_o>5 +0.0945
+        dep_o>15 -0.0272
+      in_h*sdpos +0.0152
+      in_o*sdpos -0.0311
+   in_h_kb*sdpos -0.0085
+in-sample calibration (mean p -> frequency):
+  0.0-0.1: 0.002 -> 0.002 (weight 0.968)
+  0.1-0.2: 0.147 -> 0.225 (weight 0.0022)
+  0.2-0.3: 0.247 -> 0.209 (weight 0.00237)
+  0.3-0.4: 0.348 -> 0.324 (weight 0.00136)
+  0.4-0.5: 0.448 -> 0.401 (weight 0.00127)
+  0.5-0.6: 0.551 -> 0.471 (weight 0.00102)
+  0.6-0.7: 0.652 -> 0.659 (weight 0.00158)
+  0.7-0.8: 0.755 -> 0.792 (weight 0.00205)
+  0.8-0.9: 0.845 -> 0.861 (weight 0.00246)
+  0.9-1.0: 0.976 -> 0.969 (weight 0.0181)
+  prior inside anchor (q=1, in host): 0.985
+  prior chosen extent rim (q=0.5, in host): 0.628
+  prior 5 mm outside extent, in host: 0.004
+  prior 5 mm outside extent, other organ: 0.003
+  prior 5 mm outside extent, no organ: 0.003
+  prior 20 mm outside extent, in host: 0.003
+  prior 20 mm outside, host unsegmented (KB region): 0.001
