@@ -222,3 +222,84 @@ Outputs: `knowledge_base/knowledge_base/stage2/nu_prior.json`; `clinical/PanCIA_
   (Dice 0.95), so it is not used.
 - **No rebuild needed:** the spatial-prior samples do not use the image features; rerun `s2_selftest.py`, `s2_fit.py`, then validation.
 - **Shards** of `run_stage2.sh` are single-threaded and low priority.
+
+## Validation with real agent outlines (27 Oct): `s2_validate_agents.py`
+The first validation (`s2_validate.py`, 27 Oct) drew every claim from the expert mask: over- and under-segmenting outline types
+around the truth and anchors always inside the tumour. A vote of such claims (q >= 1/2) lands near the truth by construction, and
+all methods scored Dice 0.82-0.90. This step replaces the simulated claims by the BiomedParse and VoxTell tumour masks on R2Seg
+(`analysis/a02_tumor_segmentation/m_tumor_segmentation.py --dataset R2Seg --seg_obj tumor`, written to
+`R2Seg_Seg/<agent>/<collection>/<stem>_tumor.nii.gz`); folds and fold fits are those of `s2_validate.py` (`validation/folds/`).
+- **Lesions** (`pancia_kb/stage2/agents.py`): anchors = 26-connected components of BiomedParse AND VoxTell >= 0.5 ml; outlines =
+  each agent's components touching an anchor; extents and w0 by the frozen v8.4 rule (`expert.extents`); anchors within 10 mm
+  form one lesion (q = 1 - prod(1 - q_a), xi = union). No planner on R2Seg, so no per-host prompt masks (at most two outlines).
+- **Truth (evaluation only):** a lesion is true when an anchor touches expert tumour, false otherwise; expert tumours >= 0.5 ml no
+  anchor touches are stage-1 misses (their recall by stage 2 is reported).
+- **Reported:** agent Dice per scan and stage-1 detection; lesion Dice of stage2 / xi / q_half / U / anchor / bp / vt and go/no-go
+  against xi and q_half; scan-level Dice (false lesions included, misses as false negatives); recall beyond the outlines; Bayes-
+  factor flags on true lesions, false lesions in tumour scans and in tumour-free scans (AUC); calibration.
+- Caveat: both agents were likely trained on much of R2Seg, so their errors here are smaller than on unseen data.
+
+    python s2_validate_agents.py --check       # agent masks found per site
+    ./run_stage2.sh validate_agents            # N_VAL_AG=40 tumour, N_NEG=20 tumour-free scans per site; NSHARD_VAL shards
+
+Outputs: `clinical/PanCIA_outputs/stage2/validation_agents/` (report.txt, summary_*.csv, rows*.csv).
+Smoke test (27 Oct, synthetic agent masks on two kidney scans and one tumour-free pancreas scan, short runs): all row kinds and
+the summary are produced.
+
+## TCGA at the validated resolution (28 Oct)
+R2Seg crops (tumour box + 60 mm) above 3M voxels are strided in-plane before stage 2 (`expert._image_crop`), so the fit and both
+validations ran at that resolution. TCGA ran at full resolution (TCGA-PRAD MR at 0.27 mm: 3.6M voxels in one cluster, about 3 s
+per iteration). Now `features.stride_rule` is the one rule for both: `interface.stride_cluster` applies it to each TCGA cluster's
+crop (anchors and chosen extents + 60 mm), `run.solve_cluster` runs on the strided grid, and `interface.upsample_result` puts the
+maps back on the full grid (nearest neighbour), so the stage-1 extents, the existence test, the saved maps and `s2_png.py` are
+unchanged. `clusters.csv` records the stride. R2Seg behaviour is unchanged (same rule, refactored). Smoke (PRAD, 8 iterations):
+stride 2 x 2 x 1, 0.9M voxels, 30 s vs 112 s; maps aligned on the panels.
+
+## Spatial prior on real agent outlines (29 Oct)
+The prior fitted on simulated claims (`s2_expert_build.py`) is a function of q alone (intercept -5.55, q +16.95, distance terms
+~0): simulated outlines bracket the expert tumour, so it learned "no tumour outside the claims" (pi ~ 0.0035 next to the outline
+at any distance; TCGA k138 one-slice slab; recall beyond outlines ~0 % on R2Seg). New, all versioned by the fit JSON (old fits
+behave exactly as before):
+- `s2_agent_build.py`: samples from BiomedParse + VoxTell outlines on R2Seg (agents.py lesions; tumour window + up to 3 false-lesion
+  windows; tumour-free scans too), with the through-plane distance `dtp` (`features.through_plane_distance`).
+- `prior.py`: basis with 4 extra columns (dtp, hinges 5/10/20 mm) when eta has `P_TP` entries.
+- `s2_fit.py --samples agent --tumour-from anchor`: eta and r on those samples; `tumour_from` stored in the fit.
+- `run.py`: `tumour_from == 'anchor'` learns the tumour classes' within-scan priors from the anchors and starts them from the
+  anchors (1) and the spatial prior elsewhere (TCGA KIRP: an extent that is mostly normal kidney no longer defines "tumour").
+- `s2_prior_calibration.py`: held-out (leave one site out) calibration of the prior by zone (anchor, extent, outlines, outside by
+  distance band and direction), simulated vs real-agent fit.
+- `s2_validate_agents.py --fit-dir --fit-samples --tumour-from --tag`; `s2_run_tcga.py`: the Bayes factor is reported only.
+
+    ./run_stage2.sh agent_fit            # samples, 9 fold fits, full fit (stage2_fit_agent.json), calibration
+    ./run_stage2.sh validate_agents_v2   # real-agent validation with those fits -> validation_agents_v2/report.txt
+    # 30 Oct: shards split by (site, case), not one site per shard (liver dominated); same cases and results; resumes with any
+    # shard count. Laptop (M3 Pro, 18 GB): NSHARD_VAL=4.
+- Single-agent anchors (29 Oct): `agents.scan(single=True)` adds v8.4-style single-agent anchors (one agent's component >= 0.5 ml
+  with no agreement; joins the nearest two-agent lesion within 10 mm, else alone). `s2_agent_build.py` uses them by default
+  (`--two-only` to switch off), storing the lesion support (`singleL`) and the voxel's anchor kind (`anc`). With them the prior gets
+  two more inputs, `single` and `single*q` (`prior.NAMES_TPS`, 32 entries); `run.lesion_single` reads the support from the lesion
+  (R2Seg: `support`; TCGA: stage-1 anchor kinds, lobe = single). `s2_validate_agents.py --single` (used by `validate_agents_v2`)
+  reports lesion Dice by support; the calibration splits the anchor zone by support. Agent-agnostic: the support level, not the
+  agent's identity, enters the prior.
+
+## True-lesion spatial prior (1 Nov)
+validate_agents_v2 showed the agent-fitted prior mixed existence with location: it was fitted on every agent lesion (most false), so
+inside real tumours it was too low and stage 2 trimmed them (two-agent lesions: xi 0.745, stage 2 0.718; recall 0.68). The spatial
+prior now describes a real tumour only, pi_v = P(tumour at v | lesion real); existence stays with the stage-1 decision and the stage-2
+log BF. psi (agent-dependent: it weighs the agents' outlines) is unchanged.
+
+    ./run_stage2.sh agent_true_fit       # s2_agent_build.py --true-only -> agent_samples_true; folds_agent_true; stage2_fit_agent_true.json;
+                                         # prior_calibration_true.txt (sim vs agent vs agent_true on true-lesion samples)
+    ./run_stage2.sh validate_agents_v3   # -> validation_agents_v3/report.txt
+
+Samples now also store tL (1 = true lesion) per lesion column.
+
+## In an outline beyond xi (1 Nov, option B)
+Held-out on true lesions the band U \ xi (inside some candidate outline, outside the chosen extent) was priced as an ordinary low-q
+voxel: prior 0.19 vs tumour 0.41 at 8 of 9 sites, while xi was over-predicted (0.58 vs 0.53). One input is added,
+1[q > 0] x 1[sd > 0] (`prior.NAMES_TPO`, 33 entries; computed from q and sd, so no new samples). It asks only whether any outline
+contains the voxel. Fits with 30 or 32 entries are unchanged.
+
+    ./run_stage2.sh agent_beyond_fit     # folds_agent_beyond, stage2_fit_agent_beyond.json, prior_calibration_beyond.txt
+    ./run_stage2.sh validate_agents_v3   # uses folds_agent_beyond
+

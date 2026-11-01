@@ -4,12 +4,16 @@ Per series of ledger/v84_pilot with accepted or uncertain anchors: rebuild stage
 regions overlap into clusters, run stage 2 per cluster (pancia_kb.stage2.run.solve_cluster), and write
   lesions[_s<i>].csv     one row per lesion: stage-1 decisions / hosts, volumes (chosen extent, refined tumour), trimmed and recalled
                          ml (recalled by host territory), Dice(refined, extent), mean p over the extent and the refined tumour, log BF and
-                         flag, reported segmentation (stage-1 extent when flagged), components, region growth, stage-1 existence
+                         flag (reported only), reported segmentation (stage 2), components, region growth, stage-1 existence
                          test recomputed on the refined tumour under each host of S (alpha 0.05)
   candidates[_s<i>].csv  new candidates (components of p >= 1/2 meeting no anchor): ml, distance to the nearest anchor, organs
   clusters[_s<i>].csv    per cluster: lesions, voxels, iterations, convergence, effective components, time
   checks[_s<i>].csv      P(h|L) / S recomputed vs the stored v84_pilot rows
   maps/<k>/c<j>.npz      window, p (uint8, x255), component map, refined tumours, anchors, chosen extents (for s2_png.py)
+Stage 2 runs at the R2Seg validation resolution: a cluster whose crop (anchors and chosen extents + 60 mm) exceeds 3M voxels is
+strided in-plane (features.stride_rule, as expert._image_crop) and its maps are put back on the full grid (clusters.csv: stride).
+The Bayes factor is reported only (29 Oct): it no longer switches the reported extent to stage 1 (it flagged about 55 % of lesions on
+the TCGA smoke, at the same rate for accepted and uncertain ones, and did not separate true from false anchors on R2Seg).
 Stage-1 decisions are not changed. Usage: [SHARD=i/n] python3 s2_run_tcga.py [--tag tcga_v1] [--only substr,...] [--no-bf]"""
 import os, sys, json, glob, time, argparse, traceback
 import numpy as np, pandas as pd
@@ -86,8 +90,12 @@ def run_series(rel, kidx, S1, fit, O, SUF, a, TAB1, TS):
     for j, g in enumerate(groups):
         Ls = [s1['lesions'][i] for i in g]
         t0 = time.time()
-        res = RN.solve_cluster(img, Ls, s1['organs'], fit, s1['sp'], mod, s1['thick'], s1['ax'], s1['body'], s1['shape'],
+        # stage 2 at the resolution it was validated at: the R2Seg stride rule on the cluster's crop (interface.stride_cluster);
+        # maps are put back on the full grid, so the stage-1 extents, the existence test and the panels are unchanged
+        g_ = IF.stride_cluster(s1, Ls)
+        res = RN.solve_cluster(g_['img'], g_['lesions'], g_['organs'], fit, g_['sp'], mod, g_['thick'], g_['ax'], g_['body'], g_['shape'],
                                bayes=not a.no_bf, max_iter=a.max_iter, seq=s1['seq'])
+        res = IF.upsample_result(res, g_['fac'], s1['shape'])
         W = res['W']
         np.savez_compressed(os.path.join(md, f'c{j}.npz'), rel=rel, W=np.array([[s.start, s.stop] for s in W]),
                             p=np.round(res['p'] * 255).astype(np.uint8), comp=res['comp'], ROI=np.packbits(res['ROI']),
@@ -108,7 +116,7 @@ def run_series(rel, kidx, S1, fit, O, SUF, a, TAB1, TS):
                               PhL_S=json.dumps({n_: round(L['PhL'][q], 4) for n_, q in zip(L['S_names'], L['S'])}), h_map=L['h_map'],
                               tum_cls=L['tum_cls'], extents=json.dumps(L['ext']),
                               **{k_: (json.dumps({name(q): v for q, v in val.items()}) if isinstance(val, dict) else val) for k_, val in r_.items() if k_ != 'key'},
-                              reported='stage1_extent' if flag else 'stage2', evidence_on_Z=json.dumps(ev),
+                              reported='stage2', bf_note='prior-only (log BF < 0)' if flag else None, evidence_on_Z=json.dumps(ev),
                               n_grow=res['n_grow'], reached_max_grow=res['reached_max_grow']))
         append(os.path.join(O, f'lesions{SUF}.csv'), lrows)
         append(os.path.join(O, f'candidates{SUF}.csv'),
@@ -120,6 +128,7 @@ def run_series(rel, kidx, S1, fit, O, SUF, a, TAB1, TS):
                                                             k_eff=md_['k_eff'], rho=json.dumps(md_['rho']), comp_means=json.dumps(md_['comp_means']),
                                                             organs=json.dumps([name(q) for q in md_['organs']]), mean_Ew=md_['mean_Ew'],
                                                             n_new=len(res['new_candidates']), n_grow=res['n_grow'], sec=round(time.time() - t0, 1),
+                                                            stride=json.dumps(res['stride']),
                                                             vox_ml=vox_ml)])
 
 

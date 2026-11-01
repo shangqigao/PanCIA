@@ -49,8 +49,37 @@ def signed_distance(m, sp):
     return np.where(m, -inner_depth(m, sp), edt(m, sp)).astype(np.float32)
 
 
+def through_plane_distance(m, sp, ax):
+    """for every voxel outside m: |offset along axis ax| (mm) to its nearest voxel of m (Euclidean nearest, sampling sp); 0 inside m;
+    60 everywhere when m is empty (the prior basis clips at 60 mm)"""
+    from scipy import ndimage as _nd
+    m = np.asarray(m, bool)
+    if not m.any():
+        return np.full(m.shape, 60.0, np.float32)
+    _, ind = _nd.distance_transform_edt(~m, sampling=np.asarray(sp, float), return_indices=True)
+    pos = np.arange(m.shape[ax]).reshape([-1 if k == ax else 1 for k in range(3)])
+    out = (np.abs(ind[ax] - pos) * float(sp[ax])).astype(np.float32)
+    out[m] = 0.0
+    return out
+
+
 def dil(m, sp, mm):
     return edt(m, sp) <= mm if np.asarray(m).any() else np.zeros(np.shape(m), bool)
+
+
+MAX_VOX = 3e6     # crops above this many voxels are strided before stage 2 (testbed rule; the same on R2Seg and TCGA)
+
+
+def stride_rule(sp, nvox, max_vox=MAX_VOX):
+    """stride of a crop of nvox voxels at spacing sp: None when nvox <= max_vox; else (f, axes): every f-th voxel along axes (all
+    three when near-isotropic, else the in-plane axes), f = ceil((nvox / max_vox) ** (1 / len(axes))). Used by expert._image_crop
+    (R2Seg fitting and validation) and interface.stride_cluster (TCGA), so stage 2 runs at the resolution it was validated at."""
+    if nvox <= max_vox:
+        return None
+    sp = np.asarray(sp, float)
+    thin = sp.max() / sp.min() < 1.5
+    axes = [0, 1, 2] if thin else [k for k in range(3) if k != int(np.argmax(sp))]
+    return int(np.ceil((nvox / max_vox) ** (1.0 / len(axes)))), axes
 
 
 def acq_axis(sp, si):

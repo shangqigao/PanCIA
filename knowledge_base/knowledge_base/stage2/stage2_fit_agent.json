@@ -1,0 +1,323 @@
+{
+ "version": "s2.0",
+ "date": "2026-10-30",
+ "excluded": [],
+ "features": [
+  "I",
+  "D1a",
+  "D1b",
+  "LoG1"
+ ],
+ "eta_names": [
+  "1",
+  "q",
+  "q2",
+  "q>0.25",
+  "q>0.5",
+  "q>0.75",
+  "sd",
+  "sd>-10",
+  "sd>-5",
+  "sd>0",
+  "sd>5",
+  "sd>10",
+  "sd>20",
+  "sd>40",
+  "in_h",
+  "in_o",
+  "in_h_kb",
+  "dep_h",
+  "dep_h>5",
+  "dep_h>15",
+  "dep_o",
+  "dep_o>5",
+  "dep_o>15",
+  "in_h*sdpos",
+  "in_o*sdpos",
+  "in_h_kb*sdpos",
+  "dtp",
+  "dtp>5",
+  "dtp>10",
+  "dtp>20",
+  "unagreed",
+  "unagreed*q"
+ ],
+ "samples": "agent",
+ "tumour_from": "anchor",
+ "nu_prior": {
+  "version": "nu_prior_v1",
+  "kb_version": "0.5.9",
+  "min_n": 100,
+  "excluded": [],
+  "variable": "x = log(1/nu), nu in [2, 100]",
+  "key": "modality (CT | MR) x host tissue_class (parenchymal | hollow | aerated); other -> fallback",
+  "tumour": {
+   "cells": {
+    "CT / aerated": {
+     "mean_x": -2.8142,
+     "sd_x": 0.9525,
+     "nu_at_mean": 16.68,
+     "n_sites": 1,
+     "sites": "lung",
+     "n_scans": 383,
+     "n_components": 782
+    },
+    "CT / hollow": {
+     "mean_x": -3.388,
+     "sd_x": 0.9525,
+     "nu_at_mean": 29.61,
+     "n_sites": 1,
+     "sites": "colon",
+     "n_scans": 92,
+     "n_components": 105
+    },
+    "CT / parenchymal": {
+     "mean_x": -3.9122,
+     "sd_x": 0.9503,
+     "nu_at_mean": 50.01,
+     "n_sites": 3,
+     "sites": "kidney, liver, pancreas",
+     "n_scans": 567,
+     "n_components": 854
+    },
+    "MR / hollow": {
+     "mean_x": -2.6482,
+     "sd_x": 0.9508,
+     "nu_at_mean": 14.13,
+     "n_sites": 2,
+     "sites": "cervix, urinary_bladder",
+     "n_scans": 113,
+     "n_components": 146
+    },
+    "MR / parenchymal": {
+     "mean_x": -3.0901,
+     "sd_x": 0.9508,
+     "nu_at_mean": 21.98,
+     "n_sites": 2,
+     "sites": "breast, prostate",
+     "n_scans": 99,
+     "n_components": 144
+    }
+   },
+   "fallback": {
+    "mean_x": -3.1696,
+    "sd_x": 1.0978,
+    "nu_at_mean": 23.8
+   },
+   "variance": {
+    "within_site": 0.8944,
+    "between_site": 0.0065,
+    "between_site_df": 4.0,
+    "between_cell": 0.253
+   }
+  },
+  "normal": {
+   "cells": {
+    "CT / aerated": {
+     "mean_x": -3.5062,
+     "sd_x": 1.1147,
+     "nu_at_mean": 33.32,
+     "n_sites": 1,
+     "sites": "lung",
+     "n_scans": 391,
+     "n_components": 1120
+    },
+    "CT / hollow": {
+     "mean_x": -2.27,
+     "sd_x": 1.1147,
+     "nu_at_mean": 9.68,
+     "n_sites": 1,
+     "sites": "colon",
+     "n_scans": 80,
+     "n_components": 128
+    },
+    "CT / parenchymal": {
+     "mean_x": -3.4084,
+     "sd_x": 1.0988,
+     "nu_at_mean": 30.22,
+     "n_sites": 3,
+     "sites": "kidney, liver, pancreas",
+     "n_scans": 543,
+     "n_components": 1056
+    },
+    "MR / hollow": {
+     "mean_x": -3.1663,
+     "sd_x": 1.1032,
+     "nu_at_mean": 23.72,
+     "n_sites": 2,
+     "sites": "cervix, urinary_bladder",
+     "n_scans": 109,
+     "n_components": 158
+    },
+    "MR / parenchymal": {
+     "mean_x": -3.0888,
+     "sd_x": 1.1147,
+     "nu_at_mean": 21.95,
+     "n_sites": 1,
+     "sites": "prostate",
+     "n_scans": 10,
+     "n_components": 11
+    }
+   },
+   "fallback": {
+    "mean_x": -3.0779,
+    "sd_x": 1.2463,
+    "nu_at_mean": 21.71
+   },
+   "variance": {
+    "within_site": 1.116,
+    "between_site": 0.0698,
+    "between_site_df": 3.0,
+    "between_cell": 0.2989
+   }
+  }
+ },
+ "eta": [
+  -3.5141737987866257,
+  7.435231787596369,
+  -0.3623629677024858,
+  -4.732854270613867,
+  4.673209936603204,
+  -4.2212972517329295,
+  -0.048521628835355664,
+  -0.042715345018383706,
+  -0.030763325454924075,
+  -0.021980371646741784,
+  -0.007179271315097629,
+  0.013094907229638774,
+  0.03597072725259467,
+  0.07688292245121306,
+  0.8210633535826688,
+  0.18440060633969277,
+  -0.3792490866596178,
+  0.0296147543167819,
+  -0.03839120955140593,
+  -0.01538528317053066,
+  -0.02662938608602946,
+  -0.03430399807301464,
+  -0.058881878511959904,
+  0.029872426886950788,
+  -0.019940896031943302,
+  0.00040119423117421904,
+  -0.008523732591468545,
+  0.0035947142027003775,
+  0.011198145459537547,
+  0.012852042924971191,
+  -1.8900897863198491,
+  -5.187077534532723
+ ],
+ "eta_fit": {
+  "success": true,
+  "nll": 0.012381662887037508,
+  "iters": 96
+ },
+ "r_mm": 36.52644348144531,
+ "a_w": 0.39330109600068885,
+ "b_w": 0.04889754623383458,
+ "nu": 8.612324657495071,
+ "K_max": 4,
+ "alpha0": 0.25,
+ "nw_beta0": 1.0,
+ "nw_nu0": 6.0,
+ "l2": 0.0001,
+ "n_cases": {
+  "Bladder_Tumor_00": 100,
+  "Breast_Tumor_00": 100,
+  "Colon_Tumor_00": 100,
+  "Kidney_Tumor_00": 100,
+  "Liver_Tumor_00": 100,
+  "Lung_Tumor_01": 100,
+  "Pancreas_Tumor_00": 100,
+  "Prostate_Tumor_00": 81,
+  "Cervix_Tumor_00": 65,
+  "Lung_Tumor_00": 63
+ },
+ "omega": {
+  "n": 881,
+  "median": 3.49880364990149,
+  "q10": 1.4472262641872584,
+  "q90": 30.90170395049995
+ },
+ "nu_cases": {
+  "n": 907,
+  "median": 8.612324657495071
+ },
+ "nu_source": "WHOLE TUMOUR (no s2_nu.py output)",
+ "nu_population": null,
+ "calibration_in_sample": [
+  {
+   "bin": "0.0-0.1",
+   "mean_p": 0.001359496544400081,
+   "freq": 0.0012325896936779468,
+   "weight": 0.9914664486559461
+  },
+  {
+   "bin": "0.1-0.2",
+   "mean_p": 0.14481225701200245,
+   "freq": 0.17018705658026112,
+   "weight": 0.0016618135328802578
+  },
+  {
+   "bin": "0.2-0.3",
+   "mean_p": 0.2454844789607869,
+   "freq": 0.37446870972393953,
+   "weight": 0.0008745263693738668
+  },
+  {
+   "bin": "0.3-0.4",
+   "mean_p": 0.3441609749167202,
+   "freq": 0.42929047851561136,
+   "weight": 0.0004981779855476589
+  },
+  {
+   "bin": "0.4-0.5",
+   "mean_p": 0.44474185315583575,
+   "freq": 0.39308347686563977,
+   "weight": 0.0003400821731586912
+  },
+  {
+   "bin": "0.5-0.6",
+   "mean_p": 0.5509620811891561,
+   "freq": 0.5887484437794939,
+   "weight": 0.00029687057851898003
+  },
+  {
+   "bin": "0.6-0.7",
+   "mean_p": 0.6609888154155853,
+   "freq": 0.6051889989170022,
+   "weight": 0.0004057812288990703
+  },
+  {
+   "bin": "0.7-0.8",
+   "mean_p": 0.753262728844169,
+   "freq": 0.6844880742857875,
+   "weight": 0.0011912585959284326
+  },
+  {
+   "bin": "0.8-0.9",
+   "mean_p": 0.8585482422290716,
+   "freq": 0.8752902654340395,
+   "weight": 0.0021879742099717644
+  },
+  {
+   "bin": "0.9-1.0",
+   "mean_p": 0.9268043669996766,
+   "freq": 0.9495103223616774,
+   "weight": 0.001077066669775057
+  }
+ ],
+ "weighting": {
+  "rule": "sites count equally (each site weight 1 / n_sites, shared by its cases)",
+  "cases_per_site": {
+   "lung": 163,
+   "urinary_bladder": 100,
+   "breast": 100,
+   "colon": 100,
+   "kidney": 100,
+   "liver": 100,
+   "pancreas": 100,
+   "prostate": 81,
+   "cervix": 65
+  }
+ }
+}

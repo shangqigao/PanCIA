@@ -186,3 +186,73 @@ def existence_on_mask(s1, Zfull_patch, L, TAB1, TS):
 def s1_mod_G1():
     from .. import grounding_g1 as G1
     return G1
+
+
+# ------------------------------------------------------------------ resolution: the same stride rule as R2Seg (features.stride_rule)
+CROP_PAD_MM = 60.0       # crop = the cluster's anchors and chosen extents + 60 mm (R2Seg: tumour box + 60 mm, expert.load_case)
+
+
+def _stride_obj(o, fac):
+    """a mask object (sl, crop) on the strided grid (every fac[k]-th full-grid voxel along axis k, phase 0)"""
+    if o is None or getattr(o, 'crop', None) is None:
+        return o
+    sl, c = list(o.sl), o.crop; out = []
+    for k, f in enumerate(fac):
+        if f == 1:
+            out.append(sl[k]); continue
+        s = sl[k].start; i0 = -(-s // f) * f
+        idx = [slice(None)] * 3; idx[k] = slice(i0 - s, None, f); c = c[tuple(idx)]
+        out.append(slice(i0 // f, i0 // f + c.shape[k]))
+    return RN.Patch(out, c)
+
+
+def stride_cluster(s1, Ls, max_vox=F.MAX_VOX):
+    """inputs of run.solve_cluster for one cluster at the stage-2 resolution. The crop (anchors and chosen extents of the cluster +
+    60 mm) decides the stride by features.stride_rule, exactly as R2Seg crops do. Returns dict(img, lesions, organs, sp, thick, ax,
+    body, shape, fac) with fac = (1, 1, 1) when no stride is needed (inputs unchanged)."""
+    shape, sp = s1['shape'], np.asarray(s1['sp'], float)
+    box = RN.box_union([a.sl for L in Ls for a in L['anchors']] + [L['xi'].sl for L in Ls], shape)
+    crop = F.pad_box(box, sp, CROP_PAD_MM, shape)
+    rule = F.stride_rule(sp, int(np.prod([s.stop - s.start for s in crop])), max_vox)
+    X, mod, cen, scl = s1['X'], s1['mod'], s1['cen'], s1['scl']
+    if rule is None:
+        return dict(img=lambda W: F.normalise(X[W], mod, cen, scl), lesions=Ls, organs=s1['organs'], sp=sp, thick=s1['thick'],
+                    ax=s1['ax'], body=s1['body'], shape=tuple(shape), fac=(1, 1, 1))
+    f, axes = rule
+    fac = tuple(f if k in axes else 1 for k in range(3))
+    Xs = X[tuple(slice(None, None, q) for q in fac)]
+    sps = sp * np.array(fac, float)
+    thick, ax = F.acq_axis(sps, s1['si'])
+    Lss = [dict(L, anchors=[_stride_obj(a, fac) for a in L['anchors']], q=_stride_obj(L['q'], fac), xi=_stride_obj(L['xi'], fac))
+           for L in Ls]
+    orgs = {k: dict(o, theta=_stride_obj(o['theta'], fac)) for k, o in s1['organs'].items()}
+    return dict(img=lambda W: F.normalise(Xs[W], mod, cen, scl), lesions=Lss, organs=orgs, sp=sps, thick=thick, ax=ax,
+                body=_stride_obj(s1['body'], fac), shape=Xs.shape, fac=fac)
+
+
+def upsample_result(res, fac, full_shape):
+    """window maps of run.solve_cluster from the strided grid back to the full grid (nearest neighbour); volumes in ml need no
+    change (computed with the strided spacing). Sets res['W'] to the full-grid window and res['stride'] = fac."""
+    res['stride'] = list(fac)
+    if all(q == 1 for q in fac):
+        return res
+    Ws = res['W']
+    Wf = tuple(slice(s.start * q, min(s.stop * q, n)) for s, q, n in zip(Ws, fac, full_shape))
+    n_s = tuple(s.stop - s.start for s in Ws)
+
+    def up(A):
+        A = np.asarray(A)
+        if A.ndim != 3 or A.shape != n_s:
+            return A
+        for k, q in enumerate(fac):
+            if q > 1:
+                A = np.repeat(A, q, axis=k)
+        return A[tuple(slice(0, w.stop - w.start) for w in Wf)]
+    for key in ('p', 'comp', 'atyp', 'ROI', 'Z', 'lab'):
+        if key in res and res[key] is not None:
+            res[key] = up(res[key])
+    for key in ('ZL', 'anchors'):
+        if key in res and res[key] is not None:
+            res[key] = [up(a) for a in res[key]]
+    res['W'] = Wf
+    return res

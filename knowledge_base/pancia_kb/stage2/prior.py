@@ -16,23 +16,54 @@ NAMES = (['1', 'q', 'q2'] + [f'q>{k:g}' for k in Q_KNOTS] + ['sd'] + [f'sd>{k:g}
          + ['dep_h'] + [f'dep_h>{k:g}' for k in DEP_KNOTS] + ['dep_o'] + [f'dep_o>{k:g}' for k in DEP_KNOTS]
          + ['in_h*sdpos', 'in_o*sdpos', 'in_h_kb*sdpos'])
 P = len(NAMES)
+# through-plane distance (29 Oct): dtp = |offset along the acquisition (thick-slice) axis| from a voxel outside xi to its nearest
+# xi voxel (mm; 0 inside xi; clipped to [0, 60]) with hinges at 5, 10, 20 mm. With sd (the full distance) the prior can differ
+# between a voxel beside the extent in plane and one on the next slices. Used when eta has P_TP entries (fits on real-agent
+# outlines); a fit with P entries uses the original basis.
+TP_KNOTS = (5.0, 10.0, 20.0)
+NAMES_TP = NAMES + ['dtp'] + [f'dtp>{k:g}' for k in TP_KNOTS]
+P_TP = len(NAMES_TP)
+# anchor support (29 Oct; user: keep, generalised): u = 1 - k / n, the share of the tumour agents that do NOT agree on the lesion's
+# best-supported anchor (k agents agree, n tumour agents in the system; two agents: agreement u = 0, one agent u = 0.5). It counts
+# agreeing agents and never names one; with more agents it stays defined. With its interaction with q, the fit learns how far a
+# claim with less agreement is trusted. Used when eta has
+# P_TPS entries (requires dtp as well).
+NAMES_TPS = NAMES_TP + ['unagreed', 'unagreed*q']
+P_TPS = len(NAMES_TPS)
+# in an outline beyond xi (1 Nov, user): 1[q > 0] x 1[sd > 0], a voxel inside at least one candidate outline of the lesion but outside
+# its chosen extent xi. It asks only whether ANY outline contains the voxel (never which agent's, nor how many). Without it the band
+# U \ xi was priced as an ordinary low-q voxel (held-out, true lesions: prior 0.19 vs tumour 0.41 at 8 of 9 sites) while xi was
+# over-predicted. Used when eta has P_TPO entries (requires dtp and unagreed as well).
+NAMES_TPO = NAMES_TPS + ['outline_beyond_xi']
+P_TPO = len(NAMES_TPO)
+Q_EPS = 1e-6
 
 
-def basis(q, sd, in_h, in_o, kb_h, dep_h, dep_o):
-    """all inputs are 1-D arrays of equal length (kb_h a scalar or array). Returns (n, P) float32 design matrix."""
+def basis(q, sd, in_h, in_o, kb_h, dep_h, dep_o, dtp=None, unagreed=None, beyond=False):
+    """all inputs are 1-D arrays of equal length (kb_h a scalar or array). Returns (n, P) float32 design matrix; (n, P_TP) when the
+    through-plane distance dtp is given."""
     q = np.asarray(q, np.float32); n = q.size
     sd = np.clip(np.asarray(sd, np.float32), -30.0, 60.0)
     in_h = np.asarray(in_h, np.float32); in_o = np.asarray(in_o, np.float32) * (1.0 - in_h)
     kb = np.broadcast_to(np.asarray(kb_h, np.float32), (n,))
     dh = np.clip(np.asarray(dep_h, np.float32), 0.0, 30.0) * in_h
     do = np.clip(np.asarray(dep_o, np.float32), 0.0, 30.0) * in_o
+    sd_raw = np.asarray(sd, np.float32)
     sdp = np.clip(sd, 0.0, 60.0)
     cols = [np.ones(n, np.float32), q, q * q] + [np.maximum(q - k, 0.0) for k in Q_KNOTS] + [sd] + [np.maximum(sd - k, 0.0) for k in SD_KNOTS]
     cols += [in_h, in_o, in_h * kb, dh] + [np.maximum(dh - k, 0.0) * in_h for k in DEP_KNOTS]
     cols += [do] + [np.maximum(do - k, 0.0) * in_o for k in DEP_KNOTS]
     cols += [in_h * sdp * (1.0 - kb), in_o * sdp, in_h * kb * sdp]
+    if dtp is not None:
+        dt = np.clip(np.asarray(dtp, np.float32), 0.0, 60.0)
+        cols += [dt] + [np.maximum(dt - k, 0.0) for k in TP_KNOTS]
+        if unagreed is not None:
+            sg = np.broadcast_to(np.asarray(unagreed, np.float32), (n,))
+            cols += [sg, sg * q]
+            if beyond:
+                cols += [((q > Q_EPS) & (sd_raw > 0)).astype(np.float32)]
     X = np.stack(cols, 1).astype(np.float32)
-    assert X.shape[1] == P
+    assert X.shape[1] == (P if dtp is None else (P_TP if unagreed is None else (P_TPO if beyond else P_TPS)))
     return X
 
 
@@ -43,7 +74,10 @@ def sigmoid(z):
 class SpatialPrior:
     def __init__(self, eta):
         self.eta = np.asarray(eta, np.float64)
-        assert self.eta.size == P, (self.eta.size, P)
+        assert self.eta.size in (P, P_TP, P_TPS, P_TPO), (self.eta.size, P, P_TP, P_TPS, P_TPO)
+        self.tp = self.eta.size in (P_TP, P_TPS, P_TPO)     # the basis includes the through-plane distance
+        self.sup = self.eta.size in (P_TPS, P_TPO)          # ... and the lesion's anchor support
+        self.ob = self.eta.size == P_TPO                    # ... and 'in an outline beyond xi' (1 Nov)
 
     def prob(self, Xb):
         return sigmoid(Xb.astype(np.float64) @ self.eta)
@@ -66,7 +100,7 @@ def host_inputs(theta, kb, organs, depth, h, shape):
     return in_h, in_o & ~in_h, float(bool(kb.get(h, False))), dep_h, dep_o
 
 
-def lesion_prior(SP, q, sd, PhL, theta, kb, organs, depth, M=None):
+def lesion_prior(SP, q, sd, PhL, theta, kb, organs, depth, M=None, dtp=None, unagreed=0.0):
     """pi^L on a window (mixture over the credible hosts). PhL: dict host -> probability, renormalised over the credible set by the
     caller. M: optional bool mask where pi is needed (elsewhere 0). Hosts with no territory in the window still contribute (in_h = 0)."""
     shape = q.shape; M = np.ones(shape, bool) if M is None else M
@@ -75,7 +109,8 @@ def lesion_prior(SP, q, sd, PhL, theta, kb, organs, depth, M=None):
         PhL = {None: 1.0}
     for h, w in PhL.items():
         in_h, in_o, kb_h, dep_h, dep_o = host_inputs(theta, kb, organs, depth, h, shape)
-        Xb = basis(q[M], sd[M], in_h[M], in_o[M], kb_h, dep_h[M], dep_o[M])
+        Xb = basis(q[M], sd[M], in_h[M], in_o[M], kb_h, dep_h[M], dep_o[M], dtp=dtp[M] if SP.tp else None,
+                   unagreed=float(unagreed) if SP.sup else None, beyond=SP.ob)
         out += w * SP.prob(Xb)
     pi = np.zeros(shape, np.float32); pi[M] = out
     return pi

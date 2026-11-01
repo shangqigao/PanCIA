@@ -52,6 +52,24 @@ def win(obj, W, dtype=bool):
     return out
 
 
+N_TUMOUR_AGENTS = 2         # tumour agents in the system (BiomedParse, VoxTell); agent-agnostic count
+
+
+def lesion_unagreed(L, n=N_TUMOUR_AGENTS):
+    """u = 1 - k / n for a lesion: k = the most agents agreeing on any of its anchors (v8.4 kinds: 'two' -> 2, 'single' / 'lobe' -> 1;
+    R2Seg agent lesions: L['support']). Lesions without either (simulated lesions) count as full agreement (u = 0)."""
+    if 'support' in L:
+        k = 2 if L['support'] == 'two' else 1
+    elif L.get('kinds'):
+        k = max(2 if v == 'two' else 1 for v in L['kinds'].values())
+    else:
+        k = n
+    return 1.0 - min(k, n) / float(n)
+
+
+TUMOUR_FROM = ['q']          # set per solve from fit['tumour_from'] ('q' or 'anchor'); see _solve_window
+
+
 def box_union(sls, shape):
     sls = [s for s in sls if s is not None]
     return tuple(slice(max(0, min(s[d].start for s in sls)), min(shape[d], max(s[d].stop for s in sls))) for d in range(3))
@@ -87,6 +105,7 @@ def solve_cluster(img, lesions, organs, fit, sp, mod, thick, ax, body_obj, shape
     key = seq or ('CT' if mod == 'CT' else 'MR')
     t0 = time.time()
     r = float(fit['r_mm']); SP = PR.SpatialPrior(fit['eta']); PRI = (float(fit['nw_beta0']), float(fit['nw_nu0']))
+    TUMOUR_FROM[0] = fit.get('tumour_from', 'q')
     K = int(fit['K_max']); alpha0 = float(fit['alpha0']); nu = float(fit['nu']); a_w, b_w = float(fit['a_w']), float(fit['b_w'])
     CP = NP.ClassPriors(fit['nu_prior'], mod) if fit.get('nu_prior') else None
     regs = [lesion_region(L, organs, body_obj, r, shape, sp) for L in lesions]
@@ -160,7 +179,8 @@ def _solve_window(img, lesions, organs, SP, PRI, sp, mod, thick, ax, body_obj, W
         q = win(L['q'], Wp, np.float32)
         xi = win(L['xi'], Wp)
         sd = F.signed_distance(xi, sp) if xi.any() else np.full(shape_w, 60.0, np.float32)
-        piL = PR.lesion_prior(SP, q, sd, L['PhL'], theta_w, kb, seg, depth, ROI)
+        dtp = F.through_plane_distance(xi, sp, ax) if SP.tp else None
+        piL = PR.lesion_prior(SP, q, sd, L['PhL'], theta_w, kb, seg, depth, ROI, dtp=dtp, unagreed=lesion_unagreed(L))
         one_minus_pi *= (1.0 - piL[ROI]); one_minus_q *= (1.0 - q[ROI])
         A = np.zeros(shape_w, bool)
         for a in L['anchors']:
@@ -171,11 +191,21 @@ def _solve_window(img, lesions, organs, SP, PRI, sp, mod, thick, ax, body_obj, W
     organs_in = [k for k in seg if (theta_w[k] & ROI).sum() >= 20]
     types, allowed = _types(organs_in, ROI, theta_w)
     Y = Y4[:, ROI].T
-    tp, bps = _priors(Y, q_c[ROI], allowed, types, PRI)
+    # tumour appearance and initialisation (29 Oct): 'q' (default, fits before 29 Oct) learns the tumour classes' within-scan priors
+    # from q-weighted voxels and starts them from q; 'anchor' uses the anchors (agreement cores) for the priors and starts from the
+    # anchors (1) and the spatial prior elsewhere, so an extent that is mostly normal tissue cannot redefine the tumour (TCGA KIRP)
+    if TUMOUR_FROM[0] == 'anchor':
+        Aall = np.zeros(shape_w, bool)
+        for A_ in anchors_w:
+            Aall |= A_
+        q_app = Aall[ROI].astype(np.float64); q_init = np.where(Aall[ROI], 0.99, pi_c[ROI])
+    else:
+        q_app = q_c[ROI]; q_init = q_c[ROI]
+    tp, bps = _priors(Y, q_app, allowed, types, PRI)
     edges = vb.build_edges(ROI, sp)
     m = vb.Model(Y, pi_c[ROI], types, allowed, tp, bps, K=K, alpha0=alpha0, nu=nu, a_w=a_w, b_w=b_w, edges=edges,
                  nu_prior=cluster_nu_prior(CP, lesions, organs_in, K))
-    m.init(q_c[ROI]).run(max_iter=max_iter, parity=vb.parity(ROI))
+    m.init(q_init).run(max_iter=max_iter, parity=vb.parity(ROI))
     p = np.zeros(shape_w, np.float32); p[ROI] = m.p()
     Rt, _ = m.components()
     comp = np.zeros(shape_w, np.uint8); comp[ROI] = (np.argmax(Rt, 1) + 1).astype(np.uint8)
@@ -188,10 +218,36 @@ def _solve_window(img, lesions, organs, SP, PRI, sp, mod, thick, ax, body_obj, W
     outside_ok = ndimage.binary_dilation(~ROI & body_w) & edge
     out = []; grow = np.zeros(shape_w, bool); used = set(); ZLs = []
     vox_ml = float(np.prod(sp)) / 1000.0
+    # components of {p >= 1/2} met by each lesion's anchors. A component met by several lesions (their refined tumours meet) is
+    # split between them by the nearest anchor (Euclidean, mm), so no lesion inherits another's tumour; the merged component is
+    # reported once per group (merged_with, vol_Z_group).
+    ids_of = [set(np.unique(lab[anchors_w[i] & Z]).tolist()) - {0} for i in range(len(lesions))]
+    owners = {}
+    for i, ids in enumerate(ids_of):
+        for j in ids:
+            owners.setdefault(j, []).append(i)
+    shared = {j: o for j, o in owners.items() if len(o) > 1}
+    near = None
+    if shared:
+        sh_ids = list(shared)
+        Msh = np.isin(lab, sh_ids)
+        dist = np.full((len(lesions),) + shape_w, np.inf, np.float32)
+        for i in sorted({i for o in shared.values() for i in o}):
+            dist[i] = F.edt(anchors_w[i], sp)
+        near = np.full(shape_w, -1, np.int16)
+        for j, o in shared.items():
+            mj = lab == j
+            d = np.stack([dist[i][mj] for i in o], 0)
+            near[mj] = np.asarray(o, np.int16)[np.argmin(d, 0)]
+        del dist, Msh
     for i, L in enumerate(lesions):
-        ids = set(np.unique(lab[anchors_w[i] & Z]).tolist()) - {0}
+        ids = ids_of[i]
         used |= ids
-        ZL = np.isin(lab, list(ids)) if ids else np.zeros(shape_w, bool)
+        own = [j for j in ids if j not in shared]
+        ZL = np.isin(lab, own) if own else np.zeros(shape_w, bool)
+        if near is not None:
+            ZL |= near == i
+        grp = sorted({k for j in ids if j in shared for k in shared[j]} - {i})
         ZLs.append(ZL)
         if (ZL & outside_ok).any():
             grow |= ZL
@@ -201,7 +257,9 @@ def _solve_window(img, lesions, organs, SP, PRI, sp, mod, thick, ax, body_obj, W
         for k in theta_w:
             v = float((rec & theta_w[k]).sum() * vox_ml)
             if v > 0: rec_by[k] = round(v, 2)
-        out.append(dict(key=L['key'], vol_xi=round(float(xi.sum()) * vox_ml, 2), vol_Z=round(float(ZL.sum()) * vox_ml, 2),
+        out.append(dict(key=L['key'], merged_with=[lesions[k]['key'] for k in grp],
+                        vol_Z_group=round(float(np.isin(lab, list(ids)).sum()) * vox_ml, 2) if grp else None,
+                        vol_xi=round(float(xi.sum()) * vox_ml, 2), vol_Z=round(float(ZL.sum()) * vox_ml, 2),
                         vol_anchor=round(float(A.sum()) * vox_ml, 2), trimmed_ml=round(float(trim.sum()) * vox_ml, 2),
                         recalled_ml=round(float(rec.sum()) * vox_ml, 2), recalled_by_territory=rec_by,
                         dice_Z_xi=round(float(F_dice(ZL, xi)), 3),
@@ -248,10 +306,12 @@ def _bayes_factor(res, L, organs, PRI, mod, K, alpha0, nu, a_w, b_w, sp, r, max_
     organs_in = [k for k in seg if (theta_w[k] & N).sum() >= 20]
     types, allowed = _types(organs_in, N, theta_w)
     Y = res['_Y4'][:, N].T
-    tp, bps = _priors(Y, qw[N], allowed, types, PRI)          # within-scan priors on N_L, the same for both models
+    q_app = A[N].astype(np.float64) if TUMOUR_FROM[0] == 'anchor' else qw[N]
+    q_init = np.where(A[N], 0.99, L['_pi_w'][N]) if TUMOUR_FROM[0] == 'anchor' else qw[N]
+    tp, bps = _priors(Y, q_app, allowed, types, PRI)          # within-scan priors on N_L, the same for both models
     npr = cluster_nu_prior(CP, [L], organs_in, K)
     npr = None if npr is None else (npr[:K], npr[K:], CP.generic())
-    lbf, _, _ = vb.log_bayes_factor(Y, L['_pi_w'][N], types, allowed, tp, bps, qw[N], K=K, alpha0=alpha0, nu=nu, a_w=a_w, b_w=b_w,
+    lbf, _, _ = vb.log_bayes_factor(Y, L['_pi_w'][N], types, allowed, tp, bps, q_init, K=K, alpha0=alpha0, nu=nu, a_w=a_w, b_w=b_w,
                                     edges=vb.build_edges(N, sp), parity=vb.parity(N), max_iter=max_iter, nu_prior=npr)
     n = int(N.sum())
     # log BF sums over voxels treated as independent, so its size grows with N_L and overstates the evidence; the per-voxel value is

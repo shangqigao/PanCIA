@@ -242,10 +242,9 @@ def _image_crop(img, mod, W, sp, si, nvox, max_vox):
         cen, scl = 0.0, 1.0
         X = np.asarray(img.dataobj[W], np.float32); X = X[..., 0] if X.ndim == 4 else X
     st = None
-    if nvox > max_vox:
-        thin = sp.max() / sp.min() < 1.5
-        axes = [0, 1, 2] if thin else [k for k in range(3) if k != int(np.argmax(sp))]
-        f = int(np.ceil((nvox / max_vox) ** (1.0 / len(axes))))
+    rule = F.stride_rule(sp, nvox, max_vox)
+    if rule is not None:
+        f, axes = rule
         st = tuple(slice(None, None, f) if k in axes else slice(None) for k in range(3))
         X = X[st]; sp = np.array([s * f if k in axes else s for k, s in enumerate(sp)])
     return F.normalise(X, mod, cen, scl), sp, st

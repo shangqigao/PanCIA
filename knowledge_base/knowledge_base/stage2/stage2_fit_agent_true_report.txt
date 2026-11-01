@@ -1,0 +1,61 @@
+stage-2 fit 2026-11-01 (s2.0); samples agent_true; tumour classes from anchor; excluded []; cases {'Bladder_Tumor_00': 100, 'Breast_Tumor_00': 100, 'Colon_Tumor_00': 100, 'Liver_Tumor_00': 100, 'Lung_Tumor_01': 100, 'Pancreas_Tumor_00': 99, 'Kidney_Tumor_00': 94, 'Prostate_Tumor_00': 66, 'Cervix_Tumor_00': 65, 'Lung_Tumor_00': 62}
+weighting: sites count equally; cases per site {'lung': 162, 'urinary_bladder': 100, 'breast': 100, 'colon': 100, 'liver': 100, 'pancreas': 99, 'kidney': 94, 'prostate': 66, 'cervix': 65} (each case weighs 1 / (9 x cases of its site))
+appearance: no prior across scans; inferred within each scan (vb.class_priors, strength beta0 = 1, nu0 = 6)
+r = 36.5 mm; nu = 8.61 (WHOLE TUMOUR (no s2_nu.py output); 907 components / cases); omega per case n=886 median 2.5116016684247002 -> Gamma(a_w=1.6719502128239092, b_w=0.6211542618484855)
+nu population: none
+features: ['I', 'D1a', 'D1b', 'LoG1'] (D = 4)
+nu prior (modality x tissue class; nu at the cell mean / sd of log 1/nu): tumour CT / aerated 16.68/0.9525; CT / hollow 29.61/0.9525; CT / parenchymal 50.01/0.9503; MR / hollow 14.13/0.9508; MR / parenchymal 21.98/0.9508; fallback 23.8/1.0978 | normal CT / aerated 33.32/1.1147; CT / hollow 9.68/1.1147; CT / parenchymal 30.22/1.0988; MR / hollow 23.72/1.1032; MR / parenchymal 21.95/1.1147; fallback 21.71/1.2463
+eta:
+               1 -1.9014
+               q +5.5799
+              q2 +0.0632
+          q>0.25 -3.1423
+           q>0.5 -0.6080
+          q>0.75 +2.5849
+              sd -0.0855
+          sd>-10 -0.0716
+           sd>-5 -0.0501
+            sd>0 -0.0317
+            sd>5 -0.0027
+           sd>10 +0.0288
+           sd>20 +0.0387
+           sd>40 +0.0098
+            in_h +0.3800
+            in_o +0.3579
+         in_h_kb -0.0388
+           dep_h +0.0026
+         dep_h>5 +0.0052
+        dep_h>15 -0.0394
+           dep_o -0.0002
+         dep_o>5 +0.0113
+        dep_o>15 -0.0730
+      in_h*sdpos +0.0317
+      in_o*sdpos -0.0335
+   in_h_kb*sdpos -0.0101
+             dtp -0.0029
+           dtp>5 +0.0231
+          dtp>10 +0.0317
+          dtp>20 +0.0292
+        unagreed +2.0499
+      unagreed*q -2.5855
+in-sample calibration (mean p -> frequency):
+  0.0-0.1: 0.003 -> 0.003 (weight 0.971)
+  0.1-0.2: 0.135 -> 0.241 (weight 0.00202)
+  0.2-0.3: 0.252 -> 0.443 (weight 0.00064)
+  0.3-0.4: 0.355 -> 0.401 (weight 0.00108)
+  0.4-0.5: 0.454 -> 0.391 (weight 0.00188)
+  0.5-0.6: 0.547 -> 0.450 (weight 0.00185)
+  0.6-0.7: 0.653 -> 0.642 (weight 0.00155)
+  0.7-0.8: 0.759 -> 0.723 (weight 0.0038)
+  0.8-0.9: 0.852 -> 0.868 (weight 0.00883)
+  0.9-1.0: 0.944 -> 0.968 (weight 0.00717)
+  prior inside anchor (q=1, in host): 0.9028
+  prior inside anchor (q=1, in host), one of two agents: 0.8766
+  prior chosen extent rim (q=0.5, in host): 0.4372
+  prior 5 mm outside extent in plane, in host: 0.0290
+  prior 5 mm outside extent through plane, in host: 0.0286
+  prior 10 mm outside extent through plane, in host: 0.0113
+  prior 5 mm outside extent, other organ: 0.0204
+  prior 5 mm outside extent, no organ: 0.0169
+  prior 20 mm outside extent in plane, in host: 0.0018
+  prior 20 mm outside, host unsegmented (KB region): 0.0007
