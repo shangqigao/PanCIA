@@ -25,6 +25,7 @@ from scipy.special import digamma, gammaln
 
 LOG2PI = np.log(2 * np.pi)
 DT = np.float32       # dtype of the large voxel x class arrays (memory on large TCGA clusters; sums are taken in float64)
+BLOCK = 32768         # voxels per block in the M and E steps (2 Nov: temporaries stay in cache; memory traffic, not arithmetic, was the cost)
 
 
 class NW:
@@ -65,6 +66,19 @@ class NW:
         ybar = (w[:, None] * Y).sum(0) / sw
         Z = Y - ybar
         S = (Z * w[:, None]).T @ Z
+        beta = prior.beta + sw
+        m = (prior.beta * prior.m + sw * ybar) / beta
+        dm = (ybar - prior.m)[:, None]
+        Winv = np.linalg.inv(prior.W) + S + (prior.beta * sw / beta) * (dm @ dm.T)
+        Winv = 0.5 * (Winv + Winv.T)
+        return NW(m, beta, np.linalg.inv(Winv), prior.nu + r_sum)
+
+    @staticmethod
+    def posterior_from_moments(prior, sw, ybar, S, r_sum):
+        """as posterior(), from the weighted moments: sw = sum w, ybar = weighted mean, S = sum w (y - ybar)(y - ybar)' (2 Nov:
+        Model computes the moments of every class in one pass)"""
+        if sw <= 1e-10:
+            return NW(prior.m, prior.beta, prior.W, prior.nu + r_sum)
         beta = prior.beta + sw
         m = (prior.beta * prior.m + sw * ybar) / beta
         dm = (ybar - prior.m)[:, None]
@@ -151,6 +165,17 @@ def nu_map(r, Eu, Elu, mix, lo=NU_RANGE[0], hi=NU_RANGE[1]):
     mode. Returns nu."""
     from scipy.optimize import minimize_scalar
     sr = float(np.sum(r)); a = float(np.sum(r * (Elu - Eu)))
+    def negf(x):
+        nu = np.exp(-x)
+        return -(sr * (0.5 * nu * np.log(nu / 2.0) - gammaln(nu / 2.0)) + 0.5 * nu * a + log_mix(x, mix))
+    res = minimize_scalar(negf, bounds=(np.log(1.0 / hi), np.log(1.0 / lo)), method='bounded', options=dict(xatol=1e-4))
+    return float(np.exp(-res.x))
+
+
+def nu_map_sums(sr, a, mix, lo=NU_RANGE[0], hi=NU_RANGE[1]):
+    """nu_map from its sufficient sums: sr = sum r, a = sum r (E[log u] - E[u]) (2 Nov: Model accumulates them blockwise)"""
+    from scipy.optimize import minimize_scalar
+    sr = float(sr); a = float(a)
     def negf(x):
         nu = np.exp(-x)
         return -(sr * (0.5 * nu * np.log(nu / 2.0) - gammaln(nu / 2.0)) + 0.5 * nu * a + log_mix(x, mix))
@@ -270,6 +295,14 @@ class Model:
                                   for mx in self.nu_prior])
         self.edges = edges if (tumour and edges is not None and len(edges[0])) else None
         self.mask_bg = self.allowed[self.types]                        # (n, C)
+        # 2 Nov (efficiency; same model): features centred once, with their pairwise products, so that every class's weighted
+        # moments (M step) and expected Mahalanobis distances (E step) are a few matrix products over blocks of voxels instead of
+        # one pass per class; log pi cached. Results equal the per-class code up to floating-point rounding.
+        self._c = self.Y.mean(0); self._Yc = self.Y - self._c
+        self._pairs = [(a, b) for a in range(self.D) for b in range(a, self.D)]
+        self._Y2 = np.stack([self._Yc[:, a] * self._Yc[:, b] for a, b in self._pairs], 1)
+        self._logpi = np.log(self.pi) if tumour else None; self._log1mpi = np.log1p(-self.pi) if tumour else None
+        self._T = self.allowed.shape[0]
 
     # ------------------------------------------------------------------ initialisation
     def init(self, init_q, seed=0):
@@ -317,21 +350,32 @@ class Model:
 
     # ------------------------------------------------------------------ updates
     def _m_step(self):
-        K, C = self.K, self.C; R = self.R
+        K, C = self.K, self.C; R = self.R; J = K + C; D = self.D; P = len(self._pairs)
+        r_sum = np.zeros(J); M0 = np.zeros(J); M1 = np.zeros((J, D)); M2 = np.zeros((J, P))
+        for b in range(0, self.n, BLOCK):
+            s_ = slice(b, b + BLOCK)
+            Rb = np.asarray(R[s_], np.float64); Wb = Rb * self.Eu[s_]
+            r_sum += Rb.sum(0); M0 += Wb.sum(0); M1 += Wb.T @ self._Yc[s_]; M2 += Wb.T @ self._Y2[s_]
         self.post = []
-        for j in range(K + C):
+        for j in range(J):
             prior = self.tp if j < K else self.bp[j - K]
-            w = R[:, j] * self.Eu[:, j]
-            self.post.append(NW.posterior(prior, self.Y, w, float(R[:, j].sum())))
+            sw = float(M0[j])
+            if sw <= 1e-10:
+                self.post.append(NW.posterior_from_moments(prior, sw, None, None, float(r_sum[j]))); continue
+            ybc = M1[j] / sw; S = np.zeros((D, D))
+            for (a, b_), v in zip(self._pairs, M2[j]):
+                S[a, b_] = S[b_, a] = v
+            S -= sw * np.outer(ybc, ybc)
+            self.post.append(NW.posterior_from_moments(prior, sw, ybc + self._c, S, float(r_sum[j])))
         if K:
-            self.a_rho = self.alpha0 + R[:, :K].sum(0)
+            self.a_rho = self.alpha0 + r_sum[:K]
             self.Elrho = _dir_e_log(self.a_rho)
-        T = self.allowed.shape[0]
+        T = self._T
         self.a_lam = np.where(self.allowed, 1.0, 0.0) + np.zeros((T, C))
-        for t in range(T):
-            sel = self.types == t
-            if sel.any():
-                self.a_lam[t] += np.where(self.allowed[t], R[sel, K:].sum(0), 0.0)
+        cnt = np.bincount(self.types, minlength=T)
+        for c in range(C):
+            tot = np.bincount(self.types, weights=R[:, K + c], minlength=T)
+            self.a_lam[:, c] += np.where(self.allowed[:, c] & (cnt > 0), tot, 0.0)
         self.Ellam = np.full((T, C), -np.inf)
         for t in range(T):
             al = self.allowed[t]
@@ -339,6 +383,61 @@ class Model:
                 self.Ellam[t, al] = _dir_e_log(self.a_lam[t, al])
 
     def _ell(self, update_nu=True):
+        """per-voxel expected log likelihood L (n, J) and E[u] of every class, blockwise over voxels (2 Nov). Same terms as
+        student_terms: with a_u = (nu + D)/2 and b_u = (nu + Delta)/2 they reduce to ell = -a_u log b_u + c_j (the E[u] Delta and nu E[u]
+        terms sum to -a_u, the E[log u] terms to -(a_u - 1) log b_u), E[u] = a_u / b_u, E[log u] = digamma(a_u) - log b_u."""
+        K, C = self.K, self.C; J = K + C; D = self.D
+        L = np.empty((self.n, J), DT); Eu = np.empty_like(L)
+        nu = np.asarray(self.nu_k, np.float64)
+        # Delta_j = D / beta_j + nu_j (y - m_j)' W_j (y - m_j), with y - m_j = yc - (m_j - c): quadratic + linear + constant in yc
+        Cq = np.zeros((len(self._pairs), J)); Bl = np.zeros((D, J)); c0 = np.zeros(J); cj = np.zeros(J)
+        for j, post in enumerate(self.post):
+            W = post.W * post.nu; mc = post.m - self._c
+            Cq[:, j] = [W[a, a] if a == b_ else 2.0 * W[a, b_] for a, b_ in self._pairs]
+            Bl[:, j] = -2.0 * (W @ mc); c0[j] = float(mc @ W @ mc) + D / post.beta
+            au = (nu[j] + D) / 2.0
+            cj[j] = (0.5 * post.e_logdet() - 0.5 * D * LOG2PI + 0.5 * nu[j] * np.log(nu[j] / 2.0) - gammaln(nu[j] / 2.0) + gammaln(au))
+        au = (nu + D) / 2.0; au32 = au.astype(DT); cj32 = cj.astype(DT)
+        want = update_nu and (self.nu_prior is not None or (self.learn_nu and K))
+        if want:
+            sr = np.zeros(J); s_lb = np.zeros(J); s_eu = np.zeros(J)
+        for b in range(0, self.n, BLOCK):
+            s_ = slice(b, b + BLOCK)
+            Dl = self._Y2[s_] @ Cq + self._Yc[s_] @ Bl + c0             # float64 (cancellation-safe), then float32 like L and E[u]
+            np.maximum(Dl, 0.0, out=Dl)
+            bu = (0.5 * (nu + Dl)).astype(DT); lbu = np.log(bu)
+            L[s_] = cj32 - au32 * lbu
+            np.divide(au32, bu, out=Eu[s_])
+            if want:
+                Rb = self.R[s_]
+                sr += Rb.sum(0, dtype=np.float64); s_lb += (Rb * lbu).sum(0, dtype=np.float64); s_eu += (Rb * Eu[s_]).sum(0, dtype=np.float64)
+        if want:
+            a = sr * digamma(au) - s_lb - s_eu                          # sum r (E[log u] - E[u])
+            for j in range(J):
+                if self.nu_prior is not None:
+                    self.nu_k[j] = nu_map_sums(sr[j], a[j], self.nu_prior[j])
+                elif j < K:
+                    v = self._nu_update_sums(sr[j], a[j])
+                    if v is not None:
+                        self.nu_k[j] = v
+        return L, Eu
+
+    @staticmethod
+    def _nu_update_sums(sr, a, lo=NU_RANGE[0], hi=NU_RANGE[1]):
+        """nu_update from its sums (sr = sum r, a = sum r (E[log u] - E[u]))"""
+        from scipy.optimize import brentq
+        if sr <= 1e-9:
+            return None
+        c = -(1.0 + a / sr)
+        g = lambda v: np.log(v / 2.0) - digamma(v / 2.0) - c
+        if g(hi) >= 0:
+            return hi
+        if g(lo) <= 0:
+            return lo
+        return float(brentq(g, lo, hi, xtol=1e-4))
+
+    def _ell_per_class(self, update_nu=True):
+        """the per-class version (before 2 Nov; kept for the equivalence check)"""
         L = np.empty((self.n, self.K + self.C), DT); Eu = np.empty_like(L)
         for j, post in enumerate(self.post):
             if self.nu_prior is not None:
@@ -368,6 +467,28 @@ class Model:
         c0 = np.bincount(I, ws * p[J], self.n) + np.bincount(J, ws * p[I], self.n)
         return c1, c0, Ew
 
+    def _orient(self, par):
+        """edges oriented so that I has parity 0 and J parity 1 (every 6-neighbour edge joins the two parities); then a half-sweep
+        needs the coupling sums at one end of every edge only (2 Nov)"""
+        I, J, S = self.edges
+        sw = par[I] == 1
+        I2 = np.where(sw, J, I); J2 = np.where(sw, I, J)
+        if not (np.all(par[I2] == 0) and np.all(par[J2] == 1)):
+            return None
+        E = (I2, J2, S)                                                # grid order (build_edges): neighbouring reads stay local
+        return {0: E, 1: E}
+
+    def _coupling_half(self, p, ph, E):
+        """(c1, c0) at the voxels of parity ph only (index arrays into the full voxel list are the edges' ends of that parity)"""
+        I, J, S = E[ph]
+        pI = p[I]; pJ = p[J]
+        d = pI * (1 - pJ) + pJ * (1 - pI)
+        ws = self.a_w / (self.b_w + S * d) * S
+        A, other = (I, pJ) if ph == 0 else (J, pI)
+        c0 = np.bincount(A, ws * other, self.n)
+        c1 = np.bincount(A, ws, self.n) - c0
+        return c1, c0
+
     def prior_logits(self):
         K = self.K; lg = np.full((self.n, K + self.C), -np.inf, DT)
         if K:
@@ -383,22 +504,52 @@ class Model:
         par = np.zeros(self.n, np.int8) if parity is None else np.asarray(parity, np.int8)
         p_old = self.R[:, :K].sum(1) if K else np.zeros(self.n)
         self.converged = False; self.trace = []; stable = 0
+        E = self._orient(par) if (K and self.edges is not None and parity is not None) else None
+        phases = (0, 1) if (K and self.edges is not None) else (None,)
+        idx = {ph: (None if ph is None else np.flatnonzero(par == ph)) for ph in phases}
         for it in range(1, max_iter + 1):
             self._m_step()
             L, self.Eu = self._ell()
-            base = self.prior_logits() + L
+            lb = self.Ellam
             p_cur = p_old.copy()
-            for ph in ((0, 1) if (K and self.edges is not None) else (None,)):
-                sel = np.ones(self.n, bool) if ph is None else (par == ph)
-                lg = base[sel].copy()
+            for ph in phases:
+                ix = idx[ph]
+                c1 = c0 = None
                 if K and self.edges is not None:
-                    c1, c0, _ = self._coupling(p_cur)
-                    lg[:, :K] -= c1[sel, None]; lg[:, K:] -= c0[sel, None]
-                lg -= lg.max(1, keepdims=True)
-                Rn = np.exp(lg); Rn /= Rn.sum(1, keepdims=True)
-                self.R[sel] = Rn
-                if K:
-                    p_cur[sel] = Rn[:, :K].sum(1)
+                    if E is not None:
+                        c1, c0 = self._coupling_half(p_cur, ph, E)
+                    else:
+                        c1, c0, _ = self._coupling(p_cur)
+                # neighbours of a half-sweep's voxels all have the other parity, so its voxels can be updated block by block (2 Nov)
+                nr = self.n if ix is None else len(ix)
+                for b in range(0, nr, BLOCK):
+                    rows = slice(b, min(b + BLOCK, nr)) if ix is None else ix[b:b + BLOCK]
+                    lg = L[rows]
+                    if ix is None:
+                        lg = lg.copy()
+                    if K:
+                        lg[:, :K] += (self._logpi[rows][:, None] + self.Elrho[None, :]).astype(DT)
+                    lbr = lb[self.types[rows]]
+                    if self.tumour:
+                        lbr = self._log1mpi[rows][:, None] + lbr
+                    lg[:, K:] += lbr.astype(DT)
+                    if c1 is not None:
+                        lg[:, :K] -= c1[rows][:, None].astype(DT); lg[:, K:] -= c0[rows][:, None].astype(DT)
+                    mx = lg[:, 0].copy()
+                    for j in range(1, lg.shape[1]):
+                        np.maximum(mx, lg[:, j], out=mx)
+                    lg -= mx[:, None]
+                    np.exp(lg, out=lg)
+                    tot = lg[:, 0].copy()
+                    for j in range(1, lg.shape[1]):
+                        tot += lg[:, j]
+                    lg /= tot[:, None]
+                    self.R[rows] = lg
+                    if K:
+                        pk = lg[:, 0].astype(np.float64)
+                        for j in range(1, K):
+                            pk += lg[:, j]
+                        p_cur[rows] = pk
             p = p_cur if K else np.zeros(self.n)
             dp = float(np.abs(p - p_old).max()) if K else 0.0
             if self.learn_nu and K:

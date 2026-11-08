@@ -913,6 +913,8 @@ if __name__ == "__main__":
             seg_obj=args.seg_obj,
             img_format=args.format,
             prostate_seq=args.r2seg_prostate_seq,
+            planner_dir=args.planner_dir,
+            plan_lists=args.plan_lists,
         )
     else:
         raise ValueError(f'Dataset {args.dataset} is currently unsupported')

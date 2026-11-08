@@ -303,3 +303,11 @@ contains the voxel. Fits with 30 or 32 entries are unchanged.
     ./run_stage2.sh agent_beyond_fit     # folds_agent_beyond, stage2_fit_agent_beyond.json, prior_calibration_beyond.txt
     ./run_stage2.sh validate_agents_v3   # uses folds_agent_beyond
 
+
+## Speed (2 Nov): vb.py, same model
+The VB solver (pancia_kb/stage2/vb.py) computes every class's moments and expected Mahalanobis distances with a few matrix products
+over blocks of 32768 voxels (centred features and their pairwise products cached), uses the closed form ell = -a_u log b_u + c_j of
+the Student-t terms, couples a half-sweep at one end of each edge only, and updates labels block by block. Same model and
+convergence rule: on two R2Seg scans (breast, kidney) Dice, precision, recall, iterations and p are unchanged; log BF differs by
+<= 0.04 % (rounding in the two ELBOs). About 3x faster per process (446 -> 134 s, 429 -> 149 s), with far less memory traffic,
+which was what slowed many parallel shards. The previous version: knowledge_base/_to_delete/2026-11-02/stage2_before_vb_speed/.

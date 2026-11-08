@@ -241,6 +241,8 @@ def main():
     # --fit-dir validation_agents/folds_agent --fit-samples agent --tumour-from anchor --tag validation_agents_v2
     ap.add_argument('--fit-dir', default='validation/folds'); ap.add_argument('--fit-samples', default='expert', choices=['expert', 'agent', 'agent_true'])
     ap.add_argument('--tumour-from', default='q', choices=['q', 'anchor']); ap.add_argument('--tag', default='validation_agents')
+    ap.add_argument('--appearance-from', default=None, choices=['anchor', 'q'], help="override the fits' tumour_from at run time "
+                    "(tumour appearance learned from the anchors or from q-weighted voxels; 2 Nov test); default: as fitted")
     ap.add_argument('--fit-beyond', action='store_true', help="fold fits with 'in an outline beyond xi' (s2_fit.py --beyond), when fitted here")
     ap.add_argument('--single', action='store_true', help='single-agent anchors too (v8.4 kind single); default: agreement only')
     ap.add_argument('--psi', default=None, help='stage-1 extent prior JSON with a psi entry (ledger/v85/extent/fit_psi.json); default v8.4')
@@ -295,6 +297,8 @@ def main():
             subprocess.run([sys.executable, os.path.join(HERE, 's2_fit.py'), '--exclude', ','.join(held), '--out', ff,
                             '--samples', a.fit_samples, '--tumour-from', a.tumour_from] + (['--beyond'] if a.fit_beyond else []), check=True)
         fits[D] = json.load(open(ff))
+        if a.appearance_from:
+            fits[D]['tumour_from'] = a.appearance_from
         psis[D] = psi
         if pj and pj.get('adopted') and D in (pj.get('folds') or {}):   # held-out site: the psi fold fitted without it (s1_fit_psi.py)
             psis[D] = G2.Psi(dict(edges=pj['psi']['edges'], val=pj['folds'][D][pj['method']]))
@@ -323,6 +327,34 @@ def main():
 def _sw(per):
     """site-weighted mean of a per-site Series / DataFrame"""
     return per.mean()
+
+
+def per_tumour(L):
+    """per expert tumour (3 Nov): lesions whose anchors touch the same expert tumour (same scan, same G_ml) are one tumour. Stage 2's
+    pieces of it are disjoint (a merged component is split by nearest anchor), so they are summed; the stage-1 extents of such lesions
+    are typically the same outline, so xi / U / q_half / anchor are scored by the best lesion (a lower bound of their union).
+    Per lesion, a tumour split into two lesions scored stage 2 by its split pieces and xi whole for each (kidney / lung)."""
+    x = L.copy(); x['tp'] = x.recall * x.G_ml
+    x['pred'] = np.where(x.precision > 0, x.tp / x.precision.where(x.precision > 0, np.nan), 0.0)
+    key = ['fold', 'case', 'G_ml']; res = {}
+    for m in [m for m in METHODS if m in set(x.method)]:
+        y = x[x.method == m]
+        if m == 'stage2':
+            g = y.groupby(key).agg(tp=('tp', 'sum'), pred=('pred', 'sum'))
+            res[m] = 2 * g.tp / (g.pred + g.index.get_level_values('G_ml'))
+        else:
+            res[m] = y.groupby(key).dice.max()
+    r = pd.DataFrame(res); n = x[x.method == 'xi'].groupby(key).size()
+    s = r.groupby(level='fold').mean(); s['tumours'] = r.groupby(level='fold').size(); s['shared'] = (n > 1).groupby(level='fold').mean()
+    sw = s[[c for c in METHODS if c in s]].mean()
+    out = ['== per expert tumour (lesions sharing one expert tumour merged; stage 2 pieces summed, other methods best lesion) ==',
+           s.round(3).to_string(), '(sites equal) ' + ', '.join(f'{k} {v:.3f}' for k, v in sw.items())]
+    for ref in ('xi', 'q_half'):
+        if ref in r:
+            dd = (r['stage2'] - r[ref]).groupby(level='fold').mean()
+            out.append(f'stage2 vs {ref} per tumour: diff {dd.mean():+.3f} (sites equal); better in {int((dd > 0).sum())} of {len(dd)} sites; '
+                       + ', '.join(f'{k} {v:+.3f}' for k, v in dd.items()))
+    return out + ['']
 
 
 def summarise(O):
@@ -372,6 +404,7 @@ def summarise(O):
                 rep += [f'      {f}: {r["stage2"]:.3f} vs {r[ref]:.3f} ({r["diff"]:+.3f}; {int(g.xs(f, level="fold").shape[0])} lesions)'
                         for f, r in ps.iterrows()]
             rep.append('')
+        rep += per_tumour(L)
         ap = L[L.method == 'stage2'].groupby('fold').anchor_precision.agg(['mean', 'median', lambda v: (v < 0.5).mean()])
         ap.columns = ['mean', 'median', 'share_below_0.5']
         rep += ['anchor precision of true lesions (share of the anchor inside expert tumour):', ap.round(3).to_string(), '']

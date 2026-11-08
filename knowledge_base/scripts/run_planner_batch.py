@@ -126,6 +126,7 @@ def main():
     ap.add_argument('--workers', type=int, default=4)
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--overwrite', action='store_true')
+    ap.add_argument('--only_meta', action='store_true', help='plan only the scans listed in --meta_csv (e.g. R2Seg without Uterus)')
     args = ap.parse_args()
 
     meta = {}
@@ -147,13 +148,15 @@ def main():
         print(f'{len(csvs)} TS tables located from metadata; {missing_dirs} series without a TS folder', flush=True)
     else:
         csvs = sorted(glob.glob(os.path.join(args.ts_dir, '**', '*_structures.csv'), recursive=True))
-    if args.limit:
-        csvs = csvs[:args.limit]
     jobs = []
     for p in csvs:
         name = img_name_from_csv(p, args.ts_obj, args.ts_dir)
         m = dict(meta_lookup(meta, name)); m['img_name'] = name
         jobs.append((p, m))
+    if args.only_meta:
+        jobs = [(p, m) for p, m in jobs if len(m) > 1]
+    if args.limit:
+        jobs = jobs[:args.limit]
     print(f'{len(jobs)} TS outputs; {sum(1 for _, m in jobs if len(m) > 1)} with metadata', flush=True)
 
     kb = KnowledgeBase.load(args.kb)

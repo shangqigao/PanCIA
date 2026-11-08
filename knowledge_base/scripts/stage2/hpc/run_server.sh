@@ -5,7 +5,10 @@
 # Stop everything: bash stop_server.sh. Resumable: run again (any NSHARD); finished scans are skipped.
 set -uo pipefail
 cd "$(dirname "$0")"; mkdir -p logs; source env.sh
-source ~/.bashrc >/dev/null 2>&1; conda activate "${CONDA_ENV:-}" 2>/dev/null || true
+# activate the conda env (non-interactive shells skip the conda block of ~/.bashrc, so source conda.sh directly)
+if [ -n "${CONDA_EXE:-}" ]; then source "$(dirname "$(dirname "$CONDA_EXE")")/etc/profile.d/conda.sh"; fi
+conda activate "${CONDA_ENV:-}" 2>/dev/null || echo "WARNING: could not activate conda env '${CONDA_ENV:-}'; using $(which python)"
+echo "python: $(which python)"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 CORES=$(nproc); MEMG=$(awk '/MemAvailable/ {printf "%d", $2 / 1048576}' /proc/meminfo)
 AUTO=$(( CORES - 2 < MEMG / 3 ? CORES - 2 : MEMG / 3 )); [ "$AUTO" -lt 1 ] && AUTO=1

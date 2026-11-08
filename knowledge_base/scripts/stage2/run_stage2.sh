@@ -10,6 +10,7 @@
 #   ./run_stage2.sh agent_true_fit      spatial prior refitted on TRUE lesions only: P(tumour | lesion real) (1 Nov)
 #   ./run_stage2.sh agent_beyond_fit    true-lesion prior + 'in an outline beyond xi' (fits only; samples of agent_true_fit) (1 Nov)
 #   ./run_stage2.sh validate_agents_v3  real-agent validation with the agent_beyond_fit fold fits
+#   ./run_stage2.sh validate_agents_v3q as v3, tumour appearance from q instead of the anchors (2 Nov)
 #   ./run_stage2.sh tcga       TCGA pilot run and panels
 # NSHARD (default 4) parallel shards for the long steps (NSHARD_TCGA, default 2, for the TCGA run: memory; NSHARD_VAL, default 3, for the validations: s2_validate_agents.py splits by (site, case), so up to ~400 shards are useful; s2_validate.py by site); N_PER (default 100) R2Seg cases per collection, drawn at random from the usable cases; N_VAL (default 20).
 set -euo pipefail
@@ -99,6 +100,23 @@ case "${1:-fit}" in
     python s2_prior_calibration.py --samples agent_samples_true --out prior_calibration_beyond \
       --fits sim=validation/folds,agent=validation_agents/folds_agent,agent_true=validation_agents/folds_agent_true,agent_beyond=validation_agents/folds_agent_beyond
     echo "Review: clinical/PanCIA_outputs/stage2/validation_agents/prior_calibration_beyond.txt and knowledge_base/knowledge_base/stage2/stage2_fit_agent_beyond_report.txt"
+    ;;
+  validate_agents_v3q)
+    # 2 Nov: v3 on all sites with tumour appearance from q-weighted voxels (tumour_from q) instead of the anchors
+    NSHARD=$NSHARD_VAL shards s2_validate_agents.py --n-val "${N_VAL_AG:-40}" --n-neg "${N_NEG:-20}" \
+      --fit-dir validation_agents/folds_agent_beyond --fit-samples agent_true --fit-beyond --tumour-from anchor --appearance-from q \
+      --single --tag validation_agents_v3q $PSI_ARG
+    python s2_validate_agents.py --summary --tag validation_agents_v3q
+    echo "Review: clinical/PanCIA_outputs/stage2/validation_agents_v3q/report.txt (compare with validation_agents_v3)"
+    ;;
+  kidney_appearance_q)
+    # 2 Nov test: v3 on the kidney site only, tumour appearance from q-weighted voxels (tumour_from q) instead of the anchors;
+    # same fits and scans as validate_agents_v3 -> validation_agents_v3q (compare kidney with validation_agents_v3)
+    NSHARD=$NSHARD_VAL shards s2_validate_agents.py --folds "${FOLDS:-kidney}" --n-val "${N_VAL_AG:-40}" --n-neg "${N_NEG:-20}" \
+      --fit-dir validation_agents/folds_agent_beyond --fit-samples agent_true --fit-beyond --tumour-from anchor --appearance-from q \
+      --single --tag validation_agents_v3q $PSI_ARG
+    python s2_validate_agents.py --summary --tag validation_agents_v3q
+    echo "Review: clinical/PanCIA_outputs/stage2/validation_agents_v3q/report.txt (kidney; compare with validation_agents_v3)"
     ;;
   validate_agents_v3)
     NSHARD=$NSHARD_VAL shards s2_validate_agents.py --n-val "${N_VAL_AG:-40}" --n-neg "${N_NEG:-20}" \

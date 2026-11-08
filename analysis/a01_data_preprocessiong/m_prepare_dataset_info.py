@@ -314,11 +314,14 @@ def _r2seg_table(root):
     return out
 
 
-def prepare_R2Seg_info(r2seg_dir, collections=None, seg_obj='organ', img_format='nifti', prostate_seq='t2'):
+def prepare_R2Seg_info(r2seg_dir, collections=None, seg_obj='organ', img_format='nifti', prostate_seq='t2', planner_dir=None,
+                       plan_lists=None):
     """R2Seg images: <r2seg_dir>/<collection>/images/*.nii.gz (labels in <collection>/labels/<stem>_seg.nii.gz).
     collections: list of collection names (default: every folder with an images/ subfolder).
     prostate_seq: Prostate_Tumor_00 has a T2 and an ADC image per case; 't2' (default), 'adc' or 'both'.
-    Output names are '<collection>/<stem>' (m_tumor_segmentation._image_name): stems repeat across collections."""
+    Output names are '<collection>/<stem>' (m_tumor_segmentation._image_name): stems repeat across collections.
+    planner_dir (8 Nov 2026): if given, prompts come from each image's planner plan <planner_dir>/<collection>/<stem>_plan.json
+    (scripts/run_planner_batch.py on R2Seg_Seg/TotalSegmentator), as for TCGA; images without a plan keep the single prompt."""
     root = pathlib.Path(r2seg_dir)
     table = _r2seg_table(root)
     cols = list(collections) if collections else sorted(d.name for d in root.iterdir() if (d / 'images').is_dir())
@@ -340,12 +343,21 @@ def prepare_R2Seg_info(r2seg_dir, collections=None, seg_obj='organ', img_format=
             else:
                 prompts.append(f"{st} on {mod}")
         print(f'R2Seg {c}: {len(fs)} images ({mod}, {st})')
+    plan_paths = [None] * len(images)
+    if planner_dir is not None:
+        for i, img_path in enumerate(images):
+            pp = pathlib.Path(img_path)
+            cand = pathlib.Path(planner_dir) / pp.parent.parent.name / pp.name.replace('.nii.gz', '_plan.json')
+            if cand.is_file():
+                prompts[i] = load_plan_prompts(cand, plan_lists)
+                plan_paths[i] = str(cand)
+        print(f'planner prompts: {sum(p is not None for p in plan_paths)}/{len(images)} images have a plan')
     return {
         'name': 'R2Seg',
         'img_paths': images,
         'lab_paths': labels,
         'text_prompts': prompts,
-        'plan_paths': [None] * len(images),
+        'plan_paths': plan_paths,
         'modality': modality,
         'site': site,
         'meta_list': None,
