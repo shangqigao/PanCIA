@@ -123,9 +123,11 @@ save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg_Seg"
 python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
             --model VoxTell \
             --radiology $radiology \
+            --planner_dir "${save_dir}/Planner" \
             --dataset R2Seg \
             --save_dir $save_dir \
-            # --start 3200 
+            --start 0 \
+            --end 1300
 
 # python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --seg_obj organ \
