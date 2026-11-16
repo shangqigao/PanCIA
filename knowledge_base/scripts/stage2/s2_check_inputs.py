@@ -11,25 +11,25 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(os.path.join(HERE, '..', '..')))
 from pancia_kb import KnowledgeBase, grounding_g2 as G2   # noqa: E402
 from pancia_kb.stage2 import paths, interface as IF   # noqa: E402
-from s2_run_tcga import append, name   # noqa: E402
+from s2_run_tcga import append, name, psi_for, stage1_args   # noqa: E402
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('--r', type=float, default=None); ap.add_argument('--only', default=None)
+    ap = argparse.ArgumentParser(); ap.add_argument('--r', type=float, default=None); ap.add_argument('--only', default=None); stage1_args(ap)
     a = ap.parse_args()
     SH = os.environ.get('SHARD'); SI, SN = (int(x) for x in SH.split('/')) if SH else (0, 1); SUF = f'_s{SI}' if SH else ''
     O = paths.out_dir('check_inputs')
     r = a.r if a.r is not None else (json.load(open(paths.fit_path()))['r_mm'] if os.path.exists(paths.fit_path()) else 20.0)
-    B = paths.ledger_dir(); P = os.path.join(B, 'v84_pilot')
+    B = paths.ledger_dir(); P = os.path.join(B, a.stage1)                     # 16 Nov: stage-1 rows (default v86_tcga_pilot)
     fit6 = json.load(open(os.path.join(B, 'v8', 'testbed', 'fit_host6.json')))
     KB = KnowledgeBase.load(os.path.join(paths.kb_dir(), 'knowledge_base'))
-    rows = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'anchors_s*.csv')))], ignore_index=True)
-    ser = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'series_s*.csv')))], ignore_index=True)
+    rows = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'anchors*.csv')))], ignore_index=True)
+    ser = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'series*.csv')))], ignore_index=True)
     ser = ser[(ser.n_acc + ser.n_unc) > 0].sort_values('rel')
     rels = [x for i, x in enumerate(ser.rel) if i % SN == SI]
     if a.only:
         rels = [x for x in rels if any(s in x for s in a.only.split(','))]
-    S1 = IF.Stage1(KB, fit6['beta_UD'], G2.Psi(fit6['psi']), rows, paths.root('TCGA_Seg'), paths.root('TCGA_NIFTI'))
+    S1 = IF.Stage1(KB, fit6['beta_UD'], psi_for(a, B), rows, paths.root('TCGA_Seg'), paths.root('TCGA_NIFTI'), ledger=a.ledger)
     fd = os.path.join(O, f'done{SUF}.txt'); done = set()
     for f_ in glob.glob(os.path.join(O, 'done*.txt')):                 # all shards
         done |= set(open(f_).read().splitlines())

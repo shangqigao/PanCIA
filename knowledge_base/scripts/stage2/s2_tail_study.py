@@ -214,6 +214,8 @@ def jobs(n_per, n_neg, tumour_only=False):
     out = []
     for ds, g in d[(d.status == 'usable') & d.ts.astype(bool)].groupby('ds'):
         g = g.sample(frac=1.0, random_state=0); out += [('tumour', ds, f) for f in (g.file if not n_per else g.file[:n_per])]
+    negk = {(a, os.path.basename(f)[:-len('_seg.nii.gz')]) for a, f in EX.negative_list(paths.root('R2Seg'))}   # 16 Nov: true negatives only
+    d = d[(d.status != 'no_tumour') | [(a, f[:-len('_seg.nii.gz')]) in negk for a, f in zip(d.ds, d.file)]]
     for ds, g in d[d.status == 'no_tumour'].groupby('ds'):
         if ds not in EXPERT_HOST:
             g = g[g.ts.astype(bool)]

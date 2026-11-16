@@ -16,3 +16,9 @@ or `cd ../stage2 && ./run_stage2.sh psi_fit`. Outputs: clinical/PanCIA_outputs/l
 fit_psi.json, fit_psi_report.txt). The stage-2 real-agent steps (agent_fit, validate_agents_v2) use fit_psi.json when it exists
 (validation: the psi fold that left the held-out site out). eta_f stays {} (the v8.4 flags are computed inside the TCGA ledger and
 are not reproduced on R2Seg; disclosed). The TCGA stage-1 run keeps v8.4 psi until v8.5.
+
+## Stage 1 on R2Seg (11-12 Nov 2026)
+- `g3_run_v84.py`: byte-identical copy of `clinical/PanCIA_outputs/scripts/g3_run_v84.py` (frozen v8.4 decisions: host choice, existence test, decision table).
+- `r2seg_scan_meta.py`, `run_r2seg_plan.sh`: scan list and planner for R2Seg (VoxTell plan call on the HPC with m_tumor_segmentation.py --planner_dir).
+- `s1_run_r2seg.py [--shards N]`: runs build_ledger + g3_run_v84 unchanged on R2Seg through a symlink view -> `ledger/v84_r2seg/`.
+

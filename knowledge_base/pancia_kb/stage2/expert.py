@@ -167,8 +167,16 @@ def case_list(r2, n_per=None):
 
 
 def negative_list(r2):
-    """tumour-free scans of the spatial collections with a TS mask (validation only: false anchors in scans without tumour)"""
+    """tumour-free scans of the spatial collections with a TS mask (validation only: false anchors in scans without tumour).
+    16 Nov 2026 (user, 14 Nov): only scans listed 'negative' in cohort/r2seg_tumour_free.csv (NIH-like pancreas 80, prostate 57,
+    lung 3). FLARE23 scans without a lesion label (Liver_Tumor_00 83, Pancreas_Tumor_00 139) are unannotated, not tumour-free:
+    status 'no_tumour' in the usability index alone no longer makes a scan a negative."""
+    import pandas as pd
+    from . import paths
+    tf = pd.read_csv(os.path.join(paths.root('outputs'), 'cohort', 'r2seg_tumour_free.csv'), dtype={'case': str})
+    negk = set(zip(tf.ds[tf.status == 'negative'], tf.case[tf.status == 'negative']))
     d = read_index(); d = d[(d.status == 'no_tumour') & d.ts.astype(bool) & (d.seq != 'adc') & d.ds.isin(SPATIAL_SETS)]
+    d = d[[(a, f[:-len('_seg.nii.gz')]) in negk for a, f in zip(d.ds, d.file)]]
     out = []
     for ds in SPATIAL_SETS:
         out += [(ds, os.path.join(r2, ds, 'labels', f)) for f in _draw(d[d.ds == ds], r2, None, ds + 'neg')]

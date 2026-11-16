@@ -95,11 +95,20 @@ def parts(L, rel, sp, A3, X, mid_x, lsign):
 
 def _fit():
     import json, os
-    f = os.path.join(os.path.expanduser('~'), 'mnt', 'clinical', 'PanCIA_outputs', 'ledger', 'v8', 'testbed', 'relational_fit.json')
+    # 16 Nov 2026: also look in the outputs root (paths.ledger_dir()); before, outside the ~/mnt view (e.g. stage 2 on the Mac) the
+    # file was not found and the defaults below were used silently
+    fs = [os.path.join(os.path.expanduser('~'), 'mnt', 'clinical', 'PanCIA_outputs', 'ledger', 'v8', 'testbed', 'relational_fit.json')]
     try:
-        d = json.load(open(f)); return float(d['theta']), float(d['margin_mm']), float(d['extent_mm']), bool(d['shadow'])
+        from .stage2 import paths as _P
+        fs.append(os.path.join(_P.ledger_dir(), 'v8', 'testbed', 'relational_fit.json'))
     except Exception:
-        return 45.0, 10.0, 50.0, True
+        pass
+    for f in fs:
+        try:
+            d = json.load(open(f)); return float(d['theta']), float(d['margin_mm']), float(d['extent_mm']), bool(d['shadow'])
+        except Exception:
+            continue
+    return 45.0, 10.0, 50.0, True
 
 
 def region(kb, ent, side, masks, aff, mid_x, lsign, base=None, lr_ok=True, return_info=False):

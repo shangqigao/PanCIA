@@ -35,6 +35,19 @@ def append(f, rows):
     df.to_csv(f, mode='a', header=not os.path.exists(f), index=False)
 
 
+def psi_for(a, B):
+    """psi for q and xi (16 Nov): refitted psi (ledger/v85/extent/fit_psi.json, pooled over sites: TCGA is external) for stage 1 v8.6;
+    the v8.4 psi of fit_host6.json when reproducing a v8.4 run"""
+    if a.ledger == 'v84':
+        return G2.Psi(json.load(open(os.path.join(B, 'v8', 'testbed', 'fit_host6.json')))['psi'])
+    return G2.Psi(json.load(open(os.path.join(B, 'v85', 'extent', 'fit_psi.json')))['psi'])
+
+
+def stage1_args(ap):
+    ap.add_argument('--stage1', default='v86_tcga_pilot', help='stage-1 rows under ledger/ (v8.4: v84_pilot)')
+    ap.add_argument('--ledger', default='v86', choices=('v86', 'v84'), help='ledger module used to rebuild stage 1 (match --stage1)')
+
+
 def name(q):
     from pancia_kb.ledger_v6 import _hk
     return _hk(q) if isinstance(q, tuple) else str(q)
@@ -43,23 +56,23 @@ def name(q):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--tag', default='tcga_v1'); ap.add_argument('--only', default=None)
     ap.add_argument('--no-bf', action='store_true'); ap.add_argument('--max-iter', type=int, default=300)
-    ap.add_argument('--no-evidence', action='store_true')
+    ap.add_argument('--no-evidence', action='store_true'); stage1_args(ap)
     a = ap.parse_args()
     SH = os.environ.get('SHARD'); SI, SN = (int(x) for x in SH.split('/')) if SH else (0, 1); SUF = f'_s{SI}' if SH else ''
     O = paths.out_dir(a.tag); os.makedirs(os.path.join(O, 'maps'), exist_ok=True)
     fit = json.load(open(paths.fit_path()))
-    B = paths.ledger_dir(); P = os.path.join(B, 'v84_pilot')
+    B = paths.ledger_dir(); P = os.path.join(B, a.stage1)                     # 16 Nov: stage-1 rows (default v86_tcga_pilot)
     fit6 = json.load(open(os.path.join(B, 'v8', 'testbed', 'fit_host6.json')))
     KB = KnowledgeBase.load(os.path.join(paths.kb_dir(), 'knowledge_base'))
-    rows = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'anchors_s*.csv')))], ignore_index=True)
-    ser = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'series_s*.csv')))], ignore_index=True)
+    rows = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'anchors*.csv')))], ignore_index=True)
+    ser = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'series*.csv')))], ignore_index=True)
     ser = ser[(ser.n_acc + ser.n_unc) > 0].sort_values('rel')
     rels = [r for i, r in enumerate(ser.rel) if i % SN == SI]
     if a.only:
         rels = [r for r in rels if any(s in r for s in a.only.split(','))]
     TAB1 = G1.Tables1(os.path.join(B, 'v6', 'grounding', 'g0', 'h5', 'tables_g1.json'))
     TS = G2.TestSets(os.path.join(B, 'v8', 'grounding', 'test_sets.json'))
-    S1 = IF.Stage1(KB, fit6['beta_UD'], G2.Psi(fit6['psi']), rows, paths.root('TCGA_Seg'), paths.root('TCGA_NIFTI'))
+    S1 = IF.Stage1(KB, fit6['beta_UD'], psi_for(a, B), rows, paths.root('TCGA_Seg'), paths.root('TCGA_NIFTI'), ledger=a.ledger)
     fd = os.path.join(O, f'done{SUF}.txt'); done = set()
     for f_ in glob.glob(os.path.join(O, 'done*.txt')):                 # all shards
         done |= set(open(f_).read().splitlines())

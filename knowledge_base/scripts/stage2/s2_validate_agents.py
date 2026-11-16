@@ -361,8 +361,16 @@ def summarise(O):
     d = V._cat(O, 'rows')
     if d is None:
         print('no rows yet'); return
+    # 16 Nov 2026: tumour-free results only on true negatives (cohort/r2seg_tumour_free.csv); rows of unannotated FLARE23 scans,
+    # which earlier runs treated as tumour-free, are left out of the summary
+    negk = {(a, os.path.basename(f)[:-len('_seg.nii.gz')]) for a, f in EX.negative_list(paths.root('R2Seg'))}
+    isneg = (d.kind == 'baseline_neg') | (d.get('where', pd.Series(index=d.index, dtype=object)) == 'tumour_free_scan')
+    keep = ~isneg | pd.Series([(a, str(c)) in negk for a, c in zip(d.ds, d.case)], index=d.index)
+    n_drop = int(d[~keep].groupby(['ds', 'case']).ngroups) if (~keep).any() else 0
+    d = d[keep]
     rep = ['Stage-2 validation with real agent outlines (BiomedParse + VoxTell) on R2Seg, leave one tumour site out; TotalSegmentator '
-           'anatomy; sites count equally. Both agents have likely seen much of R2Seg in training.', '']
+           'anatomy; sites count equally. Both agents have likely seen much of R2Seg in training.',
+           f'Tumour-free scans: true negatives only (cohort/r2seg_tumour_free.csv); {n_drop} unannotated FLARE23 scans left out.', '']
     S_ = []
     # 1. agents and stage-1 detection
     b = d[d.kind == 'baseline'].copy()

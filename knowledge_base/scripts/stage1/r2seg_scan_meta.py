@@ -25,7 +25,7 @@ COLL = {  # collection: (modality, TCGA project, KB host)
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--ts_dir', default=os.path.join(paths.root('R2Seg_Seg'), 'TotalSegmentator'))
-    ap.add_argument('--out', default=os.path.join(paths.root('clinical'), 'PanCIA_outputs', 'cohort', 'r2seg_scan_meta.csv'))
+    ap.add_argument('--out', default=os.path.join(paths.root('outputs'), 'cohort', 'r2seg_scan_meta.csv'))
     a = ap.parse_args()
     rows = []
     for c, (mod, ct, host) in COLL.items():

@@ -1,10 +1,13 @@
 """Data roots. Order: environment variable PANCIA_<NAME> (e.g. PANCIA_R2SEG), then ~/mnt/<name> (Cowork VM), then the Mac
-defaults below. Names: PanCIA, clinical, TCGA_Seg, TCGA_NIFTI, R2Seg, R2Seg_Seg, Totalsegmentator."""
+defaults below. Names: PanCIA, clinical, outputs, TCGA_Seg, TCGA_NIFTI, R2Seg, R2Seg_Seg, Totalsegmentator.
+outputs (16 Nov 2026): pipeline outputs live in a local, non-OneDrive folder (~/Datasets/PanCIA_outputs); OneDrive file locks,
+timeouts and online-only eviction broke stage-1 runs and evaluations. clinical/PanCIA_outputs is the old location (kept as archive)."""
 import os
 
 _MAC = {
     'PanCIA': '/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/PanCIA',
     'clinical': '/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/clinical',
+    'outputs': '/Users/sg2162/Datasets/PanCIA_outputs',
     'TCGA_Seg': '/Users/sg2162/Datasets/CancerDatasets/PanCIA/TCGA-TCIA/TCGA_Seg',
     'TCGA_NIFTI': '/Users/sg2162/Datasets/CancerDatasets/PanCIA/TCGA-TCIA/TCGA_NIFTI',
     'R2Seg': '/Users/sg2162/Datasets/CancerDatasets/R2Seg',
@@ -17,7 +20,7 @@ def root(name):
     env = os.environ.get('PANCIA_' + name.upper())
     if env:
         return env
-    vm = os.path.join(os.path.expanduser('~'), 'mnt', name)
+    vm = os.path.join(os.path.expanduser('~'), 'mnt', 'PanCIA_outputs' if name == 'outputs' else name)
     if os.path.isdir(vm):
         return vm
     return _MAC[name]
@@ -33,10 +36,10 @@ def fit_path(tag='stage2_fit.json'):
 
 
 def ledger_dir():
-    return os.path.join(root('clinical'), 'PanCIA_outputs', 'ledger')
+    return os.path.join(root('outputs'), 'ledger')
 
 
 def out_dir(*sub):
-    d = os.path.join(root('clinical'), 'PanCIA_outputs', 'stage2', *sub)
+    d = os.path.join(root('outputs'), 'stage2', *sub)
     os.makedirs(d, exist_ok=True)
     return d

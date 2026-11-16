@@ -1,8 +1,10 @@
-"""Stage 1 (ledger v8.4, frozen) -> stage-2 inputs for one TCGA series. Agent-agnostic: only stage-1 outputs are passed on.
+"""Stage 1 -> stage-2 inputs for one TCGA series. Agent-agnostic: only stage-1 outputs are passed on.
+16 Nov 2026: the stage-1 version is a parameter (default v8.6: ledger_v86, rows from ledger/v86_tcga_<set>, decisions as stored by
+g3_run_v86, refitted psi for q and xi); v8.4 (ledger_v84, v84_pilot rows) stays available for reproducing earlier runs.
 
-Per series: the ledger is rebuilt deterministically (ledger_v84.build_ledger); P(h|L) and the credible set are recomputed exactly as in
-g3_run_v84.py (origins scored by their best explanation, beta_UD of fit_host6.json, alpha 0.05) and checked against the stored
-v84_pilot rows (mismatches are reported, not corrected). Decisions are read from the stored rows (stage 1 is not re-decided).
+Per series: the ledger is rebuilt deterministically (ledger_<version>.build_ledger); P(h|L) and the credible set are recomputed exactly as in
+g3_run (origins scored by their best explanation, beta_UD of fit_host6.json, alpha 0.05) and checked against the stored
+stage-1 rows (mismatches are reported, not corrected). Decisions are read from the stored rows (stage 1 is not re-decided).
 Lesions with at least one accepted / accepted_override / uncertain anchor are passed on, with their non-rejected anchors only.
 Per lesion: anchors, q^L_v = 1 - prod_a (1 - q^a_v) with q^a_v = sum_xi w0_a(xi) 1[v in xi], the chosen extent xi_L (union of the
 anchors' argmax-w0 extents), S_L with P(h|L) renormalised over S_L (host key = the origin's best explanation, e.g. a composite p>n
@@ -18,8 +20,10 @@ KEEP = ('accepted', 'accepted_override', 'uncertain')
 
 
 class Stage1:
-    def __init__(self, kb, beta, psi, pilot_rows, seg_root, nifti_root):
-        from .. import ledger_v84 as L8, host_v81 as HV, grounding_g1 as G1, grounding_g2 as G2
+    def __init__(self, kb, beta, psi, pilot_rows, seg_root, nifti_root, ledger='v86'):
+        import importlib
+        from .. import host_v81 as HV, grounding_g1 as G1, grounding_g2 as G2
+        L8 = importlib.import_module(f'pancia_kb.ledger_{ledger}')     # 16 Nov: v86 (default) or v84
         from ..ledger_v6 import _hk
         self.L8, self.HV, self.G1, self.G2, self.hk = L8, HV, G1, G2, _hk
         self.kb, self.beta, self.psi, self.rows = kb, beta, psi, pilot_rows
