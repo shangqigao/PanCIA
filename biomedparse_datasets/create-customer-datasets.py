@@ -7,9 +7,10 @@ from create_annotations import *
 
 
 # provide the path to the dataset. There should be train, train_mask, test, test_mask under this folder
-# project = 'TumorSegmentation' 
-project = 'Endometriosis' 
-targetpath = '/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_Endometriosis/UterusMRI'
+project = 'TumorSegmentation' 
+targetpath = '/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/Breast_Tumor'
+# project = 'Endometriosis' 
+# targetpath = '/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_Endometriosis/UterusMRI'
 if 'MP_Breast' in targetpath:
     clinical_info_path = 'clinical_and_imaging_info.xlsx'
     df_clinic = pd.read_excel(clinical_info_path, sheet_name='dataset_info')

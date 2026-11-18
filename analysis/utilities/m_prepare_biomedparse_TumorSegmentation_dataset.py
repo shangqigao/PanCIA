@@ -174,9 +174,10 @@ def convert_nifti_to_png(img_path, lab_path, output_img_dir, output_msk_dir, pre
             mask = slice_lab == int(tumor_label)
             if np.sum(mask) > 0:     
                 save_msk_path = f'{output_msk_dir}/{img_name}_{phase}_slice_{i:03d}_{modality}_{site}_{target}.png'
-            else:
-                save_msk_path = f'{output_msk_dir}/{img_name}_{phase}_slice_{i:03d}_{modality}_{site}_background.png'
-            save_mask(mask, save_msk_path)
+                save_mask(mask, save_msk_path)
+            # else:
+            #     save_msk_path = f'{output_msk_dir}/{img_name}_{phase}_slice_{i:03d}_{modality}_{site}_background.png'
+            # save_mask(mask, save_msk_path)
     else:
         raise ValueError("Unsupported or unknown scanning phase")
 
@@ -200,9 +201,9 @@ if __name__ == "__main__":
     #         img = nib.load(new_path)
     #         nib.save(img, old_path)
 
-    root_dir = '/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/Documents/TumorSegmentation'
+    root_dir = '/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg'
     dataset_names = [f for f in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir, f))]
-    output_dir = '/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/Documents/BiomedParse_TumorSegmentation'
+    output_dir = '/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation'
     print(f"Found {len(dataset_names)} datasets")
     for dataset in dataset_names:
         # if 'Bladder' not in dataset: continue

@@ -15,9 +15,9 @@
 
 ## activate environment
 source ~/.bashrc
-# conda activate PanCIA
+conda activate PanCIA
 # conda activate /home/sg2162/rds/hpc-work/miniconda3/Qwen
-conda activate /home/sg2162/rds/hpc-work/miniconda3/voxtell
+# conda activate /home/sg2162/rds/hpc-work/miniconda3/voxtell
 
 # conda activate /home/sg2162/rds/hpc-work/miniconda3/totalseg
 # export TOTALSEG_HOME_DIR=/home/sg2162/rds/hpc-work/PanCIA/checkpoints/TotalSegmentator
@@ -82,13 +82,16 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # pan-cancer segmentation
-# radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
-# save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg"
-# srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-#             --model BiomedParse \
-#             --radiology $radiology \
-#             --dataset TCGA \
-#             --save_dir $save_dir
+radiology="/home/sg2162/rds/hpc-work/Experiments/clinical/TCGA_included_subjects.json"
+save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/TCGA_Seg"
+srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+            --model BiomedParse \
+            --radiology $radiology \
+            --dataset TCGA \
+            --save_dir $save_dir \
+            --start 3200 \
+            # --end 3200
+
 
 # if no planner_dir, VoxTell would segment tumor as default
 # python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
@@ -109,8 +112,8 @@ stdbuf -oL -eL echo "Starting job at $(date)"
 #             --save_dir $save_dir
 
 # R2Seg anatomy segmentation
-radiology="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg"
-save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg_Seg"
+# radiology="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg"
+# save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg_Seg"
 
 # srun python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --model BiomedParse \
@@ -120,14 +123,15 @@ save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg_Seg"
 #             --start 2600 \
 #             # --end 2600
 
-python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-            --model VoxTell \
-            --radiology $radiology \
-            --planner_dir "${save_dir}/Planner" \
-            --dataset R2Seg \
-            --save_dir $save_dir \
-            --start 0 \
-            --end 1300
+# python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+#             --model VoxTell \
+#             --radiology $radiology \
+#             --planner_dir "${save_dir}/Planner" \
+#             --dataset R2Seg \
+#             --save_dir $save_dir \
+#             --start 1300 \
+#             --end 2600 \
+#             --skip_exist
 
 # python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --seg_obj organ \

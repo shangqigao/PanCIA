@@ -178,7 +178,7 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
     # Load model from pretrained weights
     if seg_obj == 'tumor':
         opt['LoRA'] = True
-        pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/PanCancer_LoRA')
+        pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/PanCancer_LoRA_v1')
     else:
         opt['LoRA'] = False
         pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/biomedparse_v1.pt')

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -A CRISPIN-ORTUZAR-SL2-GPU
+#SBATCH -A ECI-SL2-GPU
 #SBATCH -J radiopath
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
@@ -17,7 +17,7 @@
 source ~/.bashrc
 conda activate PanCIA
 
-data_root="/home/sg2162/rds/rds-pion-p3-3b78hrFsASU/PanCancer/BiomedParse_TumorSegmentation/"
+data_root="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation/"
 export DETECTRON2_DATASETS=$data_root
 export DATASET=$data_root
 export DATASET2=$data_root
@@ -28,7 +28,7 @@ export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 #export WANDB_KEY=YOUR_WANDB_KEY # Provide your wandb key here
 srun --mpi=pmi2 python entry.py train \
-            --conf_files configs/biomed_seg_lang_v1.yaml \
+            --conf_files configs/radiology_segmentation/biomed_seg_lang_v1.yaml \
             --overrides \
             FP16 True \
             RANDOM_SEED 2024 \
