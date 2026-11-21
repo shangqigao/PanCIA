@@ -4,7 +4,7 @@
 #   bash scripts/run_planner.sh              # full cohort (resumable: existing plans are skipped)
 #   LIMIT=50 bash scripts/run_planner.sh     # smoke test on the first 50 TS outputs
 #   WORKERS=16 bash scripts/run_planner.sh   # more processes
-#   OVERWRITE=1 bash scripts/run_planner.sh  # re-plan everything (after a KB change)
+#   OVERWRITE=1 bash scripts/run_planner.sh  # re-plan everything (after a KB change, or after a BiomedParse rerun: BP is rater 1)
 #
 # Layout expected (as written by m_tumor_segmentation.py):
 #   $SEG_ROOT/TotalSegmentator/Radiology/<CT|MR>/<Project>/<series_uid>/<desc>_organ{.nii.gz,_labels.json,_structures.csv}
@@ -15,7 +15,7 @@ set -euo pipefail
 
 KB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SEG_ROOT="${SEG_ROOT:-/Users/sg2162/Datasets/CancerDatasets/PanCIA/TCGA-TCIA/TCGA_Seg}"
-META_CSV="${META_CSV:-/Users/sg2162/Library/CloudStorage/OneDrive-UniversityofCambridge/backup/project/Experiments/clinical/PanCIA_outputs/cohort/scan_meta.csv}"
+META_CSV="${META_CSV:-/Users/sg2162/Datasets/PanCIA_outputs/cohort/scan_meta.csv}"   # outputs root since 16 Nov 2026 (was OneDrive clinical/PanCIA_outputs)
 OUT_DIR="${OUT_DIR:-$SEG_ROOT/Planner/Radiology}"
 TS_OBJ="${TS_OBJ:-organ}"
 TUMOUR_OBJ="${TUMOUR_OBJ:-tumor}"
