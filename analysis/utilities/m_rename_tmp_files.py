@@ -32,7 +32,12 @@
 
 from pathlib import Path
 
-root = Path("/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/BiomedParse_TumorSegmentation")
+root = Path("/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg_Seg/VoxTell")
 
-for file in root.rglob("*.png"):
+for file in root.rglob("*_plan_manifest.json"):
     file.unlink()
+
+import shutil
+for folder in root.rglob("*_plan"):
+    if folder.is_dir():
+        shutil.rmtree(folder)
