@@ -60,6 +60,9 @@ def extract_radiology_segmentation(
         ts_threads=4,
         ts_body_seg=False,
         voxtell_prompt_batch=0,
+        nni_prompts_dir=None,
+        nni_variants=('P1', 'P2', 'P3', 'P4'),
+        nni_model_dir=None,
     ):
     """extract segmentation from radiology images
     Args:
@@ -105,6 +108,17 @@ def extract_radiology_segmentation(
             model_root=voxtell_model_root,
             keep_largest=keep_largest,
             prompt_ensemble=prompt_ensemble,
+            device=device,
+            skip_exist=skip_exist,
+        )
+    elif model_mode == "nnInteractive":
+        extract_nnInteractive_segmentation(
+            dataset=dataset,
+            img_paths=img_paths,
+            save_dir=save_dir,
+            prompts_dir=nni_prompts_dir,
+            variants=nni_variants,
+            model_dir=nni_model_dir,
             device=device,
             skip_exist=skip_exist,
         )
@@ -576,6 +590,102 @@ def _voxtell_plan_segment(predictor, reader_writer, img_path, img_name, plan, sa
     logger.info("%s: %d masks, %d call(s), %.1f s", img_name, len(entries), n_calls, time.time() - t0)
 
 
+def nni_prompt_key(img_name):
+    """prompt file stem of one image: the output stem with '/' replaced by '__' (R2Seg: '<collection>__<stem>')."""
+    return img_name.replace('/', '__')
+
+
+def extract_nnInteractive_segmentation(
+        dataset,
+        img_paths,
+        save_dir,
+        prompts_dir,
+        variants=('P1', 'P2', 'P3', 'P4'),
+        model_dir=None,
+        device=None,
+        skip_exist=False,
+    ):
+    """Interactive agent (nnInteractive, 22 Nov 2026; knowledge_base/scripts/interactive/s3_prompts.py, claude/interactive_pilot_2026-11-22.md).
+
+    Prompts come from stage 1 only: <prompts_dir>/<key>.json (+ .npz lasso crops), key = image name with '/' -> '__'. Images without a
+    prompt file are skipped. Per image: the NIfTI is loaded with nibabel WITHOUT reorientation, as raw float32 intensities (no windowing
+    or normalisation, as nnInteractive requires), in the (x, y, z) array order the prompts use, and set once. Per lesion and variant:
+    reset_interactions, add the prompts, save the target buffer (uint8, image affine) as <save_dir>/<img_name>_les<k>_<V>.nii.gz.
+    Variants: P1 points; P2 + box of xi on its largest slice; P3 + boxes through anchor centres; P4 points + lasso of xi.
+    The outline is a CANDIDATE outline only (never detection support). Timing: <save_dir>/timing_<first>_<last>.csv.
+    model_dir sets NNINTERACTIVE_MODEL_DIR (weights from Hugging Face MIC-DKFZ/nnInteractive, CC BY-NC-SA 4.0; downloaded if missing).
+    """
+    import csv, json, time
+    import nibabel as nib
+    if prompts_dir is None:
+        raise ValueError("nnInteractive needs --nni_prompts_dir (stage-1 prompts from s3_prompts.py)")
+    if model_dir is not None:
+        os.environ["NNINTERACTIVE_MODEL_DIR"] = str(pathlib.Path(model_dir).expanduser().resolve())
+        os.makedirs(os.environ["NNINTERACTIVE_MODEL_DIR"], exist_ok=True)
+    # nnInteractive lives in its own environment; keep its imports local
+    import torch
+    from nnInteractive.model_management import ensure_model_available, get_default_model_id
+    from nnInteractive.inference.inference_session import nnInteractiveInferenceSession
+
+    if device is None:
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    session = nnInteractiveInferenceSession(device=torch.device(device), use_torch_compile=False, verbose=False,
+                                            torch_n_threads=min(8, os.cpu_count() or 1), do_autozoom=True)
+    model_path = ensure_model_available(get_default_model_id())
+    session.initialize_from_trained_model_folder(str(model_path))
+    logger.info("nnInteractive model %s (licence: %s)", model_path, getattr(session, "license", "n/a"))
+
+    save_dir = pathlib.Path(save_dir); save_dir.mkdir(parents=True, exist_ok=True)
+    names = [_image_name(p[0] if isinstance(p, list) else p, dataset) for p in img_paths]
+    tf = save_dir / f"timing_{nni_prompt_key(names[0]) if names else 'none'}_{nni_prompt_key(names[-1]) if names else 'none'}.csv"
+    new = not tf.exists(); fh = open(tf, "a", buffering=1); tw = csv.writer(fh)
+    if new:
+        tw.writerow(["image", "lesion", "variant", "seconds", "voxels", "note"])
+
+    for idx, img_path in enumerate(img_paths):
+        if isinstance(img_path, list):
+            img_path = img_path[0]
+        img_name = names[idx]; key = nni_prompt_key(img_name)
+        pj = pathlib.Path(prompts_dir) / f"{key}.json"
+        if not pj.exists():
+            continue
+        prm = json.load(open(pj)); crops = np.load(str(pj)[:-5] + ".npz")
+        todo = [(les, V) for les in prm["lesions"] for V in variants
+                if not (skip_exist and (save_dir / f"{img_name}_les{les['lesion']}_{V}.nii.gz").exists())]
+        if not todo:
+            logger.info("%s: all nnInteractive outputs exist, skip", img_name); continue
+        logger.info("nnInteractive %s/%s: %s (%d lesion-variants)", idx + 1, len(img_paths), img_name, len(todo))
+        t0 = time.time()
+        img = nib.load(str(img_path)); arr = np.asarray(img.get_fdata(dtype=np.float32))
+        session.set_image(arr[None])
+        target = torch.zeros(arr.shape, dtype=torch.uint8); session.set_target_buffer(target)
+        tw.writerow([img_name, -1, "set_image", round(time.time() - t0, 2), int(arr.size), ""])
+        for les, V in todo:
+            t1 = time.time(); note = ""
+            try:
+                session.reset_interactions()
+                for p in les["points"]:
+                    session.add_point_interaction(tuple(int(x) for x in p), include_interaction=True)
+                if V in ("P2", "P3"):
+                    session.add_bbox_interaction(les["box_largest"], include_interaction=True)
+                if V == "P3":
+                    for b in les["boxes_anchor"]:
+                        session.add_bbox_interaction(b, include_interaction=True)
+                if V == "P4":
+                    session.add_lasso_interaction(crops[f"lasso_{les['lesion']}"].astype(np.uint8), include_interaction=True,
+                                                  interaction_bbox=les["lasso_bbox"])
+                mask = target.cpu().numpy().astype(np.uint8)
+            except Exception as ex:          # keep going; the failure is recorded
+                mask = np.zeros(arr.shape, np.uint8); note = "error: " + repr(ex)[:200]
+                logger.warning("%s lesion %s %s failed: %s", img_name, les["lesion"], V, ex)
+            out = save_dir / f"{img_name}_les{les['lesion']}_{V}.nii.gz"; out.parent.mkdir(parents=True, exist_ok=True)
+            nib.save(nib.Nifti1Image(mask, img.affine), str(out))
+            tw.writerow([img_name, les["lesion"], V, round(time.time() - t1, 2), int(mask.sum()), note])
+        logger.info("%s done in %.1fs", img_name, time.time() - t0)
+    fh.close()
+    return
+
+
 def extract_TotalSegmentator_segmentation(
         dataset,
         seg_obj,
@@ -832,7 +942,7 @@ if __name__ == "__main__":
     parser.add_argument('--format', default="nifti", choices=["dicom", "nifti"], type=str)
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
-    parser.add_argument('--model', default="BiomedParse", choices=["SegVol", "BiomedParse", "VoxTell", "TotalSegmentator"], type=str)
+    parser.add_argument('--model', default="BiomedParse", choices=["SegVol", "BiomedParse", "VoxTell", "TotalSegmentator", "nnInteractive"], type=str)
     parser.add_argument(
         '--voxtell_model_root',
         default=os.path.join(relative_path, 'checkpoints', 'VoxTell'),
@@ -876,6 +986,11 @@ if __name__ == "__main__":
                         help='R2Seg collections to run (default: every collection folder with images/)')
     parser.add_argument('--r2seg_prostate_seq', default='t2', choices=['t2', 'adc', 'both'],
                         help='Prostate_Tumor_00 images to run (T2 and ADC per case)')
+    parser.add_argument('--nni_prompts_dir', default=None, type=str,
+                        help='nnInteractive: folder of stage-1 prompts (<collection>__<stem>.json/.npz from s3_prompts.py); only images with prompts run')
+    parser.add_argument('--nni_variants', default=['P1', 'P2', 'P3', 'P4'], nargs='*', help='nnInteractive prompt variants (pilot: all; at scale: the chosen one)')
+    parser.add_argument('--nni_model_dir', default=os.path.join(relative_path, 'checkpoints', 'nnInteractive'), type=str,
+                        help='nnInteractive weights folder (NNINTERACTIVE_MODEL_DIR); downloaded here if missing')
     parser.add_argument('--skip_exist', action='store_true', help='Skip images whose outputs already exist (resume)')
     parser.add_argument('--start', default=0, type=int, help='First image index (for sharding)')
     parser.add_argument('--end', default=None, type=int, help='Stop before this image index (default: all)')
@@ -922,6 +1037,17 @@ if __name__ == "__main__":
     # extract radiology segmentation
     # warning: do not run this function in a loop
     logger.info(f"starting segmentation on {dataset_info['name']}...")
+    if args.model == 'nnInteractive':
+        # only images with a stage-1 prompt file; --start/--end then index these images
+        if not args.nni_prompts_dir:
+            raise ValueError('--model nnInteractive needs --nni_prompts_dir')
+        keep = [i for i, p in enumerate(dataset_info['img_paths'])
+                if (pathlib.Path(args.nni_prompts_dir) / (nni_prompt_key(_image_name(p[0] if isinstance(p, list) else p, args.dataset)) + '.json')).exists()]
+        n0 = len(dataset_info['img_paths'])
+        for k in ('img_paths', 'lab_paths', 'plan_paths', 'text_prompts', 'modality', 'site', 'img_format'):
+            if isinstance(dataset_info.get(k), list) and len(dataset_info[k]) == n0:
+                dataset_info[k] = [dataset_info[k][i] for i in keep]
+        logger.info("nnInteractive: %d images with prompts", len(dataset_info['img_paths']))
     sl = slice(args.start, args.end)
     extract_radiology_segmentation(
         dataset=args.dataset,
@@ -950,4 +1076,7 @@ if __name__ == "__main__":
         ts_threads=args.ts_threads,
         ts_body_seg=args.ts_body_seg,
         voxtell_prompt_batch=args.voxtell_prompt_batch,
+        nni_prompts_dir=args.nni_prompts_dir,
+        nni_variants=tuple(args.nni_variants),
+        nni_model_dir=args.nni_model_dir,
     )
