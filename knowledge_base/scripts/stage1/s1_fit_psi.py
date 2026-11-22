@@ -110,7 +110,10 @@ def evaluate(te, P, scorers):
 
 
 def main():
-    O = os.path.join(paths.ledger_dir(), 'v85', 'extent')
+    import argparse
+    ap = argparse.ArgumentParser(); ap.add_argument('--tag', default=None, help='22 Nov: bp2 -> rows and fit in ledger/v85/extent_bp2')
+    a = ap.parse_args()
+    O = os.path.join(paths.ledger_dir(), 'v85', 'extent' + (f'_{a.tag}' if a.tag else ''))
     E, P = load(O)
     v84 = json.load(open(os.path.join(paths.ledger_dir(), 'v8', 'testbed', 'fit_host6.json')))['psi']
     v84v = np.asarray(v84['val'], float)

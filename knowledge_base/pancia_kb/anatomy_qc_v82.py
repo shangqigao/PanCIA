@@ -511,9 +511,9 @@ def analyse(kb, md, names, task, aff, sp, plan, manifest, plan_dir, tumour=None,
         if mus:
             noise = noise_metric(image, _union(mus, shape), aff, modality)
             th = (thresholds or {}).get(modality or '', {})
-            if noise and modality == 'CT' and th.get('sigma_p99') and noise['sigma'] > th['sigma_p99']:
+            if noise and modality == 'CT' and th.get('sigma_p99') and noise.get('sigma') is not None and noise['sigma'] > th['sigma_p99']:
                 reasons.append(f"noise_sigma={noise['sigma']:.1f}>{th['sigma_p99']:.1f}"); state = 'degraded' if state == 'good' else state
-            if noise and modality == 'MR' and th.get('snr_p01') and noise['snr'] < th['snr_p01']:
+            if noise and modality == 'MR' and th.get('snr_p01') and noise.get('snr') is not None and noise['snr'] < th['snr_p01']:   # 22 Nov: SNR not measurable -> not flagged (7 TCGA MR series crashed)
                 reasons.append(f"noise_snr={noise['snr']:.1f}<{th['snr_p01']:.1f}"); state = 'degraded' if state == 'good' else state
     # user, 17 Oct: missing anatomy alone never excludes (dedicated protocols, e.g. breast MR, show little anatomy besides the
     # host); a scan is excluded only when most expected organs fail AND an image measure (spacing or noise) fails as well

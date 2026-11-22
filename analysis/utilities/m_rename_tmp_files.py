@@ -32,7 +32,7 @@
 
 from pathlib import Path
 
-root = Path("/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg_Seg/VoxTell")
+root = Path("/Users/sg2162/Datasets/CancerDatasets/PanCIA/TCGA-TCIA/TCGA_Seg/VoxTell")
 
 for file in root.rglob("*_plan_manifest.json"):
     file.unlink()

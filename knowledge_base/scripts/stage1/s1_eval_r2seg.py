@@ -20,7 +20,9 @@ equal: per collection site, then mean over sites; the two lung collections are o
 Usage: [SHARD=i/n] python s1_eval_r2seg.py [--collections ...] [--only ...]  (resumable)  |  python s1_eval_r2seg.py --shards 4
        python s1_eval_r2seg.py --summary
        --ledger v85_r2seg --decisions decisions_v85.csv (15 Nov): another stage-1 ledger, with decisions taken from a re-decided file
-       (column decision_<name>); outputs go to ledger/<ledger>/eval/."""
+       (column decision_<name>); outputs go to ledger/<ledger>/eval/.
+       --tumour-band 0.1,0.5 (22 Nov): only expert tumours with 0.1 <= ml < 0.5; scans without one are skipped (row method
+       'no_band_tumour', for resuming only); outputs ledger/<ledger>/eval_band_0.1_0.5/ (tumours, scans, report.txt)."""
 import os, sys, csv, json, glob, time, argparse, subprocess, traceback
 for _v in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
     os.environ.setdefault(_v, '1')
@@ -36,11 +38,16 @@ BIT = {m: 1 << k for k, m in enumerate(METHODS)}
 ACC = ('accepted', 'accepted_override')
 LEDGER = ['v84_r2seg']     # --ledger (15 Nov)
 DECFILE = [None]           # --decisions: re-decided file in the ledger dir (rel, id, decision_<name>)
+EVTAG = [None]             # --eval-tag (22 Nov): outputs eval_<tag>/ (e.g. psi_bp2 after the psi refit), old eval kept
+BAND = [None]              # --tumour-band lo,hi (22 Nov): evaluate only expert tumours with lo <= ml < hi; outputs eval_band_<lo>_<hi>/
 S26 = EX.STRUCT26
 
 
 def out_dir():
-    d = os.path.join(paths.ledger_dir(), LEDGER[0], 'eval'); os.makedirs(d, exist_ok=True); return d
+    sub = 'eval' if BAND[0] is None else f'eval_band_{BAND[0][0]:g}_{BAND[0][1]:g}'
+    if EVTAG[0]:
+        sub += f'_{EVTAG[0]}'
+    d = os.path.join(paths.ledger_dir(), LEDGER[0], sub); os.makedirs(d, exist_ok=True); return d
 
 
 def load_decisions():
@@ -85,6 +92,12 @@ def eval_scan(ds, stem, dec, psis):
     img = nib.load(lf.replace('/labels/', '/images/').replace('_seg.nii.gz', '.nii.gz'))
     sp = np.array(img.header.get_zooms()[:3], float); vml = float(np.prod(sp)) / 1000.0
     T = np.isin(EX._read_labels(lf), EX.APPEARANCE[ds]['tumour'])
+    if BAND[0] is not None:                                            # band mode: skip scans without a tumour in the band
+        lt0, n0 = comps(T); sz0 = np.bincount(lt0.ravel(), minlength=n0 + 1)[1:] * vml
+        if not ((sz0 >= BAND[0][0]) & (sz0 < BAND[0][1])).any():
+            return [dict(ds=ds, case=stem, site=EX.SITE_ENTITY[ds], T_ml=float(T.sum() * vml), note=None, xi_v84_check=None, method='no_band_tumour',
+                         dice=np.nan, tp_ml=np.nan, fp_ml=np.nan, fn_ml=np.nan, fp_comps=np.nan, pred_ml=np.nan)], []   # same columns as a full row (CSV append)
+        del lt0
     M = np.zeros(T.shape, np.uint8)
     for a, m in (('VoxTell', 'vt'), ('BiomedParse', 'bp')):
         A, _ = AG._on_grid(AG.mask_path(a, ds, stem), img)
@@ -129,7 +142,8 @@ def eval_scan(ds, stem, dec, psis):
     T = T[sl]; M = M[sl]
     labT, nT = comps(T)
     tsz = np.bincount(labT.ravel(), minlength=nT + 1)
-    big = [j for j in range(1, nT + 1) if tsz[j] * vml >= EX.MIN_ML]
+    lo, hi = (EX.MIN_ML, np.inf) if BAND[0] is None else BAND[0]
+    big = [j for j in range(1, nT + 1) if lo <= tsz[j] * vml < hi]
     srows, trows = [], []
     for m in METHODS:
         P = (M & BIT[m]) > 0
@@ -200,13 +214,36 @@ def summarise(O):
     open(os.path.join(O, 'report.txt'), 'w').write('\n'.join(rep) + '\n'); print('\n'.join(rep))
 
 
+def summarise_band(O):
+    t = pd.concat([pd.read_csv(f, dtype={'case': str}) for f in glob.glob(os.path.join(O, 'tumours*.csv'))], ignore_index=True)
+    t = t.drop_duplicates(['ds', 'case', 'tumour', 'method'], keep='last')
+    t['detected'] = t.detected.astype(str).isin(['True', '1', '1.0'])
+    for c in ('recall', 'dice', 'ml'):
+        t[c] = pd.to_numeric(t[c], errors='coerce')
+    lo, hi = BAND[0]
+    n = t.drop_duplicates(['ds', 'case', 'tumour']).groupby('site').size()
+    rep = [f'Stage 1 on R2Seg, ledger {LEDGER[0]}: expert tumours with {lo:g} <= ml < {hi:g} only ({int(n.sum())} tumours in '
+           f'{t.drop_duplicates(["ds", "case"]).shape[0]} scans). Detection = any overlap. Sites equal = mean over sites with >= 1 tumour.', '',
+           'tumours per site: ' + ', '.join(f'{k} {v}' for k, v in n.items()), '']
+    for title, col in (('detection rate', 'detected'), ('recall', 'recall'), ('Dice', 'dice')):
+        x = t.groupby(['site', 'method'])[col].mean().unstack('method')[[m for m in METHODS if m in set(t.method)]]
+        rep += [f'== {title} ==', x.round(3).to_string(), '(sites equal) ' + ', '.join(f'{m} {v:.3f}' for m, v in x.mean().items()), '']
+    open(os.path.join(O, 'report.txt'), 'w').write('\n'.join(rep) + '\n'); print('\n'.join(rep))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--collections', default=None); ap.add_argument('--only', default=None)
     ap.add_argument('--shards', type=int, default=0); ap.add_argument('--summary', action='store_true')
     ap.add_argument('--ledger', default='v84_r2seg'); ap.add_argument('--decisions', default=None)
+    ap.add_argument('--eval-tag', default=None, help='output dir eval_<tag>/ (22 Nov)')
+    ap.add_argument('--tumour-band', default=None, help='lo,hi in ml (e.g. 0.1,0.5): per-tumour rows only for tumours in [lo, hi); separate output dir')
     a = ap.parse_args()
-    LEDGER[0] = a.ledger; DECFILE[0] = a.decisions
+    LEDGER[0] = a.ledger; DECFILE[0] = a.decisions; EVTAG[0] = a.eval_tag
+    if a.tumour_band:
+        BAND[0] = tuple(float(x) for x in a.tumour_band.split(','))
+        if a.summary:
+            summarise_band(out_dir()); return
     O = out_dir()
     if a.summary:
         summarise(O); return
@@ -220,7 +257,7 @@ def main():
         except KeyboardInterrupt:
             for p in ps:
                 p.terminate()
-        summarise(O); return
+        summarise_band(O) if BAND[0] is not None else summarise(O); return
     SH = os.environ.get('SHARD'); SI, SN = (int(x) for x in SH.split('/')) if SH else (0, 1); SUF = f'_s{SI}' if SH else ''
     meta = list(csv.DictReader(open(os.path.join(paths.root('outputs'), 'cohort', 'r2seg_scan_meta.csv'))))
     meta = [r for r in meta if r['img_name'].split('/')[0] in EX.SITE_ENTITY]          # no Uterus (benign)

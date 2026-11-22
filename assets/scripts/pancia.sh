@@ -17,7 +17,10 @@
 source ~/.bashrc
 # conda activate PanCIA
 # conda activate /home/sg2162/rds/hpc-work/miniconda3/Qwen
-conda activate /home/sg2162/rds/hpc-work/miniconda3/voxtell
+# conda activate /home/sg2162/rds/hpc-work/miniconda3/voxtell
+
+conda activate /home/sg2162/rds/hpc-work/miniconda3/nninteractive 
+export NNINTERACTIVE_MODEL_DIR=/home/sg2162/rds/hpc-work/PanCIA/checkpoints/nninteractive_models
 
 # conda activate /home/sg2162/rds/hpc-work/miniconda3/totalseg
 # export TOTALSEG_HOME_DIR=/home/sg2162/rds/hpc-work/PanCIA/checkpoints/TotalSegmentator
@@ -124,15 +127,15 @@ save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg_Seg"
 #             --start 2600 \
 #             # --end 2600
 
-python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-            --model VoxTell \
-            --radiology $radiology \
-            --planner_dir "${save_dir}/Planner" \
-            --dataset R2Seg \
-            --save_dir $save_dir \
-            --start 2500 \
-            --end 2600 \
-            # --skip_exist
+# python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+#             --model VoxTell \
+#             --radiology $radiology \
+#             --planner_dir "${save_dir}/Planner" \
+#             --dataset R2Seg \
+#             --save_dir $save_dir \
+#             --start 2500 \
+#             --end 2600 \
+#             # --skip_exist
 
 # python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --seg_obj organ \
@@ -142,6 +145,12 @@ python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
 #             --radiology $radiology \
 #             --dataset R2Seg \
 #             --save_dir $save_dir
+
+# nnInterative
+python knowledge_base/scripts/interactives3_run_interactive.py \
+            --prompts "${save_dir}/nnInterative/prompts" \
+            --r2seg-root $radiology \
+            --out "${save_dir}/nnInterative/masks"
 
 # Endometrioma segmentation
 # radiology="/home/sg2162/rds/hpc-work/EndoMRI_All"

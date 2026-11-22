@@ -5,7 +5,7 @@ TCGA_NIFTI/Radiology/...); this runner builds a view of symlinks and points HOME
   <view>/mnt/TCGA_Seg -> TCGA_Seg  <view>/mnt/TCGA_NIFTI -> TCGA_NIFTI
 Series: --set pilot (default): the 152 series of ledger/v84_pilot (stage-2 TCGA smoke and pilot); --set all: every series with a
 VoxTell plan manifest. Outputs: ledger/v86_tcga_<set>/{anchors,lesions,series}[_s<i>].csv, cache/ (panel slices). Resumable.
-Usage: python s1_run_tcga.py [--set pilot|all] [--only <substring>,...] [--shards 4]"""
+Usage: python s1_run_tcga.py [--set pilot|all] [--tag bp2] [--only <substring>,...] [--shards 4]"""
 import os, sys, csv, glob, time, argparse, subprocess, importlib.util, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(os.path.join(HERE, '..', '..')))
@@ -40,10 +40,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--set', default='pilot', choices=('pilot', 'all')); ap.add_argument('--only', default=None)
     ap.add_argument('--shards', type=int, default=0)
-    ap.add_argument('--view', default=os.path.join(os.path.expanduser('~'), '.pancia_tcga_view'))
+    ap.add_argument('--view', default=None, help='symlink view = HOME of the run (g3 checkpoints); default ~/.pancia_tcga_view[_<tag>]')
+    ap.add_argument('--tag', default=None, help='21 Nov: new inputs (bp2 = retrained BiomedParse + new planner / VoxTell plan call) -> '
+                    'ledger/v86_tcga_<set>_<tag>/ and a separate view (old outputs and checkpoints are not reused)')
     a = ap.parse_args()
     real = {nm: os.path.realpath(paths.root(nm)) for nm in ('PanCIA', 'outputs', 'TCGA_Seg', 'TCGA_NIFTI')}
-    out_dir = os.path.join(real['outputs'], 'ledger', f'v86_tcga_{a.set}')
+    out_dir = os.path.join(real['outputs'], 'ledger', f'v86_tcga_{a.set}' + (f'_{a.tag}' if a.tag else ''))
+    if a.view is None:
+        a.view = os.path.join(os.path.expanduser('~'), '.pancia_tcga_view' + (f'_{a.tag}' if a.tag else ''))
     os.makedirs(os.path.join(out_dir, 'logs'), exist_ok=True)
     build_view(a.view, real)
     if a.shards:

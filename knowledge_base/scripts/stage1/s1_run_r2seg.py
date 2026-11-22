@@ -16,7 +16,9 @@ ledger checkpoint, to ledger/v84_r2seg/extents/<collection>/<stem>.npz, so that 
 Usage: [SHARD=i/n] python s1_run_r2seg.py [--collections Kidney_Tumor_00,...] [--only case_00000,...] [--view <dir>]   (resumable)
        python s1_run_r2seg.py --shards 6     (runs 6 shards in parallel, low priority, and waits)
        --version v85 (15 Nov): ledger_v85 (F1, G1, G3) via g3_run_v85.py; outputs ledger/v85_r2seg/
-       --version v86 (15 Nov): g3_run_v86.py (cascade: existence test at level 1 only; v8.6 decision table, R1, no override); ledger/v86_r2seg/"""
+       --version v86 (15 Nov): g3_run_v86.py (cascade: existence test at level 1 only; v8.6 decision table, R1, no override); ledger/v86_r2seg/
+       --tag bp2 (21 Nov): outputs ledger/<version>_r2seg_bp2/ and view ~/.pancia_r2seg_view_bp2 (fresh checkpoints); for the rerun after the
+       BiomedParse retrain, planner and VoxTell plan call."""
 import os, sys, csv, time, glob, argparse, subprocess, importlib.util, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(os.path.join(HERE, '..', '..')))
@@ -76,13 +78,17 @@ def save_extents(G, rel, path):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--view', default=os.path.join(os.path.expanduser('~'), '.pancia_r2seg_view'))
+    ap.add_argument('--view', default=None, help='symlink view = HOME of the run (holds the g3 checkpoints); default ~/.pancia_r2seg_view[_<tag>]')
+    ap.add_argument('--tag', default=None, help='21 Nov: new inputs (e.g. bp2 = retrained BiomedParse + new planner / VoxTell plan call) -> '
+                    'ledger/<version>_r2seg_<tag>/ and a separate view, so neither old outputs nor old checkpoints are reused')
     ap.add_argument('--collections', default=None); ap.add_argument('--only', default=None)
     ap.add_argument('--shards', type=int, default=0, help='launch this many shard processes and wait')
     ap.add_argument('--version', default='v84', choices=('v84', 'v85', 'v86'), help='stage-1 version (v85: F1, G1, G3; v86: + cascade, decision rules built in; 15 Nov)')
     a = ap.parse_args()
     real = {nm: os.path.realpath(paths.root(nm)) for nm in ('PanCIA', 'outputs', 'R2Seg', 'R2Seg_Seg')}
-    out_dir = os.path.join(real['outputs'], 'ledger', f'{a.version}_r2seg')
+    out_dir = os.path.join(real['outputs'], 'ledger', f'{a.version}_r2seg' + (f'_{a.tag}' if a.tag else ''))
+    if a.view is None:
+        a.view = os.path.join(os.path.expanduser('~'), '.pancia_r2seg_view' + (f'_{a.tag}' if a.tag else ''))
     if a.shards:
         os.makedirs(os.path.join(out_dir, 'logs'), exist_ok=True)
         meta0 = list(csv.DictReader(open(os.path.join(real['outputs'], 'cohort', 'r2seg_scan_meta.csv'))))

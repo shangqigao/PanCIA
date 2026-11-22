@@ -13,7 +13,8 @@ Patterns (one row per anchor, for exact q >= 1/2 Dice under any psi): every voxe
 of candidates containing it (bitmask over the anchor's candidates); n voxels and n tumour voxels per code, plus tumour voxels outside
 every candidate.
 Outputs: clinical/PanCIA_outputs/ledger/v85/extent/ extent_rows[_s<i>].csv, patterns[_s<i>].jsonl, done[_s<i>].txt, notes[_s<i>].csv
-Usage: [SHARD=i/n] python s1_extent_rows.py [--n-per 100] [--only Kidney_Tumor_00]   (resumable)"""
+Usage: [SHARD=i/n] python s1_extent_rows.py [--n-per 100] [--only Kidney_Tumor_00]   (resumable)
+       22 Nov: python s1_extent_rows.py --tag bp2 --shards 4   (retrained BiomedParse; outputs ledger/v85/extent_bp2/)"""
 import os, re, sys, json, time, argparse, traceback
 for _v in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS', 'NUMEXPR_NUM_THREADS'):
     os.environ.setdefault(_v, '1')
@@ -24,8 +25,11 @@ from pancia_kb import KnowledgeBase, grounding_g1 as G1, grounding_g2 as G2   # 
 from pancia_kb.stage2 import paths, expert as EX, features as F, agents as AG   # noqa: E402
 
 
+TAG = [None]   # --tag (22 Nov): bp2 -> ledger/v85/extent_bp2 (retrained BiomedParse); the old rows in ledger/v85/extent are kept
+
+
 def out_dir():
-    d = os.path.join(paths.ledger_dir(), 'v85', 'extent'); os.makedirs(d, exist_ok=True); return d
+    d = os.path.join(paths.ledger_dir(), 'v85', 'extent' + (f'_{TAG[0]}' if TAG[0] else '')); os.makedirs(d, exist_ok=True); return d
 
 
 def rows_for_case(ds, lf, kb, psi):
@@ -71,7 +75,16 @@ def rows_for_case(ds, lf, kb, psi):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--n-per', type=int, default=100); ap.add_argument('--only', default=None)
-    a = ap.parse_args()
+    ap.add_argument('--tag', default=None); ap.add_argument('--shards', type=int, default=0)
+    a = ap.parse_args(); TAG[0] = a.tag
+    if a.shards:                                                     # 22 Nov: launcher (low priority, one thread each)
+        import subprocess
+        args = [x for x in sys.argv[1:] if not x.startswith('--shards') and x != str(a.shards)]
+        ps = [subprocess.Popen(['nice', '-n', '10', sys.executable, os.path.abspath(__file__)] + args, env=dict(os.environ, SHARD=f'{i}/{a.shards}'),
+                               stdout=open(os.path.join(out_dir(), f'log_s{i}.txt'), 'a'), stderr=subprocess.STDOUT) for i in range(a.shards)]
+        for p in ps:
+            p.wait()
+        print('done; logs in', out_dir()); return
     SH = os.environ.get('SHARD'); SI, SN = (int(x) for x in SH.split('/')) if SH else (0, 1); SUF = f'_s{SI}' if SH else ''
     O = out_dir()
     fit6 = json.load(open(os.path.join(paths.ledger_dir(), 'v8', 'testbed', 'fit_host6.json')))
