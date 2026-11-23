@@ -17,6 +17,12 @@ the TCGA smoke, at the same rate for accepted and uncertain ones, and did not se
 Stage-1 decisions are not changed. Usage: [SHARD=i/n] python3 s2_run_tcga.py [--tag tcga_v1] [--only substr,...] [--no-bf]"""
 import os, sys, json, glob, time, argparse, traceback
 import numpy as np, pandas as pd
+# 23 Nov (step S): PANCIA_FAST_EDT=1 swaps scipy's EDT for the exact `edt` package (as stage 1; ~1e-6 mm differences). Off by default
+# here so that a validation run is not mixed across EDT versions.
+if os.environ.get('PANCIA_FAST_EDT', '0') == '1':
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')))
+    from pancia_kb import fast_edt as _FE
+    print('[stage 2] fast EDT:', _FE.install(), flush=True)
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(os.path.join(HERE, '..', '..')))
 from pancia_kb import KnowledgeBase, grounding_g1 as G1, grounding_g2 as G2   # noqa: E402
@@ -33,6 +39,13 @@ def append(f, rows):
             df = pd.concat([pd.read_csv(f), df], ignore_index=True); df.to_csv(f, index=False); return
         df = df.reindex(columns=cols)
     df.to_csv(f, mode='a', header=not os.path.exists(f), index=False)
+
+
+def xi_rule_for(a, B):
+    """stage-1 outline rule (23 Nov): fit_psi.json xi_rule ('anchor') for v8.6; v8.4 keeps the psi argmax"""
+    if a.ledger == 'v84':
+        return 'psi'
+    return json.load(open(os.path.join(B, 'v85', 'extent', 'fit_psi.json'))).get('xi_rule', 'psi')
 
 
 def psi_for(a, B):
@@ -57,6 +70,8 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--tag', default='tcga_v1'); ap.add_argument('--only', default=None)
     ap.add_argument('--no-bf', action='store_true'); ap.add_argument('--max-iter', type=int, default=300)
     ap.add_argument('--no-evidence', action='store_true'); stage1_args(ap)
+    ap.add_argument('--accepted-only', action='store_true', help='23 Nov: OOD sets (user, 16 Nov): only lesions with an accepted anchor, '
+                    'and their accepted anchors; uncertain lesions are not passed to stage 2')
     a = ap.parse_args()
     SH = os.environ.get('SHARD'); SI, SN = (int(x) for x in SH.split('/')) if SH else (0, 1); SUF = f'_s{SI}' if SH else ''
     O = paths.out_dir(a.tag); os.makedirs(os.path.join(O, 'maps'), exist_ok=True)
@@ -72,7 +87,8 @@ def main():
         rels = [r for r in rels if any(s in r for s in a.only.split(','))]
     TAB1 = G1.Tables1(os.path.join(B, 'v6', 'grounding', 'g0', 'h5', 'tables_g1.json'))
     TS = G2.TestSets(os.path.join(B, 'v8', 'grounding', 'test_sets.json'))
-    S1 = IF.Stage1(KB, fit6['beta_UD'], psi_for(a, B), rows, paths.root('TCGA_Seg'), paths.root('TCGA_NIFTI'), ledger=a.ledger)
+    S1 = IF.Stage1(KB, fit6['beta_UD'], psi_for(a, B), rows, paths.root('TCGA_Seg'), paths.root('TCGA_NIFTI'), ledger=a.ledger, xi_rule=xi_rule_for(a, B),
+                  keep=('accepted', 'accepted_override') if a.accepted_only else IF.KEEP)
     fd = os.path.join(O, f'done{SUF}.txt'); done = set()
     for f_ in glob.glob(os.path.join(O, 'done*.txt')):                 # all shards
         done |= set(open(f_).read().splitlines())

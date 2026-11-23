@@ -20,13 +20,15 @@ KEEP = ('accepted', 'accepted_override', 'uncertain')
 
 
 class Stage1:
-    def __init__(self, kb, beta, psi, pilot_rows, seg_root, nifti_root, ledger='v86'):
+    def __init__(self, kb, beta, psi, pilot_rows, seg_root, nifti_root, ledger='v86', xi_rule='psi', keep=KEEP):
+        self.keep = tuple(keep)          # 23 Nov: OOD sets pass accepted lesions only (user, 16 Nov): keep=('accepted', 'accepted_override')
         import importlib
         from .. import host_v81 as HV, grounding_g1 as G1, grounding_g2 as G2
         L8 = importlib.import_module(f'pancia_kb.ledger_{ledger}')     # 16 Nov: v86 (default) or v84
         from ..ledger_v6 import _hk
         self.L8, self.HV, self.G1, self.G2, self.hk = L8, HV, G1, G2, _hk
         self.kb, self.beta, self.psi, self.rows = kb, beta, psi, pilot_rows
+        self.xi_rule = xi_rule   # 23 Nov: 'anchor' -> xi = the anchor; q keeps psi
         self.seg_root, self.nifti_root = seg_root, nifti_root
 
     def series(self, rel, cache=None):
@@ -55,7 +57,7 @@ class Stage1:
                 if o_ not in best or v > sc[best[o_]]: best[o_] = q
             PhL = HV.host_posterior({o_: cands[best[o_]] for o_ in best}, self.beta)
             S = G2.credible_set(PhL, ALPHA) if PhL else []
-            ids = [i for i in Lz['anchors'] if i in R.index and str(R.loc[i, 'decision']) in KEEP]
+            ids = [i for i in Lz['anchors'] if i in R.index and str(R.loc[i, 'decision']) in self.keep]
             # consistency with the stored stage-1 rows
             for i in Lz['anchors']:
                 if i in R.index:
@@ -78,7 +80,8 @@ class Stage1:
                 for e, w in zip(ext, w0):
                     qa += float(w) * RN.win(RN.Patch(e['sl'], e['crop']), Wq).astype(np.float32)
                 omq *= (1.0 - np.clip(qa, 0, 1))
-                ej = ext[int(np.argmax(w0))]; xi |= RN.win(RN.Patch(ej['sl'], ej['crop']), Wq)
+                jx = ([k for k, e in enumerate(ext) if e['name'] == 'anchor'] or [0])[0] if self.xi_rule == 'anchor' else int(np.argmax(w0))
+                ej = ext[jx]; xi |= RN.win(RN.Patch(ej['sl'], ej['crop']), Wq)
                 aw_ = RN.win(RN.Patch(anchors[i]['sl'], anchors[i]['crop']), Wq)
                 ext_rows[i] = dict(chosen=ej['name'], w0=[round(float(w), 4) for w in w0], names=[e['name'] for e in ext],
                                    q_anchor_min=round(float(qa[aw_].min()), 4) if aw_.any() else None)

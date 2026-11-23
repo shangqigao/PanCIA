@@ -29,6 +29,12 @@ import os, sys, json, time, zlib, argparse, subprocess, traceback
 for _v in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS', 'NUMEXPR_NUM_THREADS'):
     os.environ.setdefault(_v, '1')
 import numpy as np, pandas as pd
+# 23 Nov (step S): PANCIA_FAST_EDT=1 swaps scipy's EDT for the exact `edt` package (as stage 1; ~1e-6 mm differences). Off by default
+# here so that a validation run is not mixed across EDT versions.
+if os.environ.get('PANCIA_FAST_EDT', '0') == '1':
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')))
+    from pancia_kb import fast_edt as _FE
+    print('[stage 2] fast EDT:', _FE.install(), flush=True)
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(os.path.join(HERE, '..', '..'))); sys.path.insert(0, HERE)
 from pancia_kb import KnowledgeBase, grounding_g1 as G1, grounding_g2 as G2   # noqa: E402
@@ -125,7 +131,7 @@ def false_lesions(ds, S, Ls, fit, beta, psi, base, rows, max_false, where):
         t0 = time.time(); res = _solve(c, specs, theta, kb, fit); vml = float(np.prod(c['sp'])) / 1000.0
         L0 = res['lesions'][0]
         rows.append(dict(base, mod=c['mod'], seq=c['seq'], kind='false_anchor', where=where, method='stage2', anchor_ml=L['ml'],
-                         support=L.get('support', 'two'),
+                         support=L.get('support', 'two'), s1_dec=_dec(L),
                          n_anchors=len(L['anchors']), xi_name=built[0]['xi_name'], host=V._ent(hkey), host_in_S=hkey in specs[0]['S'],
                          vol_Z=L0['vol_Z'], vol_anchor=L0['vol_anchor'], p_anchor_ge_half=L0['p_anchor_ge_half'],
                          sec=round(time.time() - t0, 1), **_bf(L0)))
@@ -135,7 +141,7 @@ def false_lesions(ds, S, Ls, fit, beta, psi, base, rows, max_false, where):
 
 
 def run_positive(ds, lf, fit, beta, psi, fold, rows, calib, max_false):
-    S = AG.scan(ds, lf, single=SINGLE[0])
+    S = _scan(ds, lf)
     if S is None:
         return False
     base = _common(fold, ds, S['case'])
@@ -167,12 +173,12 @@ def run_positive(ds, lf, fit, beta, psi, fold, rows, calib, max_false):
             L0 = res['lesions'][k]
             if not L['true']:
                 rows.append(dict(common, kind='false_anchor', where='tumour_window', method='stage2', anchor_ml=L['ml'],
-                                 support=L.get('support', 'two'),
+                                 support=L.get('support', 'two'), s1_dec=_dec(L),
                                  n_anchors=len(L['anchors']), xi_name=B['xi_name'], host_in_S=hkey in specs[k]['S'],
                                  vol_Z=L0['vol_Z'], vol_anchor=L0['vol_anchor'], p_anchor_ge_half=L0['p_anchor_ge_half'], **_bf(L0)))
                 continue
             Gk = AG.lesion_truth(c, B['A'])[W_]
-            lb = dict(common, kind='lesion', lesion=k, n_anchors=len(L['anchors']), support=L.get('support', 'two'), xi_name=B['xi_name'],
+            lb = dict(common, kind='lesion', lesion=k, n_anchors=len(L['anchors']), support=L.get('support', 'two'), s1_dec=_dec(L), xi_name=B['xi_name'],
                       host_in_S=hkey in specs[k]['S'],
                       G_ml=float(Gk.sum() * vml), anchor_ml=float(B['A'].sum() * vml),
                       anchor_precision=float((B['A'] & c['T']).sum() / max(int(B['A'].sum()), 1)), **_bf(L0))
@@ -204,7 +210,7 @@ def run_positive(ds, lf, fit, beta, psi, fold, rows, calib, max_false):
 
 
 def run_negative(ds, lf, fit, beta, psi, fold, rows, max_false):
-    S = AG.scan(ds, lf, single=SINGLE[0])
+    S = _scan(ds, lf)
     if S is None:
         return False
     base = _common(fold, ds, S['case'])
@@ -230,6 +236,17 @@ def _ordered(lst, held):
 
 KB = None
 SINGLE = [False]
+STAGE1 = [None]        # 23 Nov (v4): stage-1 ledger whose accepted + uncertain lesions are validated (agents.scan_stage1)
+
+
+def _scan(ds, lf):
+    return AG.scan_stage1(ds, lf, STAGE1[0]) if STAGE1[0] else AG.scan(ds, lf, single=SINGLE[0])
+
+
+def _dec(L):
+    """stage-1 decision of a lesion: accepted when any kept anchor is accepted, else uncertain ('' without a stage-1 ledger)"""
+    d = L.get('decisions') or []
+    return ('accepted' if any(str(x).startswith('accepted') for x in d) else 'uncertain') if d else ''
 
 
 def main():
@@ -246,7 +263,10 @@ def main():
     ap.add_argument('--fit-beyond', action='store_true', help="fold fits with 'in an outline beyond xi' (s2_fit.py --beyond), when fitted here")
     ap.add_argument('--single', action='store_true', help='single-agent anchors too (v8.4 kind single); default: agreement only')
     ap.add_argument('--psi', default=None, help='stage-1 extent prior JSON with a psi entry (ledger/v85/extent/fit_psi.json); default v8.4')
+    ap.add_argument('--stage1-ledger', default=None, help='23 Nov (v4): validate the lesions stage 1 passes on (accepted + uncertain, '
+                    'their kept anchors, stage-1 extents and w0) from ledger/<name> (e.g. v86_r2seg_bp2) instead of building them from the agents')
     a = ap.parse_args()
+    STAGE1[0] = a.stage1_ledger
     O = paths.out_dir(a.tag); FD = paths.out_dir(*a.fit_dir.split('/'))
     SINGLE[0] = a.single
     si, sn = (int(x) for x in os.environ.get('SHARD', '0/1').split('/')); tag = f'_s{si}' if sn > 1 else ''
@@ -290,6 +310,7 @@ def main():
         sys.exit(f'fold fits missing in {FD} for {miss}: run once without SHARD (or s2_fit.py --exclude) before sharding')
     fits, psis = {}, {}
     pj = json.load(open(a.psi)) if a.psi else None
+    AG.XI_RULE[0] = pj.get('xi_rule', 'psi') if pj else 'psi'   # 23 Nov: xi = anchor when fit_psi.json says so; q keeps psi
     for D in need:
         held = [ds for ds, e in EX.SITE_ENTITY.items() if e == D] or [D]
         ff = os.path.join(FD, f'fit_{D}.json')

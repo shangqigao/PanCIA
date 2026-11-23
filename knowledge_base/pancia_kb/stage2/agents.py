@@ -207,6 +207,115 @@ def window(ds, S, W, kb, G_host=None, max_vox=3e6):
     return c
 
 
+# ------------------------------------------------------------------ stage-1 lesions (validate_agents v4, 23 Nov 2026)
+KEEP = ('accepted', 'accepted_override', 'uncertain')   # as stage2.interface: lesions with a kept anchor, their kept anchors only
+_S1 = {}
+
+
+def _stage1_tables(ledger):
+    """(ds, case) -> {anchor id: decision} and the set of (ds, case) the stage-1 ledger ran on"""
+    if ledger not in _S1:
+        import glob, pandas as pd
+        L = os.path.join(paths.ledger_dir(), ledger)
+        A = pd.concat([pd.read_csv(f, usecols=['rel', 'id', 'decision']) for f in sorted(glob.glob(L + '/anchors_s*.csv'))])
+        Sr = pd.concat([pd.read_csv(f, usecols=['rel', 'note']) for f in sorted(glob.glob(L + '/series_s*.csv'))])
+        Sr = Sr[~Sr.note.astype(str).str.startswith('error')]
+        key = lambda r: tuple(r.split('/', 2)[1:])
+        dec = {}
+        for r, i, d in zip(A.rel, A.id, A.decision):
+            dec.setdefault(key(r), {})[int(i)] = str(d)
+        _S1[ledger] = (dec, {key(r) for r in Sr.rel})
+    return _S1[ledger]
+
+
+def _unpack(packed, box):
+    shp = [b[1] - b[0] for b in box]
+    return np.unpackbits(packed)[:int(np.prod(shp))].reshape(shp).astype(bool)
+
+
+def on_window(box, crop, c):
+    """a full-grid crop (box [[lo, hi]] x 3) placed on the window of case c (c['W'], striding c['st'])"""
+    W = c['W']; out = np.zeros(tuple(s.stop - s.start for s in W), bool)
+    lo = [max(b[0], w.start) for b, w in zip(box, W)]; hi = [min(b[1], w.stop) for b, w in zip(box, W)]
+    if all(h > l for l, h in zip(lo, hi)):
+        out[tuple(slice(l - w.start, h - w.start) for l, h, w in zip(lo, hi, W))] = \
+            crop[tuple(slice(l - b[0], h - b[0]) for l, h, b in zip(lo, hi, box))]
+    return out[c['st']] if c['st'] is not None else out
+
+
+def scan_stage1(ds, lf, ledger, keep=KEEP):
+    """as scan(), but the anchors, their candidate extents and the lesions are stage 1's own (ledger/<ledger>/extents/<ds>/<case>.npz
+    written by s1_run_r2seg.py, decisions from anchors_s*.csv), restricted as stage 2 receives them on TCGA: lesions with at least
+    one kept anchor (default accepted / accepted_override / uncertain), with their kept anchors only. The agents' masks are still
+    loaded for the bp / vt comparison methods and the scan baseline. None when an agent mask is missing or stage 1 did not run on
+    the scan; a scan with no kept anchor has no lesions (nothing for stage 2)."""
+    S = scan(ds, lf, single=False)
+    if S is None:
+        return None
+    dec_all, ran = _stage1_tables(ledger)
+    if (ds, S['case']) not in ran:
+        return None
+    T = S['T']; dec = dec_all.get((ds, S['case']), {})
+    lab = np.zeros(T.shape, np.int32); anchors, lesions, arr = [], [], {}
+    vml = float(np.prod(S['sp'])) / 1000.0
+    fz = os.path.join(paths.ledger_dir(), ledger, 'extents', ds, S['case'] + '.npz')
+    note = None
+    if any(d in keep for d in dec.values()):
+        if not os.path.exists(fz):
+            note = 'stage1_extents_missing'
+        else:
+            import json
+            z = np.load(fz); meta = json.loads(str(z['meta']))
+            if tuple(meta['shape']) != T.shape:
+                note = f"stage1 grid {tuple(meta['shape'])} != label grid {T.shape}"
+            else:
+                pos = {}
+                for i, an in meta['anchors'].items():
+                    i = int(i)
+                    if dec.get(i) not in keep:
+                        continue
+                    bx = an['box']; sl = tuple(slice(*b) for b in bx); crop = _unpack(z[f'a{i}'], bx)
+                    sub = lab[sl]; sub[crop & (sub == 0)] = i + 1
+                    arr[f'a{i}'] = np.array(z[f'a{i}'])
+                    ext = []
+                    for j, e in enumerate(an['extents'] or []):
+                        arr[f'a{i}_e{j}'] = np.array(z[f'a{i}_e{j}'])
+                        ext.append(dict(name=e['name'], logratio=e['logratio'], flags=e.get('flags', []), box=e['box'], key=f'a{i}_e{j}'))
+                    rec = dict(id=i + 1, sid=i, ml=float(crop.sum() * vml), box=sl, abox=bx, key=f'a{i}', true=bool(T[sl][crop].any()),
+                               kind=an.get('kind') or 'two', decision=dec[i], ext=ext,
+                               obox=_box_union([sl] + [tuple(slice(*e['box'][k]) for k in range(3)) for e in ext]))
+                    for a in AGENTS:
+                        rec[SHORT[a]] = [int(x) for x in np.unique(S['lab_ag'][a][sl][crop]) if x > 0]
+                    pos[i] = len(anchors); anchors.append(rec)
+                for Lz in meta['lesions']:
+                    g = [pos[i] for i in Lz['anchors'] if i in pos]
+                    if g:
+                        lesions.append(dict(anchors=g, true=any(anchors[k]['true'] for k in g), ml=sum(anchors[k]['ml'] for k in g),
+                                            obox=_box_union([anchors[k]['obox'] for k in g]), lesion=Lz['lesion'],
+                                            decisions=[anchors[k]['decision'] for k in g],
+                                            support='two' if any(anchors[k]['kind'] == 'two' for k in g) else 'single'))
+    lt, nt = ndimage.label(T, structure=EX.STRUCT26)
+    comps = []
+    for j, sl in enumerate(ndimage.find_objects(lt), start=1):
+        if sl is None:
+            continue
+        cj = lt[sl] == j; ml = float(cj.sum() * vml)
+        if ml >= EX.MIN_ML:
+            comps.append(dict(box=sl, ml=ml, detected=bool((lab[sl][cj] > 0).any())))
+    S['baseline'].update(n_anchor=len(anchors), n_anchor_true=sum(a['true'] for a in anchors),
+                         n_anchor_single=sum(a['kind'] != 'two' for a in anchors), n_anchor_single_true=sum(a['true'] and a['kind'] != 'two' for a in anchors),
+                         n_lesion=len(lesions), n_lesion_true=sum(L['true'] for L in lesions),
+                         n_lesion_accepted=sum(any(d.startswith('accepted') for d in L['decisions']) for L in lesions),
+                         n_tumour=len(comps), n_tumour_detected=sum(c['detected'] for c in comps),
+                         tumour_ml=sum(c['ml'] for c in comps), tumour_detected_ml=sum(c['ml'] for c in comps if c['detected']),
+                         stage1_note=note)
+    S.update(lab=lab, anchors=anchors, lesions=lesions, comps=comps, ext_arr=arr, stage1=ledger)
+    return S
+
+
+XI_RULE = ['psi']   # 23 Nov: 'anchor' -> xi is the anchor (fit_psi.json xi_rule); q always uses psi. Set by the calling script.
+
+
 def build_lesion(c, S, L, G1, G2, psi):
     """stage-1 quantities of lesion L on the window of case c: anchor mask A (union), per-anchor masks, q, xi, U and the agents'
     outlines (bp, vt). None when every anchor of L vanished in the window (striding)."""
@@ -215,13 +324,22 @@ def build_lesion(c, S, L, G1, G2, psi):
     out = {'bp': np.zeros(shape, bool), 'vt': np.zeros(shape, bool)}; amasks = []; names = []
     for i in L['anchors']:
         an = S['anchors'][i]
-        a = c['lab'] == an['id']
+        if 'ext' in an:                                   # stage-1 anchor (scan_stage1): its own extents, w0 by the stage-1 rule
+            a = on_window(an['abox'], _unpack(S['ext_arr'][an['key']], an['abox']), c)
+        else:
+            a = c['lab'] == an['id']
         if a.sum() < 20:
             continue
         outl = {s: np.isin(c['lab_ag'][ag], an[s]) for ag, s in SHORT.items()}
-        ext, w0 = EX.extents(a, outl, c['others'], c['sp'], G1, G2, psi)
+        if 'ext' in an:
+            ext = [(e['name'], on_window(e['box'], _unpack(S['ext_arr'][e['key']], e['box']), c)) for e in an['ext']] or [('anchor', a)]
+            w0 = np.asarray(G2.extent_prior([dict(logratio=e['logratio'], flags=e['flags']) for e in an['ext']], psi, {}), float) \
+                if an['ext'] else np.ones(1)
+        else:
+            ext, w0 = EX.extents(a, outl, c['others'], c['sp'], G1, G2, psi)
         qa = EX.q_map(ext, w0, shape); q = 1.0 - (1.0 - q) * (1.0 - qa)
-        ib = int(np.argmax(w0)); xi |= ext[ib][1]; names.append(ext[ib][0])
+        ib = ([k for k, (nm, _) in enumerate(ext) if nm == 'anchor'] or [0])[0] if XI_RULE[0] == 'anchor' else int(np.argmax(w0))
+        xi |= ext[ib][1]; names.append(ext[ib][0])
         for _, m in ext:
             U |= m
         A |= a; amasks.append(a)

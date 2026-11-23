@@ -38,6 +38,12 @@ BIT = {m: 1 << k for k, m in enumerate(METHODS)}
 ACC = ('accepted', 'accepted_override')
 LEDGER = ['v84_r2seg']     # --ledger (15 Nov)
 DECFILE = [None]           # --decisions: re-decided file in the ledger dir (rel, id, decision_<name>)
+<<<<<<< HEAD
+=======
+XIRULE = [json.load(open(os.path.join(paths.ledger_dir(), 'v85', 'extent', 'fit_psi.json'))).get('xi_rule', 'psi')
+          if os.path.exists(os.path.join(paths.ledger_dir(), 'v85', 'extent', 'fit_psi.json')) else 'psi']   # 23 Nov
+PSIMETHOD = [None]         # --psi-method (23 Nov): extent rule from fit_psi.json folds (M1 | M2 | anchor | v8.4); default = adopted method
+>>>>>>> 7271616 (update stage 2)
 EVTAG = [None]             # --eval-tag (22 Nov): outputs eval_<tag>/ (e.g. psi_bp2 after the psi refit), old eval kept
 BAND = [None]              # --tumour-band lo,hi (22 Nov): evaluate only expert tumours with lo <= ml < hi; outputs eval_band_<lo>_<hi>/
 S26 = EX.STRUCT26
@@ -66,7 +72,7 @@ def psi_for(site):
     pj = json.load(open(os.path.join(paths.ledger_dir(), 'v85', 'extent', 'fit_psi.json')))
     old = G2.Psi(json.load(open(os.path.join(paths.ledger_dir(), 'v8', 'testbed', 'fit_host6.json')))['psi'])
     if pj.get('adopted') and site in (pj.get('folds') or {}):
-        new = G2.Psi(dict(edges=pj['psi']['edges'], val=pj['folds'][site][pj['method']]))
+        new = G2.Psi(dict(edges=pj['psi']['edges'], val=pj['folds'][site][PSIMETHOD[0] or pj['method']]))
     else:
         new = G2.Psi(pj['psi'])
     return old, new
@@ -125,6 +131,8 @@ def eval_scan(ds, stem, dec, psis):
                     continue
                 cands = [dict(logratio=e['logratio'], flags=e.get('flags', [])) for e in ex]
                 j_new = int(np.argmax(G2.extent_prior(cands, new, {}))); j_old = int(np.argmax(G2.extent_prior(cands, old, {})))
+                if PSIMETHOD[0] is None and XIRULE[0] == 'anchor':      # 23 Nov: adopted outline rule xi = anchor (fit_psi.json xi_rule)
+                    j_new = ([k for k, e in enumerate(ex) if e['name'] == 'anchor'] or [0])[0]
                 n_chk += 1; n_ok += int(ex[j_old]['name'] == dec.loc[int(i), 'extent'])
                 d_ = dec.loc[int(i), 'decision']
                 xn = unpack(z, f'a{i}_e{j_new}', ex[j_new]['box']); xo = unpack(z, f'a{i}_e{j_old}', ex[j_old]['box'])
@@ -237,9 +245,16 @@ def main():
     ap.add_argument('--shards', type=int, default=0); ap.add_argument('--summary', action='store_true')
     ap.add_argument('--ledger', default='v84_r2seg'); ap.add_argument('--decisions', default=None)
     ap.add_argument('--eval-tag', default=None, help='output dir eval_<tag>/ (22 Nov)')
+<<<<<<< HEAD
     ap.add_argument('--tumour-band', default=None, help='lo,hi in ml (e.g. 0.1,0.5): per-tumour rows only for tumours in [lo, hi); separate output dir')
     a = ap.parse_args()
     LEDGER[0] = a.ledger; DECFILE[0] = a.decisions; EVTAG[0] = a.eval_tag
+=======
+    ap.add_argument('--psi-method', default=None, choices=('M1', 'M2', 'anchor', 'v8.4'), help='extent rule (held-out site fold) from fit_psi.json (23 Nov)')
+    ap.add_argument('--tumour-band', default=None, help='lo,hi in ml (e.g. 0.1,0.5): per-tumour rows only for tumours in [lo, hi); separate output dir')
+    a = ap.parse_args()
+    LEDGER[0] = a.ledger; DECFILE[0] = a.decisions; EVTAG[0] = a.eval_tag; PSIMETHOD[0] = a.psi_method
+>>>>>>> 7271616 (update stage 2)
     if a.tumour_band:
         BAND[0] = tuple(float(x) for x in a.tumour_band.split(','))
         if a.summary:

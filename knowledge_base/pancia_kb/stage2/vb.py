@@ -27,6 +27,28 @@ LOG2PI = np.log(2 * np.pi)
 DT = np.float32       # dtype of the large voxel x class arrays (memory on large TCGA clusters; sums are taken in float64)
 BLOCK = 32768         # voxels per block in the M and E steps (2 Nov: temporaries stay in cache; memory traffic, not arithmetic, was the cost)
 
+# 23 Nov (step S): optional GPU path for Model.run (CuPy). Same model, same updates, same convergence rule; the voxel x class arrays
+# live on the GPU and the small per-class quantities (Normal-Wishart posteriors, Dirichlet terms, nu updates) stay on the CPU in
+# float64. Results differ from the CPU path only by floating-point summation order. Off unless PANCIA_GPU=1 (and cupy imports);
+# problems with fewer than GPU_MIN_N voxels stay on the CPU (transfer cost). The CPU code below is unchanged.
+import os as _os
+GPU_MIN_N = int(_os.environ.get('PANCIA_GPU_MIN_N', '20000'))
+_CP = [None]
+
+
+def gpu():
+    """the cupy module when the GPU path is on (PANCIA_GPU=1 and cupy imports), else None"""
+    if _CP[0] is None:
+        _CP[0] = False
+        if _os.environ.get('PANCIA_GPU', '0') == '1':
+            try:
+                import cupy
+                cupy.zeros(1).sum()
+                _CP[0] = cupy
+            except Exception as e:                               # noqa: BLE001
+                print(f'[vb] PANCIA_GPU=1 but cupy is unavailable ({e}); CPU path used', flush=True)
+    return _CP[0] or None
+
 
 class NW:
     """Normal-Wishart prior / posterior on (mu, Lambda): mu | Lambda ~ N(m, (beta Lambda)^-1), Lambda ~ Wishart(W, nu)."""
@@ -489,6 +511,188 @@ class Model:
         c1 = np.bincount(A, ws, self.n) - c0
         return c1, c0
 
+    # ------------------------------------------------------------------ GPU path (23 Nov; see gpu())
+    def _to_dev(self):
+        cp = gpu(); g = {}
+        g['Yc'] = cp.asarray(self._Yc); g['Y2'] = cp.asarray(self._Y2); g['types'] = cp.asarray(self.types)
+        g['R'] = cp.asarray(np.asarray(self.R, DT)); g['Eu'] = cp.asarray(np.asarray(self.Eu, DT))
+        if self.tumour:
+            g['logpi'] = cp.asarray(self._logpi); g['log1mpi'] = cp.asarray(self._log1mpi)
+        g['cnt'] = np.bincount(self.types, minlength=self._T)
+        self._g = g
+        return g
+
+    def _m_step_gpu(self):
+        cp = gpu(); g = self._g; K, C = self.K, self.C; J = K + C; D = self.D
+        Rb = g['R'].astype(cp.float64); Wb = Rb * g['Eu']
+        r_sum = cp.asnumpy(Rb.sum(0)); M0 = cp.asnumpy(Wb.sum(0)); M1 = cp.asnumpy(Wb.T @ g['Yc']); M2 = cp.asnumpy(Wb.T @ g['Y2'])
+        self.post = []
+        for j in range(J):
+            prior = self.tp if j < K else self.bp[j - K]
+            sw = float(M0[j])
+            if sw <= 1e-10:
+                self.post.append(NW.posterior_from_moments(prior, sw, None, None, float(r_sum[j]))); continue
+            ybc = M1[j] / sw; S = np.zeros((D, D))
+            for (a, b_), v in zip(self._pairs, M2[j]):
+                S[a, b_] = S[b_, a] = v
+            S -= sw * np.outer(ybc, ybc)
+            self.post.append(NW.posterior_from_moments(prior, sw, ybc + self._c, S, float(r_sum[j])))
+        if K:
+            self.a_rho = self.alpha0 + r_sum[:K]
+            self.Elrho = _dir_e_log(self.a_rho)
+        T = self._T; cnt = g['cnt']
+        self.a_lam = np.where(self.allowed, 1.0, 0.0) + np.zeros((T, C))
+        for c in range(C):
+            tot = cp.asnumpy(cp.bincount(g['types'], weights=Rb[:, K + c], minlength=T))
+            self.a_lam[:, c] += np.where(self.allowed[:, c] & (cnt > 0), tot, 0.0)
+        self.Ellam = np.full((T, C), -np.inf)
+        for t in range(T):
+            al = self.allowed[t]
+            if al.any():
+                self.Ellam[t, al] = _dir_e_log(self.a_lam[t, al])
+
+    def _ell_gpu(self, update_nu=True):
+        cp = gpu(); g = self._g; K, C = self.K, self.C; J = K + C; D = self.D
+        nu = np.asarray(self.nu_k, np.float64)
+        Cq = np.zeros((len(self._pairs), J)); Bl = np.zeros((D, J)); c0 = np.zeros(J); cj = np.zeros(J)
+        for j, post in enumerate(self.post):
+            W = post.W * post.nu; mc = post.m - self._c
+            Cq[:, j] = [W[a, a] if a == b_ else 2.0 * W[a, b_] for a, b_ in self._pairs]
+            Bl[:, j] = -2.0 * (W @ mc); c0[j] = float(mc @ W @ mc) + D / post.beta
+            au = (nu[j] + D) / 2.0
+            cj[j] = (0.5 * post.e_logdet() - 0.5 * D * LOG2PI + 0.5 * nu[j] * np.log(nu[j] / 2.0) - gammaln(nu[j] / 2.0) + gammaln(au))
+        au = (nu + D) / 2.0
+        Dl = g['Y2'] @ cp.asarray(Cq) + g['Yc'] @ cp.asarray(Bl) + cp.asarray(c0)
+        cp.maximum(Dl, 0.0, out=Dl)
+        bu = (0.5 * (cp.asarray(nu) + Dl)).astype(DT); del Dl
+        lbu = cp.log(bu)
+        L = cp.asarray(cj.astype(DT)) - cp.asarray(au.astype(DT)) * lbu
+        Eu = cp.asarray(au.astype(DT)) / bu
+        if update_nu and (self.nu_prior is not None or (self.learn_nu and K)):
+            R = g['R']
+            sr = cp.asnumpy(R.sum(0, dtype=cp.float64)); s_lb = cp.asnumpy((R * lbu).sum(0, dtype=cp.float64))
+            s_eu = cp.asnumpy((R * Eu).sum(0, dtype=cp.float64))
+            a = sr * digamma(au) - s_lb - s_eu
+            for j in range(J):
+                if self.nu_prior is not None:
+                    self.nu_k[j] = nu_map_sums(sr[j], a[j], self.nu_prior[j])
+                elif j < K:
+                    v = self._nu_update_sums(sr[j], a[j])
+                    if v is not None:
+                        self.nu_k[j] = v
+        return L, Eu
+
+    def _coupling_gpu(self, p, Ed):
+        """as _coupling (both ends), on the GPU; Ed = (I, J, S) device arrays"""
+        cp = gpu(); I, J, S = Ed
+        pI = p[I]; pJ = p[J]
+        d = pI * (1 - pJ) + pJ * (1 - pI)
+        Ew = self.a_w / (self.b_w + S * d); ws = Ew * S
+        c1 = cp.bincount(I, ws * (1 - pJ), self.n) + cp.bincount(J, ws * (1 - pI), self.n)
+        c0 = cp.bincount(I, ws * pJ, self.n) + cp.bincount(J, ws * pI, self.n)
+        return c1, c0, Ew
+
+    def _coupling_half_gpu(self, p, ph, Ed):
+        cp = gpu(); I, J, S = Ed
+        pI = p[I]; pJ = p[J]
+        d = pI * (1 - pJ) + pJ * (1 - pI)
+        ws = self.a_w / (self.b_w + S * d) * S
+        A, other = (I, pJ) if ph == 0 else (J, pI)
+        c0 = cp.bincount(A, ws * other, self.n)
+        c1 = cp.bincount(A, ws, self.n) - c0
+        return c1, c0
+
+    def _run_gpu(self, max_iter=300, tol=1e-3, min_iter=5, verbose=False, parity=None):
+        """run() with the voxel x class arrays on the GPU (same updates, same convergence rule)"""
+        cp = gpu(); g = self._to_dev(); K = self.K
+        par = np.zeros(self.n, np.int8) if parity is None else np.asarray(parity, np.int8)
+        R = g['R']
+        p_old = R[:, :K].sum(1, dtype=cp.float64) if K else cp.zeros(self.n)
+        self.converged = False; self.trace = []; stable = 0
+        Ed = None; E = None
+        if K and self.edges is not None:
+            Ed = tuple(cp.asarray(x) for x in self.edges)
+            if parity is not None:
+                Eh = self._orient(par)
+                E = None if Eh is None else tuple(cp.asarray(x) for x in Eh[0])
+        phases = (0, 1) if (K and self.edges is not None) else (None,)
+        idx = {ph: (None if ph is None else cp.asarray(np.flatnonzero(par == ph))) for ph in phases}
+        for it in range(1, max_iter + 1):
+            self._m_step_gpu()
+            L, g['Eu'] = self._ell_gpu()
+            lb = cp.asarray(self.Ellam)
+            Elrho = cp.asarray(self.Elrho) if K else None
+            p_cur = p_old.copy()
+            for ph in phases:
+                ix = idx[ph]
+                c1 = c0 = None
+                if K and self.edges is not None:
+                    if E is not None:
+                        c1, c0 = self._coupling_half_gpu(p_cur, ph, E)
+                    else:
+                        c1, c0, _ = self._coupling_gpu(p_cur, Ed)
+                rows = slice(None) if ix is None else ix
+                lg = L[rows].copy()
+                if K:
+                    lg[:, :K] += (g['logpi'][rows][:, None] + Elrho[None, :]).astype(DT)
+                lbr = lb[g['types'][rows]]
+                if self.tumour:
+                    lbr = g['log1mpi'][rows][:, None] + lbr
+                lg[:, K:] += lbr.astype(DT)
+                if c1 is not None:
+                    lg[:, :K] -= c1[rows][:, None].astype(DT); lg[:, K:] -= c0[rows][:, None].astype(DT)
+                lg -= lg.max(1, keepdims=True)
+                cp.exp(lg, out=lg)
+                lg /= lg.sum(1, keepdims=True)
+                R[rows] = lg
+                if K:
+                    p_cur[rows] = lg[:, :K].sum(1, dtype=cp.float64)
+                del lg
+            p = p_cur if K else cp.zeros(self.n)
+            dp = float(cp.abs(p - p_old).max()) if K else 0.0
+            if self.learn_nu and K:
+                Rk = R[:, :K].astype(cp.float64)
+                if getattr(self, '_Rk_old', None) is not None:
+                    dp = max(dp, float(cp.abs(Rk - self._Rk_old).max()),
+                             float(np.max(np.abs(self.nu_k[:K] - self._nu_old) / self._nu_old)))
+                else:
+                    dp = max(dp, 1.0)
+                self._Rk_old = Rk; self._nu_old = self.nu_k[:K].copy()
+            nu_settled = True
+            if self.nu_prior is not None:
+                if getattr(self, '_nuall_old', None) is not None:
+                    dnu = float(np.max(np.abs(self.nu_k - self._nuall_old) / self._nuall_old))
+                    dp = max(dp, tol * dnu / NU_TOL); nu_settled = dnu < NU_TOL
+                else:
+                    dp = max(dp, 1.0); nu_settled = False
+                self._nuall_old = self.nu_k.copy()
+            flips = int(((p >= 0.5) != (p_old >= 0.5)).sum()) if K else 0
+            stable = stable + 1 if (flips == 0 and float(cp.abs(p - p_old).mean()) < 1e-4 and nu_settled) else 0
+            self.trace.append(dp)
+            if verbose:
+                print(it, round(dp, 5), flips, flush=True)
+            p_old = p
+            if it >= min_iter and (dp < tol or (stable >= 10 and not self.learn_nu)):
+                self.converged = True; break
+        self.iters = it
+        if K and self.edges is not None:
+            _, _, Ew = self._coupling_gpu(p_old, Ed); self.Ew = cp.asnumpy(Ew)
+        self._m_step_gpu(); L, g['Eu'] = self._ell_gpu(update_nu=False)
+        # ELBO voxel term on the GPU (as elbo_independent), the rest on the CPU
+        lg = cp.full(R.shape, -cp.inf, DT)
+        if K:
+            lg[:, :K] = cp.log(cp.asarray(self.pi))[:, None] + cp.asarray(self.Elrho)[None, :]
+        lg[:, K:] = (g['log1mpi'][:, None] if self.tumour else 0.0) + cp.asarray(self.Ellam)[g['types']]
+        Rp = R > 0
+        tt = cp.where(Rp, R * (lg + L - cp.log(cp.maximum(R, 1e-30))), 0.0)
+        e = float(tt.sum(dtype=cp.float64)); del tt, lg, Rp
+        self.elbo = self._elbo_rest(e)
+        self.R = cp.asnumpy(R); self.Eu = cp.asnumpy(g['Eu'])
+        if getattr(self, '_Rk_old', None) is not None and not isinstance(self._Rk_old, np.ndarray):
+            self._Rk_old = cp.asnumpy(self._Rk_old)
+        self._g = None
+        return self
+
     def prior_logits(self):
         K = self.K; lg = np.full((self.n, K + self.C), -np.inf, DT)
         if K:
@@ -500,6 +704,8 @@ class Model:
     def run(self, max_iter=300, tol=1e-3, min_iter=5, verbose=False, parity=None):
         """coordinate ascent; label updates in two half-sweeps (checkerboard parity of the voxel grid) so that coupled neighbours are
         never updated together (parallel mean-field updates of a Potts model oscillate). parity: (n,) 0/1 array (from the grid)."""
+        if gpu() is not None and self.n >= GPU_MIN_N:
+            return self._run_gpu(max_iter=max_iter, tol=tol, min_iter=min_iter, verbose=verbose, parity=parity)
         K = self.K
         par = np.zeros(self.n, np.int8) if parity is None else np.asarray(parity, np.int8)
         p_old = self.R[:, :K].sum(1) if K else np.zeros(self.n)
@@ -597,6 +803,10 @@ class Model:
         with np.errstate(invalid='ignore'):
             t = np.where(R > 0, R * (lg + L - np.log(np.maximum(R, 1e-30))), 0.0)
         e = float(t.sum(dtype=np.float64))
+        return self._elbo_rest(e)
+
+    def _elbo_rest(self, e):
+        """the non-voxel terms of the ELBO (KL of the class posteriors, Dirichlet terms, nu prior), added to the voxel term e"""
         for j, post in enumerate(self.post):
             e += post.kl_term(self.tp if j < self.K else self.bp[j - self.K])
         if self.K:

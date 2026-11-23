@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(os.path.join(HERE, '..', '..')))
 from pancia_kb import KnowledgeBase, grounding_g2 as G2   # noqa: E402
 from pancia_kb.stage2 import paths, interface as IF   # noqa: E402
-from s2_run_tcga import append, name, psi_for, stage1_args   # noqa: E402
+from s2_run_tcga import append, name, psi_for, stage1_args, xi_rule_for   # noqa: E402
 
 
 def main():
@@ -29,7 +29,7 @@ def main():
     rels = [x for i, x in enumerate(ser.rel) if i % SN == SI]
     if a.only:
         rels = [x for x in rels if any(s in x for s in a.only.split(','))]
-    S1 = IF.Stage1(KB, fit6['beta_UD'], psi_for(a, B), rows, paths.root('TCGA_Seg'), paths.root('TCGA_NIFTI'), ledger=a.ledger)
+    S1 = IF.Stage1(KB, fit6['beta_UD'], psi_for(a, B), rows, paths.root('TCGA_Seg'), paths.root('TCGA_NIFTI'), ledger=a.ledger, xi_rule=xi_rule_for(a, B))
     fd = os.path.join(O, f'done{SUF}.txt'); done = set()
     for f_ in glob.glob(os.path.join(O, 'done*.txt')):                 # all shards
         done |= set(open(f_).read().splitlines())

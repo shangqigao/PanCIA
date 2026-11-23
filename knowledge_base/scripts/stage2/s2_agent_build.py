@@ -168,6 +168,7 @@ def main():
     O = paths.out_dir('agent_samples_true' if a.true_only else 'agent_samples'); os.makedirs(os.path.join(O, 'samples'), exist_ok=True)
     fit6 = json.load(open(os.path.join(paths.ledger_dir(), 'v8', 'testbed', 'fit_host6.json')))
     psi = G2.Psi(json.load(open(a.psi))['psi'] if a.psi else fit6['psi'])     # --psi: stage-1 extent prior (default v8.4)
+    AG.XI_RULE[0] = json.load(open(a.psi)).get('xi_rule', 'psi') if a.psi else 'psi'   # 23 Nov: xi = anchor when fit_psi.json says so; q keeps psi
     KB = KnowledgeBase.load(os.path.join(paths.kb_dir(), 'knowledge_base'))
     done = set()
     for f in os.listdir(O):

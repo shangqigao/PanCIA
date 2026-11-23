@@ -57,7 +57,11 @@ def main():
         rep += [f'== {m} ==', x.round(3).to_string(), '(sites equal) ' + ', '.join(f'{c} {v:.3f}' for c, v in x.mean().items())]
         u = d[d.under].groupby(['site', 'outline'])[m].mean().unstack('outline')[cols].mean()
         rep += ['(under-segmented lesions, xi recall < 0.7; sites equal) ' + ', '.join(f'{c} {v:.3f}' for c, v in u.items()), '']
+<<<<<<< HEAD
     tfs = glob.glob(os.path.join(a.masks, 'timing_s*.csv'))
+=======
+    tfs = glob.glob(os.path.join(a.masks, '**', 'timing_*.csv'), recursive=True)   # s3_run_interactive (timing_s<i>) or m_tumor_segmentation (timing_<first>_<last>)
+>>>>>>> 7271616 (update stage 2)
     if tfs:
         t = pd.concat([pd.read_csv(f) for f in tfs])
         rep += ['== time (s) ==', 'set_image per scan: median %.1f, max %.1f' % (t[t.variant == 'set_image'].seconds.median(), t[t.variant == 'set_image'].seconds.max()),

@@ -10,6 +10,8 @@
 #   ./run_stage2.sh agent_true_fit      spatial prior refitted on TRUE lesions only: P(tumour | lesion real) (1 Nov)
 #   ./run_stage2.sh agent_beyond_fit    true-lesion prior + 'in an outline beyond xi' (fits only; samples of agent_true_fit) (1 Nov)
 #   ./run_stage2.sh validate_agents_v3  real-agent validation with the agent_beyond_fit fold fits
+#   ./run_stage2.sh agent_beyond_fit_bp2  step F (23 Nov): true-lesion samples on bp2 with xi = anchor, beyond-xi fold fits, calibration
+#   ./run_stage2.sh validate_agents_v4    step F: stage 2 on stage-1 accepted + uncertain lesions (v86_r2seg_bp2), all 139 negatives
 #   ./run_stage2.sh validate_agents_v3q as v3, tumour appearance from q instead of the anchors (2 Nov)
 #   ./run_stage2.sh tcga       TCGA pilot run and panels
 # NSHARD (default 4) parallel shards for the long steps (NSHARD_TCGA, default 2, for the TCGA run: memory; NSHARD_VAL, default 3, for the validations: s2_validate_agents.py splits by (site, case), so up to ~400 shards are useful; s2_validate.py by site); N_PER (default 100) R2Seg cases per collection, drawn at random from the usable cases; N_VAL (default 20).
@@ -100,6 +102,32 @@ case "${1:-fit}" in
     python s2_prior_calibration.py --samples agent_samples_true --out prior_calibration_beyond \
       --fits sim=validation/folds,agent=validation_agents/folds_agent,agent_true=validation_agents/folds_agent_true,agent_beyond=validation_agents/folds_agent_beyond
     echo "Review: clinical/PanCIA_outputs/stage2/validation_agents/prior_calibration_beyond.txt and knowledge_base/knowledge_base/stage2/stage2_fit_agent_beyond_report.txt"
+    ;;
+  agent_beyond_fit_bp2)
+    # 23 Nov (step F): rebuild the true-lesion samples on the retrained BiomedParse (bp2) with xi = anchor (fit_psi.json xi_rule) and
+    # refit the beyond-xi prior. Old outputs were renamed *_oldBP (agent_samples_true_oldBP, folds_agent_beyond_oldBP,
+    # stage2_fit_agent_beyond_oldBP.json). Calibration on the new samples compares sim, the old-BP fit and the new fit.
+    shards s2_agent_build.py --n-per "$N_PER" --true-only $PSI_ARG
+    OUTD=$(python -c "import sys; sys.path.insert(0, '../..'); from pancia_kb.stage2 import paths; print(paths.out_dir('validation_agents', 'folds_agent_beyond'))")
+    for D in kidney liver pancreas colon lung cervix urinary_bladder breast prostate; do
+      EXCL=$(python -c "import sys; sys.path.insert(0, '../..'); from pancia_kb.stage2 import expert as EX; print(','.join(k for k, v in EX.SITE_ENTITY.items() if v == '$D'))")
+      [ -f "$OUTD/fit_$D.json" ] || nice -n 15 python s2_fit.py --samples agent_true --beyond --tumour-from anchor --exclude "$EXCL" --out "$OUTD/fit_$D.json" --max-rows 1.5e6
+    done
+    nice -n 15 python s2_fit.py --samples agent_true --beyond --tumour-from anchor --max-rows 1.5e6 \
+      --out "$(python -c "import sys; sys.path.insert(0, '../..'); from pancia_kb.stage2 import paths; print(paths.fit_path('stage2_fit_agent_beyond.json'))")"
+    python s2_prior_calibration.py --samples agent_samples_true --out prior_calibration_beyond_bp2 \
+      --fits agent_beyond_oldBP=validation_agents/folds_agent_beyond_oldBP,agent_beyond_bp2=validation_agents/folds_agent_beyond
+    echo "Review: clinical/PanCIA_outputs/stage2/validation_agents/prior_calibration_beyond_bp2.txt and knowledge_base/knowledge_base/stage2/stage2_fit_agent_beyond_report.txt"
+    ;;
+  validate_agents_v4)
+    # 23 Nov (step F): stage 2 on the lesions stage 1 passes on (accepted + uncertain, stage-1 anchors and extents, xi = anchor) of
+    # ledger/v86_r2seg_bp2, with the bp2 beyond-xi fold fits (run agent_beyond_fit_bp2 first). N_VAL_AG tumour scans per site, every
+    # true negative (cohort/r2seg_tumour_free.csv); MAX_FALSE false lesions solved per scan (default: all, as stage 2 sees them on TCGA)
+    NSHARD=$NSHARD_VAL shards s2_validate_agents.py --n-val "${N_VAL_AG:-40}" --n-neg "${N_NEG:-1000}" --max-false "${MAX_FALSE:-1000}" \
+      --fit-dir validation_agents/folds_agent_beyond --fit-samples agent_true --fit-beyond --tumour-from anchor \
+      --stage1-ledger "${S1_LEDGER:-v86_r2seg_bp2}" --tag validation_agents_v4 $PSI_ARG
+    python s2_validate_agents.py --summary --tag validation_agents_v4
+    echo "Review: clinical/PanCIA_outputs/stage2/validation_agents_v4/report.txt"
     ;;
   validate_agents_v3q)
     # 2 Nov: v3 on all sites with tumour appearance from q-weighted voxels (tumour_from q) instead of the anchors

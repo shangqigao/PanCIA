@@ -146,14 +146,11 @@ save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg_Seg"
 #             --dataset R2Seg \
 #             --save_dir $save_dir
 
-python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
-            --model nnInteractive \
-            --dataset R2Seg \
-            --radiology $radiology \
-            --nni_prompts_dir "${save_dir}/nnInterative/prompts" \
-            --save_dir "${save_dir}/nnInterative/masks" \
-            # --start 0 \
-            # --end 1
+# nnInterative
+python knowledge_base/scripts/interactives3_run_interactive.py \
+            --prompts "${save_dir}/nnInterative/prompts" \
+            --r2seg-root $radiology \
+            --out "${save_dir}/nnInterative/masks"
 
 # Endometrioma segmentation
 # radiology="/home/sg2162/rds/hpc-work/EndoMRI_All"
