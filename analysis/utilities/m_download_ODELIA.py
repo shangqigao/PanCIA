@@ -9,7 +9,7 @@ from tqdm import tqdm
 # --------------------- Settings ---------------------
 repo_id = "ODELIA-AI/ODELIA-Challenge-2025"
 config = "default"  # "default" or "unilateral"
-output_root = Path("/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/ODELIA")
+output_root = Path("/data/hdd1/PanCancer/ODELIA")
 
 
 # Load dataset in streaming mode
