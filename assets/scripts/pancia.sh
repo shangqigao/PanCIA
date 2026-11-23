@@ -5,13 +5,13 @@
 #SBATCH -o log.%x.job_%j
 #SBATCH --nodes=1
 ##SBATCH --cpus-per-task=32
-##SBATCH --time=0-36:00:00
-#SBATCH --time=0-00:10:00
+#SBATCH --time=0-36:00:00
+##SBATCH --time=0-00:10:00
 ##SBATCH -p cclake
 ##SBATCH -p cclake-himem
 #SBATCH -p ampere
 #SBATCH --gres=gpu:1
-#SBATCH --qos=intr
+##SBATCH --qos=intr
 
 ## activate environment
 source ~/.bashrc
@@ -146,14 +146,14 @@ save_dir="/home/sg2162/rds/rds-ge-sow2-imaging-MRNJucHuBik/PanCancer/R2Seg_Seg"
 #             --dataset R2Seg \
 #             --save_dir $save_dir
 
-python analysis/m_tumor_segmentation.py \
+python analysis/a02_tumor_segmentation/m_tumor_segmentation.py \
+            --model nnInteractive \
             --dataset R2Seg \
             --radiology $radiology \
-            --model nnInteractive \
             --nni_prompts_dir "${save_dir}/nnInterative/prompts" \
             --save_dir "${save_dir}/nnInterative/masks" \
-            --start 0 \
-            --end 1
+            # --start 0 \
+            # --end 1
 
 # Endometrioma segmentation
 # radiology="/home/sg2162/rds/hpc-work/EndoMRI_All"
