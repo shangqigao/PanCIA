@@ -70,18 +70,21 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--tag', default='tcga_v1'); ap.add_argument('--only', default=None)
     ap.add_argument('--no-bf', action='store_true'); ap.add_argument('--max-iter', type=int, default=300)
     ap.add_argument('--no-evidence', action='store_true'); stage1_args(ap)
+    ap.add_argument('--fit', default=None, help='24 Nov: stage-2 fit JSON under knowledge_base/knowledge_base/stage2/; default for v8.6: '
+                    'stage2_fit_agent_beyond.json (true-lesion prior with the beyond-xi term, refitted on bp2 23 Nov); v8.4: stage2_fit.json')
     ap.add_argument('--accepted-only', action='store_true', help='23 Nov: OOD sets (user, 16 Nov): only lesions with an accepted anchor, '
                     'and their accepted anchors; uncertain lesions are not passed to stage 2')
     a = ap.parse_args()
     SH = os.environ.get('SHARD'); SI, SN = (int(x) for x in SH.split('/')) if SH else (0, 1); SUF = f'_s{SI}' if SH else ''
     O = paths.out_dir(a.tag); os.makedirs(os.path.join(O, 'maps'), exist_ok=True)
-    fit = json.load(open(paths.fit_path()))
+    fitf = paths.fit_path(a.fit or ('stage2_fit_agent_beyond.json' if a.ledger == 'v86' else 'stage2_fit.json'))
+    fit = json.load(open(fitf))
     B = paths.ledger_dir(); P = os.path.join(B, a.stage1)                     # 16 Nov: stage-1 rows (default v86_tcga_pilot)
     fit6 = json.load(open(os.path.join(B, 'v8', 'testbed', 'fit_host6.json')))
     KB = KnowledgeBase.load(os.path.join(paths.kb_dir(), 'knowledge_base'))
     rows = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'anchors*.csv')))], ignore_index=True)
     ser = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'series*.csv')))], ignore_index=True)
-    ser = ser[(ser.n_acc + ser.n_unc) > 0].sort_values('rel')
+    ser = ser[(ser.n_acc > 0) if a.accepted_only else ((ser.n_acc + ser.n_unc) > 0)].sort_values('rel')
     rels = [r for i, r in enumerate(ser.rel) if i % SN == SI]
     if a.only:
         rels = [r for r in rels if any(s in r for s in a.only.split(','))]
@@ -92,7 +95,12 @@ def main():
     fd = os.path.join(O, f'done{SUF}.txt'); done = set()
     for f_ in glob.glob(os.path.join(O, 'done*.txt')):                 # all shards
         done |= set(open(f_).read().splitlines())
-    json.dump(dict(version=VERSION, fit=paths.fit_path(), fit_date=fit.get('date'), r_mm=fit['r_mm']), open(os.path.join(O, 'run_info.json'), 'w'))
+    from pancia_kb.stage2 import vb as _vb
+    _g = _vb.gpu()
+    json.dump(dict(version=VERSION, fit=fitf, fit_date=fit.get('date'), r_mm=fit['r_mm'], stage1=a.stage1, accepted_only=a.accepted_only,
+                   bayes_factor=not a.no_bf, gpu=_g is not None, fast_edt=os.environ.get('PANCIA_FAST_EDT', '0') == '1'),
+              open(os.path.join(O, f'run_info{SUF}.json'), 'w'))
+    print('[stage 2] fit', os.path.basename(fitf), '| VB on', 'GPU' if _g is not None else 'CPU', '|', len(rels), 'series in this shard', flush=True)
     t0 = time.time()
     for k, rel in enumerate(rels):
         if rel in done:
