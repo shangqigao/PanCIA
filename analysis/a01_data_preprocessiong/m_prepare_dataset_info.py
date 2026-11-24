@@ -363,3 +363,63 @@ def prepare_R2Seg_info(r2seg_dir, collections=None, seg_obj='organ', img_format=
         'meta_list': None,
         'img_format': [img_format] * len(images),
     }
+
+
+ODELIA_SEQUENCES = ('Pre', 'Post_1', 'Post_2', 'Post_3', 'Post_4', 'Post_5', 'T2')   # acquired sequences as released; Sub_* (derived) excluded by default (24 Nov 2026)
+
+
+def odelia_name(img_path):
+    """output stem of one ODELIA image, relative to the dataset root without 'data/': '<centre>/<UID>/<sequence>'"""
+    pp = pathlib.Path(img_path)
+    return f"{pp.parent.parent.parent.name}/{pp.parent.name}/{pp.name.replace('.nii.gz', '')}"
+
+
+def prepare_ODELIA_info(odelia_dir, centres=None, sequences=None, seg_obj='tumor', img_format='nifti', planner_dir=None,
+                        plan_lists=None):
+    """ODELIA breast MRI (24 Nov 2026): <odelia_dir>/<centre>/data/<UID>/<sequence>.nii.gz, labels per breast in
+    <centre>/metadata/annotation.csv (Lesion_Left / Lesion_Right: 0 no lesion, 1 benign, 2 malignant; no masks).
+    centres: e.g. CAM MHA RSH RUMC UKA UMCU (default: every folder with data/); sequences: names without .nii.gz (default: every
+    acquired sequence present, e.g. Pre, Post_1..Post_5, T2). Derived images (Sub_*: subtraction = post - pre, not an acquired scan)
+    are excluded by default (user, 24 Nov); they are only used when named in sequences. Output names keep the relative path '<centre>/<UID>/<sequence>'
+    (m_tumor_segmentation._image_name), so outputs mirror the dataset layout and per-centre / per-sequence evaluation is direct.
+    planner_dir: plans at <planner_dir>/<centre>/<UID>/<sequence>_plan.json, as for R2Seg / TCGA. Tumour prompt: the breast prompt
+    used for R2Seg (PANCIA_PROMPT_TEMPLETES['breast'])."""
+    root = pathlib.Path(odelia_dir)
+    cs = list(centres) if centres else sorted(d.name for d in root.iterdir() if (d / 'data').is_dir())
+    want = set(sequences) if sequences else None
+    images, site, modality, prompts, centre_of, seq_of = [], [], [], [], [], []
+    for c in cs:
+        if not (root / c / 'data').is_dir():
+            raise FileNotFoundError(f'{root / c / "data"} not found')
+        n0 = len(images)
+        for case in sorted(d for d in (root / c / 'data').iterdir() if d.is_dir() and not d.name.startswith('.')):
+            for p in sorted(case.glob('*.nii.gz')):
+                if p.name.startswith('.'):
+                    continue
+                sq = p.name.replace('.nii.gz', '')
+                if (want is not None and sq not in want) or (want is None and sq.startswith('Sub')):
+                    continue
+                images.append(str(p)); site.append('breast'); modality.append('MRI'); centre_of.append(c); seq_of.append(sq)
+                prompts.append(f"{PANCIA_PROMPT_TEMPLETES.get('breast', 'breast tumor')} on MRI" if seg_obj == 'tumor' else 'breast on MRI')
+        print(f'ODELIA {c}: {len(images) - n0} images')
+    plan_paths = [None] * len(images)
+    if planner_dir is not None:
+        for i, img_path in enumerate(images):
+            cand = pathlib.Path(planner_dir) / (odelia_name(img_path) + '_plan.json')
+            if cand.is_file():
+                prompts[i] = load_plan_prompts(cand, plan_lists)
+                plan_paths[i] = str(cand)
+        print(f'planner prompts: {sum(p is not None for p in plan_paths)}/{len(images)} images have a plan')
+    return {
+        'name': 'ODELIA',
+        'img_paths': images,
+        'lab_paths': [None] * len(images),
+        'text_prompts': prompts,
+        'plan_paths': plan_paths,
+        'modality': modality,
+        'site': site,
+        'centre': centre_of,
+        'sequence': seq_of,
+        'meta_list': None,
+        'img_format': [img_format] * len(images),
+    }

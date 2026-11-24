@@ -7,6 +7,8 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Add a relative subdirectory to sys.path
 relative_path = os.path.join(script_dir, '../../')
 sys.path.append(relative_path)
+# 24 Nov 2026: one checkpoints folder for every model (--checkpoint_dir); each model's weights live in <checkpoint_dir>/<Model>/
+CHECKPOINT_DIR = os.path.join(relative_path, 'checkpoints')
 
 import pathlib
 import argparse
@@ -17,6 +19,7 @@ from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_MAMA
 from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_TCGA_radiology_info
 from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_CPTAC_radiology_info
 from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_R2Seg_info
+from analysis.a01_data_preprocessiong.m_prepare_dataset_info import prepare_ODELIA_info, odelia_name
 logger = logging.getLogger(__name__)
 
 
@@ -27,6 +30,8 @@ def _image_name(img_path, dataset):
     if dataset == 'R2Seg':
         pp = pathlib.Path(p)
         return f"{pp.parent.parent.name}/{pp.name.replace('.nii.gz', '')}"
+    if dataset == 'ODELIA':                       # '<centre>/<UID>/<sequence>' (relative path without data/)
+        return odelia_name(p)
     if '/MAMA-MIA/' in p:
         return pathlib.Path(p).name.replace("_0001.nii.gz", "")
     if f'/{dataset}_NIFTI/' in p:
@@ -49,10 +54,8 @@ def extract_radiology_segmentation(
         prompt_ensemble=False,
         save_radiomics=False,
         zoom_in=False,
-        voxtell_model_root=None,
         device=None,
         skip_exist=False,
-        ts_model_root=None,
         ts_task=None,
         ts_fast=False,
         ts_extra_tasks=None,
@@ -62,7 +65,6 @@ def extract_radiology_segmentation(
         voxtell_prompt_batch=0,
         nni_prompts_dir=None,
         nni_variants=('P1', 'P2', 'P3', 'P4'),
-        nni_model_dir=None,
     ):
     """extract segmentation from radiology images
     Args:
@@ -105,7 +107,6 @@ def extract_radiology_segmentation(
             save_dir=save_dir,
             format=img_format,
             site=site,
-            model_root=voxtell_model_root,
             keep_largest=keep_largest,
             prompt_ensemble=prompt_ensemble,
             device=device,
@@ -118,7 +119,6 @@ def extract_radiology_segmentation(
             save_dir=save_dir,
             prompts_dir=nni_prompts_dir,
             variants=nni_variants,
-            model_dir=nni_model_dir,
             device=device,
             skip_exist=skip_exist,
         )
@@ -135,7 +135,6 @@ def extract_radiology_segmentation(
             prompt_ensemble=prompt_ensemble,
             device=device,
             skip_exist=skip_exist,
-            model_root=ts_model_root,
             task=ts_task,
             fast=ts_fast,
             extra_tasks=ts_extra_tasks,
@@ -192,11 +191,11 @@ def extract_BiomedParse_segmentation(dataset, seg_obj, img_paths, text_prompts, 
     # Load model from pretrained weights
     if seg_obj == 'tumor':
         opt['LoRA'] = True
-        pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/PanCancer_LoRA_v1')
+        pretrained_pth = os.path.join(CHECKPOINT_DIR, 'BiomedParse', 'PanCancer_LoRA_v1')
     else:
         opt['LoRA'] = False
-        pretrained_pth = os.path.join(relative_path, 'checkpoints/BiomedParse/biomedparse_v1.pt')
-    # pretrained_pth = os.path.join(relative_path, 'checkpoints/Bayes_BiomedParse/Bayes_PanCancer/model_state_dict.pt')
+        pretrained_pth = os.path.join(CHECKPOINT_DIR, 'BiomedParse', 'biomedparse_v1.pt')
+    # pretrained_pth = os.path.join(CHECKPOINT_DIR, 'Bayes_BiomedParse', 'Bayes_PanCancer', 'model_state_dict.pt')
 
     if device == 'gpu':
         if not opt.get('LoRA', False):
@@ -401,7 +400,6 @@ def extract_VoxTell_segmentation(
         prompt_batch=0,
         format='nifti',
         site='kidney',
-        model_root=None,
         keep_largest=False,
         prompt_ensemble=False,
         device=None,
@@ -409,7 +407,7 @@ def extract_VoxTell_segmentation(
     ):
     """Segment NIfTI volumes with VoxTell v1.1 using free-text prompts.
 
-    ``model_root`` is the directory that contains the ``voxtell_v1.1`` model
+    The model is read from ``<CHECKPOINT_DIR>/VoxTell/voxtell_v1.1`` (``--checkpoint_dir``)
     directory. The checkpoint is downloaded there only when the required model
     files are missing.
     """
@@ -427,9 +425,7 @@ def extract_VoxTell_segmentation(
     if prompt_ensemble:
         raise ValueError("prompt_ensemble is currently supported only by BiomedParse")
 
-    if model_root is None:
-        model_root = os.path.join(relative_path, "checkpoints", "VoxTell")
-    model_root = pathlib.Path(model_root).expanduser().resolve()
+    model_root = pathlib.Path(CHECKPOINT_DIR, "VoxTell").expanduser().resolve()
     model_dir = model_root / "voxtell_v1.1"
     required_files = (
         model_dir / "plans.json",
@@ -601,7 +597,6 @@ def extract_nnInteractive_segmentation(
         save_dir,
         prompts_dir,
         variants=('P1', 'P2', 'P3', 'P4'),
-        model_dir=None,
         device=None,
         skip_exist=False,
     ):
@@ -613,15 +608,14 @@ def extract_nnInteractive_segmentation(
     reset_interactions, add the prompts, save the target buffer (uint8, image affine) as <save_dir>/<img_name>_les<k>_<V>.nii.gz.
     Variants: P1 points; P2 + box of xi on its largest slice; P3 + boxes through anchor centres; P4 points + lasso of xi.
     The outline is a CANDIDATE outline only (never detection support). Timing: <save_dir>/timing_<first>_<last>.csv.
-    model_dir sets NNINTERACTIVE_MODEL_DIR (weights from Hugging Face MIC-DKFZ/nnInteractive, CC BY-NC-SA 4.0; downloaded if missing).
+    <CHECKPOINT_DIR>/nnInteractive is NNINTERACTIVE_MODEL_DIR (weights from Hugging Face MIC-DKFZ/nnInteractive, CC BY-NC-SA 4.0; downloaded if missing).
     """
     import csv, json, time
     import nibabel as nib
     if prompts_dir is None:
         raise ValueError("nnInteractive needs --nni_prompts_dir (stage-1 prompts from s3_prompts.py)")
-    if model_dir is not None:
-        os.environ["NNINTERACTIVE_MODEL_DIR"] = str(pathlib.Path(model_dir).expanduser().resolve())
-        os.makedirs(os.environ["NNINTERACTIVE_MODEL_DIR"], exist_ok=True)
+    os.environ["NNINTERACTIVE_MODEL_DIR"] = str(pathlib.Path(CHECKPOINT_DIR, "nnInteractive").expanduser().resolve())
+    os.makedirs(os.environ["NNINTERACTIVE_MODEL_DIR"], exist_ok=True)
     # nnInteractive lives in its own environment; keep its imports local
     import torch
     from nnInteractive.model_management import ensure_model_available, get_default_model_id
@@ -698,7 +692,6 @@ def extract_TotalSegmentator_segmentation(
         prompt_ensemble=False,
         device=None,
         skip_exist=False,
-        model_root=None,
         task=None,
         fast=False,
         extra_tasks=None,
@@ -720,10 +713,9 @@ def extract_TotalSegmentator_segmentation(
       ``{img_name}_{seg_obj}_{extra_task}.nii.gz`` for each ``extra_tasks`` entry (e.g. ``body``, ``tissue_types``)
 
     Args:
-        model_root: directory holding the TotalSegmentator weights (``<model_root>/nnunet/results/...``).
-            Defaults to ``checkpoints/TotalSegmentator`` next to the repo, mirroring VoxTell. Weights missing
-            for the requested task are downloaded there on first use (needs internet; pre-download on a login
-            node with ``TOTALSEG_HOME_DIR=<model_root> totalseg_download_weights -t total``).
+        (weights: ``<CHECKPOINT_DIR>/TotalSegmentator/nnunet/results/...`` from ``--checkpoint_dir``; weights missing for the
+            requested task are downloaded there on first use; pre-download on a login node with
+            ``TOTALSEG_HOME_DIR=<checkpoint_dir>/TotalSegmentator totalseg_download_weights -t total``).
         task: TotalSegmentator task. ``None`` picks ``total`` for CT and ``total_mr`` for MR per image.
         fast: use the 3 mm low-resolution model (``--fast``); much quicker, coarser masks.
         extra_tasks: optional list of additional TS tasks run on the same image (``body``, ``lung_vessels``,
@@ -743,9 +735,7 @@ def extract_TotalSegmentator_segmentation(
 
     # Weights location: TotalSegmentator reads TOTALSEG_HOME_DIR (default ~/.totalsegmentator).
     # Set it before importing the package so every download / lookup uses the repo checkpoint folder.
-    if model_root is None:
-        model_root = os.path.join(relative_path, "checkpoints", "TotalSegmentator")
-    model_root = pathlib.Path(model_root).expanduser().resolve()
+    model_root = pathlib.Path(CHECKPOINT_DIR, "TotalSegmentator").expanduser().resolve()
     model_root.mkdir(parents=True, exist_ok=True)
     os.environ["TOTALSEG_HOME_DIR"] = str(model_root)
     logger.info("TotalSegmentator weights directory: %s", model_root)
@@ -943,23 +933,15 @@ if __name__ == "__main__":
     parser.add_argument('--meta_info', default=None)
     parser.add_argument('--save_dir', default="/home/sg2162/rds/hpc-work/Experiments/radiomics", type=str)
     parser.add_argument('--model', default="BiomedParse", choices=["SegVol", "BiomedParse", "VoxTell", "TotalSegmentator", "nnInteractive"], type=str)
-    parser.add_argument(
-        '--voxtell_model_root',
-        default=os.path.join(relative_path, 'checkpoints', 'VoxTell'),
-        type=str,
-        help='Directory containing voxtell_v1.1; downloads the model here if missing',
-    )
+    parser.add_argument('--checkpoint_dir', default=os.path.join(relative_path, 'checkpoints'), type=str,
+                        help='Folder holding every model\'s weights as <checkpoint_dir>/<Model>/ (BiomedParse, VoxTell, TotalSegmentator, '
+                             'nnInteractive, ...); default: checkpoints/ in the repo; missing VoxTell / TotalSegmentator / nnInteractive '
+                             'weights are downloaded there')
     parser.add_argument(
         '--device',
         default=None,
         type=str,
         help='Torch device for VoxTell/TotalSegmentator, e.g. cuda:0 or cpu (default: auto-detect)',
-    )
-    parser.add_argument(
-        '--ts_model_root',
-        default=os.path.join(relative_path, 'checkpoints', 'TotalSegmentator'),
-        type=str,
-        help='Directory holding TotalSegmentator weights (nnunet/results); downloads missing tasks here',
     )
     parser.add_argument(
         '--ts_task',
@@ -989,12 +971,15 @@ if __name__ == "__main__":
     parser.add_argument('--nni_prompts_dir', default=None, type=str,
                         help='nnInteractive: folder of stage-1 prompts (<collection>__<stem>.json/.npz from s3_prompts.py); only images with prompts run')
     parser.add_argument('--nni_variants', default=['P1', 'P2', 'P3', 'P4'], nargs='*', help='nnInteractive prompt variants (pilot: all; at scale: the chosen one)')
-    parser.add_argument('--nni_model_dir', default=os.path.join(relative_path, 'checkpoints', 'nnInteractive'), type=str,
-                        help='nnInteractive weights folder (NNINTERACTIVE_MODEL_DIR); downloaded here if missing')
+    parser.add_argument('--odelia_centres', default=None, nargs='*', help='ODELIA centres to run (default: all, e.g. CAM MHA RSH RUMC UKA UMCU)')
+    parser.add_argument('--odelia_sequences', default=None, nargs='*',
+                        help='ODELIA sequences to run, e.g. Pre Post_1 T2 (default: every acquired sequence present; derived Sub_* excluded)')
     parser.add_argument('--skip_exist', action='store_true', help='Skip images whose outputs already exist (resume)')
     parser.add_argument('--start', default=0, type=int, help='First image index (for sharding)')
     parser.add_argument('--end', default=None, type=int, help='Stop before this image index (default: all)')
     args = parser.parse_args()
+    CHECKPOINT_DIR = str(pathlib.Path(args.checkpoint_dir).expanduser().resolve())     # module global, read by every extractor
+    logger.info('checkpoints: %s', CHECKPOINT_DIR)
 
     save_dir = pathlib.Path(args.save_dir) / args.model
 
@@ -1028,6 +1013,16 @@ if __name__ == "__main__":
             seg_obj=args.seg_obj,
             img_format=args.format,
             prostate_seq=args.r2seg_prostate_seq,
+            planner_dir=args.planner_dir,
+            plan_lists=args.plan_lists,
+        )
+    elif args.dataset == 'ODELIA':
+        dataset_info = prepare_ODELIA_info(
+            odelia_dir=args.radiology,
+            centres=args.odelia_centres,
+            sequences=args.odelia_sequences,
+            seg_obj=args.seg_obj,
+            img_format=args.format,
             planner_dir=args.planner_dir,
             plan_lists=args.plan_lists,
         )
@@ -1065,10 +1060,8 @@ if __name__ == "__main__":
         prompt_ensemble=False,
         save_radiomics=False,
         zoom_in=False,
-        voxtell_model_root=args.voxtell_model_root,
         device=args.device,
         skip_exist=args.skip_exist,
-        ts_model_root=args.ts_model_root,
         ts_task=args.ts_task,
         ts_fast=args.ts_fast,
         ts_extra_tasks=args.ts_extra_tasks,
@@ -1078,5 +1071,4 @@ if __name__ == "__main__":
         voxtell_prompt_batch=args.voxtell_prompt_batch,
         nni_prompts_dir=args.nni_prompts_dir,
         nni_variants=tuple(args.nni_variants),
-        nni_model_dir=args.nni_model_dir,
     )
