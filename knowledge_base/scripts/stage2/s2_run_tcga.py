@@ -97,6 +97,9 @@ def main():
         done |= set(open(f_).read().splitlines())
     from pancia_kb.stage2 import vb as _vb
     _g = _vb.gpu()
+    if os.environ.get('PANCIA_GPU', '0') == '1' and _g is None:     # 24 Nov: asked for the GPU but none usable -> stop, no silent CPU run
+        sys.exit('[stage 2] PANCIA_GPU=1 but no usable GPU / CuPy here (see the [vb] line above); not running on the CPU. '
+                 'Run inside a GPU job, or unset PANCIA_GPU for a CPU run.')
     json.dump(dict(version=VERSION, fit=fitf, fit_date=fit.get('date'), r_mm=fit['r_mm'], stage1=a.stage1, accepted_only=a.accepted_only,
                    bayes_factor=not a.no_bf, gpu=_g is not None, fast_edt=os.environ.get('PANCIA_FAST_EDT', '0') == '1'),
               open(os.path.join(O, f'run_info{SUF}.json'), 'w'))
@@ -109,7 +112,11 @@ def main():
         try:
             run_series(rel, kidx, S1, fit, O, SUF, a, TAB1, TS)
         except Exception:
+            # 24 Nov: a failed series is NOT marked done, so a resubmission retries it (an environment error, e.g. a missing CUDA
+            # library, would otherwise mark every series done)
             append(os.path.join(O, f'errors{SUF}.csv'), [dict(rel=rel, err=traceback.format_exc()[-600:].replace('\n', ' | '))])
+            print(f'{k + 1}/{len(rels)} {rel} ERROR (see errors{SUF}.csv)', flush=True)
+            continue
         open(fd, 'a').write(rel + '\n')
         print(f'{k + 1}/{len(rels)} {rel} {time.time() - t0:.0f}s', flush=True)
 
