@@ -705,7 +705,18 @@ class Model:
         """coordinate ascent; label updates in two half-sweeps (checkerboard parity of the voxel grid) so that coupled neighbours are
         never updated together (parallel mean-field updates of a Potts model oscillate). parity: (n,) 0/1 array (from the grid)."""
         if gpu() is not None and self.n >= GPU_MIN_N:
-            return self._run_gpu(max_iter=max_iter, tol=tol, min_iter=min_iter, verbose=verbose, parity=parity)
+            nu0 = self.nu_k.copy()
+            try:
+                return self._run_gpu(max_iter=max_iter, tol=tol, min_iter=min_iter, verbose=verbose, parity=parity)
+            except gpu().cuda.memory.OutOfMemoryError:
+                # GPU memory full (e.g. many shards on one card): free this process's pool and run this model on the CPU from the
+                # same starting point (R and E[u] on the host are untouched by the GPU path until it finishes)
+                self._g = None; gpu().get_default_memory_pool().free_all_blocks()
+                self.nu_k = nu0
+                for k_ in ('_nuall_old', '_Rk_old', '_nu_old'):
+                    if hasattr(self, k_):
+                        delattr(self, k_)
+                print(f'[vb] GPU out of memory (n={self.n}); this model runs on the CPU', flush=True)
         K = self.K
         par = np.zeros(self.n, np.int8) if parity is None else np.asarray(parity, np.int8)
         p_old = self.R[:, :K].sum(1) if K else np.zeros(self.n)

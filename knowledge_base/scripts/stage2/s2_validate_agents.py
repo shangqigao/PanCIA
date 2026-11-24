@@ -267,6 +267,11 @@ def main():
                     'their kept anchors, stage-1 extents and w0) from ledger/<name> (e.g. v86_r2seg_bp2) instead of building them from the agents')
     a = ap.parse_args()
     STAGE1[0] = a.stage1_ledger
+    from pancia_kb.stage2 import vb as _vb
+    _g = _vb.gpu()
+    _nm = _g.cuda.runtime.getDeviceProperties(_g.cuda.Device().id)['name'] if _g is not None else b''
+    print('[stage 2] VB on', ('GPU ' + (_nm.decode() if isinstance(_nm, bytes) else str(_nm))) if _g is not None else 'CPU',
+          f'(GPU_MIN_N {_vb.GPU_MIN_N})' if _g is not None else '', flush=True)
     O = paths.out_dir(a.tag); FD = paths.out_dir(*a.fit_dir.split('/'))
     SINGLE[0] = a.single
     si, sn = (int(x) for x in os.environ.get('SHARD', '0/1').split('/')); tag = f'_s{si}' if sn > 1 else ''

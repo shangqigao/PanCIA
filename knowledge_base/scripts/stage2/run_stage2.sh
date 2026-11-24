@@ -26,7 +26,11 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM
 # the same scans twice)
 trap 'trap - INT TERM; kill 0' INT TERM
 shards() {   # run "$@" in NSHARD parallel shards and wait
-  for i in $(seq 0 $((NSHARD - 1))); do SHARD=$i/$NSHARD nice -n 15 python "$@" > "$LOGD/log_$(basename "$1" .py)_s$i.txt" 2>&1 & done; wait
+  # 23 Nov (step S): with PANCIA_GPU=1 and NGPU=k, shard i uses GPU i mod k (CUDA_VISIBLE_DEVICES); default NGPU=1
+  for i in $(seq 0 $((NSHARD - 1))); do
+    if [ "${PANCIA_GPU:-0}" = 1 ]; then export CUDA_VISIBLE_DEVICES=$((i % ${NGPU:-1})); fi
+    SHARD=$i/$NSHARD nice -n 15 python "$@" > "$LOGD/log_$(basename "$1" .py)_s$i.txt" 2>&1 &
+  done; wait
   echo "$1 done (logs: $LOGD)"
 }
 # stage-1 extent prior for the real-agent steps: ledger/v85/extent/fit_psi.json when it exists (./run_stage2.sh psi_fit), else v8.4
