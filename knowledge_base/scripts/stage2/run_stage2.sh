@@ -129,9 +129,9 @@ case "${1:-fit}" in
     # true negative (cohort/r2seg_tumour_free.csv); MAX_FALSE false lesions solved per scan (default: all, as stage 2 sees them on TCGA)
     NSHARD=$NSHARD_VAL shards s2_validate_agents.py --n-val "${N_VAL_AG:-40}" --n-neg "${N_NEG:-1000}" --max-false "${MAX_FALSE:-1000}" \
       --fit-dir validation_agents/folds_agent_beyond --fit-samples agent_true --fit-beyond --tumour-from anchor \
-      --stage1-ledger "${S1_LEDGER:-v86_r2seg_bp2}" --tag validation_agents_v4 $PSI_ARG
-    python s2_validate_agents.py --summary --tag validation_agents_v4
-    echo "Review: clinical/PanCIA_outputs/stage2/validation_agents_v4/report.txt"
+      --stage1-ledger "${S1_LEDGER:-v86_r2seg_bp2}" --tag "${V4_TAG:-validation_agents_v4}" $PSI_ARG
+    python s2_validate_agents.py --summary --tag "${V4_TAG:-validation_agents_v4}"
+    echo "Review: clinical/PanCIA_outputs/stage2/${V4_TAG:-validation_agents_v4}/report.txt"
     ;;
   validate_agents_v3q)
     # 2 Nov: v3 on all sites with tumour appearance from q-weighted voxels (tumour_from q) instead of the anchors

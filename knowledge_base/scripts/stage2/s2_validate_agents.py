@@ -81,14 +81,20 @@ def _bf(L0):
     return dict(log_bf=L0.get('log_bf'), flag_bf=L0.get('flag_bf'), n_vox_bf=L0.get('n_vox_bf'), log_bf_per_vox=L0.get('log_bf_per_vox'))
 
 
-def _scan_parts(base, res, built, c, vml):
-    """per method: true- and false-positive volume of the union over the window's lesions (stage2: refined tumours only)"""
+def _scan_parts(base, res, built, c, vml, Ls=None):
+    """per method: true- and false-positive volume of the union over the window's lesions (stage2: refined tumours only).
+    24 Nov: with a stage-1 ledger (v4) also scope 'accepted' = the union over the window's accepted lesions only (same joint solve);
+    scope 'all' = every lesion passed (accepted + uncertain)."""
     W_ = res['W']; Tw = c['T'][W_]; out = []
-    for m in METHODS:
-        P = np.zeros(Tw.shape, bool)
-        for k, B in enumerate(built):
-            P |= _pred(m, res, k, B, W_)
-        out.append(dict(base, kind='scan_part', method=m, tp_ml=float((P & Tw).sum() * vml), fp_ml=float((P & ~Tw).sum() * vml)))
+    scopes = [('all', range(len(built)))]
+    if STAGE1[0] and Ls is not None:
+        scopes.append(('accepted', [k for k, L in enumerate(Ls) if _dec(L) == 'accepted']))
+    for sc, ks in scopes:
+        for m in METHODS:
+            P = np.zeros(Tw.shape, bool)
+            for k in ks:
+                P |= _pred(m, res, k, built[k], W_)
+            out.append(dict(base, kind='scan_part', scope=sc, method=m, tp_ml=float((P & Tw).sum() * vml), fp_ml=float((P & ~Tw).sum() * vml)))
     return out
 
 
@@ -135,7 +141,7 @@ def false_lesions(ds, S, Ls, fit, beta, psi, base, rows, max_false, where):
                          n_anchors=len(L['anchors']), xi_name=built[0]['xi_name'], host=V._ent(hkey), host_in_S=hkey in specs[0]['S'],
                          vol_Z=L0['vol_Z'], vol_anchor=L0['vol_anchor'], p_anchor_ge_half=L0['p_anchor_ge_half'],
                          sec=round(time.time() - t0, 1), **_bf(L0)))
-        rows += _scan_parts(dict(base, mod=c['mod'], window='false'), res, built, c, vml)
+        rows += _scan_parts(dict(base, mod=c['mod'], window='false'), res, built, c, vml, keep)
     if len(Ls) > max_false:
         rows.append(dict(base, kind='false_not_run', where=where, n=len(Ls) - max_false, ml=float(sum(L['ml'] for L in Ls[max_false:]))))
 
@@ -190,7 +196,7 @@ def run_positive(ds, lf, fit, beta, psi, fold, rows, calib, max_false):
                     lb[f'miss_{nm}_ml'] = float(m.sum() * vml); lb[f'rec_{nm}_ml'] = float((m & res['ZL'][k]).sum() * vml)
             for m in METHODS:
                 rows.append(dict(lb, method=m, **V.metrics(_pred(m, res, k, B, W_), Gk)))
-        rows += _scan_parts(dict(base, window='tumour'), res, built, c, vml)
+        rows += _scan_parts(dict(base, window='tumour'), res, built, c, vml, keep)
         p = res['p'][res['ROI']]; t = c['T'][W_][res['ROI']]
         hb = np.clip((p * 10).astype(int), 0, 9)
         for b in range(10):
@@ -349,6 +355,55 @@ def main():
         summarise(O)
 
 
+def _full_output(d, b, O):
+    """24 Nov (user): every method's FULL output against all expert tumour of the scan (v4, stage-1 ledger). Stage-1-derived methods
+    (stage2, xi, ...) as the union over the accepted lesions (scope 'accepted') and over accepted + uncertain (scope 'all'); the
+    agents as whole masks (baseline rows: bp, vt, agreement). Tumour scans: scan Dice (missed tumours count as false negatives).
+    Tumour-free scans: share with > 0.5 ml called tumour and median false volume. Sites equal."""
+    sp_ = d[d.kind == 'scan_part']
+    if 'scope' not in sp_ or not (sp_.scope == 'accepted').any():
+        return []
+    out = ['== full output vs all expert tumour (tumour scans: scan Dice; agents as whole masks; stage-1 methods over accepted lesions, '
+           'or accepted + uncertain) ==']
+    pos = b[b.T_ml > 0][['fold', 'ds', 'case', 'T_ml']]
+    cols = {}
+    for sc in ('accepted', 'all'):
+        s = sp_[sp_.scope.fillna('all') == sc]
+        g = s.groupby(['ds', 'case', 'method'])[['tp_ml', 'fp_ml']].sum().reset_index()
+        for m in ('stage2', 'xi', 'q_half', 'U'):
+            x = pos.merge(g[g.method == m], on=['ds', 'case'], how='left').fillna({'tp_ml': 0.0, 'fp_ml': 0.0})
+            x['dice'] = 2 * x.tp_ml / (x.tp_ml + x.fp_ml + x.T_ml)
+            cols[f'{m} ({"acc" if sc == "accepted" else "acc+unc"})'] = x.groupby('fold').dice.mean()
+    bb = b[b.T_ml > 0]
+    for a, nm in (('bp', 'BP whole'), ('vt', 'VT whole'), ('agree', 'BP&VT whole')):
+        if f'{a}_dice' in bb:
+            cols[nm] = pd.to_numeric(bb[f'{a}_dice'], errors='coerce').groupby(bb.fold).mean()
+    T = pd.DataFrame(cols); T.loc['(sites equal)'] = T.mean()
+    T.round(3).to_csv(os.path.join(O, 'summary_full_output.csv'))
+    out += [T.round(3).T.to_string(), '']
+    neg = d[d.kind == 'baseline_neg'].drop_duplicates(['ds', 'case'])
+    if len(neg):
+        rows = {}
+        nk = neg[['fold', 'ds', 'case']]
+        for sc in ('accepted', 'all'):
+            s = sp_[sp_.scope.fillna('all') == sc]
+            g = s.groupby(['ds', 'case', 'method']).fp_ml.sum().reset_index()
+            for m in ('stage2', 'xi'):
+                x = nk.merge(g[g.method == m], on=['ds', 'case'], how='left').fillna({'fp_ml': 0.0})
+                rows[f'{m} ({"acc" if sc == "accepted" else "acc+unc"})'] = x.groupby('fold').fp_ml
+        for a, nm in (('bp', 'BP whole'), ('vt', 'VT whole'), ('agree', 'BP&VT whole')):
+            if f'{a}_fp_ml' in neg:
+                rows[nm] = pd.to_numeric(neg[f'{a}_fp_ml'], errors='coerce').groupby(neg.fold)
+        F = pd.DataFrame({k: v.apply(lambda z: (z > 0.5).mean()) for k, v in rows.items()})
+        M = pd.DataFrame({k: v.median() for k, v in rows.items()})
+        n = neg.groupby('fold').size()
+        F.loc['(sites equal)'] = F.mean()
+        F.round(3).to_csv(os.path.join(O, 'summary_full_output_negatives.csv'))
+        out += ['tumour-free scans: share with > 0.5 ml called tumour (scans per site: ' + ', '.join(f'{k} {v}' for k, v in n.items()) + ')',
+                F.round(3).T.to_string(), 'median false volume (ml):', M.round(2).T.to_string(), '']
+    return out
+
+
 # ------------------------------------------------------------------ summary (sites count equally)
 def _sw(per):
     """site-weighted mean of a per-site Series / DataFrame"""
@@ -447,12 +502,15 @@ def summarise(O):
     if len(sp_) and len(b):
         # every tumour scan counts: a scan whose tumours all went undetected has no scan_part rows (Dice 0 for every method)
         allm = b[b.T_ml > 0][['fold', 'ds', 'case', 'T_ml']].merge(pd.DataFrame(dict(method=list(METHODS))), how='cross')
+        if 'scope' in sp_:
+            sp_ = sp_[sp_.scope.fillna('all') == 'all']
         g = sp_.groupby(['ds', 'case', 'method'])[['tp_ml', 'fp_ml']].sum().reset_index()
         g = allm.merge(g, on=['ds', 'case', 'method'], how='left').fillna({'tp_ml': 0.0, 'fp_ml': 0.0})
         g['dice'] = 2 * g.tp_ml / (g.tp_ml + g.fp_ml + g.T_ml)
         ps = g.pivot_table(index='fold', columns='method', values='dice', aggfunc='mean')
         ps.loc['(sites equal)'] = ps.mean()
         ps.round(3).to_csv(os.path.join(O, 'summary_scan.csv'))
+        rep += _full_output(d, b, O)
         rep += ['== scan level: Dice of the union over all lesions (false lesions included; missed tumours count as false negatives). '
                 'False lesions beyond --max-false per scan add their stage-1 volume to every method except stage2, which is not run on '
                 'them (stage2 is favoured where they are many; see "false lesions not run") ==',
