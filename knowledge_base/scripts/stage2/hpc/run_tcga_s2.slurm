@@ -3,6 +3,7 @@
 # One array task = one A100 running K shard processes; global shards = (#tasks x K), shard id = task * K + j.
 # Resumable: finished series are listed in done_s<i>.txt and skipped, so resubmit the same array after a time-out.
 # Before: edit env_tcga.sh (paths, conda env), then  bash check_tcga_s2.sh  on a login node.
+# Uncertain-only diagnostic (24 Nov; after the main run): S2_SCOPE=--uncertain-only S2_TAG=tcga_bp2_unc sbatch --array=0-7 ...
 # Submit:  sbatch --array=0-7 run_tcga_s2.slurm        (8 concurrent jobs; NTASK below must equal the array size)
 #SBATCH --job-name=s2_tcga
 #SBATCH --nodes=1
@@ -23,7 +24,7 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 PANCIA_GPU=1 P
 cd "$PANCIA_PANCIA/knowledge_base/scripts/stage2"
 for j in $(seq 0 $((K - 1))); do
   i=$((SLURM_ARRAY_TASK_ID * K + j))
-  SHARD=$i/$N python s2_run_tcga.py --stage1 v86_tcga_all_bp2 --accepted-only --no-bf --tag "${S2_TAG:-tcga_bp2}" \
+  SHARD=$i/$N python s2_run_tcga.py --stage1 v86_tcga_all_bp2 ${S2_SCOPE:---accepted-only} --no-bf --tag "${S2_TAG:-tcga_bp2}" \
     > "$SLURM_SUBMIT_DIR/logs/s2_tcga_s$i.txt" 2>&1 &
 done
 wait

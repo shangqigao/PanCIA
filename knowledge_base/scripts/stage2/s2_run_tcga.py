@@ -72,6 +72,8 @@ def main():
     ap.add_argument('--no-evidence', action='store_true'); stage1_args(ap)
     ap.add_argument('--fit', default=None, help='24 Nov: stage-2 fit JSON under knowledge_base/knowledge_base/stage2/; default for v8.6: '
                     'stage2_fit_agent_beyond.json (true-lesion prior with the beyond-xi term, refitted on bp2 23 Nov); v8.4: stage2_fit.json')
+    ap.add_argument('--uncertain-only', action='store_true', help='24 Nov: diagnostic, report-only run: lesions with an uncertain anchor and '
+                    'no accepted anchor (their uncertain anchors); use its own --tag; never mixed with the accepted-only results')
     ap.add_argument('--accepted-only', action='store_true', help='23 Nov: OOD sets (user, 16 Nov): only lesions with an accepted anchor, '
                     'and their accepted anchors; uncertain lesions are not passed to stage 2')
     a = ap.parse_args()
@@ -84,14 +86,17 @@ def main():
     KB = KnowledgeBase.load(os.path.join(paths.kb_dir(), 'knowledge_base'))
     rows = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'anchors*.csv')))], ignore_index=True)
     ser = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(P, 'series*.csv')))], ignore_index=True)
-    ser = ser[(ser.n_acc > 0) if a.accepted_only else ((ser.n_acc + ser.n_unc) > 0)].sort_values('rel')
+    if a.accepted_only and a.uncertain_only:
+        sys.exit('--accepted-only and --uncertain-only exclude each other')
+    ser = ser[(ser.n_acc > 0) if a.accepted_only else ((ser.n_unc > 0) if a.uncertain_only else ((ser.n_acc + ser.n_unc) > 0))].sort_values('rel')
     rels = [r for i, r in enumerate(ser.rel) if i % SN == SI]
     if a.only:
         rels = [r for r in rels if any(s in r for s in a.only.split(','))]
     TAB1 = G1.Tables1(os.path.join(B, 'v6', 'grounding', 'g0', 'h5', 'tables_g1.json'))
     TS = G2.TestSets(os.path.join(B, 'v8', 'grounding', 'test_sets.json'))
     S1 = IF.Stage1(KB, fit6['beta_UD'], psi_for(a, B), rows, paths.root('TCGA_Seg'), paths.root('TCGA_NIFTI'), ledger=a.ledger, xi_rule=xi_rule_for(a, B),
-                  keep=('accepted', 'accepted_override') if a.accepted_only else IF.KEEP)
+                  keep=('accepted', 'accepted_override') if a.accepted_only else (('uncertain',) if a.uncertain_only else IF.KEEP),
+                  skip_if=('accepted', 'accepted_override') if a.uncertain_only else ())
     fd = os.path.join(O, f'done{SUF}.txt'); done = set()
     for f_ in glob.glob(os.path.join(O, 'done*.txt')):                 # all shards
         done |= set(open(f_).read().splitlines())
@@ -100,7 +105,7 @@ def main():
     if os.environ.get('PANCIA_GPU', '0') == '1' and _g is None:     # 24 Nov: asked for the GPU but none usable -> stop, no silent CPU run
         sys.exit('[stage 2] PANCIA_GPU=1 but no usable GPU / CuPy here (see the [vb] line above); not running on the CPU. '
                  'Run inside a GPU job, or unset PANCIA_GPU for a CPU run.')
-    json.dump(dict(version=VERSION, fit=fitf, fit_date=fit.get('date'), r_mm=fit['r_mm'], stage1=a.stage1, accepted_only=a.accepted_only,
+    json.dump(dict(version=VERSION, fit=fitf, fit_date=fit.get('date'), r_mm=fit['r_mm'], stage1=a.stage1, accepted_only=a.accepted_only, uncertain_only=a.uncertain_only,
                    bayes_factor=not a.no_bf, gpu=_g is not None, fast_edt=os.environ.get('PANCIA_FAST_EDT', '0') == '1'),
               open(os.path.join(O, f'run_info{SUF}.json'), 'w'))
     print('[stage 2] fit', os.path.basename(fitf), '| VB on', 'GPU' if _g is not None else 'CPU', '|', len(rels), 'series in this shard', flush=True)

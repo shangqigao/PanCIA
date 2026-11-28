@@ -20,8 +20,9 @@ KEEP = ('accepted', 'accepted_override', 'uncertain')
 
 
 class Stage1:
-    def __init__(self, kb, beta, psi, pilot_rows, seg_root, nifti_root, ledger='v86', xi_rule='psi', keep=KEEP):
-        self.keep = tuple(keep)          # 23 Nov: OOD sets pass accepted lesions only (user, 16 Nov): keep=('accepted', 'accepted_override')
+    def __init__(self, kb, beta, psi, pilot_rows, seg_root, nifti_root, ledger='v86', xi_rule='psi', keep=KEEP, skip_if=()):
+        self.keep = tuple(keep)
+        self.skip_if = tuple(skip_if)     # 24 Nov: a lesion with any anchor decided as one of these is not passed (uncertain-only runs: accepted)          # 23 Nov: OOD sets pass accepted lesions only (user, 16 Nov): keep=('accepted', 'accepted_override')
         import importlib
         from .. import host_v81 as HV, grounding_g1 as G1, grounding_g2 as G2
         L8 = importlib.import_module(f'pancia_kb.ledger_{ledger}')     # 16 Nov: v86 (default) or v84
@@ -58,6 +59,8 @@ class Stage1:
             PhL = HV.host_posterior({o_: cands[best[o_]] for o_ in best}, self.beta)
             S = G2.credible_set(PhL, ALPHA) if PhL else []
             ids = [i for i in Lz['anchors'] if i in R.index and str(R.loc[i, 'decision']) in self.keep]
+            if self.skip_if and any(str(R.loc[i, 'decision']) in self.skip_if for i in Lz['anchors'] if i in R.index):
+                ids = []
             # consistency with the stored stage-1 rows
             for i in Lz['anchors']:
                 if i in R.index:
