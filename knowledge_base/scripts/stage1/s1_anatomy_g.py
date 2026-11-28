@@ -8,7 +8,7 @@ Memory guard: every attempt is logged in anatomy/r2seg/_heavy/attempts.log (appe
 heavy only after TWO attempts that started and never finished (killed out of memory on the 4 GB VM, e.g. whole-body CT); one
 unfinished attempt may be a device-call cut-off. New scans are not started within --guard seconds of the budget end. Heavy scans:
 run where memory allows with --retry_heavy. Usage: python s1_anatomy_g.py [--budget 120] [--guard 30] [--only Coll/stem,...] [--jobs jobs.csv,jobs_v2.csv] [--collections A,B] [--sample N --seed S] [--verify]   (resumable)"""
-import os, sys, json, time, argparse, csv
+import os, sys, json, time, argparse, csv, shutil
 import numpy as np, pandas as pd, nibabel as nib
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(os.path.join(HERE, '..', '..')))
@@ -90,6 +90,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--budget', type=float, default=120); ap.add_argument('--guard', type=float, default=30); ap.add_argument('--only', default=''); ap.add_argument('--jobs', default=''); ap.add_argument('--collections', default='')
     ap.add_argument('--sample', type=int, default=0); ap.add_argument('--seed', type=int, default=0); ap.add_argument('--verify', action='store_true'); ap.add_argument('--retry_heavy', action='store_true')
+    ap.add_argument('--g3_contradiction', action='store_true',
+                    help='g3 (28 Nov): rerun only scans whose saved result has an unresolved sex-class dispute (reason "both classes pass"); '
+                         'the previous files are first copied to anatomy/r2seg_g2/ (comparison); all other scans are unchanged by g3')
     a = ap.parse_args()
     meta = pd.read_csv(os.path.join(paths.root('outputs'), 'cohort', 'r2seg_scan_meta.csv'), usecols=['img_name', 'modality'])
     meta = meta[meta.img_name.map(lambda x: os.path.exists(os.path.join(S, 'VoxTell', x + '_plan_manifest.json')))]
@@ -105,6 +108,22 @@ def main():
     if a.collections: meta = meta[meta.img_name.str.split('/').str[0].isin(a.collections.split(','))]
     if a.sample: meta = meta.groupby(meta.img_name.str.split('/').str[0], group_keys=False).apply(
         lambda g: g.sample(min(a.sample, len(g)), random_state=a.seed))
+    if a.g3_contradiction:
+        def disputed(img):
+            js = os.path.join(OUT, img + '.json')
+            if not os.path.exists(js): return False
+            c = json.load(open(js)).get('consistency') or {}
+            return c.get('reason') == 'both classes pass'
+        meta = meta[meta.img_name.map(disputed)]
+        G2 = os.path.join(paths.root('outputs'), 'anatomy', 'r2seg_g2')
+        for img in meta.img_name:
+            js = os.path.join(OUT, img + '.json')
+            if json.load(open(js)).get('code_hash') == G.CODE_HASH: continue          # already g3
+            for ext in ('.json', '.npz'):
+                dst = os.path.join(G2, img + ext)
+                if not os.path.exists(dst):
+                    os.makedirs(os.path.dirname(dst), exist_ok=True); shutil.copyfile(os.path.join(OUT, img + ext), dst)
+        print(f'g3: {len(meta)} scans with an unresolved dispute (g2 copies in anatomy/r2seg_g2/)', flush=True)
     KB = KnowledgeBase.load(f'{KBD}/knowledge_base')
     vf = os.path.join(OUT, '_verify', 'verify_v2.csv'); os.makedirs(os.path.dirname(vf), exist_ok=True)   # v2: + code_hash, reasons, noise
     vdone = set(pd.read_csv(vf).query('code_hash == @G.CODE_HASH').img) if (a.verify and os.path.exists(vf)) else set()

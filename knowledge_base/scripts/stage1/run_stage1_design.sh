@@ -33,7 +33,7 @@ import sys, pandas as pd
 for f in ('real', 'real_tf', 'aug'):
     d = pd.read_csv(f'{sys.argv[1]}/augment/{f}.csv', low_memory=False)
     n = d[d.note.notna() & (d.note != '')]
-    print(f, 'scans', d[['ds', 'case']].drop_duplicates().shape[0], 'rows', len(d), 'notes', n.note.str[:40].value_counts().head(5).to_dict())
+    print(f, 'scans', d[['ds', 'case']].drop_duplicates().shape[0], 'rows', len(d), 'notes', n.note.astype(str).str[:40].value_counts().head(5).to_dict())
 PY
 } > "$O/overnight_summary.txt" 2>&1
 echo "=== done $(date '+%F %T'); summary: $O/overnight_summary.txt" | tee -a "$LOG"

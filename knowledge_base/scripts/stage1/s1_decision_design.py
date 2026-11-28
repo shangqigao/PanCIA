@@ -15,7 +15,11 @@ candidates). Tumour-free numbers are REPORTED, never used to pick a point. Refer
 <= 5%, worst site <= 10%, scans losing all T <= 2% (the G1 limits; tumour scans only; every lower t must meet them too); common point = the smallest of those.
 At the common point: stratified rejection (region class x band x mode, as G3) and the descriptive role / enlargement tables.
 Output: ledger/decision_s1/design[/<tag>]/{curves.csv, strata.csv, roles.csv, enlargement.csv, summary.txt}.
-Usage: python s1_decision_design.py [--tag smoke]"""
+28 Nov (plan claude/elongation_and_pelvic_fix_plan_2026-11-28.md, B3 as revised by the user): organ presence comes from the image
+(anatomy layer) only; the cancer type only names the primary organ. Host = the step-2g g3 node 'pelvic_reproductive_unresolved' ->
+role 'unresolved'; primary in view = 'yes' (the named primary organ is a usable organ of this scan), 'unknown' (it belongs to a
+sex class and the scan has the unresolved node), else 'no'.
+Usage: python s1_decision_design.py --lrdir elong_lr_e2 --design design_g3 --augdir augment_e2 --outdir design_e2 [--tag smoke]"""
 import os, sys, json, argparse
 import numpy as np, pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -24,6 +28,8 @@ from pancia_kb.stage2 import paths     # noqa: E402
 from pancia_kb import KnowledgeBase      # noqa: E402
 from s1_graph_v3 import whole_of, EXCL_FLAGS   # noqa: E402
 from s1_graph_v3_eval import region_class      # noqa: E402
+from pancia_kb.anatomy_check_g import _class_of  # noqa: E402
+NODE = 'pelvic_reproductive_unresolved'
 
 L = paths.ledger_dir(); ANAT = os.path.join(paths.root('outputs'), 'anatomy', 'r2seg'); S = paths.root('R2Seg_Seg')
 KBD = os.path.abspath(os.path.join(HERE, '..', '..'))
@@ -32,9 +38,10 @@ TS = [None] + [round(x, 2) for x in np.arange(-4, 4.01, 0.25)]
 
 def organ_info(kb, ds, case):
     """usable whole organs: name -> (whole entity, side, approx territory ml); manifest T roles"""
-    js = os.path.join(ANAT, ds, case + '.json'); W = {}
+    js = os.path.join(ANAT, ds, case + '.json'); W = {}; node = False
     if os.path.exists(js):
-        for o in json.load(open(js))['organs']:
+        meta = json.load(open(js)); node = bool(meta.get('unresolved'))
+        for o in meta['organs']:
             if o['mu'] <= 0 or any(f.split(':')[0].split(' ')[0] in EXCL_FLAGS for f in o['flags']): continue
             we = whole_of(kb, o['entity']); wk = we + ('_' + o['side'] if o['side'] else '')
             w = W.setdefault(wk, dict(we=we, side=o['side'], self_ml=None, parts_ml=0.0))
@@ -43,10 +50,11 @@ def organ_info(kb, ds, case):
     mf = os.path.join(S, 'VoxTell', ds, case + '_plan_manifest.json'); roles = []
     if os.path.exists(mf):
         roles = [(whole_of(kb, x['entity']), x.get('side'), x.get('host_class')) for x in json.load(open(mf)).get('masks', []) if x.get('list') == 'T']
-    return W, roles
+    return W, roles, node
 
 
-def role_of(h, W, roles):
+def role_of(h, W, roles, node=False):
+    if h == NODE: return 'unresolved'
     if not isinstance(h, str) or h not in W: return 'none'
     we, sd = W[h]['we'], W[h]['side']; got = {c for e, s, c in roles if e == we and (s is None or sd is None or s == sd)}
     return 'primary' if 'primary' in got else ('distant' if got else 'none')
@@ -69,11 +77,13 @@ def metrics(g, rej, n_tf):
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('--tag', default=''); a = ap.parse_args()
-    ld = os.path.join(L, 'decision_s1', 'elong_lr', a.tag) if a.tag else os.path.join(L, 'decision_s1', 'elong_lr')
-    od = os.path.join(L, 'decision_s1', 'design', a.tag) if a.tag else os.path.join(L, 'decision_s1', 'design'); os.makedirs(od, exist_ok=True)
+    ap = argparse.ArgumentParser(); ap.add_argument('--tag', default=''); ap.add_argument('--lrdir', default='elong_lr_e2')
+    ap.add_argument('--design', default='design_g3'); ap.add_argument('--augdir', default='augment_e2'); ap.add_argument('--outdir', default='design_e2')
+    a = ap.parse_args()
+    ld = os.path.join(L, 'decision_s1', a.lrdir, a.tag) if a.tag else os.path.join(L, 'decision_s1', a.lrdir)
+    od = os.path.join(L, 'decision_s1', a.outdir, a.tag) if a.tag else os.path.join(L, 'decision_s1', a.outdir); os.makedirs(od, exist_ok=True)
     c = pd.read_csv(os.path.join(ld, 'candidates.csv'), low_memory=False); c['case'] = c.case.astype(str)
-    d = pd.read_csv(os.path.join(L, 'graph_v3', 'design.csv'), low_memory=False); d['case'] = d.case.astype(str)
+    d = pd.read_csv(os.path.join(L, 'graph_v3', a.design + '.csv'), low_memory=False); d['case'] = d.case.astype(str)
     d = d[d.note.isna() | (d.note == '')].copy()
     sc = set(zip(c.ds, c.case)); d = d[[(u, v) in sc for u, v in zip(d.ds, d.case)]].copy()
     for k in ('in_scope', 'tumour_free'): d[k] = d[k].astype(str) == 'True'
@@ -87,9 +97,9 @@ def main():
     d['g_all_expl'] = d.groupby(gk).expl.transform('all')
     d['g_score'] = d.llr.where(~d.expl, -np.inf).groupby([d[k] for k in gk]).transform('max')
     # tumour-free denominator: every tumour-free design scan in this run, including scans without any candidate (as the v3 gate)
-    raw = pd.read_csv(os.path.join(L, 'graph_v3', 'design.csv'), usecols=['ds', 'case', 'tumour_free'], low_memory=False)
+    raw = pd.read_csv(os.path.join(L, 'graph_v3', a.design + '.csv'), usecols=['ds', 'case', 'tumour_free'], low_memory=False)
     raw['case'] = raw.case.astype(str); raw = raw[raw.tumour_free.astype(str) == 'True'][['ds', 'case']].drop_duplicates()
-    ad = os.path.join(L, 'decision_s1', 'augment', a.tag) if a.tag else os.path.join(L, 'decision_s1', 'augment')
+    ad = os.path.join(L, 'decision_s1', a.augdir, a.tag) if a.tag else os.path.join(L, 'decision_s1', a.augdir)
     tfs = pd.read_csv(os.path.join(ad, 'real_tf.csv'), usecols=['ds', 'case']); tfs = set(zip(tfs.ds, tfs.case.astype(str)))
     n_tf = sum((u, v) in tfs for u, v in raw.itertuples(index=False))
     out.append(f'tumour-free denominator {n_tf} scans (design file {len(raw)})')
@@ -130,6 +140,7 @@ def main():
     kb = KnowledgeBase.load(f'{KBD}/knowledge_base'); info = {}
     for ds, case in d[['ds', 'case']].drop_duplicates().itertuples(index=False): info[(ds, case)] = organ_info(kb, ds, case)
     d['role'] = [role_of(h, *info[(u, v)]) for h, u, v in zip(d.host, d.ds, d.case)]
+    cls = _class_of(kb)
     def enl(h, u, v):
         W = info[(u, v)][0]
         if not isinstance(h, str) or h not in W: return np.nan, np.nan
@@ -137,9 +148,11 @@ def main():
         return ml, (ml / mx if mx and ml else np.nan)
     e = [enl(h, u, v) for h, u, v in zip(d.host, d.ds, d.case)]; d['host_ml'] = [x[0] for x in e]; d['host_ratio'] = [x[1] for x in e]
     piv = {}
-    for (u, v), (W, roles) in info.items():
+    for (u, v), (W, roles, node) in info.items():
         prim = {(e_, s_) for e_, s_, c_ in roles if c_ == 'primary'}
-        piv[(u, v)] = any(w['we'] == e_ and (s_ is None or w['side'] is None or s_ == w['side']) for w in W.values() for e_, s_ in prim)
+        if any(w['we'] == e_ and (s_ is None or w['side'] is None or s_ == w['side']) for w in W.values() for e_, s_ in prim): piv[(u, v)] = 'yes'
+        elif node and any(e_ in cls for e_, _ in prim): piv[(u, v)] = 'unknown'
+        else: piv[(u, v)] = 'no'
     d['primary_in_view'] = [piv[(u, v)] for u, v in zip(d.ds, d.case)]
     d['rej'] = rej
     y = d[d.in_scope & d.lab.isin(['T', 'F']) & ~d.tumour_free]
@@ -153,7 +166,8 @@ def main():
     hv = y2.groupby(['host', 'ds', 'case']).host_ratio.first().reset_index()
     out += ['\nOrgan roles (descriptive; manifest host_class; in-scope tumour-scan candidates):', R.to_string(index=False),
             '\nTumour-free design scans by role (kept at the common point):', tfr.to_string(index=False),
-            f'\nTumour scans with the primary organ in view: {int(sc_.primary_in_view.sum())}/{len(sc_)}',
+            f'\nTumour scans, primary organ in view (from the image): {sc_.primary_in_view.value_counts().to_dict()} of {len(sc_)}; by site: '
+            f'{sc_.merge(d[["ds", "case", "site"]].drop_duplicates(), on=["ds", "case"]).groupby("site").primary_in_view.value_counts().unstack(fill_value=0).to_dict("index")}',
             '\nEnlargement (host whole-organ territory / KB volume_ml max; part sums are approximate):', E.to_string(index=False),
             f'hosts with ratio > 1: {(hv.host_ratio > 1).sum()}/{len(hv)}; by host: {hv[hv.host_ratio > 1].host.value_counts().head(10).to_dict()}']
     d[['ds', 'case', 'site', 'tumour_free', 'mode', 'cid', 'group', 'lab', 'in_scope', 'ml', 'member', 'host', 'llr', 'g_score',

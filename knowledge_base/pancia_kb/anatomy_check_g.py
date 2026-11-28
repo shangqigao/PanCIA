@@ -15,13 +15,19 @@ g2 (27 Nov, user decision 3 of claude/graph_pruning_v3_plan_2026-11-27.md): befo
 masks of KB-exclusive presence classes (sex_male / sex_female, incl. their has_part sub-structures) when both occur in one scan; if
 only one class passes its single-mask checks the other is set aside, otherwise both (a dispute the masks cannot resolve is an agent
 defect; no agent is preferred, no patient metadata). Set-aside masks take no part in the joint checks. Recorded in r['consistency'].
-save() persists the result per scan (npz of packed organ cores / territories / contested regions + json of states and flags)."""
+save() persists the result per scan (npz of packed organ cores / territories / contested regions + json of states and flags).
+g3 (28 Nov, user-approved plan claude/elongation_and_pelvic_fix_plan_2026-11-28.md, B1): when BOTH classes pass their single-mask
+checks (the dispute cannot be resolved), the passing masks of both classes (TS and VT) are no longer discarded: their union is kept
+as ONE neutral node 'pelvic_reproductive_unresolved' (npz key u0_core; json 'unresolved' with its members). It is not an organ of the
+organ reasoning (the joint checks still run without the set-aside masks, so every other organ is identical to g2); it only tells
+graph building that pelvic reproductive tissue is present without deciding which. No class is chosen, no sex inferred, no agent
+preferred, no KB change. Scans without a contradiction, and scans where exactly one class passes, are unchanged from g2."""
 from __future__ import annotations
 import json, os, hashlib
 import numpy as np
 from . import anatomy_qc_v82 as AQ
 
-VERSION = 'g2'   # 27 Nov: + logical-consistency step (KB-exclusive presence classes), see consistency()
+VERSION = 'g3'   # 27 Nov g2: + logical-consistency step; 28 Nov g3: unresolved disputes kept as one neutral node, see consistency()
 CODE_HASH = hashlib.md5(b''.join(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), f), 'rb').read()
                                  for f in ('anatomy_check_g.py', 'anatomy_qc_v82.py', 'rspans.py'))).hexdigest()[:12]
 
@@ -87,7 +93,7 @@ def consistency(kb, md, names, task, aff, sp, plan, manifest, plan_dir):
     ctx = dict(aff=aff, mid_x=mid.get('x_mm'), hand=hd.get('sign', 1) or 1, levels=lv, side_ok=side_ok, primary=set(),
                frame=(plan.get('frame') or {}).get('span'))
     vox_ml = float(np.prod(sp)) / 1000.0; shape = md.shape
-    passes = {}
+    passes, kept = {}, []
     for c in EXCLUSIVE:
         ok = False
         for a, k in pres[c]:
@@ -100,7 +106,7 @@ def consistency(kb, md, names, task, aff, sp, plan, manifest, plan_dir):
                 continue
             fail, flags = AQ.unary(kb, k, b, sp, vox_ml, ctx)
             if not fail and 'small' not in flags:
-                ok = True
+                ok = True; kept.append((f'{a}:{k[0]}' + (f'_{k[1]}' if k[1] else ''), k[0], b))
         passes[c] = ok
     if passes[EXCLUSIVE[0]] != passes[EXCLUSIVE[1]]:
         drop = [c for c in EXCLUSIVE if not passes[c]]; record['reason'] = 'only one class passes its single-mask checks'
@@ -109,6 +115,15 @@ def consistency(kb, md, names, task, aff, sp, plan, manifest, plan_dir):
     drop_ents = {e for e, c in cls.items() if c in drop}
     record['set_aside'] = sorted({f'{a}:{k[0]}' + (f'_{k[1]}' if k[1] else '') for c in drop for a, k in pres[c]})
     record['dropped_classes'] = drop
+    if record['reason'] == 'both classes pass':                     # g3: neutral node from the passing masks of both classes
+        lo = np.min([[s_.start for s_ in b.sl] for _, _, b in kept], axis=0); hi = np.max([[s_.stop for s_ in b.sl] for _, _, b in kept], axis=0)
+        node = AQ.Box(None, shape); node.sl = tuple(slice(int(l), int(h)) for l, h in zip(lo, hi))
+        node.crop = np.zeros(tuple(int(h - l) for l, h in zip(lo, hi)), bool)
+        for _, _, b in kept:
+            node.crop[tuple(slice(s_.start - int(l), s_.stop - int(l)) for s_, l in zip(b.sl, lo))] |= b.crop
+        record['unresolved'] = dict(name='pelvic_reproductive_unresolved', members=sorted({m for m, _, _ in kept}),
+                                    entities=sorted({e for _, e, _ in kept}), classes=list(EXCLUSIVE))
+        record['_node'] = node
     lab = [l for k, ls in ts_keys.items() if k[0] in drop_ents for l in ls]
     md2 = md
     if lab:
@@ -122,7 +137,9 @@ def check(kb, md, names, task, aff, sp, plan, manifest, plan_dir, image=None, mo
     md, manifest, cons = consistency(kb, md, names, task, aff, sp, plan, manifest, plan_dir)
     r = AQ.analyse(kb, md, names, task, aff, sp, plan, manifest, plan_dir, tumour=None, image=image, modality=modality,
                    thresholds=thresholds, check_keys=None, primary=None)
+    node = cons.pop('_node', None)
     r['consistency'] = cons
+    r['unresolved_box'] = node
     QP = AQ.QP
     seg = [x for x in r['expected'] if x['why'] != 'missing']
     f = (sum(x['failed'] for x in seg) / len(seg)) if len(seg) >= QP['min_expected'] else None
@@ -217,11 +234,15 @@ def save(r, path_stem, shape, affine, extra=None, offset=(0, 0, 0)):
                            core_ml=round(float(o['core'].sum()) * vml, 3) if o['core'].crop is not None else 0.0,
                            terr_ml=round(float(o['territory'].sum()) * vml, 3) if o['territory'].crop is not None else 0.0,
                            masks=has))
+    unres = None
+    if r.get('unresolved_box') is not None and _pack('u0_core', r['unresolved_box'], arr):
+        vml = float(np.prod(np.linalg.norm(np.asarray(affine)[:3, :3], axis=0))) / 1000.0
+        unres = dict((r.get('consistency') or {}).get('unresolved') or {}, core_ml=round(float(r['unresolved_box'].crop.sum()) * vml, 3))
     np.savez_compressed(path_stem + '.npz', **arr)      # written in place: the mounts do not allow replacing (deleting) files
     meta = dict(version=r['version'], code_hash=r['code_hash'], shape=list(map(int, shape)), offset=list(map(int, offset)), affine=np.asarray(affine).tolist(),
                 state=r['state'], reasons=r['reasons'], f_all=r['f_all'], n_graded=r['n_graded'],
                 no_mu1_organ=r['no_mu1_organ'], consistency=r.get('consistency'), levels=r.get('levels'), noise=r.get('noise'),
-                organs=organs, pairs=r['pairs'], expected=r['expected'], **(extra or {}))
+                organs=organs, unresolved=unres, pairs=r['pairs'], expected=r['expected'], **(extra or {}))
     json.dump(meta, open(path_stem + '.json', 'w'), default=lambda x: x.item() if hasattr(x, 'item') else str(x))
 
 

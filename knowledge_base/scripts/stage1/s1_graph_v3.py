@@ -27,6 +27,12 @@ explanation; else unexplained.
     Design fix 1 (27 Nov, design set only, before the gate): R is not applied when the host is a hollow organ; a hollow-organ wall is
     explained only by W, which carries the organ-relative wall-thickness protection (a colon tumour 7.7 ml, 15 mm thick, was pruned
     by R on FLARE23_0142 at 7.5 mm slices, where 'thickness <= 2 x largest spacing' allows 15 mm).
+Step-2g g3 node (28 Nov, user-approved plan claude/elongation_and_pelvic_fix_plan_2026-11-28.md, B2): an unresolved sex-class dispute
+is kept by 2g as one neutral node 'pelvic_reproductive_unresolved' (npz u0_core). Here it is a usable whole organ for LOCATION only
+(host_cat 'unresolved'): it can host candidates (core region, member 'unexplained' unless V applies), it never gives an R explanation
+(its boundary is not one organ's boundary; nor W). Its overlap with another usable whole organ's territory is a contested region whose
+category is the KB relation shared by all of the node's member whole organs with that organ (else other_edge); the overlap is removed
+from both cores, as 2g does for contested pairs. Scans without the node are unchanged.
 Fragment groups: candidates within tau = max(5 mm, largest spacing) sharing the dominant whole organ (or both outside organs).
 Group decision: pruned if every member is V/W/R; uncertain if any member is U-* or members are partly explained; kept otherwise.
 
@@ -185,6 +191,10 @@ def one(kb, ds, case, tf):
         bx = box_of(z, f"o{o['i']}_terr", off)
         if bx and all(a < h and b > l for (a, b), l, h in zip(bx, [x for x, _ in c0], [y for _, y in c0])):
             lo = [min(l, a) for l, (a, _) in zip(lo, bx)]; hi = [max(h, b) for h, (_, b) in zip(hi, bx)]
+    NODE = 'pelvic_reproductive_unresolved'
+    nbx = box_of(z, 'u0_core', off)                                   # g3 node (absent in g2 files and undisputed scans)
+    if nbx and all(a < h and b > l for (a, b), l, h in zip(nbx, [x for x, _ in c0], [y for _, y in c0])):
+        lo = [min(l, a) for l, (a, _) in zip(lo, nbx)]; hi = [max(h, b) for h, (_, b) in zip(hi, nbx)]
     crop = tuple(slice(max(0, l - 2), min(n, h + 2)) for l, h, n in zip(lo, hi, B.shape))
     B, V = B[crop], V[crop]
     T = (np.isin(EX._read_labels(lp), EX.APPEARANCE[ds]['tumour']) if os.path.exists(lp) else np.zeros(meta['shape'], bool))[crop]
@@ -200,7 +210,7 @@ def one(kb, ds, case, tf):
         if P0.any(): P = ndimage.distance_transform_edt(~P0, sampling=sp) <= 10
     shp = B.shape
     # whole organs (Bx boxes, not full-crop arrays)
-    W_core, W_terr, W_cat = {}, {}, {}
+    W_core, W_terr, W_cat, W_ent = {}, {}, {}, {}
     hk = {}
     for o in usable:
         wk = whole_of(kb, o['entity']) + ('_' + o['side'] if o['side'] else '')
@@ -208,7 +218,11 @@ def one(kb, ds, case, tf):
         c = unpack_bx(z, f"o{o['i']}_core", off, crop); t = unpack_bx(z, f"o{o['i']}_terr", off, crop)
         if c is not None: W_core[wk] = (W_core[wk] | c) if wk in W_core else c
         if t is not None: W_terr[wk] = (W_terr[wk] | t) if wk in W_terr else t
-        W_cat[wk] = kb.entities.get(whole_of(kb, o['entity']), {}).get('category')
+        W_cat[wk] = kb.entities.get(whole_of(kb, o['entity']), {}).get('category'); W_ent[wk] = whole_of(kb, o['entity'])
+    node = unpack_bx(z, 'u0_core', off, crop)
+    if node is not None:
+        W_terr[NODE] = node; W_cat[NODE] = 'unresolved'
+        node_wholes = sorted({whole_of(kb, e) for e in ((meta.get('unresolved') or {}).get('entities') or [])})
     EXc = np.zeros(shp, bool); anyterr = np.zeros(shp, bool)
     for o in excluded:
         c = unpack_bx(z, f"o{o['i']}_core", off, crop); t = unpack_bx(z, f"o{o['i']}_terr", off, crop)
@@ -240,6 +254,19 @@ def one(kb, ds, case, tf):
         if cat in ('supply_drain', 'vessel_vessel'):
             for w in (wa, wb):
                 if W_cat.get(w) in VES: Cves[w] = (Cves[w] | m) if w in Cves else m
+    if node is not None:                                               # g3 node: contested overlaps, then its core
+        ncore = node
+        for w, t in list(W_terr.items()):
+            if w == NODE: continue
+            ov_ = t.win(node.sl) & node.m
+            if not ov_.any(): continue
+            cats = {category(kb, e, W_ent[w]) for e in node_wholes}
+            cat = cats.pop() if len(cats) == 1 else 'other_edge'
+            cat = 'other_edge' if cat == 'same_entity' else cat
+            C[cat][node.sl] |= ov_
+            ncore = Bx(ncore.sl, ncore.m & ~ov_, shp)
+            if w in W_core: W_core[w] = Bx(W_core[w].sl, W_core[w].m & ~Bx(node.sl, ov_, shp).win(W_core[w].sl), shp)
+        if ncore.m.any(): W_core[NODE] = ncore
     core_any = np.zeros(shp, bool)
     for c in W_core.values(): core_any[c.sl] |= c.m
     maxsp = max(sp); tau = max(5.0, maxsp); edge_mm = max(2.0, float(np.sqrt(sum(s * s for s in sp))))
@@ -300,12 +327,13 @@ def one(kb, ds, case, tf):
                 # R: rim at a whole-organ territory boundary, or adjacent / vessel_organ contested
                 bnd = np.zeros(cb.shape, bool)
                 for w, t in W_terr.items():
+                    if w == NODE: continue                              # g3 node: no rim explanation from its boundary
                     tp_ = t.win(pad)
                     if not tp_.any(): continue
                     bnd |= tp_ & ~ndimage.binary_erosion(tp_, border_value=1)
                 near = (ndimage.distance_transform_edt(~bnd, sampling=sp)[cb] <= edge_mm).mean() if bnd.any() else 0.0
                 rel = near >= 0.5 or (float(((C['adjacent'][pad] | C['vessel_organ'][pad]) & cb).sum()) / nc) >= 0.5
-                if rel and th <= 2 * maxsp and W_cat.get(host) not in HOLLOW:   # design fix 1: hollow-organ walls only via W
+                if rel and th <= 2 * maxsp and W_cat.get(host) not in HOLLOW and host != NODE:   # design fix 1: hollow-organ walls only via W
                     prot = 0.0
                     if host:
                         ht = W_terr[host].win(pad); out = cb & ~ht

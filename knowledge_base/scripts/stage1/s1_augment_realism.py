@@ -9,7 +9,7 @@ are counted on the false side) and non-tumour side (lab F).
 Classifier: logistic regression (numpy, L2 1e-3), features log10 ml, log10 elongation (clipped 1..1e4), log10 nsl, thickness / largest
 spacing, sphericity, log10 largest spacing; 5-fold CV AUC (folds by scan, so a scan's candidates never span train and test).
 Bands: < 1, 1-10, > 10 ml. Also single-feature AUCs (real vs augmented) to show which feature differs.
-Output: [<tag>/]realism.txt and realism.csv. Usage: python s1_augment_realism.py [--tag smoke]"""
+Output: [<tag>/]realism.txt and realism.csv. Usage: python s1_augment_realism.py [--tag smoke] [--augdir augment_e2]"""
 import os, sys, zlib
 import numpy as np, pandas as pd
 from scipy.stats import rankdata
@@ -50,7 +50,9 @@ def cv_auc(df, y):
 
 def main():
     import argparse
-    ap = argparse.ArgumentParser(); ap.add_argument('--tag', default=''); a = ap.parse_args()
+    ap = argparse.ArgumentParser(); ap.add_argument('--tag', default=''); ap.add_argument('--augdir', default='augment'); a = ap.parse_args()
+    global D
+    D = os.path.join(paths.ledger_dir(), 'decision_s1', a.augdir)
     od = os.path.join(D, a.tag) if a.tag else D
     ag = pd.read_csv(os.path.join(od, 'aug.csv'), low_memory=False); re_ = pd.read_csv(os.path.join(D, 'real.csv'), low_memory=False)
     for x in (ag, re_): x['case'] = x.case.astype(str)

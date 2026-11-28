@@ -35,7 +35,10 @@ Output: PanCIA_outputs/ledger/decision_s1/augment[/<tag>]/{real,aug}.csv (resuma
 --stage real_tf (28 Nov, overnight run) writes real_tf.csv: features of the real candidates of the TUMOUR-FREE design scans (v1 / v2
 job files), for evaluation of the decision on the design set only; never used as exemplars, never fitted, never used to choose a
 threshold (the 139 tumour-free scans are an evaluation reference, not calibration data).
-Usage: python s1_augment_candidates.py --stage real ; --stage real_tf ; --stage aug [--tag smoke] [--only ...]"""
+Elongation e2 (28 Nov, user-approved plan claude/elongation_and_pelvic_fix_plan_2026-11-28.md, A1): the covariance is that of the
+voxelised solid, covariance of voxel centres + diag(spacing^2 / 12) (each voxel a box, not a point), so a one-slice candidate has a
+finite elongation (no cap). Versioned outputs: --outdir augment_e2 --design design_g3 (graph_v3/<design>.csv, 4g on step-2g g3).
+Usage: python s1_augment_candidates.py --stage real ; --stage real_tf ; --stage aug [--tag smoke] [--only ...] [--outdir augment_e2 --design design_g3]"""
 import os, sys, json, time, argparse, csv, zlib
 for _v in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
     os.environ.setdefault(_v, '1')
@@ -71,7 +74,8 @@ def feats(cb, sp):
     xyz = xyz * np.asarray(sp)
     el = np.nan
     if len(xyz) >= 4:
-        ev = np.sort(np.linalg.eigvalsh(np.cov(xyz.T))); el = float(np.sqrt(ev[-1] / max(ev[0], 1e-6)))
+        ev = np.sort(np.linalg.eigvalsh(np.cov(xyz.T) + np.diag(np.asarray(sp, float) ** 2 / 12.0)))   # e2: voxel = box
+        el = float(np.sqrt(ev[-1] / max(ev[0], 1e-6)))
     ax = int(np.argmax(sp))
     return dict(ml=round(float(cb.sum() * np.prod(sp) / 1000), 4), elong=el,
                 nsl=int(np.any(cb, axis=tuple(k for k in range(3) if k != ax)).sum()),
@@ -362,7 +366,10 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--stage', choices=['real', 'real_tf', 'aug'], required=True)
     ap.add_argument('--only', default=''); ap.add_argument('--budget', type=float, default=1e9); ap.add_argument('--tag', default='')
     ap.add_argument('--n_tum', type=int, default=4); ap.add_argument('--n_neg', type=int, default=12)
+    ap.add_argument('--outdir', default='augment'); ap.add_argument('--design', default='design')
     a = ap.parse_args()
+    global OUTD, DESIGN
+    OUTD = os.path.join(paths.ledger_dir(), 'decision_s1', a.outdir); DESIGN = os.path.join(paths.ledger_dir(), 'graph_v3', a.design + '.csv')
     J = pd.concat([pd.read_csv(f) for f in JOBS]).drop_duplicates(['ds', 'case']); J['case'] = J.case.astype(str)
     tfj = J.tumour_free.astype(str) == 'True'
     J = J[tfj] if a.stage == 'real_tf' else J[~tfj]                 # tumour-free scans: real_tf only (evaluation features)

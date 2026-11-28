@@ -19,6 +19,7 @@ def region_class(r):
     if r.dom == 'core':
         if r.host_cat in VES: return 'vessel'
         if r.host_cat == 'hollow_organ': return 'hollow_core'
+        if r.host_cat == 'unresolved': return 'unresolved_core'      # step-2g g3 pelvic node (28 Nov)
         return 'solid_core'
     return 'uncertain_region'
 
